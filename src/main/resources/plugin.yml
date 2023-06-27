@@ -1,0 +1,9 @@
+name: FreeMinecraftModels
+version: '1.0.0-SNAPSHOT-1'
+main: com.magmaguy.freeminecraftmodels.FreeMinecraftModels
+api-version: 1.19
+prefix: FreeMinecraftModels
+load: STARTUP
+authors: [ MagmaGuy ]
+description: Welcome to the new age of custom Minecraft models.
+website: magmaguy.com
