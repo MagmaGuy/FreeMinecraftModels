@@ -3,15 +3,12 @@ package com.magmaguy.freeminecraftmodels.customentity;
 import com.magmaguy.freeminecraftmodels.dataconverter.Bone;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.Skeleton;
+import com.magmaguy.freeminecraftmodels.entities.ModelArmorStand;
 import com.magmaguy.freeminecraftmodels.utils.Developer;
 import lombok.Getter;
-import org.bukkit.Color;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.entity.ArmorStand;
-import org.bukkit.entity.EntityType;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.LeatherArmorMeta;
+import org.bukkit.util.Vector;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
@@ -52,17 +49,7 @@ public class StaticEntity {
 
     private void armorStandInitializer(Location targetLocation, Bone bone) {
         if (!bone.getCubeChildren().isEmpty()) {
-            ArmorStand armorStand = (ArmorStand) targetLocation.getWorld().spawnEntity(targetLocation, EntityType.ARMOR_STAND);
-            armorStand.setGravity(false);
-            armorStand.setMarker(true);
-            armorStand.teleport(targetLocation.clone().add(0.5, 0, 0.5));
-            armorStand.setPersistent(false);
-            ItemStack leatherHorseArmor = new ItemStack(Material.LEATHER_HORSE_ARMOR);
-            LeatherArmorMeta itemMeta = (LeatherArmorMeta) leatherHorseArmor.getItemMeta();
-            itemMeta.setColor(Color.WHITE);
-            itemMeta.setCustomModelData(bone.getModelID());
-            leatherHorseArmor.setItemMeta(itemMeta);
-            armorStand.setHelmet(leatherHorseArmor);
+            ArmorStand armorStand = bone.generateDisplay(targetLocation);
             armorStandList.add(armorStand);
         }
         if (!bone.getBoneChildren().isEmpty())
