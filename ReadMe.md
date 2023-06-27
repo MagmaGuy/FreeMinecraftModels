@@ -83,6 +83,35 @@ Generating an `.fmmodel` is as simple as putting your `.bbmodel` in the `~/plugi
 
 ## What can FreeMinecraftModels (FMM) do for developers who want to integrate it in their plugin?
 
+***Note: No maven repo is currently available, this will be added really soon!***
+
+FMM aims to be as easy as possible to use as an API.
+
+Right now, there is only one class you need to know about if you wish to use FMM as an API for your plugin, and that is `StaticEntity`.
+
+Here is a snipped for handling a model:
+
+```java
+public class FreeMinecraftModelsModel {
+    private StaticEntity staticEntity = null;
+
+    //Create the model
+    public FreeMinecraftModelsModel(String id, Location location) {
+        //This spawns the entity!
+        staticEntity = StaticEntity.create(id, location);
+        //This checks if the entity spawned correctly
+        if (staticEntity == null) Logger.warningMessage("FMM failed to find a model named " + id +" !");
+    }
+
+    public void remove() {
+        //This removes the entity
+        staticEntity.remove();
+    }
+}
+```
+
+Right now this is all there is to it, as we are in the earliest alpha possible! You may want to check the `StaticEntity` class to check for new features in case this documentation is out of date.
+
 ## Contributing to the FreeMinecraftModels (FMM) project as a developer
 
 FMM is distributed under the GPLV3 license and code contributions are welcome. Here are the basic contribution guidelines:
