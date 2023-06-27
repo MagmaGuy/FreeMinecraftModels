@@ -105,7 +105,7 @@ public class CommandHandler {
                 .handler(context -> {
                     if (((String) context.get("spawnType")).equalsIgnoreCase("static"))
                        StaticEntity.create(context.get("entityID"),
-                                ((Player)context.getSender()).rayTraceBlocks(300).getHitBlock().getLocation().add(0,1,0));
+                                ((Player)context.getSender()).rayTraceBlocks(300).getHitBlock().getLocation().add(0.5,1,0.5));
                 }));
 
         manager.command(builder.literal("test")

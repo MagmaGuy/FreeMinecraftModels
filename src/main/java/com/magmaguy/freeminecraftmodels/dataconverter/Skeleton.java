@@ -22,9 +22,9 @@ public class Skeleton {
             if (!(outlinerJSON.get(i) instanceof Map<?,?>))continue;
              Map<?, ?> bone = (Map<?, ?>) outlinerJSON.get(i);
             if (((String) bone.get("name")).equalsIgnoreCase("hitbox"))
-                hitbox = new Bone(projectResolution,bone, values, textureReferences, modelName);
+                hitbox = new Bone(projectResolution,bone, values, textureReferences, modelName, null);
             else
-                mainModel.add(new Bone(projectResolution,bone, values, textureReferences, modelName));
+                mainModel.add(new Bone(projectResolution,bone, values, textureReferences, modelName, null));
         }
     }
 

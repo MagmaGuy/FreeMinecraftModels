@@ -34,7 +34,10 @@ public class ModelsFolder {
         leatherHorseArmor.put("parent", "item/generated");
         leatherHorseArmor.put("textures", Collections.singletonMap("layer0", "minecraft:item/leather_horse_armor"));
 
+        Developer.debug("parsing children");
+
         for (File childFile : file.listFiles()) {
+            Developer.debug("parsing file " + childFile.getName());
             FileModelConverter bbModelConverter = new FileModelConverter(childFile);
             bbModelConverterList.add(bbModelConverter);
 
