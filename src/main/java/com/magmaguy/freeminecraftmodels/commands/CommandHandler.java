@@ -108,21 +108,11 @@ public class CommandHandler {
                                 ((Player)context.getSender()).rayTraceBlocks(300).getHitBlock().getLocation().add(0.5,1,0.5));
                 }));
 
-        manager.command(builder.literal("test")
-                .handler(context -> {
-                    Pig pig = (Pig) ((Player) context.getSender()).getWorld().spawnEntity(((Player) context.getSender()).getLocation(), EntityType.PIG);
-                    Developer.warn("Pig bounding box: " + pig.getBoundingBox());
-                    pig.getBoundingBox().expand(10D);
-                    Developer.warn("Pig bounding box: " + pig.getBoundingBox());
-                    pig.getBoundingBox().expand(10, 10, 10);
-                    Developer.warn("Pig bounding box: " + pig.getBoundingBox());
-                }));
-
-
         manager.command(builder.literal("reload")
                 .handler(context -> {
                     MetadataHandler.PLUGIN.onDisable();
                     MetadataHandler.PLUGIN.onEnable();
+                    context.getSender().sendMessage("[FreeMinecraftModels] Reloaded!");
                 }));
     }
 

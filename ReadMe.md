@@ -3,7 +3,6 @@
 FreeMinecraftModels (FMM) is currently in **early alpha**! This means that several features are not yet done, and are actively being worked on.
 
 This means that right now FMM can't:
-- Do bone rotations correctly
 - Run any kind of animation
 - Do hitboxes
 
@@ -146,3 +145,12 @@ Please note that these tricks are all completely invisible to users and model ma
 ## Contributing to the FreeMinecraftModels (FMM) project in general
 
 FMM is actually crowdfunded by the lovely people over at https://www.patreon.com/magmaguy ! All contributions help more than you'd imagine ;)
+
+## Currently planned features:
+- Bedrock client RSP generation
+- Server properties-independent RSP management with geyser integration
+- Animations
+- Custom entities & hitboxes
+
+## Current weird limitations that need to be fixed:
+- If the pivot point (origin) of a bone is set to be over 67ish the model starts floating
