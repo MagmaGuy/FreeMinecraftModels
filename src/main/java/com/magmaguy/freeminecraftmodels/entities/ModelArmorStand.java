@@ -22,6 +22,7 @@ public class ModelArmorStand {
         armorStand.setGravity(false);
         armorStand.setMarker(true);
         armorStand.setPersistent(false);
+        armorStand.setVisible(false);
         ItemStack leatherHorseArmor = new ItemStack(Material.LEATHER_HORSE_ARMOR);
         LeatherArmorMeta itemMeta = (LeatherArmorMeta) leatherHorseArmor.getItemMeta();
         itemMeta.setColor(Color.WHITE);

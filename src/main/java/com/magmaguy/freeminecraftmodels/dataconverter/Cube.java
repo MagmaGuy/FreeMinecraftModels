@@ -67,7 +67,7 @@ public class Cube {
     }
 
 
-    private void setRotation(double xOffset, double yOffset, double zOffset) {
+    private void setRotation(Vector offset, Vector adjustedModelOrigin) {
         if (cubeJSON.get("origin") == null) return;
         Map<String, Object> newRotationData = new HashMap<>();
 
@@ -76,9 +76,9 @@ public class Cube {
         //Adjust the origin
         double xOrigin, yOrigin, zOrigin;
         List<Double> originData = (ArrayList<Double>) cubeJSON.get("origin");
-        xOrigin = originData.get(0) * scaleFactor + xOffset;
-        yOrigin = originData.get(1) * scaleFactor + yOffset;
-        zOrigin = originData.get(2) * scaleFactor + zOffset;
+        xOrigin = originData.get(0) * scaleFactor + offset.getX();
+        yOrigin = originData.get(1) * scaleFactor + offset.getY();
+        zOrigin = originData.get(2) * scaleFactor + offset.getZ();
         newRotationData.put("origin", List.of(xOrigin, yOrigin, zOrigin));
 
         double angle = 0;
@@ -109,14 +109,14 @@ public class Cube {
      * size will work, even if it goes beyond the technical limitations.
      * Use bones to bypass this limitation.
      */
-    private void correctPosition(double xOffset, double yOffset, double zOffset) {
-        cubeJSON.put("from", List.of(from.getX() + xOffset, from.getY() + yOffset, from.getZ() + zOffset));
-        cubeJSON.put("to", List.of(to.getX() + xOffset, to.getY() + yOffset, to.getZ() + zOffset));
+    private void correctPosition(Vector offset) {
+        cubeJSON.put("from", List.of(from.getX() + offset.getX(), from.getY() + offset.getY(), from.getZ() + offset.getZ()));
+        cubeJSON.put("to", List.of(to.getX() + offset.getX(), to.getY() + offset.getY(), to.getZ() + offset.getZ()));
     }
 
-    public Map<String, Object> generateJSON(double xOffset, double yOffset, double zOffset) {
-        correctPosition(xOffset, yOffset, zOffset);
-        setRotation(xOffset, yOffset, zOffset);
+    public Map<String, Object> generateJSON(Vector offset, Vector origin) {
+        correctPosition(offset);
+        setRotation(offset, origin);
         return cubeJSON;
     }
 }
