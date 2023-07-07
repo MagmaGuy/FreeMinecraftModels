@@ -8,6 +8,7 @@ This means that right now FMM can't:
 
 In its current stage, it works perfectly well for displaying static models in-game! The features above are actively being worked on right now. Consider supporting the dev
 development at https://www.patreon.com/magmaguy !
+
 # Using this plugin
 
 ## What can FreeMinecraftModels (FMM) do for Minecraft server admins?
@@ -55,7 +56,7 @@ Cubes are the same here as they are in Blockbench, they are the cubes that make 
 #### **Bones:**
 Bones are what Blockbench calls "groups". They serve to group the cubes together, and should be used to group bones together for animations.
 - Bones can go up to 112x112x112 "pixels" (Blockbench units) or 7x7x7 in-game blocks. *Please note that the size of bones is set by what they have, so if you have cubes that are more than 7 blocks apart, you will probably exceed this size limit. Bypassing this limit is as easy as putting the blocks in a different bone not contained in the first bone!*
-- Can have any rotation! //todo: working on this right now
+- Can have any rotation!
 
 Bones are significantly more flexible than cubes, but you should use as few bones as possible! In FMM, due to Minecraft limitations, each bone is a different entity. At a scale, this will affect performance rather quickly! Always use as few bones as you can, and be mindful of how many of that model you are planning to spawn - the more of it you plan to have, the fewer bones you should have!
 
@@ -111,7 +112,7 @@ public class FreeMinecraftModelsModel {
 
 Right now this is all there is to it, as we are in the earliest alpha possible! You may want to check the `StaticEntity` class to check for new features in case this documentation is out of date.
 
-## Contributing to the FreeMinecraftModels (FMM) project as a developer
+# Contributing to the FreeMinecraftModels (FMM) project as a developer
 
 FMM is distributed under the GPLV3 license and code contributions are welcome. Here are the basic contribution guidelines:
 
@@ -119,7 +120,7 @@ FMM is distributed under the GPLV3 license and code contributions are welcome. H
 - Keep contributions relevant to the scope of the plugin. If you don't know whether it will be relevant, feel free to ask ahead of time.
 - Be mindful of the performance impact of your code. Some contributions may be turned away if they are either too unoptimized or otherwise cause too great of a performance impact.
 
-### General plugin outline
+## General plugin outline
 
 To save you some time, here is a quick breakdown of the logic flow of FMM:
 
@@ -129,7 +130,7 @@ To save you some time, here is a quick breakdown of the logic flow of FMM:
 4) Interpret all model structures, creating `Skeleton`s which contain groups of `Bone`s, and these bones contain groups of child `Bone`s and `Cube`s. `Cube`s and `Bone`s generate the JSON resource pack data they are each related to. This means that `Cube`s generate the JSON specific to cubes and `Bone`s generate the outline and individual bone files. Note that one bone results in one resource pack file. Models are added to a list as they are generated.
 5) All data has now been initialized, the resource pack was generated in the `outputs` folder and the plugin is ready to be used.
 
-### Tricks used in this plugin:
+## Tricks used in this plugin:
 
 The tricks used here are fairly well-established and standardized, but will be listed nonetheless because they can be counter-intuitive.
 
@@ -137,20 +138,23 @@ Please note that these tricks are all completely invisible to users and model ma
 
 - All models are scaled up 4x and then the size and pivot point is readjusted in code in order to extend the theoretical maximum size of the model
 - Because resource pack models can only have models go from -16 to +32 in size, models are shifted in the background. This is completely invisible to players.
-- Leather Horse Armor is used to create models with a hue that can be influenced through code (i.e. for damage indications). The horse armor must be set to white to display the correct colors!
+- Leather horse armor is used to create models with a hue that can be influenced through code (i.e. for damage indications). The horse armor must be set to white to display the correct colors!
 - Blockbench uses a specific system of IDs for the textures, but actually reads the textures sequentially from config. IDs are assigned here based on their position in the list of textures, following how Blockbench does it.
 - Each bone is a different armor stand entity due to Minecraft limitations
+- Leather horse armor is on the head slot of the armor stand
 - Armor stands are used for the default static items. //todo: soon I'll have to implement the new alternative display system from MC 1.19.4+, it's way more efficient
 
-## Contributing to the FreeMinecraftModels (FMM) project in general
+# Contributing to the FreeMinecraftModels (FMM) project in general
 
 FMM is actually crowdfunded by the lovely people over at https://www.patreon.com/magmaguy ! All contributions help more than you'd imagine ;)
 
-## Currently planned features:
+# Currently planned features:
 - Bedrock client RSP generation
 - Server properties-independent RSP management with geyser integration
 - Animations
-- Custom entities & hitboxes
+- Custom entities
+- Hitboxes
+- tag_projectile as meta bones from which projectiles can be shot (can have more than one per model)
 
 ## Current weird limitations that need to be fixed:
 - If the pivot point (origin) of a bone is set to be over 67ish the model starts floating
