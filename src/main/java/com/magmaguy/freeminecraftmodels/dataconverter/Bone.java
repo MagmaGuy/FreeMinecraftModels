@@ -8,7 +8,9 @@ import lombok.Getter;
 import lombok.Setter;
 import org.apache.commons.io.FileUtils;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.ArmorStand;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.EulerAngle;
 import org.bukkit.util.Vector;
 
@@ -23,6 +25,7 @@ public class Bone {
     private static final double armorStandheadSizeMultiplier = 0.4D;
     private static final double modelScale = 4D;
     private static final double armorStandPivotPointHeight = 1.53D;
+    public static NamespacedKey nameTagKey = new NamespacedKey(MetadataHandler.PLUGIN, "NameTag");
     @Getter
     private final List<Bone> boneChildren = new ArrayList<>();
     @Getter
@@ -34,10 +37,12 @@ public class Bone {
     @Getter
     @Setter
     private int modelID;
-    private EulerAngle armorStandHeadRotation = new EulerAngle(0,0,0);
+    private EulerAngle armorStandHeadRotation = new EulerAngle(0, 0, 0);
     @Getter
     private Vector blockSpaceOrigin = new Vector();
     private Vector modelSpaceOrigin = new Vector();
+    @Getter
+    private boolean nameTag = false;
 
     public Bone(double projectResolution,
                 Map<String, Object> boneJSON,
@@ -46,6 +51,9 @@ public class Bone {
                 String modelName,
                 Bone parent) {
         this.boneName = "freeminecraftmodels:" + modelName.toLowerCase() + "/" + ((String) boneJSON.get("name")).toLowerCase();
+        if (boneName.contains("tag_")) {
+            nameTag = true;
+        }
         this.parent = parent;
         setBoneRotation(boneJSON);
         setOrigin(boneJSON);
@@ -90,8 +98,11 @@ public class Bone {
     }
 
     public ArmorStand generateDisplay(Location location) {
-        ArmorStand armorStand = ModelArmorStand.generate(location.clone().add(blockSpaceOrigin).subtract(0, armorStandPivotPointHeight, 0), modelID);
+        ArmorStand armorStand = ModelArmorStand.generate(location.clone().add(blockSpaceOrigin).subtract(0, armorStandPivotPointHeight, 0), modelID, this);
         armorStand.setHeadPose(armorStandHeadRotation);
+        if (this.isNameTag()) {
+            armorStand.getPersistentDataContainer().set(nameTagKey, PersistentDataType.BYTE, (byte) 0);
+        }
         return armorStand;
     }
 
@@ -101,7 +112,6 @@ public class Bone {
         String modelDirectory = getModelDirectory(modelName);
         Map<String, Object> boneJSON = new HashMap<>(textureReferences);
         Vector offset = findDisplayOffset(modelName);
-        Developer.debug("offset: " + offset + "previous origin: " + modelSpaceOrigin + " new origin " + modelSpaceOrigin.clone().subtract(offset));
         //modelSpaceOrigin.subtract(new Vector(offset.getZ(), offset.getY(), offset.getX()));
         writeCubes(boneJSON, offset);
         setDisplay(boneJSON, offset.getX(), offset.getY(), offset.getZ());

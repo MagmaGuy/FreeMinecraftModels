@@ -34,15 +34,11 @@ public class ModelsFolder {
         leatherHorseArmor.put("parent", "item/generated");
         leatherHorseArmor.put("textures", Collections.singletonMap("layer0", "minecraft:item/leather_horse_armor"));
 
-        Developer.debug("parsing children");
-
         for (File childFile : file.listFiles()) {
-            Developer.debug("parsing file " + childFile.getName());
             FileModelConverter bbModelConverter = new FileModelConverter(childFile);
             bbModelConverterList.add(bbModelConverter);
-
             for (Bone bone : bbModelConverter.getSkeleton().getMainModel())
-                if (!bone.getBoneName().equals("hitbox") && !bone.getBoneName().equals("tag_name") && !bone.getCubeChildren().isEmpty())
+                if (!bone.getBoneName().equals("hitbox") && !bone.getCubeChildren().isEmpty())
                     assignBoneModelID(leatherHorseArmor, bone);
         }
 
