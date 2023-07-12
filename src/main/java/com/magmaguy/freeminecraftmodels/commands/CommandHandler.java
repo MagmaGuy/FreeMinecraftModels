@@ -10,14 +10,13 @@ import cloud.commandframework.meta.CommandMeta;
 import cloud.commandframework.minecraft.extras.MinecraftExceptionHandler;
 import cloud.commandframework.minecraft.extras.MinecraftHelp;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.ReloadHandler;
 import com.magmaguy.freeminecraftmodels.customentity.StaticEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.utils.Developer;
 import net.kyori.adventure.platform.bukkit.BukkitAudiences;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.CommandSender;
-import org.bukkit.entity.EntityType;
-import org.bukkit.entity.Pig;
 import org.bukkit.entity.Player;
 
 import java.lang.reflect.Method;
@@ -49,7 +48,7 @@ public class CommandHandler {
                     /* C -> Command Sender */ Function.identity()
             );
         } catch (final Exception e) {
-             Developer.warn("Failed to initialize the command manager");
+            Developer.warn("Failed to initialize the command manager");
             /* Disable the plugin */
             MetadataHandler.PLUGIN.getServer().getPluginManager().disablePlugin(MetadataHandler.PLUGIN);
             return;
@@ -104,16 +103,11 @@ public class CommandHandler {
                 .meta(CommandMeta.DESCRIPTION, "Spawns a custom model of a specific type")
                 .handler(context -> {
                     if (((String) context.get("spawnType")).equalsIgnoreCase("static"))
-                       StaticEntity.create(context.get("entityID"),
-                                ((Player)context.getSender()).rayTraceBlocks(300).getHitBlock().getLocation().add(0.5,1,0.5));
+                        StaticEntity.create(context.get("entityID"),
+                                ((Player) context.getSender()).rayTraceBlocks(300).getHitBlock().getLocation().add(0.5, 1, 0.5));
                 }));
 
-        manager.command(builder.literal("reload")
-                .handler(context -> {
-                    MetadataHandler.PLUGIN.onDisable();
-                    MetadataHandler.PLUGIN.onEnable();
-                    context.getSender().sendMessage("[FreeMinecraftModels] Reloaded!");
-                }));
+        manager.command(builder.literal("reload").handler(context -> ReloadHandler.reload(context.getSender())));
     }
 
 }

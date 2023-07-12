@@ -120,7 +120,8 @@ public class FileModelConverter {
         List outlinerValues = (ArrayList) map.get("outliner");
         for (int i = 0; i < outlinerValues.size(); i++) {
             if (!(outlinerValues.get(i) instanceof Map)) {
-                Bukkit.getLogger().warning("WTF format for model name " + modelName + ": " + outlinerValues.get(i));
+                //Bukkit.getLogger().warning("WTF format for model name " + modelName + ": " + outlinerValues.get(i));
+                //I don't really know why Blockbench does this
                 continue;
             } else {
                 Map<?, ?> element = (Map<?, ?>) outlinerValues.get(i);
