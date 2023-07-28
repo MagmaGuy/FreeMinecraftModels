@@ -33,11 +33,8 @@ public class ImportsFolder {
             return;
         }
 
-        Developer.debug("Initializing imports");
-
         //First pass scans for zipped files
         for (File childFile : file.listFiles()) {
-            Developer.debug("File name " +  childFile.getName());
             try {
                 if (childFile.getName().contains(".zip"))
                     unzip(childFile);
@@ -75,7 +72,6 @@ public class ImportsFolder {
     public static File unzip(File zippedFile) throws IOException {
         String mainDirectory = MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar + "imports" + File.separatorChar;
         String fileZip = mainDirectory + zippedFile.getName();
-        Developer.debug("file name: " + fileZip);
         File finalDirectory = new File(mainDirectory + zippedFile.getName().replace(".zip", ""));
         byte[] buffer = new byte[1024];
         ZipInputStream zipInputStream = new ZipInputStream(new FileInputStream(fileZip));
