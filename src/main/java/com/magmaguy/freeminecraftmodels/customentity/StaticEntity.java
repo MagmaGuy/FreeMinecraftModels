@@ -44,7 +44,6 @@ public class StaticEntity {
     @Nullable
     public static StaticEntity create(String entityID, Location targetLocation) {
         FileModelConverter fileModelConverter = FileModelConverter.getConvertedFileModels().get(entityID);
-        Developer.warn("ID " + entityID + " was null: " + (fileModelConverter == null));
         if (fileModelConverter == null) return null;
         return new StaticEntity(entityID, targetLocation);
     }
@@ -106,4 +105,15 @@ public class StaticEntity {
         });
         return locations;
     }
+
+    /**
+     * This just moves the static entity over by the set amount in the vector.
+     * @param vector Vector to be added to the location of the static entity
+     */
+    public void move(Vector vector){
+        armorStandList.forEach(armorStand -> armorStand.teleport(armorStand.getLocation().add(vector)));
+    }
+
+    //todo: add teleport to location alternative, will require a different data structure for the armorstands
+
 }
