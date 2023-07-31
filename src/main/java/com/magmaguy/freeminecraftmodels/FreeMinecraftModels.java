@@ -7,6 +7,7 @@ import com.magmaguy.freeminecraftmodels.config.ModelsFolder;
 import com.magmaguy.freeminecraftmodels.config.OutputFolder;
 import com.magmaguy.freeminecraftmodels.customentity.StaticEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import org.bstats.bukkit.Metrics;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -25,6 +26,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         ImportsFolder.initializeConfig();
         ModelsFolder.initializeConfig();
         OutputFolder.initializeConfig();
+        Metrics metrics = new Metrics(this, 19337);
         new CommandHandler();
     }
 
