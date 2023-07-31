@@ -84,6 +84,13 @@
             <version>2.13.0</version>
         </dependency>
 
+        <!-- Bstats -->
+        <dependency>
+            <groupId>org.bstats</groupId>
+            <artifactId>bstats-bukkit</artifactId>
+            <version>3.0.2</version>
+            <scope>compile</scope>
+        </dependency>
 
     </dependencies>
 
