@@ -34,7 +34,15 @@ public class ModelsFolder {
         leatherHorseArmor.put("parent", "item/generated");
         leatherHorseArmor.put("textures", Collections.singletonMap("layer0", "minecraft:item/leather_horse_armor"));
 
-        for (File childFile : file.listFiles()) {
+        File[] modelFiles = file.listFiles();
+        Arrays.sort(modelFiles, new Comparator<File>() {
+            @Override
+            public int compare(File o1, File o2) {
+                return o1.getName().compareTo(o2.getName());
+            }
+        });
+
+        for (File childFile : modelFiles) {
             FileModelConverter bbModelConverter = new FileModelConverter(childFile);
             bbModelConverterList.add(bbModelConverter);
             for (Bone bone : bbModelConverter.getSkeleton().getMainModel())
