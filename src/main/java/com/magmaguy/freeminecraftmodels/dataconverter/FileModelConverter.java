@@ -30,10 +30,11 @@ public class FileModelConverter {
     private final HashMap<String, Object> outliner = new HashMap<>();
     //Store the texture with the identifier and the name of the texture file
     private final HashMap<Integer, String> textures = new HashMap<>();
-    private final HashMap<String, Object> animations = new HashMap<>();
     private String modelName;
     @Getter
     private Skeleton skeleton;
+    @Getter
+    private Animations animations = null;
     @Getter
     private String ID;
 
@@ -83,7 +84,7 @@ public class FileModelConverter {
             return;
         }
 
-        double projectResolution = (double) ((Map<?, ?>)map.get("resolution")).get("height");
+        double projectResolution = (double) ((Map<?, ?>) map.get("resolution")).get("height");
 
         //This parses the textures, extracts them to the correct directory and stores their values for the bone texture references
         List<Map<?, ?>> texturesValues = (ArrayList<Map<?, ?>>) map.get("textures");
@@ -96,18 +97,18 @@ public class FileModelConverter {
             textures.put(id, imageName.replace(".png", ""));
             base64Image = base64Image.split(",")[base64Image.split(",").length - 1];
             if (!imageSize.containsKey(imageName))
-            try {
-                ByteArrayInputStream inputStream = new ByteArrayInputStream(Base64Coder.decodeLines(base64Image));
-                File imageFile = new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar +
-                        "output" + File.separatorChar + "FreeMinecraftModels" + File.separatorChar + "assets" + File.separatorChar +
-                        "freeminecraftmodels" + File.separatorChar + "textures" + File.separatorChar + "entity" + File.separatorChar + imageName);
-                FileUtils.writeByteArrayToFile(imageFile, inputStream.readAllBytes());
-                BufferedImage bufferedImage = ImageIO.read(imageFile);
-                imageSize.put(imageName, bufferedImage.getWidth());
-            } catch (Exception ex) {
-                Developer.warn("Failed to convert image " + imageName + " to its corresponding image file!");
-                continue;
-            }
+                try {
+                    ByteArrayInputStream inputStream = new ByteArrayInputStream(Base64Coder.decodeLines(base64Image));
+                    File imageFile = new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar +
+                            "output" + File.separatorChar + "FreeMinecraftModels" + File.separatorChar + "assets" + File.separatorChar +
+                            "freeminecraftmodels" + File.separatorChar + "textures" + File.separatorChar + "entity" + File.separatorChar + imageName);
+                    FileUtils.writeByteArrayToFile(imageFile, inputStream.readAllBytes());
+                    BufferedImage bufferedImage = ImageIO.read(imageFile);
+                    imageSize.put(imageName, bufferedImage.getWidth());
+                } catch (Exception ex) {
+                    Developer.warn("Failed to convert image " + imageName + " to its corresponding image file!");
+                    continue;
+                }
         }
 
         //This parses the blocks
@@ -131,6 +132,9 @@ public class FileModelConverter {
 
         ID = modelName;
         skeleton = new Skeleton(projectResolution, outlinerValues, values, generateFileTextures(), modelName, null);//todo: pass path
+
+        List animationList = (ArrayList) map.get("animations");
+        if (animationList != null) animations = new Animations(animationList, modelName, skeleton);
         convertedFileModels.put(modelName, this);//todo: id needs to be more unique, add folder directory into it
     }
 

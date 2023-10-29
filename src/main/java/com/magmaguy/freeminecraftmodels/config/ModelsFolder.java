@@ -46,7 +46,7 @@ public class ModelsFolder {
             FileModelConverter bbModelConverter = new FileModelConverter(childFile);
             bbModelConverterList.add(bbModelConverter);
             for (Bone bone : bbModelConverter.getSkeleton().getMainModel())
-                if (!bone.getBoneName().equals("hitbox") && !bone.getCubeChildren().isEmpty())
+                if (!bone.getBoneName().equals("hitbox"))
                     assignBoneModelID(leatherHorseArmor, bone);
         }
 
@@ -68,13 +68,15 @@ public class ModelsFolder {
     private static void assignBoneModelID(HashMap<String, Object> ironHorseArmorFile, Bone bone) {
         Map<String, Object> entryMap = new HashMap<>();
         entryMap.put("predicate", Collections.singletonMap("custom_model_data", counter));
-        bone.setModelID(counter);
+        if(!bone.getCubeChildren().isEmpty()) {
+            bone.setModelID(counter);
+            counter++;
+        }
         entryMap.put("model", bone.getBoneName().toLowerCase());
         ironHorseArmorFile.computeIfAbsent("overrides", k -> new ArrayList<Map<String, Object>>());
         List<Map<String, Object>> existingList = ((List<Map<String, Object>>) ironHorseArmorFile.get("overrides"));
         existingList.add(entryMap);
         ironHorseArmorFile.put("overrides", existingList);
-        counter++;
         if (!bone.getBoneChildren().isEmpty())
             for (Bone childBone : bone.getBoneChildren())
                 assignBoneModelID(ironHorseArmorFile, childBone);

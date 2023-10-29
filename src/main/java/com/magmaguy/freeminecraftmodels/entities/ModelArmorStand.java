@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.entities;
 
 import com.magmaguy.freeminecraftmodels.dataconverter.Bone;
+import com.magmaguy.freeminecraftmodels.utils.Developer;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -14,13 +15,13 @@ public class ModelArmorStand {
     private ModelArmorStand() {
     }
 
-    public static ArmorStand generate(Location location, int modelID, Bone bone) {
+    public static ArmorStand generate(Location location, Bone bone) {
         location.setDirection(new Vector(0, 0, -1));
         return (ArmorStand) location.getWorld().spawn(location, EntityType.ARMOR_STAND.getEntityClass(),
-                entity -> applyFeatures((ArmorStand) entity, modelID, bone));
+                entity -> applyFeatures((ArmorStand) entity, bone));
     }
 
-    private static void applyFeatures(ArmorStand armorStand, int modelID, Bone bone) {
+    private static void applyFeatures(ArmorStand armorStand,  Bone bone) {
         armorStand.setGravity(false);
         armorStand.setMarker(true);
         armorStand.setPersistent(false);
@@ -30,7 +31,11 @@ public class ModelArmorStand {
         ItemStack leatherHorseArmor = new ItemStack(Material.LEATHER_HORSE_ARMOR);
         LeatherArmorMeta itemMeta = (LeatherArmorMeta) leatherHorseArmor.getItemMeta();
         itemMeta.setColor(Color.WHITE);
-        itemMeta.setCustomModelData(modelID);
+        Developer.debug("attempting model data");
+        if (bone.getModelID() != null) {
+            itemMeta.setCustomModelData(bone.getModelID());
+            Developer.debug("assigning model data");
+        }
         leatherHorseArmor.setItemMeta(itemMeta);
         armorStand.setHelmet(leatherHorseArmor);
     }
