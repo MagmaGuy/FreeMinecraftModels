@@ -7,6 +7,7 @@ import com.magmaguy.freeminecraftmodels.utils.Developer;
 import lombok.Getter;
 import lombok.Setter;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.math3.complex.Quaternion;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.ArmorStand;
@@ -36,20 +37,30 @@ public class Bone {
     private final double yOffsetFromArmorStandHeight = 28d;
     @Getter
     @Setter
-    private int modelID;
+    private Integer modelID = null;
     private EulerAngle armorStandHeadRotation = new EulerAngle(0, 0, 0);
     @Getter
     private Vector blockSpaceOrigin = new Vector();
     private Vector modelSpaceOrigin = new Vector();
     @Getter
     private boolean nameTag = false;
+    //This is used as the anchor in the world for animating position movements, while anchoring them to a specific coordinate.
+    //If the underlying entity moves then this point moves, otherwise it stays the same as translation animations play out.
+    private Location entityBoneOriginUnanimated = null;
+    @Getter
+    private ArmorStand armorStand = null;
+    @Getter
+    private EulerAngle tickRotation = null;
+    @Getter
+    private Vector tickPosition = new Vector(0, 0, 0);
 
     public Bone(double projectResolution,
                 Map<String, Object> boneJSON,
                 HashMap<String, Object> values,
                 Map<String, Map<String, Object>> textureReferences,
                 String modelName,
-                Bone parent) {
+                Bone parent,
+                Skeleton skeleton) {
         this.boneName = "freeminecraftmodels:" + modelName.toLowerCase() + "/" + ((String) boneJSON.get("name")).toLowerCase();
         if (boneName.contains("tag_")) {
             nameTag = true;
@@ -67,10 +78,20 @@ public class Bone {
                 cubeChildren.add(new Cube(projectResolution, (Map<String, Object>) values.get(object)));
             } else {
                 //Case for object being a bone
-                boneChildren.add(new Bone(projectResolution, (Map<String, Object>) object, values, textureReferences, modelName, this));
+                boneChildren.add(new Bone(projectResolution, (Map<String, Object>) object, values, textureReferences, modelName, this, skeleton));
             }
         }
         generateBoneResourcePackFile(((String) boneJSON.get("name")).toLowerCase().replace(" ", "_"), textureReferences, modelName);
+        skeleton.getBoneMap().put((String) boneJSON.get("name"), this);
+    }
+
+    /**
+     * Returns a clone of the current origin point of the armor stand, in real coordinates
+     *
+     * @return
+     */
+    public Location getEntityBoneOriginUnanimated() {
+        return entityBoneOriginUnanimated.clone();
     }
 
     private void setBoneRotation(Map<?, ?> boneJSON) {
@@ -78,8 +99,77 @@ public class Bone {
         if (obj == null) return;
         List<Double> rotations = (List<Double>) obj;
         armorStandHeadRotation = new EulerAngle(-Math.toRadians(rotations.get(0)), -Math.toRadians(rotations.get(1)), Math.toRadians(rotations.get(2)));
-        //todo: rotation placeholder here
-        //if (parent != null) boneRotation.add(parent.getBoneRotation()); todo: probably needs to be enabled
+    }
+
+    public void rotateTo(double newX, double newY, double newZ) {
+        if (armorStand == null) return;
+        if (tickRotation != null) {
+            tickRotation = tickRotation.add(Math.toRadians(newX), Math.toRadians(newY), Math.toRadians(newZ));
+        } else {
+            tickRotation = new EulerAngle(Math.toRadians(newX), Math.toRadians(newY), Math.toRadians(newZ));
+        }
+        boneChildren.forEach(boneChild -> boneChild.rotateTo(newX, newY, newZ));
+    }
+
+    public void translateTo(double x, double y, double z) {
+        if (armorStand == null) return;
+        if (tickPosition == null) tickPosition = new Vector(x, y, z);
+        else tickPosition.add(new Vector(x, y, z));
+        // armorStand.teleport(entityBoneOrigin.clone().add(tickPosition));
+        boneChildren.forEach(boneChild -> boneChild.translateTo(x, y, z));
+    }
+
+    public void transform() {
+        if (tickRotation != null) armorStand.setHeadPose(tickRotation);
+        if (tickRotation != null || !tickPosition.isZero()) {
+//            //Get the translation transform of the parent as a vector to be added to the current armorstand location
+//            Vector animationTranslationOffset = parent.getArmorStand().getLocation().subtract(parent.getEntityBoneOriginUnanimated()).toVector();
+//            //Get the translation caused by the rotation of the parent
+//            EulerAngle parentRotation = parent.getTickRotation();
+//            if (parentRotation != null){
+//                Vector fromParentToChild = getEntityBoneOriginUnanimated().subtract(parent.getEntityBoneOriginUnanimated()).toVector();
+//                //todo: rotate fromParentToChild by parentRotation
+//                // Convert EulerAngle to Quaternion for rotation
+//                // Convert EulerAngle to Quaternion manually
+//                double yaw = parentRotation.getX();
+//                double pitch = parentRotation.getY();
+//                double roll = parentRotation.getZ();
+//
+//                double cy = Math.cos(yaw * 0.5);
+//                double sy = Math.sin(yaw * 0.5);
+//                double cp = Math.cos(pitch * 0.5);
+//                double sp = Math.sin(pitch * 0.5);
+//                double cr = Math.cos(roll * 0.5);
+//                double sr = Math.sin(roll * 0.5);
+//
+//                double w = cy * cp * cr + sy * sp * sr;
+//                double x = cy * cp * sr - sy * sp * cr;
+//                double y = sy * cp * sr + cy * sp * cr;
+//                double z = sy * cp * cr - cy * sp * sr;
+//
+//                Quaternion parentQuaternion = new Quaternion(w, x, y, z);
+//
+//                // Create a Quaternion from the fromParentToChild vector
+//                Quaternion vectorQuaternion = new Quaternion(0, fromParentToChild.getX(), fromParentToChild.getY(), fromParentToChild.getZ());
+//
+//                // Rotate the vectorQuaternion by parentQuaternion
+//                Quaternion rotatedVector = parentQuaternion.multiply(vectorQuaternion).multiply(parentQuaternion.getConjugate());
+//
+//                // Extract the rotated vector from the resulting Quaternion
+//                Vector rotatedVectorResult = new Vector(rotatedVector.getQ0(), rotatedVector.getQ1(), rotatedVector.getQ2());
+//
+//                // Update fromParentToChild with the rotated vector
+//                fromParentToChild = rotatedVectorResult;
+//
+//                animationTranslationOffset.add(fromParentToChild);
+//            }
+
+            armorStand.teleport(getEntityBoneOriginUnanimated().add(tickPosition));
+        }
+
+        boneChildren.forEach(Bone::transform);
+        tickRotation = null;
+        if (!tickPosition.isZero()) tickPosition = new Vector(0, 0, 0);
     }
 
     private void setOrigin(Map<String, Object> boneJSON) {
@@ -98,8 +188,9 @@ public class Bone {
     }
 
     public ArmorStand generateDisplay(Location location) {
-        ArmorStand armorStand = ModelArmorStand.generate(location.clone().add(blockSpaceOrigin).subtract(0, armorStandPivotPointHeight, 0), modelID, this);
+        armorStand = ModelArmorStand.generate(location.clone().add(blockSpaceOrigin).subtract(0, armorStandPivotPointHeight, 0), this);
         armorStand.setHeadPose(armorStandHeadRotation);
+        entityBoneOriginUnanimated = armorStand.getLocation();
         if (this.isNameTag()) {
             armorStand.getPersistentDataContainer().set(nameTagKey, PersistentDataType.BYTE, (byte) 0);
         }

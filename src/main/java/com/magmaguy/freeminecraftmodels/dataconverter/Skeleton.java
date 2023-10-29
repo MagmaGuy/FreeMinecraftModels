@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.dataconverter;
 
 import lombok.Getter;
+import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -11,6 +12,9 @@ public class Skeleton {
     private Bone hitbox;
     @Getter
     private final List<Bone> mainModel = new ArrayList<>();
+    //In BlockBench models are referred to by name for animations, and names are unique
+    @Getter
+    private HashMap<String, Bone> boneMap = new HashMap<>();
 
     public Skeleton(double projectResolution,
                     List outlinerJSON,
@@ -22,9 +26,9 @@ public class Skeleton {
             if (!(outlinerJSON.get(i) instanceof Map<?, ?>)) continue;
             Map<String, Object> bone = (Map<String, Object>) outlinerJSON.get(i);
             if (((String) bone.get("name")).equalsIgnoreCase("hitbox"))
-                hitbox = new Bone(projectResolution, bone, values, textureReferences, modelName, null);
+                hitbox = new Bone(projectResolution, bone, values, textureReferences, modelName, null, this);
             else
-                mainModel.add(new Bone(projectResolution, bone, values, textureReferences, modelName, null));
+                mainModel.add(new Bone(projectResolution, bone, values, textureReferences, modelName, null, this));
         }
     }
 }
