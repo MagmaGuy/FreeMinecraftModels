@@ -54,11 +54,11 @@ Cubes are the same here as they are in Blockbench, they are the cubes that make 
 - Cubes only rotate in one axis, meaning that a rotation of [22.5, 0, 0] is fine, a rotation of [22.5, 0, 45] will not fully work and only rotate on one axis.
 
 #### **Bones:**
-Bones are what Blockbench calls "groups". They serve to group the cubes together, and should be used to group bones together for animations.
-- Bones can go up to 112x112x112 "pixels" (Blockbench units) or 7x7x7 in-game blocks. *Please note that the size of bones is set by what they have, so if you have cubes that are more than 7 blocks apart, you will probably exceed this size limit. Bypassing this limit is as easy as putting the blocks in a different bone not contained in the first bone!*
+Bones are what Blockbench calls "groups". They serve to group the cubes together, and should be used to group bones together for animationsBlueprint.
+- Bones can go up to 112x112x112 "pixels" (Blockbench units) or 7x7x7 in-game blocks. *Please note that the size of bones is set by what they have, so if you have cubes that are more than 7 blocks apart, you will probably exceed this size limit. Bypassing this limit is as easy as putting the blocks in a different boneBlueprint not contained in the first boneBlueprint!*
 - Can have any rotation!
 
-Bones are significantly more flexible than cubes, but you should use as few bones as possible! In FMM, due to Minecraft limitations, each bone is a different entity. At a scale, this will affect performance rather quickly! Always use as few bones as you can, and be mindful of how many of that model you are planning to spawn - the more of it you plan to have, the fewer bones you should have!
+Bones are significantly more flexible than cubes, but you should use as few bones as possible! In FMM, due to Minecraft limitations, each boneBlueprint is a different entity. At a scale, this will affect performance rather quickly! Always use as few bones as you can, and be mindful of how many of that model you are planning to spawn - the more of it you plan to have, the fewer bones you should have!
 
 #### **Virtual Bones**
 
@@ -66,10 +66,10 @@ If you are coming from ModelEngine, you probably want to know if/how virtual bon
 
 However, at the very least, the following virtual bones will be compatible with FMM soon:
 
-- Hitboxes / eye height: a bone called "hitbox" with a cube that defines the boundaries, and has the same x and z value (the largest value will be picked if they are not the same) defines the hitbox. The eye level is set at the pivot point of the hitbox's bone.
-- Name tag: a bone whose name starts with "tag_". Honestly I would prefer being mode specific here and going with "tag_name" in order to use tags for other things, but that will be seriously considered later.
+- Hitboxes / eye height: a boneBlueprint called "hitbox" with a cubeBlueprint that defines the boundaries, and has the same x and z value (the largest value will be picked if they are not the same) defines the hitbox. The eye level is set at the pivot point of the hitbox's boneBlueprint.
+- Name tag: a boneBlueprint whose name starts with "tag_". Honestly I would prefer being mode specific here and going with "tag_name" in order to use tags for other things, but that will be seriously considered later.
 
-No other virtual bone feature is guaranteed to be added in the immediate future.
+No other virtual boneBlueprint feature is guaranteed to be added in the immediate future.
 
 #### **Safer, easier, uneditable file distribution**
 
@@ -127,7 +127,7 @@ To save you some time, here is a quick breakdown of the logic flow of FMM:
 1) Read the `imports` folder
 2) Move files from `imports` folder into the `models` folder. If the file is a `.bbmodel`, it gets converted to `.fmmodel` in the models folder.
 3) Read the files in the `models` folder.
-4) Interpret all model structures, creating `Skeleton`s which contain groups of `Bone`s, and these bones contain groups of child `Bone`s and `Cube`s. `Cube`s and `Bone`s generate the JSON resource pack data they are each related to. This means that `Cube`s generate the JSON specific to cubes and `Bone`s generate the outline and individual bone files. Note that one bone results in one resource pack file. Models are added to a list as they are generated.
+4) Interpret all model structures, creating `Skeleton`s which contain groups of `Bone`s, and these bones contain groups of child `Bone`s and `Cube`s. `Cube`s and `Bone`s generate the JSON resource pack data they are each related to. This means that `Cube`s generate the JSON specific to cubes and `Bone`s generate the outline and individual boneBlueprint files. Note that one boneBlueprint results in one resource pack file. Models are added to a list as they are generated.
 5) All data has now been initialized, the resource pack was generated in the `outputs` folder and the plugin is ready to be used.
 
 ## Tricks used in this plugin:
@@ -140,7 +140,7 @@ Please note that these tricks are all completely invisible to users and model ma
 - Because resource pack models can only have models go from -16 to +32 in size, models are shifted in the background. This is completely invisible to players.
 - Leather horse armor is used to create models with a hue that can be influenced through code (i.e. for damage indications). The horse armor must be set to white to display the correct colors!
 - Blockbench uses a specific system of IDs for the textures, but actually reads the textures sequentially from config. IDs are assigned here based on their position in the list of textures, following how Blockbench does it.
-- Each bone is a different armor stand entity due to Minecraft limitations
+- Each boneBlueprint is a different armor stand entity due to Minecraft limitations
 - Leather horse armor is on the head slot of the armor stand
 - Armor stands are used for the default static items. //todo: soon I'll have to implement the new alternative display system from MC 1.19.4+, it's way more efficient
 
@@ -157,4 +157,4 @@ FMM is actually crowdfunded by the lovely people over at https://www.patreon.com
 - tag_projectile as meta bones from which projectiles can be shot (can have more than one per model)
 
 ## Current weird limitations that need to be fixed:
-- If the pivot point (origin) of a bone is set to be over 67ish the model starts floating
+- If the pivot point (origin) of a boneBlueprint is set to be over 67ish the model starts floating

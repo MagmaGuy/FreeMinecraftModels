@@ -1,9 +1,10 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.freeminecraftmodels.animation.AnimationManager;
-import com.magmaguy.freeminecraftmodels.dataconverter.Bone;
+import com.magmaguy.freeminecraftmodels.customentity.core.Skeleton;
+import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
-import com.magmaguy.freeminecraftmodels.dataconverter.Skeleton;
+import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import com.magmaguy.freeminecraftmodels.utils.ChunkHasher;
 import lombok.Getter;
 import org.bukkit.Location;
@@ -11,23 +12,23 @@ import org.bukkit.entity.ArmorStand;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.Vector;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public class ModeledEntity {
 
     @Getter
     private final String entityID;
-    private final ArrayList<ArmorStand> armorStandList = new ArrayList<>();
     @Getter
     private final String name = "default";
     private final Location spawnLocation;
     protected Integer chunkHash = null;
     AnimationManager animationManager;
     @Getter
-    private Skeleton skeleton = null;
+    private SkeletonBlueprint skeletonBlueprint = null;
     @Getter
     private Location lastSeenLocation;
+    @Getter
+    private Skeleton skeleton;
 
     public ModeledEntity(String entityID, Location spawnLocation) {
         this.entityID = entityID;
@@ -36,26 +37,21 @@ public class ModeledEntity {
         ModeledEntityEvents.addLoadedModeledEntity(this);
         FileModelConverter fileModelConverter = FileModelConverter.getConvertedFileModels().get(entityID);
         if (fileModelConverter == null) return;
-        skeleton = fileModelConverter.getSkeleton();
-        if (fileModelConverter.getAnimations() != null) animationManager = new AnimationManager(this, fileModelConverter.getAnimations());
+        skeletonBlueprint = fileModelConverter.getSkeletonBlueprint();
+        skeleton = new Skeleton(skeletonBlueprint);
+        if (fileModelConverter.getAnimationsBlueprint() != null) animationManager = new AnimationManager(this, fileModelConverter.getAnimationsBlueprint());
     }
 
     private static boolean isNameTag(ArmorStand armorStand) {
-        return armorStand.getPersistentDataContainer().has(Bone.nameTagKey, PersistentDataType.BYTE);
+        return armorStand.getPersistentDataContainer().has(BoneBlueprint.nameTagKey, PersistentDataType.BYTE);
     }
 
-    protected void armorStandInitializer(Location targetLocation, Bone bone) {
-        if (!bone.getCubeChildren().isEmpty() || bone.isNameTag()) {
-            ArmorStand armorStand = bone.generateDisplay(targetLocation);
-            armorStandList.add(armorStand);
-            if (bone.isNameTag()) armorStand.setMarker(false);
-        }
-        if (!bone.getBoneChildren().isEmpty())
-            bone.getBoneChildren().forEach(boneChild -> armorStandInitializer(targetLocation, boneChild));
+    protected void armorStandInitializer(Location targetLocation) {
+        skeleton.generateDisplays(targetLocation);
     }
 
     public void spawn(Location location) {
-        skeleton.getMainModel().forEach(bone -> armorStandInitializer(location, bone));
+        armorStandInitializer(location);
     }
 
     public void loadChunk() {
@@ -68,8 +64,7 @@ public class ModeledEntity {
 
 
     public void remove() {
-        for (ArmorStand armorStand : armorStandList) armorStand.remove();
-        armorStandList.clear();
+        skeleton.remove();
         ModeledEntityEvents.removeLoadedModeledEntity(this);
         ModeledEntityEvents.removeUnloadedModeledEntity(this);
         terminateAnimation();
@@ -81,8 +76,7 @@ public class ModeledEntity {
 
     public void unloadChunk() {
         lastSeenLocation = getLocation();
-        for (ArmorStand armorStand : armorStandList) armorStand.remove();
-        armorStandList.clear();
+        skeleton.remove();
         terminateAnimation();
     }
 
@@ -92,22 +86,16 @@ public class ModeledEntity {
      * @param name Name to set
      */
     public void setName(String name) {
-        armorStandList.forEach(armorStand -> {
-            if (isNameTag(armorStand))
-                armorStand.setCustomName(name);
-        });
+        skeleton.setName(name);
     }
 
     /**
      * Default is false
      *
-     * @param display Sets whether the name is visible
+     * @param visible Sets whether the name is visible
      */
-    public void setNameVisible(boolean display) {
-        armorStandList.forEach(armorStand -> {
-            if (isNameTag(armorStand))
-                armorStand.setCustomNameVisible(display);
-        });
+    public void setNameVisible(boolean visible) {
+        skeleton.setNameVisible(visible);
     }
 
     /**
@@ -116,12 +104,8 @@ public class ModeledEntity {
      *
      * @return
      */
-    public List<Location> getNameTagLocations() {
-        List<Location> locations = new ArrayList<>();
-        armorStandList.forEach(armorStand -> {
-            if (isNameTag(armorStand)) locations.add(armorStand.getLocation().add(new Vector(0, 1.9875, 0)));
-        });
-        return locations;
+    public List<ArmorStand> getNametagArmorstands() {
+        return skeleton.getNametags();
     }
 
     /**
@@ -130,7 +114,7 @@ public class ModeledEntity {
      * @param vector Vector to be added to the location of the static entity
      */
     public void move(Vector vector) {
-        armorStandList.forEach(armorStand -> armorStand.teleport(armorStand.getLocation().add(vector)));
+//        armorStandList.forEach(armorStand -> armorStand.teleport(armorStand.getLocation().add(vector)));
     }
 
     public Location getLocation() {
