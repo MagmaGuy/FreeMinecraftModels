@@ -1,7 +1,6 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
-import com.magmaguy.freeminecraftmodels.dataconverter.Skeleton;
 import com.magmaguy.freeminecraftmodels.utils.ChunkHasher;
 import lombok.Getter;
 import org.bukkit.Location;

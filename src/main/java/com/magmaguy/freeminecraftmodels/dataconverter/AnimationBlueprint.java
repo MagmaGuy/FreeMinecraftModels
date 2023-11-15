@@ -6,20 +6,20 @@ import lombok.Getter;
 
 import java.util.*;
 
-public class Animation {
+public class AnimationBlueprint {
     @Getter
-    private final HashMap<Bone, List<Keyframe>> boneKeyframes = new HashMap<>();
+    private final HashMap<BoneBlueprint, List<Keyframe>> boneKeyframes = new HashMap<>();
     @Getter
     private LoopType loopType;
     @Getter
     private String animationName;
-    private Skeleton skeleton;
+    private SkeletonBlueprint skeletonBlueprint;
     @Getter
     private int duration;
     @Getter
-    private HashMap<Bone, AnimationFrame[]> animationFrames = new HashMap<>();
+    private HashMap<BoneBlueprint, AnimationFrame[]> animationFrames = new HashMap<>();
 
-    public Animation(Object data, String modelName, Skeleton skeleton) {
+    public AnimationBlueprint(Object data, String modelName, SkeletonBlueprint skeletonBlueprint) {
         Map<String, Object> animationData;
         try {
             animationData = (Map<String, Object>) data;
@@ -29,7 +29,7 @@ public class Animation {
             return;
         }
 
-        this.skeleton = skeleton;
+        this.skeletonBlueprint = skeletonBlueprint;
         initializeGlobalValues(animationData);
 
         //In BBModel files, each bone holds the data for their transformations, so data is stored from the bone's perspective
@@ -52,8 +52,8 @@ public class Animation {
 
     private void initializeBones(Map<String, Object> animationData) {
         String boneName = (String) animationData.get("name");
-        Bone bone = skeleton.getBoneMap().get(boneName);
-        if (bone == null) {
+        BoneBlueprint boneBlueprint = skeletonBlueprint.getBoneMap().get(boneName);
+        if (boneBlueprint == null) {
             Developer.warn("Failed to get bone " + boneName + " from model!");
             return;
         }
@@ -63,7 +63,7 @@ public class Animation {
             keyframes.add(new Keyframe(keyframeData));
         }
         keyframes.sort(Comparator.comparingInt(Keyframe::getTimeInTicks));
-        boneKeyframes.put(bone, keyframes);
+        boneKeyframes.put(boneBlueprint, keyframes);
         Developer.debug("bones size " + boneKeyframes.size());
     }
 
@@ -71,7 +71,7 @@ public class Animation {
         boneKeyframes.forEach(this::interpolateBoneKeyframes);
     }
 
-    private void interpolateBoneKeyframes(Bone bone, List<Keyframe> keyframes) {
+    private void interpolateBoneKeyframes(BoneBlueprint boneBlueprint, List<Keyframe> keyframes) {
         List<Keyframe> rotationKeyframes = new ArrayList<>();
         List<Keyframe> positionKeyframes = new ArrayList<>();
         List<Keyframe> scaleKeyframes = new ArrayList<>();
@@ -141,6 +141,6 @@ public class Animation {
             previousFrame = animationFrame;
         }
 
-        this.animationFrames.put(bone, animationFramesArray);
+        this.animationFrames.put(boneBlueprint, animationFramesArray);
     }
 }
