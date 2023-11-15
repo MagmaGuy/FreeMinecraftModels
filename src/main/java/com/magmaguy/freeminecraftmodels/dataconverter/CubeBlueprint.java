@@ -10,14 +10,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class Cube {
+public class CubeBlueprint {
     private final Map<String, Object> cubeJSON;
     @Getter
     private final Vector to;
     @Getter
     private final Vector from;
 
-    public Cube(double projectResolution, Map<String, Object> cubeJSON) {
+    public CubeBlueprint(double projectResolution, Map<String, Object> cubeJSON) {
         this.cubeJSON = cubeJSON;
         //Sanitize data from ModelEngine which is not used by Minecraft resource packs
         cubeJSON.remove("rescale");

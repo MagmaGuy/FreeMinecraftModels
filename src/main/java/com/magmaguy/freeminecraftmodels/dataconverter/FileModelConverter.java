@@ -32,9 +32,9 @@ public class FileModelConverter {
     private final HashMap<Integer, String> textures = new HashMap<>();
     private String modelName;
     @Getter
-    private Skeleton skeleton;
+    private SkeletonBlueprint skeletonBlueprint;
     @Getter
-    private Animations animations = null;
+    private AnimationsBlueprint animationsBlueprint = null;
     @Getter
     private String ID;
 
@@ -131,10 +131,10 @@ public class FileModelConverter {
         }
 
         ID = modelName;
-        skeleton = new Skeleton(projectResolution, outlinerValues, values, generateFileTextures(), modelName, null);//todo: pass path
+        skeletonBlueprint = new SkeletonBlueprint(projectResolution, outlinerValues, values, generateFileTextures(), modelName, null);//todo: pass path
 
         List animationList = (ArrayList) map.get("animations");
-        if (animationList != null) animations = new Animations(animationList, modelName, skeleton);
+        if (animationList != null) animationsBlueprint = new AnimationsBlueprint(animationList, modelName, skeletonBlueprint);
         convertedFileModels.put(modelName, this);//todo: id needs to be more unique, add folder directory into it
     }
 

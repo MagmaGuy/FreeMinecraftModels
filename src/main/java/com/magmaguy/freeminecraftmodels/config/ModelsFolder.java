@@ -2,7 +2,7 @@ package com.magmaguy.freeminecraftmodels.config;
 
 import com.google.gson.Gson;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
-import com.magmaguy.freeminecraftmodels.dataconverter.Bone;
+import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.utils.Developer;
 import org.apache.commons.io.FileUtils;
@@ -45,9 +45,9 @@ public class ModelsFolder {
         for (File childFile : modelFiles) {
             FileModelConverter bbModelConverter = new FileModelConverter(childFile);
             bbModelConverterList.add(bbModelConverter);
-            for (Bone bone : bbModelConverter.getSkeleton().getMainModel())
-                if (!bone.getBoneName().equals("hitbox"))
-                    assignBoneModelID(leatherHorseArmor, bone);
+            for (BoneBlueprint boneBlueprint : bbModelConverter.getSkeletonBlueprint().getMainModel())
+                if (!boneBlueprint.getBoneName().equals("hitbox"))
+                    assignBoneModelID(leatherHorseArmor, boneBlueprint);
         }
 
         leatherHorseArmor.put("data", counter - 1);
@@ -65,20 +65,20 @@ public class ModelsFolder {
         }
     }
 
-    private static void assignBoneModelID(HashMap<String, Object> ironHorseArmorFile, Bone bone) {
+    private static void assignBoneModelID(HashMap<String, Object> ironHorseArmorFile, BoneBlueprint boneBlueprint) {
         Map<String, Object> entryMap = new HashMap<>();
         entryMap.put("predicate", Collections.singletonMap("custom_model_data", counter));
-        if(!bone.getCubeChildren().isEmpty()) {
-            bone.setModelID(counter);
+        if(!boneBlueprint.getCubeBlueprintChildren().isEmpty()) {
+            boneBlueprint.setModelID(counter);
             counter++;
         }
-        entryMap.put("model", bone.getBoneName().toLowerCase());
+        entryMap.put("model", boneBlueprint.getBoneName().toLowerCase());
         ironHorseArmorFile.computeIfAbsent("overrides", k -> new ArrayList<Map<String, Object>>());
         List<Map<String, Object>> existingList = ((List<Map<String, Object>>) ironHorseArmorFile.get("overrides"));
         existingList.add(entryMap);
         ironHorseArmorFile.put("overrides", existingList);
-        if (!bone.getBoneChildren().isEmpty())
-            for (Bone childBone : bone.getBoneChildren())
-                assignBoneModelID(ironHorseArmorFile, childBone);
+        if (!boneBlueprint.getBoneBlueprintChildren().isEmpty())
+            for (BoneBlueprint childBoneBlueprint : boneBlueprint.getBoneBlueprintChildren())
+                assignBoneModelID(ironHorseArmorFile, childBoneBlueprint);
     }
 }

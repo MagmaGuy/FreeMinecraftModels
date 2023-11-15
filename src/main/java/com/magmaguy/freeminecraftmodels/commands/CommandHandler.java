@@ -16,6 +16,7 @@ import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.utils.Developer;
 import net.kyori.adventure.platform.bukkit.BukkitAudiences;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
@@ -102,9 +103,11 @@ public class CommandHandler {
                         ArgumentDescription.of("Entity ID"))
                 .meta(CommandMeta.DESCRIPTION, "Spawns a custom model of a specific type")
                 .handler(context -> {
+                    Location location = ((Player) context.getSender()).rayTraceBlocks(300).getHitBlock().getLocation().add(0.5, 1, 0.5);
+                    location.setPitch(0);
+                    location.setYaw(180);
                     if (((String) context.get("spawnType")).equalsIgnoreCase("static"))
-                        StaticEntity.create(context.get("entityID"),
-                                ((Player) context.getSender()).rayTraceBlocks(300).getHitBlock().getLocation().add(0.5, 1, 0.5));
+                        StaticEntity.create(context.get("entityID"),                                location);
                 }));
 
         manager.command(builder.literal("reload").handler(context -> ReloadHandler.reload(context.getSender())));
