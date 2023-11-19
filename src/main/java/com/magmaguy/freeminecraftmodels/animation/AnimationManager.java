@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.animation;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.AnimationsBlueprint;
+import com.magmaguy.freeminecraftmodels.utils.Developer;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -29,7 +30,6 @@ public class AnimationManager {
                 @Override
                 public void run() {
                     int adjustedAnimationPosition = (int) (counter - Math.floor(counter / (double) idleAnimation.getAnimationBlueprint().getDuration()) * idleAnimation.getAnimationBlueprint().getDuration());
-
                     idleAnimation.getAnimationFrames().entrySet().forEach(boneEntry -> {
                         boneEntry.getKey().rotateTo(
                                 boneEntry.getValue()[adjustedAnimationPosition].xRotation,
@@ -44,11 +44,8 @@ public class AnimationManager {
                                 boneEntry.getValue()[adjustedAnimationPosition].zPosition);
                     });
 
-                    modeledEntity.getSkeleton().transform();
+                    modeledEntity.getSkeleton().transform(false);
 
-//                    idleAnimation.getAnimationFrames().entrySet().forEach(boneEntry -> {
-//                        boneEntry.getKey().transform();
-//                    });
                     counter++;
                 }
             }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
