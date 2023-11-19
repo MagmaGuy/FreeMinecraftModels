@@ -3,15 +3,15 @@ package com.magmaguy.freeminecraftmodels.dataconverter;
 import java.util.List;
 
 public class AnimationFrame {
-    public double xRotation = 0;
-    public double yRotation = 0;
-    public double zRotation = 0;
-    public double xPosition = 0;
-    public double yPosition = 0;
-    public double zPosition = 0;
-    public double xScale = 0;
-    public double yScale = 0;
-    public double zScale = 0;
+    public double xRotation;
+    public double yRotation;
+    public double zRotation;
+    public double xPosition;
+    public double yPosition;
+    public double zPosition;
+    public double xScale;
+    public double yScale;
+    public double zScale;
 
     public AnimationFrame(){
     }
