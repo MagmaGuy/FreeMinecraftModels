@@ -2,8 +2,12 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.entities.ModelArmorStand;
+import com.magmaguy.freeminecraftmodels.utils.Developer;
 import com.magmaguy.freeminecraftmodels.utils.EulerAngleUtils;
 import lombok.Getter;
+import org.apache.commons.math3.complex.Quaternion;
+import org.apache.commons.math3.geometry.euclidean.threed.*;
+import org.apache.commons.math3.util.FastMath;
 import org.bukkit.Location;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.persistence.PersistentDataType;
@@ -21,7 +25,6 @@ public class Bone {
     private final List<Bone> boneChildren = new ArrayList<>();
     private final Bone parent;
     private final Skeleton skeleton;
-    //    private EulerAngle lastKeyframeRotation = null;
     @Getter
     private ArmorStand armorStand;
     @Getter
@@ -30,8 +33,6 @@ public class Bone {
     private Vector tickPosition = null;
     //This is the location that the bone should be at when the tick ends. Due to teleport interpolation, it takes about 100ms to actually get there
     private Location targetAnimationLocation = null;
-//    private EulerAngle lastRotation = null;
-//    private EulerAngle lastParentRotation = null;
 
     public Bone(BoneBlueprint boneBlueprint, Bone parent, Skeleton skeleton) {
         this.boneBlueprint = boneBlueprint;
@@ -44,7 +45,6 @@ public class Bone {
     public void rotateTo(double newX, double newY, double newZ) {
         if (armorStand == null) return;
         tickRotation = new EulerAngle(Math.toRadians(newX), Math.toRadians(newY), Math.toRadians(newZ));
-//        lastKeyframeRotation = tickRotation;
     }
 
     public void translateTo(double x, double y, double z) {
@@ -53,17 +53,19 @@ public class Bone {
     }
 
     public void transform(boolean parentUpdate, EulerAngle parentRotation) {
-        if (tickRotation != null)
-            //Case where there is a keyframe on this tick
+        if (tickRotation != null) {
+//            if (getBoneBlueprint().getBoneName().contains("bone9"))
+//                Developer.debug(Developer.eulerAngleToString(tickRotation));
+            //todo: found the issue - the parent rotation needs to ROTATE the tickrotation, not just add to it.
+//           Quaternion quaternion = eulerToQuaternion(parentRotation);
+//           Rotation rotation = new Rotation(quaternion.getQ0(), quaternion.getQ1(), quaternion.getQ2(), quaternion.getQ3(), false);
+//           Vector3D rotated = rotation.applyTo(new Vector3D(tickRotation.getX(), tickRotation.getY(), tickRotation.getZ()));
+//            tickRotation = EulerAngleUtils.add(new EulerAngle(rotated.getX(), rotated.getY(), rotated.getZ()), boneBlueprint.getArmorStandHeadRotation());
             tickRotation = EulerAngleUtils.add(parentRotation, tickRotation, boneBlueprint.getArmorStandHeadRotation());
-//        else if (lastKeyframeRotation != null)
-//            //Case where there has been a keyframe before
-//            tickRotation = EulerAngleUtils.add(parentRotation, lastKeyframeRotation, boneBlueprint.getArmorStandHeadRotation());
-//        else if (lastParentRotation != null && lastParentRotation == parentRotation)
-//            //Case where the parent hasn't changed its rotation since the last tick, meaning things stay as they are
-//            tickRotation = lastRotation;
-        else
+        }
+        else {
             tickRotation = EulerAngleUtils.add(parentRotation, boneBlueprint.getArmorStandHeadRotation());
+        }
 
         if (!EulerAngleUtils.isZero(tickRotation)) armorStand.setHeadPose(tickRotation);
 
@@ -77,23 +79,70 @@ public class Bone {
 
         boolean finalParentUpdate = parentUpdate;
         boneChildren.forEach(boneChild -> boneChild.transform(finalParentUpdate, tickRotation));
-//        if (tickRotation != null) lastRotation = tickRotation;
-//        lastParentRotation = parentRotation;
         tickRotation = null;
         tickPosition = null;
     }
 
+//    private void updateTickPositionBasedOnParentRotation(EulerAngle parentRotation) {
+//        if (parentRotation != null) {
+//            Vector fromParentToChild = getBoneBlueprint().getArmorStandOffsetFromModel().subtract(parent.getBoneBlueprint().getArmorStandOffsetFromModel());
+//            Vector rotatedVector = fromParentToChild.clone();
+//            rotatedVector.rotateAroundX(-parentRotation.getX());
+//            rotatedVector.rotateAroundY(-parentRotation.getY());
+//            rotatedVector.rotateAroundZ(parentRotation.getZ());
+//            if (tickPosition == null) tickPosition = new Vector(0, 0, 0);
+//            Vector vector = rotatedVector.subtract(fromParentToChild);
+//            tickPosition.add(vector);
+//        }
+//    }
+
     private void updateTickPositionBasedOnParentRotation(EulerAngle parentRotation) {
         if (parentRotation != null) {
-            Vector fromParentToChild = getBoneBlueprint().getArmorStandOffsetFromModel().subtract(parent.getBoneBlueprint().getArmorStandOffsetFromModel());
-            Vector rotatedVector = fromParentToChild.clone();
-            rotatedVector.rotateAroundX(-parentRotation.getX());
-            rotatedVector.rotateAroundY(-parentRotation.getY());
-            rotatedVector.rotateAroundZ(parentRotation.getZ());
+            Vector fromParentToChild = getBoneBlueprint().getArmorStandOffsetFromModel()
+                    .subtract(parent.getBoneBlueprint().getArmorStandOffsetFromModel());
+
+            // Convert Euler angles to a Quaternion
+            Quaternion rotationQuaternion = eulerToQuaternion(parentRotation);
+
+            // Rotate the vector using the quaternion
+            Vector rotatedVector = rotate(rotationQuaternion, fromParentToChild);
+
             if (tickPosition == null) tickPosition = new Vector(0, 0, 0);
-            Vector vector = rotatedVector.subtract(fromParentToChild);
+            Vector vector = rotatedVector.clone().subtract(fromParentToChild);
+//            if (boneBlueprint.getBoneName().contains("bone9")) {
+//                Developer.debug("vector " + Developer.vectorToString(vector));
+//                Developer.debug("parent " + Developer.eulerAngleToString(parentRotation));
+//                Developer.debug("rotated vector " + Developer.vectorToString(rotatedVector));
+//                Developer.debug("from parent to child " + Developer.vectorToString(fromParentToChild));
+//            }
             tickPosition.add(vector);
         }
+    }
+
+    private Quaternion eulerToQuaternion(EulerAngle eulerAngle) {
+        double yaw = eulerAngle.getZ();
+        double pitch = -eulerAngle.getY();
+        double roll = -eulerAngle.getX();
+
+        double cy = Math.cos(yaw * 0.5);
+        double sy = Math.sin(yaw * 0.5);
+        double cp = Math.cos(pitch * 0.5);
+        double sp = Math.sin(pitch * 0.5);
+        double cr = Math.cos(roll * 0.5);
+        double sr = Math.sin(roll * 0.5);
+
+        double w = cr * cp * cy + sr * sp * sy;
+        double x = sr * cp * cy - cr * sp * sy;
+        double y = cr * sp * cy + sr * cp * sy;
+        double z = cr * cp * sy - sr * sp * cy;
+
+        return new Quaternion(w, x, y, z);
+    }
+
+    public Vector rotate(Quaternion quaternion, Vector rotation) {
+        Quaternion rotationQuaternion = new Quaternion(0, rotation.getX(), rotation.getY(), rotation.getZ());
+        Quaternion rotatedQuaternion = quaternion.multiply(rotationQuaternion).multiply(quaternion.getConjugate());
+        return new Vector(rotatedQuaternion.getQ1(), rotatedQuaternion.getQ2(), rotatedQuaternion.getQ3());
     }
 
     //If the expected origin of the parent is offset from its actual location, translate that offset to the child
