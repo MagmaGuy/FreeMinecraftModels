@@ -6,6 +6,7 @@ import com.magmaguy.freeminecraftmodels.utils.Developer;
 import lombok.Getter;
 import org.bukkit.Location;
 import org.bukkit.entity.ArmorStand;
+import org.bukkit.util.EulerAngle;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -27,7 +28,6 @@ public class Skeleton {
         this.skeletonBlueprint = skeletonBlueprint;
         skeletonBlueprint.getBoneMap().forEach((key, value) -> {
             if (value.getParent() == null) {
-                Developer.debug("1");
                 Bone bone = new Bone(value, null, this);
                 boneMap.put(key, bone);
                 bone.getAllChildren(boneMap);
@@ -73,9 +73,8 @@ public class Skeleton {
     }
 
     /**
-     * Returns the list of bones the Skeleton has
+     * Returns the map of bones the Skeleton has
      *
-     * @param deep If set to true, this will return every single bone the entity has. Otherwise, it will only return to top-level bones, and the children of those bones can be accessed in the bones.
      * @return
      */
     public Collection<Bone> getBones() {
@@ -85,10 +84,10 @@ public class Skeleton {
     /**
      * This updates animations. The plugin runs this automatically, don't use it unless you know what you're doing!
      */
-    public void transform() {
+    public void transform(boolean parentUpdate) {
         boneMap.values().forEach(bone-> {
             if (bone.getBoneBlueprint().getParent() == null)
-                bone.transform();
+                bone.transform(parentUpdate, new EulerAngle(0,0,0));
         });
     }
 }

@@ -46,7 +46,5 @@ public class Keyframe {
             dataZ = Double.parseDouble(string.replace("\\n", ""));
         else
             dataZ = (Double) zObject;
-
-        Developer.debug(transformationType + " " + interpolationType + " " + timeInTicks + " " + dataX + " " + dataY + " " + dataZ);
     }
 }
