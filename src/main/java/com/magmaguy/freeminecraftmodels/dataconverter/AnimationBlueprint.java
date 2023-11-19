@@ -151,7 +151,7 @@ public class AnimationBlueprint {
             int durationBetweenKeyframes = animationFrame.getTimeInTicks() - previousFrame.getTimeInTicks();
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                animationFramesArray[currentFrame].xPosition = lerp(-previousFrame.getDataX(), -animationFrame.getDataX(), j / (double) durationBetweenKeyframes) / 16d;
+                animationFramesArray[currentFrame].xPosition = lerp(previousFrame.getDataX(), animationFrame.getDataX(), j / (double) durationBetweenKeyframes) / 16d;
                 animationFramesArray[currentFrame].yPosition = lerp(previousFrame.getDataY(), animationFrame.getDataY(), j / (double) durationBetweenKeyframes) / 16d;
                 animationFramesArray[currentFrame].zPosition = lerp(previousFrame.getDataZ(), animationFrame.getDataZ(), j / (double) durationBetweenKeyframes) / 16d;
             }
@@ -163,7 +163,7 @@ public class AnimationBlueprint {
             int durationBetweenKeyframes = duration - 1 - lastFrame.getTimeInTicks();
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                animationFramesArray[currentFrame].xPosition = -lastFrame.getDataX() /16d;
+                animationFramesArray[currentFrame].xPosition = lastFrame.getDataX() /16d;
                 animationFramesArray[currentFrame].yPosition = lastFrame.getDataY()/16d;
                 animationFramesArray[currentFrame].zPosition = lastFrame.getDataZ()/16d;
             }
@@ -172,7 +172,7 @@ public class AnimationBlueprint {
             int durationBetweenKeyframes = firstFrame.getTimeInTicks();
             durationBetweenKeyframes = Math.min(durationBetweenKeyframes, duration - 1);
             for (int j = 0; j < durationBetweenKeyframes; j++) {
-                animationFramesArray[j].xPosition = -firstFrame.getDataX()/16d;
+                animationFramesArray[j].xPosition = firstFrame.getDataX()/16d;
                 animationFramesArray[j].yPosition = firstFrame.getDataY()/16d;
                 animationFramesArray[j].zPosition = firstFrame.getDataZ()/16d;
             }
