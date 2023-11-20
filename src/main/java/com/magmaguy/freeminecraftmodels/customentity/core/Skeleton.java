@@ -87,7 +87,7 @@ public class Skeleton {
     public void transform(boolean parentUpdate) {
         boneMap.values().forEach(bone-> {
             if (bone.getBoneBlueprint().getParent() == null)
-                bone.transform(parentUpdate, new EulerAngle(0,0,0));
+                bone.transform(parentUpdate);
         });
     }
 }
