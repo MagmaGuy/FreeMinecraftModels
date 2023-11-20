@@ -2,8 +2,7 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.entities.ModelArmorStand;
-import com.magmaguy.freeminecraftmodels.utils.Developer;
-import com.magmaguy.freeminecraftmodels.utils.EulerAngleUtils;
+import com.magmaguy.freeminecraftmodels.utils.QuaternionHelper;
 import lombok.Getter;
 import org.apache.commons.math3.complex.Quaternion;
 import org.bukkit.Location;
@@ -26,14 +25,17 @@ public class Bone {
     @Getter
     private ArmorStand armorStand;
     @Getter
-    private EulerAngle tickRotation = null;
     private Quaternion localRotation = null;
     @Getter
     private Quaternion globalRotation = null;
     @Getter
-    private Vector tickPosition = null;
+    private Vector localTranslation = null;
+    @Getter
+    private Vector globalTranslation = null;
     //This is the location that the bone should be at when the tick ends. Due to teleport interpolation, it takes about 100ms to actually get there
     private Location targetAnimationLocation = null;
+    private boolean rotated = false;
+    private boolean translated = false;
 
     public Bone(BoneBlueprint boneBlueprint, Bone parent, Skeleton skeleton) {
         this.boneBlueprint = boneBlueprint;
@@ -43,147 +45,65 @@ public class Bone {
             boneChildren.add(new Bone(child, this, skeleton));
     }
 
-    public static Vector quaternionToEuler(Quaternion q) {
-        // Ensure the quaternion is normalized
-        q.normalize();
-
-        // Extract the quaternion components
-        double w = q.getQ0();
-        double x = q.getQ1();
-        double y = q.getQ2();
-        double z = q.getQ3();
-
-        // Calculate Euler angles
-        double pitch = Math.atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y));
-        double yaw = Math.asin(2.0 * (w * y - z * x));
-        double roll = Math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z));
-
-        // Convert radians to degrees
-        pitch = Math.toDegrees(pitch);
-        yaw = Math.toDegrees(yaw);
-        roll = Math.toDegrees(roll);
-
-        // Return as a vector
-        return new Vector(pitch, yaw, roll);
-    }
-
     public void rotateTo(double newX, double newY, double newZ) {
         if (armorStand == null) return;
-        tickRotation = new EulerAngle(Math.toRadians(newX), Math.toRadians(newY), Math.toRadians(newZ));
-        localRotation = eulerToQuaternion(tickRotation);
+        localRotation = QuaternionHelper.eulerToQuaternion(newX, newY, newZ);
+        rotated = true;
     }
 
     public void translateTo(double x, double y, double z) {
         if (armorStand == null) return;
-        tickPosition = new Vector(x, y, z);
+        localTranslation = new Vector(x, y, z);
+        translated = true;
     }
 
-    public void transform(boolean parentUpdate, EulerAngle parentRotation) {
+    public void transform(boolean parentUpdate) {
+        //Inherit rotation and translation values from parents
         updateGlobalRotation();
-        EulerAngle tempAngle = tickRotation;
+        updateGlobalTranslation();
 
-        //Update global rotation based on parents
-        if (parent != null) {
-            Vector updatedGlobal = quaternionToEuler(globalRotation);
-            tempAngle = new EulerAngle(Math.toRadians(updatedGlobal.getX()), Math.toRadians(updatedGlobal.getY()), Math.toRadians(updatedGlobal.getZ()));
-            tickRotation = tempAngle;
-        }
-
-        if (!EulerAngleUtils.isZero(tickRotation)) armorStand.setHeadPose(tempAngle);
-
-        if (!EulerAngleUtils.isZero(tickRotation) || tickPosition != null || parentUpdate) {
+        if (rotated || parentUpdate) armorStand.setHeadPose(QuaternionHelper.quaternionToEuler(globalRotation));
+        if (rotated || translated || parentUpdate) {
             parentUpdate = true;
-            if (parent != null) updateTickPositionBasedOnParentRotation(parentRotation);
-            updateTickPositionBasedOnParentTranslation();
+            updateTickPositionBasedOnParentRotation();
             targetAnimationLocation = updateArmorStandLocation();
             armorStand.teleport(targetAnimationLocation);
         }
 
         boolean finalParentUpdate = parentUpdate;
-        boneChildren.forEach(boneChild -> boneChild.transform(finalParentUpdate, tickRotation));
-        tickRotation = null;
-        tickPosition = null;
+        boneChildren.forEach(boneChild -> boneChild.transform(finalParentUpdate));
+        localTranslation = null;
+        globalTranslation = null;
+        localRotation = null;
+        globalRotation = null;
+        rotated = false;
+        translated = false;
     }
 
     private void updateGlobalRotation() {
-        if (localRotation == null) localRotation = eulerToQuaternion(new EulerAngle(0, 0, 0));
+        if (localRotation == null) localRotation = QuaternionHelper.eulerToQuaternion(0, 0, 0);
         if (parent == null || parent.getGlobalRotation() == null) globalRotation = localRotation;
         else globalRotation = parent.getGlobalRotation().multiply(localRotation);
     }
 
-    private void updateTickPositionBasedOnParentRotation(EulerAngle parentRotation) {
-        if (parentRotation != null) {
-            Vector fromParentToChild = getBoneBlueprint().getArmorStandOffsetFromModel().subtract(parent.getBoneBlueprint().getArmorStandOffsetFromModel());
-            Vector rotatedVector = fromParentToChild.clone();
-            rotatedVector.rotateAroundX(-parentRotation.getX());
-            rotatedVector.rotateAroundY(-parentRotation.getY());
-            rotatedVector.rotateAroundZ(parentRotation.getZ());
-
-            if (tickPosition == null) tickPosition = new Vector(0, 0, 0);
-            Vector vector = rotatedVector.subtract(fromParentToChild);
-            tickPosition.add(vector);
-        }
+    private void updateGlobalTranslation() {
+        if (localTranslation == null) localTranslation = new Vector(0, 0, 0);
+        if (parent == null || parent.getGlobalTranslation() == null) globalTranslation = localTranslation;
+        else globalTranslation = localTranslation.clone().add(parent.getGlobalTranslation());
     }
 
-    //    private void updateTickPositionBasedOnParentRotation(EulerAngle parentRotation) {
-//        if (parentRotation != null) {
-//            Vector fromParentToChild = getBoneBlueprint().getArmorStandOffsetFromModel()
-//                    .subtract(parent.getBoneBlueprint().getArmorStandOffsetFromModel());
-//
-//            // Convert Euler angles to a Quaternion
-//            Quaternion rotationQuaternion = eulerToQuaternion(parentRotation);
-//
-//            // Rotate the vector using the quaternion
-//            Vector rotatedVector = rotate(rotationQuaternion, fromParentToChild);
-//
-//            if (tickPosition == null) tickPosition = new Vector(0, 0, 0);
-//            Vector vector = rotatedVector.clone().subtract(fromParentToChild);
-////            if (boneBlueprint.getBoneName().contains("bone9")) {
-////                Developer.debug("vector " + Developer.vectorToString(vector));
-////                Developer.debug("parent " + Developer.eulerAngleToString(parentRotation));
-////                Developer.debug("rotated vector " + Developer.vectorToString(rotatedVector));
-////                Developer.debug("from parent to child " + Developer.vectorToString(fromParentToChild));
-////            }
-//            tickPosition.add(vector);
-//        }
-//    }
-//
-    private Quaternion eulerToQuaternion(EulerAngle eulerAngle) {
-        double yaw = eulerAngle.getZ();
-        double pitch = eulerAngle.getY();
-        double roll = eulerAngle.getX();
+    private void updateTickPositionBasedOnParentRotation() {
+        if (parent == null || parent.getGlobalRotation() == null) return;
+        Vector fromParentToChild = getBoneBlueprint().getArmorStandOffsetFromModel().subtract(parent.getBoneBlueprint().getArmorStandOffsetFromModel());
+        Vector rotatedVector = fromParentToChild.clone();
+        EulerAngle parentRotation = QuaternionHelper.quaternionToEuler(parent.getGlobalRotation());
+        rotatedVector.rotateAroundX(-parentRotation.getX());
+        rotatedVector.rotateAroundY(-parentRotation.getY());
+        rotatedVector.rotateAroundZ(parentRotation.getZ());
 
-        double cy = Math.cos(yaw * 0.5);
-        double sy = Math.sin(yaw * 0.5);
-        double cp = Math.cos(pitch * 0.5);
-        double sp = Math.sin(pitch * 0.5);
-        double cr = Math.cos(roll * 0.5);
-        double sr = Math.sin(roll * 0.5);
-
-        double w = cr * cp * cy + sr * sp * sy;
-        double x = sr * cp * cy - cr * sp * sy;
-        double y = cr * sp * cy + sr * cp * sy;
-        double z = cr * cp * sy - sr * sp * cy;
-
-        return new Quaternion(w, x, y, z);
-    }
-//
-//    public Vector rotate(Quaternion quaternion, Vector rotation) {
-//        Quaternion rotationQuaternion = new Quaternion(0, rotation.getX(), rotation.getY(), rotation.getZ());
-//        Quaternion rotatedQuaternion = quaternion.multiply(rotationQuaternion).multiply(quaternion.getConjugate());
-//        return new Vector(rotatedQuaternion.getQ1(), rotatedQuaternion.getQ2(), rotatedQuaternion.getQ3());
-//    }
-
-    //If the expected origin of the parent is offset from its actual location, translate that offset to the child
-    private void updateTickPositionBasedOnParentTranslation() {
-        if (parent == null) return;
-        Vector parentOffsetFromPivot = parent.getCurrentOffsetFromSkeletonLocation().subtract(parent.getBoneBlueprint().getBoneOriginOffset());
-        if (tickPosition == null) tickPosition = new Vector(0, 0, 0);
-        tickPosition.add(parentOffsetFromPivot);
-    }
-
-    private Vector getCurrentOffsetFromSkeletonLocation() {
-        return armorStand.getLocation().subtract(skeleton.getCurrentLocation()).toVector();
+        if (globalTranslation == null) globalTranslation = new Vector(0, 0, 0);
+        Vector vector = rotatedVector.subtract(fromParentToChild);
+        globalTranslation.add(vector);
     }
 
     public ArmorStand generateDisplay(Location location) {
@@ -212,11 +132,8 @@ public class Bone {
         boneChildren.forEach(child -> child.getNametags(nametags));
     }
 
-
     private Location updateArmorStandLocation() {
-        if (tickPosition != null)
-            return skeleton.getCurrentLocation().add(boneBlueprint.getBoneOriginOffset().add(tickPosition));
-        else return skeleton.getCurrentLocation().add(boneBlueprint.getBoneOriginOffset());
+        return skeleton.getCurrentLocation().add(boneBlueprint.getBoneOriginOffset().add(globalTranslation));
     }
 
     public void remove() {
