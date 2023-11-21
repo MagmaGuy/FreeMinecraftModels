@@ -13,7 +13,6 @@ import java.util.List;
 public class StaticEntity extends ModeledEntity {
     @Getter
     private static final List<StaticEntity> staticEntities = new ArrayList<>();
-    private final ArrayList<ArmorStand> armorStandList = new ArrayList<>();
     @Getter
     private final String name = "default";
 

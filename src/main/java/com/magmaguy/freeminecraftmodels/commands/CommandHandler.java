@@ -11,6 +11,7 @@ import cloud.commandframework.minecraft.extras.MinecraftExceptionHandler;
 import cloud.commandframework.minecraft.extras.MinecraftHelp;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.ReloadHandler;
+import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.customentity.StaticEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.utils.Developer;
@@ -18,6 +19,7 @@ import net.kyori.adventure.platform.bukkit.BukkitAudiences;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 
 import java.lang.reflect.Method;
@@ -92,7 +94,7 @@ public class CommandHandler {
                     minecraftHelp.queryCommands(context.getOrDefault("query", ""), context.getSender());
                 }));
 
-        List<String> spawnTypes = List.of("static");
+        List<String> spawnTypes = List.of("static", "dynamic");
         List<String> entityIDs = new ArrayList<>();
         FileModelConverter.getConvertedFileModels().values().forEach(fileModelConverter -> entityIDs.add(fileModelConverter.getID()));
 
@@ -107,7 +109,9 @@ public class CommandHandler {
                     location.setPitch(0);
                     location.setYaw(180);
                     if (((String) context.get("spawnType")).equalsIgnoreCase("static"))
-                        StaticEntity.create(context.get("entityID"),                                location);
+                        StaticEntity.create(context.get("entityID"), location);
+                    else if (((String) context.get("spawnType")).equalsIgnoreCase("dynamic"))
+                        DynamicEntity.create(context.get("entityID"), location, location.getWorld().spawnEntity(location, EntityType.COW));
                 }));
 
         manager.command(builder.literal("reload").handler(context -> ReloadHandler.reload(context.getSender())));
