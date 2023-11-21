@@ -9,6 +9,7 @@ import com.magmaguy.freeminecraftmodels.utils.ChunkHasher;
 import lombok.Getter;
 import org.bukkit.Location;
 import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.Entity;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.Vector;
 
@@ -29,6 +30,8 @@ public class ModeledEntity {
     private Location lastSeenLocation;
     @Getter
     private Skeleton skeleton;
+    @Getter
+    protected Entity entity = null;
 
     public ModeledEntity(String entityID, Location spawnLocation) {
         this.entityID = entityID;
@@ -39,7 +42,8 @@ public class ModeledEntity {
         if (fileModelConverter == null) return;
         skeletonBlueprint = fileModelConverter.getSkeletonBlueprint();
         skeleton = new Skeleton(skeletonBlueprint);
-        if (fileModelConverter.getAnimationsBlueprint() != null) animationManager = new AnimationManager(this, fileModelConverter.getAnimationsBlueprint());
+        if (fileModelConverter.getAnimationsBlueprint() != null)
+            animationManager = new AnimationManager(this, fileModelConverter.getAnimationsBlueprint());
     }
 
     private static boolean isNameTag(ArmorStand armorStand) {
@@ -52,6 +56,19 @@ public class ModeledEntity {
 
     public void spawn(Location location) {
         armorStandInitializer(location);
+        animationManager.start();
+    }
+
+    /**
+     * Plays an animation as set by the string name.
+     *
+     * @param animationName  Name of the animation - case-sensitive
+     * @param blendAnimation If the animation should blend. If set to false, the animation passed will stop other animations.
+     *                      If set to true, the animation will be mixed with any currently ongoing animations
+     * @return Whether the animation successfully started playing.
+     */
+    public boolean playAnimation(String animationName, boolean blendAnimation) {
+        return animationManager.playAnimation(animationName, blendAnimation);
     }
 
     public void loadChunk() {
@@ -65,13 +82,14 @@ public class ModeledEntity {
 
     public void remove() {
         skeleton.remove();
+        if (entity != null) entity.remove();
         ModeledEntityEvents.removeLoadedModeledEntity(this);
         ModeledEntityEvents.removeUnloadedModeledEntity(this);
         terminateAnimation();
     }
 
-    private void terminateAnimation(){
-        if (animationManager !=null) animationManager.stop();
+    private void terminateAnimation() {
+        if (animationManager != null) animationManager.stop();
     }
 
     public void unloadChunk() {

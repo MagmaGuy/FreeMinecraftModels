@@ -43,7 +43,7 @@ public class ModeledEntityEvents implements Listener {
     public void ChunkUnloadEvent (ChunkUnloadEvent event) {
         int chunkHash = ChunkHasher.hash(event.getChunk());
         loadedModeledEntities.values().forEach(modeledEntity->{
-            if (chunkHash == modeledEntity.chunkHash) {
+            if (modeledEntity.chunkHash != null && chunkHash == modeledEntity.chunkHash) {
                 modeledEntity.unloadChunk();
                 loadedModeledEntities.put(chunkHash, modeledEntity);
                 unloadedModeledEntities.remove(chunkHash, modeledEntity);
