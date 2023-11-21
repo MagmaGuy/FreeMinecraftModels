@@ -4,6 +4,7 @@ import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import com.magmaguy.freeminecraftmodels.utils.Developer;
 import lombok.Getter;
+import lombok.Setter;
 import org.bukkit.Location;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.util.EulerAngle;
@@ -21,6 +22,7 @@ public class Skeleton {
     @Getter
     private final HashMap<String, Bone> boneMap = new HashMap<>();
     private final SkeletonBlueprint skeletonBlueprint;
+    @Setter
     private Location currentLocation = null;
     private BoneBlueprint hitbox;
 
