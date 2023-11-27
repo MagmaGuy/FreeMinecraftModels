@@ -85,9 +85,29 @@ Generating an `.fmmodel` is as simple as putting your `.bbmodel` in the `~/plugi
 and reloading the plugin with `/fmm reload` or restarting the server. Your `.fmmodel` will then be in
 the `~/plugins/FreeMinecraftModels/models` folder.
 
-## What can FreeMinecraftModels (FMM) do for developers who want to integrate it in their plugin?
+## What can FreeMinecraftModels (FMM) do for developers who want to integrate it in their plugins?
 
-***Note: No maven repo is currently available, this will be added really soon!***
+FMM has a maven repo!
+Maven:
+
+```xml
+
+<dependency>
+    <groupId>com.magmaguy</groupId>
+    <artifactId>FreeMinecraftModels</artifactId>
+    <version>1.1.0-SNAPSHOT</version>
+    <scope>provided</scope>
+</dependency>
+```
+
+Gradle:
+
+```kotlin
+compileOnly group : 'com.magmaguy', name: 'FreeMinecraftModels', version: '1.1.0-SNAPSHOT'
+```
+
+*Note FreeMinecraftModels is mean to be used as an API, and will require installation of the plugin on the server. Do
+not shade it into your plugin!*
 
 FMM aims to be as easy as possible to use as an API.
 
@@ -118,35 +138,77 @@ public class FreeMinecraftModelsModel {
 Keep in mind that static models are meant to stay in place and act as a decorative element in a fixed location. While it
 is possible to move them, consider whether you might instead want to use a dynamic model if that is your purpose.
 
-And here is a snippet for handling a dynamic model:
+And here is how EliteMobs, my custom bosses plugin, uses dynamic entities:
 
 ```java
+package com.magmaguy.elitemobs.thirdparty.custommodels.freeminecraftmodels;
+
+import com.magmaguy.elitemobs.mobconstructor.custombosses.CustomBossEntity;
+import com.magmaguy.elitemobs.thirdparty.custommodels.CustomModelInterface;
+import com.magmaguy.freeminecraftmodels.api.ModeledEntityManager;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
+import lombok.Getter;
 import org.bukkit.entity.LivingEntity;
 
-public class FreeMinecraftModelsModel {
-    private DynamicEntity dynamicEntity = null;
+public class CustomModelFMM implements CustomModelInterface {
+    @Getter
+    private DynamicEntity dynamicEntity;
 
-    //Create the model
-    public FreeMinecraftModelsModel(String id, LivingEntity livingEntity) {
-        //This spawns the entity!
-        dynamicEntity = DynamicEntity.create(id, livingEntity);
-        //This checks if the entity spawned correctly
-        if (staticEntity == null) Logger.warningMessage("FMM failed to find a model named " + id + " !");
+    public CustomModelFMM(LivingEntity livingEntity, String modelName, String nametagName) {
+        dynamicEntity = DynamicEntity.create(modelName, livingEntity);
+        if (dynamicEntity == null) return;
+        dynamicEntity.setName(nametagName);
     }
 
-    public void remove() {
-        //This removes the entity
-        staticEntity.remove();
+    public static void reloadModels() {
+        ModeledEntityManager.reload();
+    }
+
+    public static boolean modelExists(String modelName) {
+        return ModeledEntityManager.modelExists(modelName);
+    }
+
+    @Override
+    public void shoot() {
+        if (dynamicEntity.hasAnimation("attack_ranged")) dynamicEntity.playAnimation("attack_ranged", false);
+        else dynamicEntity.playAnimation("attack", false);
+    }
+
+    @Override
+    public void melee() {
+        if (dynamicEntity.hasAnimation("attack_melee")) dynamicEntity.playAnimation("attack_melee", false);
+        else dynamicEntity.playAnimation("attack", false);
+    }
+
+    @Override
+    public void playAnimationByName(String animationName) {
+        dynamicEntity.playAnimation(animationName, false);
+    }
+
+    @Override
+    public void setName(String nametagName, boolean visible) {
+        dynamicEntity.setName(nametagName);
+        dynamicEntity.setNameVisible(visible);
+    }
+
+    @Override
+    public void setNameVisible(boolean visible) {
+        dynamicEntity.setNameVisible(visible);
+    }
+
+    @Override
+    public void switchPhase() {
+        dynamicEntity.stopCurrentAnimations();
     }
 }
 ```
 
-Dynamic models are built on top of a living entity. This is a WIP.
+Dynamic models are built on top of a living entity, which can be provided either when using the create method as in the
+example above, or when running the spawn method on a Dynamic entity.
 
 While there is no formal API resource right now, all elements intended for API use are contained within ModeledEntity (
-the base class for all entities), StaticEntity and DynamicEntity. 99% of developers should find all the methods they
-need spread across those three classes.
+the base class for all entities), StaticEntity, DynamicEntity and ModeledEntityManager. 99% of developers should find
+all the methods they need spread across those three classes.
 
 # Contributing to the FreeMinecraftModels (FMM) project as a developer
 
@@ -193,6 +255,7 @@ Please note that these tricks are all completely invisible to users and model ma
   system from MC 1.19.4+, it's way more efficient
 - To avoid collisions with other plugins which modify leather horse armor, FMM uses custom model data values starting at
   50,000
+
 # Contributing to the FreeMinecraftModels (FMM) project in general
 
 FMM is actually crowdfunded by the lovely people over at https://www.patreon.com/magmaguy ! All contributions help more than you'd imagine ;)
