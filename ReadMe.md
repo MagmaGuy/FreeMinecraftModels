@@ -1,12 +1,12 @@
 # ***Before you start!***
 
-FreeMinecraftModels (FMM) is currently in **early alpha**! This means that several features are not yet done, and are actively being worked on.
+FreeMinecraftModels (FMM) is currently in **alpha**! This means that several features are not yet done, and are actively
+being worked on.
 
-This means that right now FMM can't:
-- Do hitboxes
+However, at this moment, the core of the plugin is fully functional - converting bbmodel files, generating resource
+packs, spawning entities in-game and managing their animations is all working, if perhaps not 100% polished.
 
-In its current stage, it works perfectly well for displaying static models in-game! The features above are actively being worked on right now. Consider supporting the dev
-development at https://www.patreon.com/magmaguy !
+Consider supporting the development at https://www.patreon.com/magmaguy !
 
 # Using this plugin
 
@@ -15,8 +15,12 @@ development at https://www.patreon.com/magmaguy !
 It can:
 
 - Import .bbmodel or fmmodel (FFM's custom format) models
-- Generate resource packs with models that exceed normal Minecraft resource pack model limits (up to 112x112x112 units or 7x7x7 in-game blocks)
-- Display these models in-game through the use of the command `/fmm spawn static <id>` where the id is the file name of the model, in lowercase and without the file extension
+- Generate resource packs with models that exceed normal Minecraft resource pack model limits (up to 112x112x112 units
+  or 7x7x7 in-game blocks)
+- Display these models in-game through the use of the command `/fmm spawn static <id>` where the id is the file name of
+  the model, in lowercase and without the file extension
+- Animate these models as they were configured to be animated in Blockbench
+- Handle default state animations without requiring other plugins (walk, idle, death, attack, spawn)
 
 ### How do you add an existing model?
 
@@ -27,8 +31,12 @@ To import a model, just drag the .bbmodel to the imports folder and do `/fmm rel
 ### How do you view the model in-game?
 
 There are two (planned) categories of models.
-- `Static` models are for models that do not move, and serve more like decorations - think something like a tower or a Christmas tree.
-- `Dynamic` models are for models that behave like Minecraft mobs, that is to say they move around and do various behaviors associated to mobs. Think something like custom boss models or adding completely new entity types to Minecraft.
+
+- `Static` models are for models that do not move (but can have animations), and serve more like decorations - think
+  something like a tower or a Christmas tree.
+- `Dynamic` models are for models that behave like Minecraft mobs, that is to say they move around and do various
+  behaviors associated to mobs. Think something like custom boss models or adding completely new entity types to
+  Minecraft.
 
 #### Viewing static models in-game
 
@@ -135,8 +143,9 @@ public class FreeMinecraftModelsModel {
 }
 ```
 
-Keep in mind that static models are meant to stay in place and act as a decorative element in a fixed location. While it
-is possible to move them, consider whether you might instead want to use a dynamic model if that is your purpose.
+Keep in mind that static models are meant to stay in place and act as a decorative element in a fixed location (
+animations don't count as 'movement' here). While it is possible to move them, consider whether you might instead want
+to use a dynamic model if that is your purpose.
 
 And here is how EliteMobs, my custom bosses plugin, uses dynamic entities:
 
@@ -263,8 +272,7 @@ FMM is actually crowdfunded by the lovely people over at https://www.patreon.com
 # Currently planned features:
 - Bedrock client RSP generation
 - Server properties-independent RSP management with geyser integration
-- Custom entities
-- Hitboxes
+- Custom entities (?)
 - tag_projectile as meta bones from which projectiles can be shot (can have more than one per model)
 
 # Current weird limitations that need to be fixed:
