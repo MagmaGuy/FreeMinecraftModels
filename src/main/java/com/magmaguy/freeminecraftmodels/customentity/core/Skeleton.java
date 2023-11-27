@@ -1,13 +1,17 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
+import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
-import com.magmaguy.freeminecraftmodels.utils.Developer;
 import lombok.Getter;
 import lombok.Setter;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.entity.ArmorStand;
-import org.bukkit.util.EulerAngle;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.LeatherArmorMeta;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -25,6 +29,7 @@ public class Skeleton {
     @Setter
     private Location currentLocation = null;
     private BoneBlueprint hitbox;
+    private BukkitTask damageTintTask = null;
 
     public Skeleton(SkeletonBlueprint skeletonBlueprint) {
         this.skeletonBlueprint = skeletonBlueprint;
@@ -86,10 +91,42 @@ public class Skeleton {
     /**
      * This updates animations. The plugin runs this automatically, don't use it unless you know what you're doing!
      */
-    public void transform(boolean parentUpdate) {
-        boneMap.values().forEach(bone-> {
+    public void transform() {
+        boneMap.values().forEach(bone -> {
             if (bone.getBoneBlueprint().getParent() == null)
-                bone.transform(parentUpdate);
+                bone.transform();
         });
+    }
+
+    public void tint() {
+        if (damageTintTask != null) damageTintTask.cancel();
+        damageTintTask = new BukkitRunnable() {
+            int counter = 0;
+
+            @Override
+            public void run() {
+                counter++;
+                if (counter > 10) {
+                    cancel();
+                    boneMap.values().forEach(bone -> {
+                        if (bone.getArmorStand().getHelmet().getItemMeta() == null) return;
+                        ItemStack itemStack = bone.getArmorStand().getHelmet();
+                        LeatherArmorMeta leatherArmorMeta = (LeatherArmorMeta) bone.getArmorStand().getHelmet().getItemMeta();
+                        leatherArmorMeta.setColor(Color.WHITE);
+                        itemStack.setItemMeta(leatherArmorMeta);
+                        bone.getArmorStand().setHelmet(itemStack);
+                    });
+                    return;
+                }
+                boneMap.values().forEach(bone -> {
+                    if (bone.getArmorStand().getHelmet().getItemMeta() == null) return;
+                    ItemStack itemStack = bone.getArmorStand().getHelmet();
+                    LeatherArmorMeta leatherArmorMeta = (LeatherArmorMeta) bone.getArmorStand().getHelmet().getItemMeta();
+                    leatherArmorMeta.setColor(Color.fromRGB(255, (int) (255 / (double) counter), (int) (255 / (double) counter)));
+                    itemStack.setItemMeta(leatherArmorMeta);
+                    bone.getArmorStand().setHelmet(itemStack);
+                });
+            }
+        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
     }
 }

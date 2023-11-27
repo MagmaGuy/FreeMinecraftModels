@@ -30,6 +30,10 @@ public class BoneBlueprint {
     @Getter
     private final String boneName;
     @Getter
+    private final String originalName;
+    //This is the vector offset from the entity's location that the pivot point of the boneBlueprint should be in, outside of animations
+    private final Vector boneOriginOffset;
+    @Getter
     @Setter
     private Integer modelID = null;
     @Getter
@@ -38,18 +42,12 @@ public class BoneBlueprint {
     private Vector modelSpaceOrigin = new Vector();
     @Getter
     private boolean nameTag = false;
-    //This is the vector offset from the entity's location that the pivot point of the boneBlueprint should be in, outside of animations
-    private final Vector boneOriginOffset;
     @Getter
     private BoneBlueprint parent = null;
-    public BoneBlueprint(double projectResolution,
-                         Map<String, Object> boneJSON,
-                         HashMap<String, Object> values,
-                         Map<String, Map<String, Object>> textureReferences,
-                         String modelName,
-                         BoneBlueprint parent,
-                         SkeletonBlueprint skeletonBlueprint) {
+
+    public BoneBlueprint(double projectResolution, Map<String, Object> boneJSON, HashMap<String, Object> values, Map<String, Map<String, Object>> textureReferences, String modelName, BoneBlueprint parent, SkeletonBlueprint skeletonBlueprint) {
         this.boneName = "freeminecraftmodels:" + modelName.toLowerCase() + "/" + ((String) boneJSON.get("name")).toLowerCase();
+        this.originalName = modelName;
         this.parent = parent;
         if (boneName.contains("tag_")) {
             nameTag = true;
@@ -63,7 +61,9 @@ public class BoneBlueprint {
         for (Object object : childrenValues) {
             if (object instanceof String) {
                 //Case for object being a cube
-                cubeBlueprintChildren.add(new CubeBlueprint(projectResolution, (Map<String, Object>) values.get(object)));
+                CubeBlueprint cubeBlueprint = new CubeBlueprint(projectResolution, (Map<String, Object>) values.get(object));
+                if (cubeBlueprint.isValidatedData()) cubeBlueprintChildren.add(cubeBlueprint);
+                else Developer.warn("Model " + modelName + " has an invalid configuration for its cubes!");
             } else {
                 //Case for object being a boneBlueprint
                 boneBlueprintChildren.add(new BoneBlueprint(projectResolution, (Map<String, Object>) object, values, textureReferences, modelName, this, skeletonBlueprint));
@@ -98,10 +98,7 @@ public class BoneBlueprint {
         blockSpaceOrigin = new Vector(origins.get(0) / 16d, origins.get(1) / 16d, origins.get(2) / 16d);
         //This in the origin in "model space", meaning it is adjusted to the resource pack / Blockbench unit size (16x smaller than real space)
         //It also adjusts the scaling to fit the head
-        modelSpaceOrigin = new Vector(
-                origins.get(0) * ARMOR_STAND_HEAD_SIZE_MULTIPLIER * MODEL_SCALE,
-                origins.get(1) * ARMOR_STAND_HEAD_SIZE_MULTIPLIER * MODEL_SCALE,
-                origins.get(2) * ARMOR_STAND_HEAD_SIZE_MULTIPLIER * MODEL_SCALE);
+        modelSpaceOrigin = new Vector(origins.get(0) * ARMOR_STAND_HEAD_SIZE_MULTIPLIER * MODEL_SCALE, origins.get(1) * ARMOR_STAND_HEAD_SIZE_MULTIPLIER * MODEL_SCALE, origins.get(2) * ARMOR_STAND_HEAD_SIZE_MULTIPLIER * MODEL_SCALE);
         boneJSON.put("origin", List.of(modelSpaceOrigin.getX(), modelSpaceOrigin.getY(), modelSpaceOrigin.getZ()));
     }
 
@@ -118,9 +115,7 @@ public class BoneBlueprint {
     }
 
     private String getModelDirectory(String modelName) {
-        return MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar +
-                "output" + File.separatorChar + "FreeMinecraftModels" + File.separatorChar + "assets" + File.separatorChar +
-                "freeminecraftmodels" + File.separatorChar + "models" + File.separatorChar + modelName;
+        return MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar + "output" + File.separatorChar + "FreeMinecraftModels" + File.separatorChar + "assets" + File.separatorChar + "freeminecraftmodels" + File.separatorChar + "models" + File.separatorChar + modelName;
     }
 
     private Vector findDisplayOffset(String modelName) {
@@ -147,18 +142,12 @@ public class BoneBlueprint {
         double minecraftMinimumModelStartPoint = -16D;
         double minecraftMaximumModelEndPoint = 32D;
         double xOffset = 0, yOffset = 0, zOffset = 0;
-        if (lowestX < minecraftMinimumModelStartPoint)
-            xOffset = minecraftMinimumModelStartPoint - lowestX;
-        if (lowestY < minecraftMinimumModelStartPoint)
-            yOffset = minecraftMinimumModelStartPoint - lowestY;
-        if (lowestZ < minecraftMinimumModelStartPoint)
-            zOffset = minecraftMinimumModelStartPoint - lowestZ;
-        if (highestX > minecraftMaximumModelEndPoint)
-            xOffset = minecraftMaximumModelEndPoint - highestX;
-        if (highestY > minecraftMaximumModelEndPoint)
-            yOffset = minecraftMaximumModelEndPoint - highestY;
-        if (highestZ > minecraftMaximumModelEndPoint)
-            zOffset = minecraftMaximumModelEndPoint - highestZ;
+        if (lowestX < minecraftMinimumModelStartPoint) xOffset = minecraftMinimumModelStartPoint - lowestX;
+        if (lowestY < minecraftMinimumModelStartPoint) yOffset = minecraftMinimumModelStartPoint - lowestY;
+        if (lowestZ < minecraftMinimumModelStartPoint) zOffset = minecraftMinimumModelStartPoint - lowestZ;
+        if (highestX > minecraftMaximumModelEndPoint) xOffset = minecraftMaximumModelEndPoint - highestX;
+        if (highestY > minecraftMaximumModelEndPoint) yOffset = minecraftMaximumModelEndPoint - highestY;
+        if (highestZ > minecraftMaximumModelEndPoint) zOffset = minecraftMaximumModelEndPoint - highestZ;
 
         return new Vector(xOffset, yOffset, zOffset);
     }
@@ -177,12 +166,7 @@ public class BoneBlueprint {
         //The hardcoded numbers adjust the item to the center of the armor stand
         //The offsets are from shifting the model around, when relevant, in order to fit the model boundaries
         //The offsets are scaled down
-        boneJSON.put("display", Map.of(
-                "head", Map.of("translation",
-                        List.of(calculateVisualOffset(32, xOffset, modelSpaceOrigin.getX()),
-                                calculateVisualOffset(25.5, yOffset, modelSpaceOrigin.getY()),
-                                calculateVisualOffset(32, zOffset, modelSpaceOrigin.getZ())),
-                        "scale", List.of(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE))));
+        boneJSON.put("display", Map.of("head", Map.of("translation", List.of(calculateVisualOffset(32, xOffset, modelSpaceOrigin.getX()), calculateVisualOffset(25.5, yOffset, modelSpaceOrigin.getY()), calculateVisualOffset(32, zOffset, modelSpaceOrigin.getZ())), "scale", List.of(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE))));
     }
 
     /**

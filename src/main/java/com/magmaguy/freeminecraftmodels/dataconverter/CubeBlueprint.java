@@ -13,9 +13,11 @@ import java.util.Map;
 public class CubeBlueprint {
     private final Map<String, Object> cubeJSON;
     @Getter
-    private final Vector to;
+    private Vector to;
     @Getter
-    private final Vector from;
+    private Vector from;
+    @Getter
+    private boolean validatedData = false;
 
     public CubeBlueprint(double projectResolution, Map<String, Object> cubeJSON) {
         this.cubeJSON = cubeJSON;
@@ -41,9 +43,12 @@ public class CubeBlueprint {
         //works out that this is the right amount to get the right final size.
         double scaleFactor = 0.4D;
         ArrayList<Double> fromList = (ArrayList<Double>) cubeJSON.get("from");
+        if (fromList == null) return;
         from = new Vector(Round.fourDecimalPlaces(fromList.get(0) * scaleFactor), Round.fourDecimalPlaces(fromList.get(1) * scaleFactor), Round.fourDecimalPlaces(fromList.get(2) * scaleFactor));
         ArrayList<Double> toList = (ArrayList<Double>) cubeJSON.get("to");
+        if (toList == null) return;
         to = new Vector(Round.fourDecimalPlaces(toList.get(0) * scaleFactor), Round.fourDecimalPlaces(toList.get(1) * scaleFactor), Round.fourDecimalPlaces(toList.get(2) * scaleFactor));
+        validatedData = true;
     }
 
     private void processFace(double projectResolution, Map<String, Object> map, String faceName) {
@@ -51,7 +56,7 @@ public class CubeBlueprint {
     }
 
     private void setTextureData(double projectResolution, Map<String, Object> map) {
-        if (map.get("texture") == null) return;
+        if (map == null || map.get("texture") == null) return;
         Double textureDouble = (Double) map.get("texture");
         int textureValue = (int) Math.round(textureDouble);
         map.put("texture", "#" + textureValue);
@@ -60,10 +65,7 @@ public class CubeBlueprint {
         ArrayList<Double> originalUV = (ArrayList<Double>) map.get("uv");
         //For some reason Minecraft really wants images to be 16x16 so here we scale the UV to fit that
         double uvMultiplier = 16 / projectResolution;
-        map.put("uv", List.of(Round.fourDecimalPlaces(originalUV.get(0) * uvMultiplier),
-                Round.fourDecimalPlaces(originalUV.get(1) * uvMultiplier),
-                Round.fourDecimalPlaces(originalUV.get(2) * uvMultiplier),
-                Round.fourDecimalPlaces(originalUV.get(3) * uvMultiplier)));
+        map.put("uv", List.of(Round.fourDecimalPlaces(originalUV.get(0) * uvMultiplier), Round.fourDecimalPlaces(originalUV.get(1) * uvMultiplier), Round.fourDecimalPlaces(originalUV.get(2) * uvMultiplier), Round.fourDecimalPlaces(originalUV.get(3) * uvMultiplier)));
     }
 
 

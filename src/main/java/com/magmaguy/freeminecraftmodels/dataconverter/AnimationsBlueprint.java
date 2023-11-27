@@ -7,7 +7,7 @@ import java.util.List;
 
 public class AnimationsBlueprint {
     @Getter
-    private HashMap<String, AnimationBlueprint> animations = new HashMap<>();
+    private final HashMap<String, AnimationBlueprint> animations = new HashMap<>();
 
     public AnimationsBlueprint(List<Object> rawAnimationData, String modelName, SkeletonBlueprint skeletonBlueprint) {
         for (Object animation : rawAnimationData) {

@@ -13,6 +13,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -36,8 +37,7 @@ public class ImportsFolder {
         //First pass scans for zipped files
         for (File childFile : file.listFiles()) {
             try {
-                if (childFile.getName().contains(".zip"))
-                    unzip(childFile);
+                if (childFile.getName().contains(".zip")) unzip(childFile);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -57,9 +57,8 @@ public class ImportsFolder {
 
     private static boolean isEmptyDirectory(File directory) {
         if (directory.isFile()) return false;
-        if (directory.isDirectory())
-            for (File child : directory.listFiles())
-                if (!isEmptyDirectory(child)) return false;
+        if (directory.isDirectory()) for (File child : directory.listFiles())
+            if (!isEmptyDirectory(child)) return false;
         return true;
     }
 
@@ -122,7 +121,7 @@ public class ImportsFolder {
         for (File childFile : folder.listFiles())
             if (childFile.isDirectory()) processFolder(folder);
             else processFile(childFile);
-        //folder.delete();
+        //folder.delete();  not sure I want to do this
     }
 
     private static void processFile(File childFile) {
@@ -152,18 +151,30 @@ public class ImportsFolder {
             minifiedMap.put("elements", jsonMap.get("elements"));
             minifiedMap.put("outliner", jsonMap.get("outliner"));
             ArrayList<Map> minifiedTextures = new ArrayList<>();
-            ((ArrayList) jsonMap.get("textures")).forEach(innerMap ->
-                    minifiedTextures.add(
-                            Map.of(
-                                    "source", ((LinkedTreeMap) innerMap).get("source"),
-                                    "id", ((LinkedTreeMap) innerMap).get("id"),
-                                    "name", ((LinkedTreeMap) innerMap).get("name"))));
+            ((ArrayList) jsonMap.get("textures")).forEach(innerMap -> minifiedTextures.add(Map.of("source", ((LinkedTreeMap) innerMap).get("source"), "id", ((LinkedTreeMap) innerMap).get("id"), "name", ((LinkedTreeMap) innerMap).get("name"))));
             minifiedMap.put("textures", minifiedTextures);
+            minifiedMap.put("animations", jsonMap.get("animations"));
+
+            List<String> parentFiles = new ArrayList<>();
+            File currentFile = childFile;
+            while (true) {
+                File parentFile = currentFile.getParentFile();
+                if (parentFile.getName().equals("imports")) break;
+                parentFiles.add(parentFile.getName());
+                currentFile = parentFile;
+            }
+            String pathName;
+            if (parentFiles.isEmpty())
+                pathName = modelsDirectory + File.separatorChar + childFile.getName().replace(".bbmodel", ".fmmodel");
+            else {
+                pathName = modelsDirectory;
+                for (int i = parentFiles.size() - 1; i > -1; i--)
+                    pathName += File.separatorChar + parentFiles.get(i);
+                pathName += File.separatorChar + childFile.getName().replace(".bbmodel", ".fmmodel");
+            }
 
             try {
-                FileUtils.writeStringToFile(
-                        new File(modelsDirectory + File.separatorChar + childFile.getName().replace(".bbmodel", ".fmmodel")),
-                        writerGson.toJson(minifiedMap), StandardCharsets.UTF_8);
+                FileUtils.writeStringToFile(new File(pathName), writerGson.toJson(minifiedMap), StandardCharsets.UTF_8);
             } catch (IOException e) {
                 Developer.warn("Failed to generate the minified file!");
                 throw new RuntimeException(e);

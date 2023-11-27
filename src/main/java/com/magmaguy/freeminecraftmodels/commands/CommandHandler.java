@@ -20,6 +20,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 
 import java.lang.reflect.Method;
@@ -111,7 +112,7 @@ public class CommandHandler {
                     if (((String) context.get("spawnType")).equalsIgnoreCase("static"))
                         StaticEntity.create(context.get("entityID"), location);
                     else if (((String) context.get("spawnType")).equalsIgnoreCase("dynamic"))
-                        DynamicEntity.create(context.get("entityID"), location, location.getWorld().spawnEntity(location, EntityType.COW));
+                        DynamicEntity.create(context.get("entityID"), (LivingEntity) location.getWorld().spawnEntity(location, EntityType.PIG));
                 }));
 
         manager.command(builder.literal("reload").handler(context -> ReloadHandler.reload(context.getSender())));

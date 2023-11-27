@@ -1,7 +1,5 @@
 package com.magmaguy.freeminecraftmodels.dataconverter;
 
-import java.util.List;
-
 public class AnimationFrame {
     public double xRotation;
     public double yRotation;

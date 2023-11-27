@@ -33,10 +33,15 @@ public class AnimationBlueprint {
         initializeGlobalValues(animationData);
 
         //In BBModel files, each bone holds the data for their transformations, so data is stored from the bone's perspective
-        ((Map<String, Object>) animationData.get("animators")).entrySet().forEach(pair -> initializeBones((Map<String, Object>) pair.getValue()));
+        ((Map<String, Object>) animationData.get("animators")).entrySet().forEach(pair -> initializeBones((Map<String, Object>) pair.getValue(), modelName, animationName));
 
         //Process the keyframes
-        interpolateKeyframes();
+        try {
+            interpolateKeyframes();
+        } catch (Exception e) {
+            Developer.warn("Failed to interpolate animations for model " + modelName + "! Animation name: " + animationName);
+            e.printStackTrace();
+        }
     }
 
     public static double lerp(double start, double end, double t) {
@@ -50,16 +55,18 @@ public class AnimationBlueprint {
         duration = (int) (20 * (Double) animationData.get("length"));
     }
 
-    private void initializeBones(Map<String, Object> animationData) {
+    private void initializeBones(Map<String, Object> animationData, String modelName, String animationName) {
         String boneName = (String) animationData.get("name");
         BoneBlueprint boneBlueprint = skeletonBlueprint.getBoneMap().get(boneName);
+        //hitboxes do not get animated!
+        if (boneName.equalsIgnoreCase("hitbox")) return;
         if (boneBlueprint == null) {
-            Developer.warn("Failed to get bone " + boneName + " from model!");
+            Developer.warn("Failed to get bone " + boneName + " from model " + modelName + "!");
             return;
         }
         List<Keyframe> keyframes = new ArrayList<>();
         for (Object keyframeData : ((List) animationData.get("keyframes"))) {
-            keyframes.add(new Keyframe(keyframeData));
+            keyframes.add(new Keyframe(keyframeData, modelName, animationName));
         }
         keyframes.sort(Comparator.comparingInt(Keyframe::getTimeInTicks));
         boneKeyframes.put(boneBlueprint, keyframes);
@@ -105,7 +112,9 @@ public class AnimationBlueprint {
                 lastFrame = animationFrame;
                 continue;
             }
-            int durationBetweenKeyframes = animationFrame.getTimeInTicks() - previousFrame.getTimeInTicks();
+            //It is possible for frames to go beyond the animation's duration, so we need to clamp that
+            if (previousFrame.getTimeInTicks() >= duration) return;
+            int durationBetweenKeyframes = Math.min(animationFrame.getTimeInTicks(), duration) - previousFrame.getTimeInTicks();
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
                 animationFramesArray[currentFrame].xRotation = lerp(previousFrame.getDataX(), animationFrame.getDataX(), j / (double) durationBetweenKeyframes);
@@ -163,18 +172,18 @@ public class AnimationBlueprint {
             int durationBetweenKeyframes = duration - 1 - lastFrame.getTimeInTicks();
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                animationFramesArray[currentFrame].xPosition = lastFrame.getDataX() /16d;
-                animationFramesArray[currentFrame].yPosition = lastFrame.getDataY()/16d;
-                animationFramesArray[currentFrame].zPosition = lastFrame.getDataZ()/16d;
+                animationFramesArray[currentFrame].xPosition = lastFrame.getDataX() / 16d;
+                animationFramesArray[currentFrame].yPosition = lastFrame.getDataY() / 16d;
+                animationFramesArray[currentFrame].zPosition = lastFrame.getDataZ() / 16d;
             }
         }
         if (firstFrame != null && firstFrame.getTimeInTicks() > 0) {
             int durationBetweenKeyframes = firstFrame.getTimeInTicks();
             durationBetweenKeyframes = Math.min(durationBetweenKeyframes, duration - 1);
             for (int j = 0; j < durationBetweenKeyframes; j++) {
-                animationFramesArray[j].xPosition = firstFrame.getDataX()/16d;
-                animationFramesArray[j].yPosition = firstFrame.getDataY()/16d;
-                animationFramesArray[j].zPosition = firstFrame.getDataZ()/16d;
+                animationFramesArray[j].xPosition = firstFrame.getDataX() / 16d;
+                animationFramesArray[j].yPosition = firstFrame.getDataY() / 16d;
+                animationFramesArray[j].zPosition = firstFrame.getDataZ() / 16d;
             }
         }
     }
