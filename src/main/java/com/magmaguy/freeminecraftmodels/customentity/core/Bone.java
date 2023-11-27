@@ -15,6 +15,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import static com.magmaguy.freeminecraftmodels.utils.QuaternionHelper.quaternionToEuler;
+
 public class Bone {
     @Getter
     private final BoneBlueprint boneBlueprint;
@@ -34,8 +36,6 @@ public class Bone {
     private Vector globalTranslation = null;
     //This is the location that the bone should be at when the tick ends. Due to teleport interpolation, it takes about 100ms to actually get there
     private Location targetAnimationLocation = null;
-    private boolean rotated = false;
-    private boolean translated = false;
 
     public Bone(BoneBlueprint boneBlueprint, Bone parent, Skeleton skeleton) {
         this.boneBlueprint = boneBlueprint;
@@ -48,41 +48,45 @@ public class Bone {
     public void rotateTo(double newX, double newY, double newZ) {
         if (armorStand == null) return;
         localRotation = QuaternionHelper.eulerToQuaternion(newX, newY, newZ);
-        rotated = true;
     }
 
     public void translateTo(double x, double y, double z) {
         if (armorStand == null) return;
         localTranslation = new Vector(x, y, z);
-        translated = true;
     }
 
-    public void transform(boolean parentUpdate) {
+    //Note that several optimizations might be possible here, but that syncing with a base entity is necessary.
+    public void transform() {
         //Inherit rotation and translation values from parents
         updateGlobalRotation();
         updateGlobalTranslation();
 
-        if (rotated || parentUpdate) armorStand.setHeadPose(QuaternionHelper.quaternionToEuler(globalRotation));
-        if (rotated || translated || parentUpdate) {
-            parentUpdate = true;
-            updateTickPositionBasedOnParentRotation();
-            targetAnimationLocation = updateArmorStandLocation();
-            armorStand.teleport(targetAnimationLocation);
+        //Optimization: avoid sending a rotation
+        EulerAngle eulerAngle = quaternionToEuler(globalRotation);
+        if (Math.abs(eulerAngle.getX() - armorStand.getHeadPose().getX()) > .00000001 ||
+                Math.abs(eulerAngle.getY() - armorStand.getHeadPose().getY()) > .00000001 ||
+                Math.abs(eulerAngle.getZ() - armorStand.getHeadPose().getZ()) > .00000001) {
+            armorStand.setHeadPose(eulerAngle);
         }
 
-        boolean finalParentUpdate = parentUpdate;
-        boneChildren.forEach(boneChild -> boneChild.transform(finalParentUpdate));
+        updateTickPositionBasedOnParentRotation();
+        targetAnimationLocation = updateArmorStandLocation();
+        //Optimization: avoid a teleport packet if the target location is the same
+        if (!armorStand.getLocation().equals(targetAnimationLocation))
+            armorStand.teleport(targetAnimationLocation);
+
+        boneChildren.forEach(Bone::transform);
         localTranslation = null;
         globalTranslation = null;
         localRotation = null;
         globalRotation = null;
-        rotated = false;
-        translated = false;
     }
 
     private void updateGlobalRotation() {
         if (localRotation == null) localRotation = QuaternionHelper.eulerToQuaternion(0, 0, 0);
-        if (parent == null || parent.getGlobalRotation() == null) globalRotation = localRotation;
+        if (parent == null)
+            //Root bone, rotated by the yaw of the base model to face the right way. It's also rotated by 90 due to Blockbench compat.
+            globalRotation = localRotation.multiply(QuaternionHelper.eulerToQuaternion(0, skeleton.getCurrentLocation().getYaw() - 180, 0));
         else globalRotation = parent.getGlobalRotation().multiply(localRotation);
     }
 
@@ -96,7 +100,7 @@ public class Bone {
         if (parent == null || parent.getGlobalRotation() == null) return;
         Vector fromParentToChild = getBoneBlueprint().getArmorStandOffsetFromModel().subtract(parent.getBoneBlueprint().getArmorStandOffsetFromModel());
         Vector rotatedVector = fromParentToChild.clone();
-        EulerAngle parentRotation = QuaternionHelper.quaternionToEuler(parent.getGlobalRotation());
+        EulerAngle parentRotation = quaternionToEuler(parent.getGlobalRotation());
         rotatedVector.rotateAroundX(-parentRotation.getX());
         rotatedVector.rotateAroundY(-parentRotation.getY());
         rotatedVector.rotateAroundZ(parentRotation.getZ());
@@ -133,7 +137,10 @@ public class Bone {
     }
 
     private Location updateArmorStandLocation() {
-        return skeleton.getCurrentLocation().add(boneBlueprint.getBoneOriginOffset().add(globalTranslation));
+        Location testLocation = skeleton.getCurrentLocation().add(boneBlueprint.getBoneOriginOffset().add(globalTranslation));
+        testLocation.setYaw(180);
+//        return skeleton.getCurrentLocation().add(boneBlueprint.getBoneOriginOffset().add(globalTranslation));
+        return testLocation;
     }
 
     public void remove() {

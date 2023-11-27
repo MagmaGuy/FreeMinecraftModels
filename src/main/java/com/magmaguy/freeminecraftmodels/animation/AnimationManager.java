@@ -3,7 +3,6 @@ package com.magmaguy.freeminecraftmodels.animation;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.AnimationsBlueprint;
-import com.magmaguy.freeminecraftmodels.utils.Developer;
 import com.magmaguy.freeminecraftmodels.utils.LoopType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
@@ -35,7 +34,6 @@ public class AnimationManager {
         idleAnimation = animations.getAnimations().get("idle");
         attackAnimation = animations.getAnimations().get("attack");
         walkAnimation = animations.getAnimations().get("walk");
-        Developer.debug("walk is nul " + (walkAnimation == null));
         jumpAnimation = animations.getAnimations().get("jump");
         deathAnimation = animations.getAnimations().get("death");
         spawnAnimation = animations.getAnimations().get("spawn");
@@ -53,38 +51,33 @@ public class AnimationManager {
                 }.runTaskLater(MetadataHandler.PLUGIN, spawnAnimation.getAnimationBlueprint().getDuration());
         } else if (idleAnimation != null) states.add(idleAnimation);
 
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                playAnimationFrame(idleAnimation);
-                modeledEntity.getSkeleton().transform(false);
-            }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
-
         clock = new BukkitRunnable() {
             @Override
             public void run() {
                 updateStates();
                 states.forEach(animation -> playAnimationFrame(animation));
-                modeledEntity.getSkeleton().transform(false);
+                modeledEntity.getSkeleton().transform();
             }
         }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
 
     }
 
     private void updateStates() {
-        if (modeledEntity.getEntity() == null) return;
-        if (deathAnimation != null && modeledEntity.getEntity().isDead()) {
-            animationGracePeriod = true;
-            overrideStates(deathAnimation);
-            return;
+        if (modeledEntity.getLivingEntity() == null) return;
+        if (modeledEntity.getLivingEntity().isDead()) {
+            if (deathAnimation != null) {
+                animationGracePeriod = true;
+                overrideStates(deathAnimation);
+                return;
+            } else
+                modeledEntity.remove();
         }
         if (animationGracePeriod) return;
-        if (jumpAnimation != null && !modeledEntity.getEntity().isOnGround()) {
+        if (jumpAnimation != null && !modeledEntity.getLivingEntity().isOnGround()) {
             overrideStates(jumpAnimation);
             return;
         }
-        if (walkAnimation != null && modeledEntity.getEntity().getVelocity().length() > .08) {
+        if (walkAnimation != null && modeledEntity.getLivingEntity().getVelocity().length() > .08) {
             overrideStates(walkAnimation);
             return;
         }
@@ -104,23 +97,27 @@ public class AnimationManager {
     public boolean playAnimation(String animationName, boolean blendAnimation) {
         Animation animation = animations.getAnimations().get(animationName);
         if (animation == null) return false;
-        if (!blendAnimation) states.clear();
+        if (!blendAnimation) {
+            states.clear();
+            animationGracePeriod = true;
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    animationGracePeriod = false;
+                }
+            }.runTaskLater(MetadataHandler.PLUGIN, animation.getAnimationBlueprint().getDuration());
+        }
         animation.resetCounter();
         states.add(animation);
-        animationGracePeriod = true;
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                animationGracePeriod = false;
-            }
-        }.runTaskLater(MetadataHandler.PLUGIN, animation.getAnimationBlueprint().getDuration());
         return true;
     }
 
     private void playAnimationFrame(Animation animation) {
-        //Case where the animation doesn't loop, and it's over
         if (!animation.getAnimationBlueprint().getLoopType().equals(LoopType.LOOP) && animation.getCounter() >= animation.getAnimationBlueprint().getDuration()) {
+            //Case where the animation doesn't loop, and it's over
             states.remove(animation);
+            if (animation == deathAnimation)
+                modeledEntity.remove();
             return;
         }
         int adjustedAnimationPosition;
@@ -128,8 +125,8 @@ public class AnimationManager {
             //Case where the animation is technically over but also is set to hold
             adjustedAnimationPosition = animation.getAnimationBlueprint().getDuration() - 1;
         else
-            //Normal case
-            adjustedAnimationPosition = (int) (animation.getCounter() - Math.floor(animation.getCounter() / (double) idleAnimation.getAnimationBlueprint().getDuration()) * idleAnimation.getAnimationBlueprint().getDuration());
+            //Normal case, looping
+            adjustedAnimationPosition = (int) (animation.getCounter() - Math.floor(animation.getCounter() / (double) animation.getAnimationBlueprint().getDuration()) * animation.getAnimationBlueprint().getDuration());
 
         //Handle rotations
         animation.getAnimationFrames().entrySet().forEach(boneEntry -> {
@@ -151,6 +148,15 @@ public class AnimationManager {
     }
 
     public void stop() {
+        states.clear();
+        animationGracePeriod = false;
+    }
+
+    public boolean hasAnimation(String animationName) {
+        return animations.getAnimations().containsKey(animationName);
+    }
+
+    public void end() {
         if (clock != null) clock.cancel();
     }
 }

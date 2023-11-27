@@ -3,7 +3,6 @@
 FreeMinecraftModels (FMM) is currently in **early alpha**! This means that several features are not yet done, and are actively being worked on.
 
 This means that right now FMM can't:
-- Run any kind of animation
 - Do hitboxes
 
 In its current stage, it works perfectly well for displaying static models in-game! The features above are actively being worked on right now. Consider supporting the dev
@@ -37,7 +36,8 @@ To view static models in-game, use the command `/fmm spawn static <id>` where th
 
 #### Viewing dynamic models in-game
 
-- Coming soon!
+To view dynamic models in-game, use the command `/fmm spawn dynamic <id>` where the id is the file name of the model, in
+lowercase and without the file extension.
 
 ## What can FreeMinecraftModels (FMM) do for modelers?
 
@@ -75,11 +75,15 @@ No other virtual boneBlueprint feature is guaranteed to be added in the immediat
 
 One thing that FMM tries to tackle is users repurposing models they have obtained to edit them in ways the model creator did not want them to edit, specifically in order to reskin or otherwise slightly alter a model and potentially try to resell as an original creation.
 
-To that end, FMM uses the `.fmmodel` file format which aims to strip `.bbmodel` files down to the point where they can be used by the plugin but can not be edited in Blockbench.
+To that end, FMM uses the `.fmmodel` file format which aims to strip `.bbmodel` files down to the point where they can
+be used by the plugin but can not be edited in Blockbench.
 
-As a modeler, you now have the choice whether you want to release an uneditable `.fmmodel` file, an editable `.bbmodel` file or even do differential pricing for the two.
+As a modeler, you now have the choice whether you want to release an uneditable `.fmmodel` file, an editable `.bbmodel`
+file or even do differential pricing or distribution terms of service for the two.
 
-Generating an `.fmmodel` is as simple as putting your `.bbmodel` in the `~/plugins/FreeMinecraftModels/imports` folder and reloading the plugin with `/fmm reload` or restarting the server. Your `.fmmodel` will then be in the `~/plugins/FreeMinecraftModels/models` folder.
+Generating an `.fmmodel` is as simple as putting your `.bbmodel` in the `~/plugins/FreeMinecraftModels/imports` folder
+and reloading the plugin with `/fmm reload` or restarting the server. Your `.fmmodel` will then be in
+the `~/plugins/FreeMinecraftModels/models` folder.
 
 ## What can FreeMinecraftModels (FMM) do for developers who want to integrate it in their plugin?
 
@@ -87,9 +91,10 @@ Generating an `.fmmodel` is as simple as putting your `.bbmodel` in the `~/plugi
 
 FMM aims to be as easy as possible to use as an API.
 
-Right now, there is only one class you need to know about if you wish to use FMM as an API for your plugin, and that is `StaticEntity`.
+Right now, there is only one class you need to know about if you wish to use FMM as an API for your plugin, and that
+is `StaticEntity`.
 
-Here is a snipped for handling a model:
+Here is a snippet for handling a static model:
 
 ```java
 public class FreeMinecraftModelsModel {
@@ -100,7 +105,7 @@ public class FreeMinecraftModelsModel {
         //This spawns the entity!
         staticEntity = StaticEntity.create(id, location);
         //This checks if the entity spawned correctly
-        if (staticEntity == null) Logger.warningMessage("FMM failed to find a model named " + id +" !");
+        if (staticEntity == null) Logger.warningMessage("FMM failed to find a model named " + id + " !");
     }
 
     public void remove() {
@@ -110,25 +115,67 @@ public class FreeMinecraftModelsModel {
 }
 ```
 
-Right now this is all there is to it, as we are in the earliest alpha possible! You may want to check the `StaticEntity` class to check for new features in case this documentation is out of date.
+Keep in mind that static models are meant to stay in place and act as a decorative element in a fixed location. While it
+is possible to move them, consider whether you might instead want to use a dynamic model if that is your purpose.
+
+And here is a snippet for handling a dynamic model:
+
+```java
+import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
+import org.bukkit.entity.LivingEntity;
+
+public class FreeMinecraftModelsModel {
+    private DynamicEntity dynamicEntity = null;
+
+    //Create the model
+    public FreeMinecraftModelsModel(String id, LivingEntity livingEntity) {
+        //This spawns the entity!
+        dynamicEntity = DynamicEntity.create(id, livingEntity);
+        //This checks if the entity spawned correctly
+        if (staticEntity == null) Logger.warningMessage("FMM failed to find a model named " + id + " !");
+    }
+
+    public void remove() {
+        //This removes the entity
+        staticEntity.remove();
+    }
+}
+```
+
+Dynamic models are built on top of a living entity. This is a WIP.
+
+While there is no formal API resource right now, all elements intended for API use are contained within ModeledEntity (
+the base class for all entities), StaticEntity and DynamicEntity. 99% of developers should find all the methods they
+need spread across those three classes.
 
 # Contributing to the FreeMinecraftModels (FMM) project as a developer
 
-FMM is distributed under the GPLV3 license and code contributions are welcome. Here are the basic contribution guidelines:
+FMM is distributed under the GPLV3 license and code contributions are welcome. Here are the basic contribution
+guidelines:
 
-- Follow the existing naming conventions, maintain the existing level of verbosity and add enough documentation that your contribution is easy to understand
-- Keep contributions relevant to the scope of the plugin. If you don't know whether it will be relevant, feel free to ask ahead of time.
-- Be mindful of the performance impact of your code. Some contributions may be turned away if they are either too unoptimized or otherwise cause too great of a performance impact.
+- Follow the existing naming conventions, maintain the existing level of verbosity and add enough documentation that
+  your contribution is easy to understand
+- Keep contributions relevant to the scope of the plugin. If you don't know whether it will be relevant, feel free to
+  ask ahead of time.
+- Be mindful of the performance impact of your code. Some contributions may be turned away if they are either too
+  unoptimized or otherwise cause too great of a performance impact.
 
 ## General plugin outline
 
 To save you some time, here is a quick breakdown of the logic flow of FMM:
 
 1) Read the `imports` folder
-2) Move files from `imports` folder into the `models` folder. If the file is a `.bbmodel`, it gets converted to `.fmmodel` in the models folder.
+2) Move files from `imports` folder into the `models` folder. If the file is a `.bbmodel`, it gets converted
+   to `.fmmodel` in the models folder.
 3) Read the files in the `models` folder.
-4) Interpret all model structures, creating `Skeleton`s which contain groups of `Bone`s, and these bones contain groups of child `Bone`s and `Cube`s. `Cube`s and `Bone`s generate the JSON resource pack data they are each related to. This means that `Cube`s generate the JSON specific to cubes and `Bone`s generate the outline and individual boneBlueprint files. Note that one boneBlueprint results in one resource pack file. Models are added to a list as they are generated.
-5) All data has now been initialized, the resource pack was generated in the `outputs` folder and the plugin is ready to be used.
+4) Interpret all model structures, creating `Skeleton`s which contain groups of `Bone`s, and these bones contain groups
+   of child `Bone`s and `Cube`s. `Cube`s and `Bone`s generate the JSON resource pack data they are each related to. This
+   means that `Cube`s generate the JSON specific to cubes and `Bone`s generate the outline and individual boneBlueprint
+   files. Note that one boneBlueprint results in one resource pack file. Models are added to a list as they are
+   generated.
+5) Still in the `Skeleton`, interpret all `Animations` in the model, if any
+6) All data has now been initialized, the resource pack was generated in the `outputs` folder and the plugin is ready to
+   be used.
 
 ## Tricks used in this plugin:
 
@@ -142,8 +189,10 @@ Please note that these tricks are all completely invisible to users and model ma
 - Blockbench uses a specific system of IDs for the textures, but actually reads the textures sequentially from config. IDs are assigned here based on their position in the list of textures, following how Blockbench does it.
 - Each boneBlueprint is a different armor stand entity due to Minecraft limitations
 - Leather horse armor is on the head slot of the armor stand
-- Armor stands are used for the default static items. //todo: soon I'll have to implement the new alternative display system from MC 1.19.4+, it's way more efficient
-
+- Armor stands are used for the default static items. //todo: soon I'll have to implement the new alternative display
+  system from MC 1.19.4+, it's way more efficient
+- To avoid collisions with other plugins which modify leather horse armor, FMM uses custom model data values starting at
+  50,000
 # Contributing to the FreeMinecraftModels (FMM) project in general
 
 FMM is actually crowdfunded by the lovely people over at https://www.patreon.com/magmaguy ! All contributions help more than you'd imagine ;)
@@ -151,10 +200,9 @@ FMM is actually crowdfunded by the lovely people over at https://www.patreon.com
 # Currently planned features:
 - Bedrock client RSP generation
 - Server properties-independent RSP management with geyser integration
-- Animations
 - Custom entities
 - Hitboxes
 - tag_projectile as meta bones from which projectiles can be shot (can have more than one per model)
 
-## Current weird limitations that need to be fixed:
+# Current weird limitations that need to be fixed:
 - If the pivot point (origin) of a boneBlueprint is set to be over 67ish the model starts floating

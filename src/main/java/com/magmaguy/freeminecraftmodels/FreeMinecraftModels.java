@@ -9,9 +9,11 @@ import com.magmaguy.freeminecraftmodels.config.OutputFolder;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntityEvents;
 import com.magmaguy.freeminecraftmodels.customentity.StaticEntity;
+import com.magmaguy.freeminecraftmodels.customentity.core.LegacyHitDetection;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.Bukkit;
+import org.bukkit.event.HandlerList;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public final class FreeMinecraftModels extends JavaPlugin {
@@ -31,7 +33,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         OutputFolder.initializeConfig();
         Metrics metrics = new Metrics(this, 19337);
         Bukkit.getPluginManager().registerEvents(new ModeledEntityEvents(), this);
-        Bukkit.getPluginManager().registerEvents(new ModeledEntityEvents(), this);
+        Bukkit.getPluginManager().registerEvents(new LegacyHitDetection(), this);
         NMSManager.initializeAdapter(this);
         new CommandHandler();
     }
@@ -42,5 +44,8 @@ public final class FreeMinecraftModels extends JavaPlugin {
         FileModelConverter.shutdown();
         StaticEntity.shutdown();
         DynamicEntity.shutdown();
+        LegacyHitDetection.shutdown();
+        Bukkit.getServer().getScheduler().cancelTasks(MetadataHandler.PLUGIN);
+        HandlerList.unregisterAll(MetadataHandler.PLUGIN);
     }
 }
