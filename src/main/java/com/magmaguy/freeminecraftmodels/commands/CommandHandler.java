@@ -22,6 +22,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.util.RayTraceResult;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -49,8 +50,7 @@ public class CommandHandler {
                     /* Owning plugin */ MetadataHandler.PLUGIN,
                     /* Coordinator function */ commandExecutionCoordinator,
                     /* Command Sender -> C */ Function.identity(),
-                    /* C -> Command Sender */ Function.identity()
-            );
+                    /* C -> Command Sender */ Function.identity());
         } catch (final Exception e) {
             Developer.warn("Failed to initialize the command manager");
             /* Disable the plugin */
@@ -61,26 +61,10 @@ public class CommandHandler {
         // Create a BukkitAudiences instance (adventure) in order to use the minecraft-extras help system
         bukkitAudiences = BukkitAudiences.create(MetadataHandler.PLUGIN);
 
-        minecraftHelp = new MinecraftHelp<CommandSender>(
-                "/freeminecraftmodels help",
-                bukkitAudiences::sender,
-                manager
-        );
+        minecraftHelp = new MinecraftHelp<CommandSender>("/freeminecraftmodels help", bukkitAudiences::sender, manager);
 
         // Override the default exception handlers
-        new MinecraftExceptionHandler<CommandSender>()
-                .withInvalidSyntaxHandler()
-                .withInvalidSenderHandler()
-                .withNoPermissionHandler()
-                .withArgumentParsingHandler()
-                .withCommandExecutionHandler()
-                .withDecorator(
-                        component -> text()
-                                .append(text("[", NamedTextColor.DARK_GRAY))
-                                .append(text("Example", NamedTextColor.GOLD))
-                                .append(text("] ", NamedTextColor.DARK_GRAY))
-                                .append(component).build()
-                ).apply(manager, bukkitAudiences::sender);
+        new MinecraftExceptionHandler<CommandSender>().withInvalidSyntaxHandler().withInvalidSenderHandler().withNoPermissionHandler().withArgumentParsingHandler().withCommandExecutionHandler().withDecorator(component -> text().append(text("[", NamedTextColor.DARK_GRAY)).append(text("Example", NamedTextColor.GOLD)).append(text("] ", NamedTextColor.DARK_GRAY)).append(component).build()).apply(manager, bukkitAudiences::sender);
 
         constructCommands();
     }
@@ -89,31 +73,28 @@ public class CommandHandler {
         // Base command builder
         final Command.Builder<CommandSender> builder = manager.commandBuilder("freeminecraftmodels", "fmm");
 
-        manager.command(builder.literal("help")
-                .argument(StringArgument.optional("query", StringArgument.StringMode.GREEDY))
-                .handler(context -> {
-                    minecraftHelp.queryCommands(context.getOrDefault("query", ""), context.getSender());
-                }));
+        manager.command(builder.literal("help").argument(StringArgument.optional("query", StringArgument.StringMode.GREEDY)).handler(context -> {
+            minecraftHelp.queryCommands(context.getOrDefault("query", ""), context.getSender());
+        }));
 
         List<String> spawnTypes = List.of("static", "dynamic");
         List<String> entityIDs = new ArrayList<>();
         FileModelConverter.getConvertedFileModels().values().forEach(fileModelConverter -> entityIDs.add(fileModelConverter.getID()));
 
-        manager.command(builder.literal("spawn")
-                .argument(StringArgument.<CommandSender>newBuilder("spawnType").withSuggestionsProvider(((objectCommandContext, s) -> spawnTypes)),
-                        ArgumentDescription.of("Spawn Type"))
-                .argument(StringArgument.<CommandSender>newBuilder("entityID").withSuggestionsProvider(((objectCommandContext, s) -> entityIDs)),
-                        ArgumentDescription.of("Entity ID"))
-                .meta(CommandMeta.DESCRIPTION, "Spawns a custom model of a specific type")
-                .handler(context -> {
-                    Location location = ((Player) context.getSender()).rayTraceBlocks(300).getHitBlock().getLocation().add(0.5, 1, 0.5);
-                    location.setPitch(0);
-                    location.setYaw(180);
-                    if (((String) context.get("spawnType")).equalsIgnoreCase("static"))
-                        StaticEntity.create(context.get("entityID"), location);
-                    else if (((String) context.get("spawnType")).equalsIgnoreCase("dynamic"))
-                        DynamicEntity.create(context.get("entityID"), (LivingEntity) location.getWorld().spawnEntity(location, EntityType.PIG));
-                }));
+        manager.command(builder.literal("spawn").argument(StringArgument.<CommandSender>newBuilder("spawnType").withSuggestionsProvider(((objectCommandContext, s) -> spawnTypes)), ArgumentDescription.of("Spawn Type")).argument(StringArgument.<CommandSender>newBuilder("entityID").withSuggestionsProvider(((objectCommandContext, s) -> entityIDs)), ArgumentDescription.of("Entity ID")).meta(CommandMeta.DESCRIPTION, "Spawns a custom model of a specific type").handler(context -> {
+            RayTraceResult rayTraceResult = ((Player) context.getSender()).rayTraceBlocks(300);
+            if (rayTraceResult == null) {
+                context.getSender().sendMessage("[FMM] You need to be looking at the ground to spawn a mob!");
+                return;
+            }
+            Location location = rayTraceResult.getHitBlock().getLocation().add(0.5, 1, 0.5);
+            location.setPitch(0);
+            location.setYaw(180);
+            if (((String) context.get("spawnType")).equalsIgnoreCase("static"))
+                StaticEntity.create(context.get("entityID"), location);
+            else if (((String) context.get("spawnType")).equalsIgnoreCase("dynamic"))
+                DynamicEntity.create(context.get("entityID"), (LivingEntity) location.getWorld().spawnEntity(location, EntityType.PIG));
+        }));
 
         manager.command(builder.literal("reload").handler(context -> ReloadHandler.reload(context.getSender())));
     }
