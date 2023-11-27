@@ -63,16 +63,14 @@ public class Bone {
 
         //Optimization: avoid sending a rotation
         EulerAngle eulerAngle = quaternionToEuler(globalRotation);
-        if (Math.abs(eulerAngle.getX() - armorStand.getHeadPose().getX()) > .00000001 ||
-                Math.abs(eulerAngle.getY() - armorStand.getHeadPose().getY()) > .00000001 ||
-                Math.abs(eulerAngle.getZ() - armorStand.getHeadPose().getZ()) > .00000001) {
+        if (Math.abs(eulerAngle.getX() - armorStand.getHeadPose().getX()) > .00000001 || Math.abs(eulerAngle.getY() - armorStand.getHeadPose().getY()) > .00000001 || Math.abs(eulerAngle.getZ() - armorStand.getHeadPose().getZ()) > .00000001) {
             armorStand.setHeadPose(eulerAngle);
         }
 
         updateTickPositionBasedOnParentRotation();
         targetAnimationLocation = updateArmorStandLocation();
         //Optimization: avoid a teleport packet if the target location is the same
-        if (!armorStand.getLocation().equals(targetAnimationLocation))
+        if (!armorStand.getLocation().equals(targetAnimationLocation) && Double.isFinite(targetAnimationLocation.getX()) && Double.isFinite(targetAnimationLocation.getY()) && Double.isFinite(targetAnimationLocation.getZ()))
             armorStand.teleport(targetAnimationLocation);
 
         boneChildren.forEach(Bone::transform);
@@ -120,8 +118,7 @@ public class Bone {
     }
 
     public void setName(String name) {
-        if (armorStand != null && armorStand.isValid() && boneBlueprint.isNameTag())
-            armorStand.setCustomName(name);
+        if (armorStand != null && armorStand.isValid() && boneBlueprint.isNameTag()) armorStand.setCustomName(name);
         boneChildren.forEach(child -> child.setName(name));
     }
 
