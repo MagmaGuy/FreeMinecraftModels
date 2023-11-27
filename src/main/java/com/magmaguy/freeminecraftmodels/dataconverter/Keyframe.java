@@ -16,35 +16,33 @@ public class Keyframe {
     @Getter
     private final InterpolationType interpolationType;
     @Getter
-    private double dataX;
+    private final double dataX;
     @Getter
-    private double dataY;
+    private final double dataY;
     @Getter
-    private double dataZ;
+    private final double dataZ;
 
-    public Keyframe(Object object) {
+    public Keyframe(Object object, String modelName, String animationName) {
         Map<String, Object> data = (Map<String, Object>) object;
         transformationType = TransformationType.valueOf(((String) data.get("channel")).toUpperCase());
         interpolationType = InterpolationType.valueOf(((String) data.get("interpolation")).toUpperCase());
-        timeInTicks = (int)(20 * (double) data.get("time"));
+        timeInTicks = (int) (20 * (double) data.get("time"));
         Map<String, Object> dataPoints = ((List<Map<String, Object>>) data.get("data_points")).get(0);
 
-        Object xObject = dataPoints.get("x");
-        if (xObject instanceof String string)
-            dataX = Double.parseDouble(string.replace("\\n", ""));
-        else
-            dataX = (Double) xObject;
+        dataX = tryParseDouble(dataPoints.get("x"), modelName, animationName);
+        dataY = tryParseDouble(dataPoints.get("y"), modelName, animationName);
+        dataZ = tryParseDouble(dataPoints.get("z"), modelName, animationName);
+    }
 
-        Object yObject = dataPoints.get("y");
-        if (yObject instanceof String string)
-            dataY = Double.parseDouble(string.replace("\\n", ""));
-        else
-            dataY = (Double) yObject;
-
-        Object zObject = dataPoints.get("z");
-        if (zObject instanceof String string)
-            dataZ = Double.parseDouble(string.replace("\\n", ""));
-        else
-            dataZ = (Double) zObject;
+    private double tryParseDouble(Object rawObject, String modelName, String animationName) {
+        if (!(rawObject instanceof String rawValue)) return (Double) rawObject;
+        rawValue = rawValue.replaceAll("\\n", "");
+        if (rawValue.isEmpty()) return 0;
+        try {
+            return Double.parseDouble(rawValue);
+        } catch (Exception e) {
+            Developer.warn("Failed to parse supposed number value " + rawValue + " in animation " + animationName + " for model " + modelName + "!");
+            return 0;
+        }
     }
 }

@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.entities;
 
 import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
+import com.magmaguy.freeminecraftmodels.customentity.core.RegisterModelEntity;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -8,7 +9,6 @@ import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.EntityType;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.LeatherArmorMeta;
-import org.bukkit.util.Vector;
 
 public class ModelArmorStand {
     private ModelArmorStand() {
@@ -33,5 +33,6 @@ public class ModelArmorStand {
             itemMeta.setCustomModelData(bone.getBoneBlueprint().getModelID());
         leatherHorseArmor.setItemMeta(itemMeta);
         armorStand.setHelmet(leatherHorseArmor);
+        RegisterModelEntity.registerModelArmorStand(armorStand, bone.getBoneBlueprint().getBoneName());
     }
 }

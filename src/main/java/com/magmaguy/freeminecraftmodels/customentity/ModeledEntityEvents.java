@@ -11,18 +11,18 @@ import org.bukkit.event.world.ChunkUnloadEvent;
 import java.util.List;
 
 public class ModeledEntityEvents implements Listener {
-    private static ArrayListMultimap<Integer, ModeledEntity> loadedModeledEntities = ArrayListMultimap.create();
-    private static ArrayListMultimap<Integer, ModeledEntity> unloadedModeledEntities = ArrayListMultimap.create();
+    private static final ArrayListMultimap<Integer, ModeledEntity> loadedModeledEntities = ArrayListMultimap.create();
+    private static final ArrayListMultimap<Integer, ModeledEntity> unloadedModeledEntities = ArrayListMultimap.create();
 
-    public static void addLoadedModeledEntity(ModeledEntity modeledEntity){
+    public static void addLoadedModeledEntity(ModeledEntity modeledEntity) {
         loadedModeledEntities.put(modeledEntity.getChunkHash(), modeledEntity);
     }
 
-    public static void addUnloadedModeledEntity(ModeledEntity modeledEntity){
+    public static void addUnloadedModeledEntity(ModeledEntity modeledEntity) {
         unloadedModeledEntities.put(modeledEntity.getChunkHash(), modeledEntity);
     }
 
-    public static void removeLoadedModeledEntity(ModeledEntity modeledEntity){
+    public static void removeLoadedModeledEntity(ModeledEntity modeledEntity) {
         loadedModeledEntities.remove(modeledEntity.getChunkHash(), modeledEntity);
     }
     public static void removeUnloadedModeledEntity(ModeledEntity modeledEntity){
