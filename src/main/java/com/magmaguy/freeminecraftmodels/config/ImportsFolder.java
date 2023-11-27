@@ -118,9 +118,11 @@ public class ImportsFolder {
     }
 
     private static void processFolder(File folder) {
-        for (File childFile : folder.listFiles())
-            if (childFile.isDirectory()) processFolder(folder);
+        for (File childFile : folder.listFiles()) {
+            if (childFile.getName().equals("desktop.ini")) continue; //more common than you'd think
+            if (childFile.isDirectory()) processFolder(childFile);
             else processFile(childFile);
+        }
         //folder.delete();  not sure I want to do this
     }
 
