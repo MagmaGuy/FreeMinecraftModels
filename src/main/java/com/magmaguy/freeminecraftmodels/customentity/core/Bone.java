@@ -136,7 +136,6 @@ public class Bone {
     private Location updateArmorStandLocation() {
         Location testLocation = skeleton.getCurrentLocation().add(boneBlueprint.getBoneOriginOffset().add(globalTranslation));
         testLocation.setYaw(180);
-//        return skeleton.getCurrentLocation().add(boneBlueprint.getBoneOriginOffset().add(globalTranslation));
         return testLocation;
     }
 

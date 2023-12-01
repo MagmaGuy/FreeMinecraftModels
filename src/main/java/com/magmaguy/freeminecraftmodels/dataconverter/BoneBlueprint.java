@@ -21,7 +21,7 @@ public class BoneBlueprint {
     private static final double ARMOR_STAND_HEAD_SIZE_MULTIPLIER = 0.4D;
     private static final double MODEL_SCALE = 4D;
     @Getter
-    private static final double ARMOR_STAND_PIVOT_POINT_HEIGHT = 1.43D;
+    private static final double ARMOR_STAND_PIVOT_POINT_HEIGHT = 1.434595D;
     public static NamespacedKey nameTagKey = new NamespacedKey(MetadataHandler.PLUGIN, "NameTag");
     @Getter
     private final List<BoneBlueprint> boneBlueprintChildren = new ArrayList<>();
@@ -30,9 +30,11 @@ public class BoneBlueprint {
     @Getter
     private final String boneName;
     @Getter
-    private final String originalName;
+    private final String originalModelName;
+    @Getter
+    private final String originalBoneName;
     //This is the vector offset from the entity's location that the pivot point of the boneBlueprint should be in, outside of animations
-    private final Vector boneOriginOffset;
+    private Vector boneOriginOffset;
     @Getter
     @Setter
     private Integer modelID = null;
@@ -44,16 +46,39 @@ public class BoneBlueprint {
     private boolean nameTag = false;
     @Getter
     private BoneBlueprint parent = null;
+    @Getter
+    private boolean isDisplayModel = true;
+    private Vector cubeOffsetBasedOnResourcePackLimitation = new Vector(0, 0, 0);
+    @Getter
+    private boolean debug = false;
 
     public BoneBlueprint(double projectResolution, Map<String, Object> boneJSON, HashMap<String, Object> values, Map<String, Map<String, Object>> textureReferences, String modelName, BoneBlueprint parent, SkeletonBlueprint skeletonBlueprint) {
-        this.boneName = "freeminecraftmodels:" + modelName.toLowerCase() + "/" + ((String) boneJSON.get("name")).toLowerCase();
-        this.originalName = modelName;
+        this.originalBoneName = (String) boneJSON.get("name");
+        this.boneName = "freeminecraftmodels:" + modelName.toLowerCase() + "/" + originalBoneName.toLowerCase();
+        this.originalModelName = modelName;
         this.parent = parent;
-        if (boneName.contains("tag_")) {
-            nameTag = true;
-        }
-        setBoneRotation(boneJSON);
+        if (originalBoneName.startsWith("tag_")) nameTag = true;
+        //Some bones should not be displayed because they just hold metadata
+        if (originalBoneName.startsWith("b_")) isDisplayModel = false;
+        processChildren(boneJSON, modelName, projectResolution, values, textureReferences, skeletonBlueprint);
+        processBoneValues(boneJSON);
+        String filename = ((String) boneJSON.get("name")).toLowerCase().replace(" ", "_");
+        generateAndWriteCubes(filename, textureReferences, modelName);
+        //Add bone to the map
+        skeletonBlueprint.getBoneMap().put((String) boneJSON.get("name"), this);
+    }
+
+    private void processBoneValues(Map<String, Object> boneJSON) {
+        if (!cubeBlueprintChildren.isEmpty()) findDisplayOffset();
         setOrigin(boneJSON);
+        calculateArmorStandOffsetFromModel();
+        if (cubeBlueprintChildren.isEmpty()) return;
+        setBoneRotation(boneJSON);
+        //The origin point in the resource pack might get shifted due to MC limitations
+        boneJSON.put("origin", List.of(modelSpaceOrigin.getX(), modelSpaceOrigin.getY(), modelSpaceOrigin.getZ()));
+    }
+
+    private void processChildren(Map<String, Object> boneJSON, String modelName, double projectResolution, HashMap<String, Object> values, Map<String, Map<String, Object>> textureReferences, SkeletonBlueprint skeletonBlueprint) {
         //Bones can contain two types of children: bones and cubes
         //Bones exist solely for containing cubes
         //Cubes store the relevant visual data
@@ -69,9 +94,6 @@ public class BoneBlueprint {
                 boneBlueprintChildren.add(new BoneBlueprint(projectResolution, (Map<String, Object>) object, values, textureReferences, modelName, this, skeletonBlueprint));
             }
         }
-        generateBoneResourcePackFile(((String) boneJSON.get("name")).toLowerCase().replace(" ", "_"), textureReferences, modelName);
-        skeletonBlueprint.getBoneMap().put((String) boneJSON.get("name"), this);
-        boneOriginOffset = getArmorStandOffsetFromModel();
     }
 
     public Vector getBlockSpaceOrigin() {
@@ -95,30 +117,32 @@ public class BoneBlueprint {
         if (obj == null) return;
         List<Double> origins = (List<Double>) obj;
         //This is the origin in "real space", meaning it is adjusted to the in-game unit size (16x larger than model space)
-        blockSpaceOrigin = new Vector(origins.get(0) / 16d, origins.get(1) / 16d, origins.get(2) / 16d);
+        blockSpaceOrigin = new Vector(
+                origins.get(0) / 16d,
+                origins.get(1) / 16d,
+                origins.get(2) / 16d);
         //This in the origin in "model space", meaning it is adjusted to the resource pack / Blockbench unit size (16x smaller than real space)
         //It also adjusts the scaling to fit the head
-        modelSpaceOrigin = new Vector(origins.get(0) * ARMOR_STAND_HEAD_SIZE_MULTIPLIER * MODEL_SCALE, origins.get(1) * ARMOR_STAND_HEAD_SIZE_MULTIPLIER * MODEL_SCALE, origins.get(2) * ARMOR_STAND_HEAD_SIZE_MULTIPLIER * MODEL_SCALE);
-        boneJSON.put("origin", List.of(modelSpaceOrigin.getX(), modelSpaceOrigin.getY(), modelSpaceOrigin.getZ()));
+        modelSpaceOrigin = new Vector(
+                (origins.get(0)) * ARMOR_STAND_HEAD_SIZE_MULTIPLIER * MODEL_SCALE,
+                (origins.get(1)) * ARMOR_STAND_HEAD_SIZE_MULTIPLIER * MODEL_SCALE,
+                (origins.get(2)) * ARMOR_STAND_HEAD_SIZE_MULTIPLIER * MODEL_SCALE);
     }
 
-    private void generateBoneResourcePackFile(String filename, Map<String, Map<String, Object>> textureReferences, String modelName) {
+    private void generateAndWriteCubes(String filename, Map<String, Map<String, Object>> textureReferences, String modelName) {
         if (filename.equalsIgnoreCase("hitbox") || filename.equalsIgnoreCase("tag_name") || cubeBlueprintChildren.isEmpty())
             return;
-        String modelDirectory = getModelDirectory(modelName);
-        Map<String, Object> boneJSON = new HashMap<>(textureReferences);
-        Vector offset = findDisplayOffset(modelName);
-        //modelSpaceOrigin.subtract(new Vector(offset.getZ(), offset.getY(), offset.getX()));
-        writeCubes(boneJSON, offset);
-        setDisplay(boneJSON, offset.getX(), offset.getY(), offset.getZ());
-        writeFile(modelDirectory, filename, boneJSON);
+        Map<String, Object> textureReferencesClone = new HashMap<>(textureReferences);
+        setDisplay(textureReferencesClone);
+        writeCubes(textureReferencesClone);
+        writeFile(modelName, filename, textureReferencesClone);
     }
 
     private String getModelDirectory(String modelName) {
         return MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar + "output" + File.separatorChar + "FreeMinecraftModels" + File.separatorChar + "assets" + File.separatorChar + "freeminecraftmodels" + File.separatorChar + "models" + File.separatorChar + modelName;
     }
 
-    private Vector findDisplayOffset(String modelName) {
+    private void findDisplayOffset() {
         //Get the lowest and highest coordinates of the cube
         Double lowestX = null, lowestY = null, lowestZ = null, highestX = null, highestY = null, highestZ = null;
         for (CubeBlueprint cubeBlueprint : cubeBlueprintChildren) {
@@ -129,44 +153,57 @@ public class BoneBlueprint {
             if (highestY == null || cubeBlueprint.getTo().getY() > highestY) highestY = cubeBlueprint.getTo().getY();
             if (highestZ == null || cubeBlueprint.getTo().getZ() > highestZ) highestZ = cubeBlueprint.getTo().getZ();
         }
-        double xSize = highestX - lowestX;
-        double ySize = highestY - lowestY;
-        double zSize = highestZ - lowestZ;
+        double xSize = Math.abs(highestX - lowestX);
+        double ySize = Math.abs(highestY - lowestY);
+        double zSize = Math.abs(highestZ - lowestZ);
 
         //If the cube exceeds 48 in size (remember, this is scaled) then it is too large to be rendered
         if (xSize > 48 || ySize > 48 || zSize > 48) {
-            Developer.warn("Model " + modelName + " has a boneBlueprint or set of cubes which exceeds the maximum size! Either make the cubes smaller, less far apart or split them up into multiple bones!");
+            Developer.warn("Model " + originalModelName + " has a boneBlueprint or set of cubes which exceeds the maximum size! Either make the cubes smaller, less far apart or split them up into multiple bones!");
         }
 
         //This finds how much the boneBlueprint needs to be shifted around to fit between -16 and +32 to comply with resource pack limitations
+        //Ok so if it's exactly -16 or +32 it causes issues, it's fine to set it to -15 and +31. Really, this could be applied globally.
+        // Might cause some issues if the size is exactly at the maximum possible setting though
         double minecraftMinimumModelStartPoint = -16D;
         double minecraftMaximumModelEndPoint = 32D;
         double xOffset = 0, yOffset = 0, zOffset = 0;
-        if (lowestX < minecraftMinimumModelStartPoint) xOffset = minecraftMinimumModelStartPoint - lowestX;
-        if (lowestY < minecraftMinimumModelStartPoint) yOffset = minecraftMinimumModelStartPoint - lowestY;
-        if (lowestZ < minecraftMinimumModelStartPoint) zOffset = minecraftMinimumModelStartPoint - lowestZ;
-        if (highestX > minecraftMaximumModelEndPoint) xOffset = minecraftMaximumModelEndPoint - highestX;
-        if (highestY > minecraftMaximumModelEndPoint) yOffset = minecraftMaximumModelEndPoint - highestY;
-        if (highestZ > minecraftMaximumModelEndPoint) zOffset = minecraftMaximumModelEndPoint - highestZ;
 
-        return new Vector(xOffset, yOffset, zOffset);
+        if (lowestX <= minecraftMinimumModelStartPoint) xOffset = minecraftMinimumModelStartPoint - lowestX;
+        if (lowestY <= minecraftMinimumModelStartPoint) yOffset = minecraftMinimumModelStartPoint - lowestY;
+        if (lowestZ <= minecraftMinimumModelStartPoint) zOffset = minecraftMinimumModelStartPoint - lowestZ;
+        if (highestX >= minecraftMaximumModelEndPoint) xOffset = minecraftMaximumModelEndPoint - highestX;
+        if (highestY >= minecraftMaximumModelEndPoint) yOffset = minecraftMaximumModelEndPoint - highestY;
+        if (highestZ >= minecraftMaximumModelEndPoint) zOffset = minecraftMaximumModelEndPoint - highestZ;
+
+
+        cubeOffsetBasedOnResourcePackLimitation = new Vector(xOffset, yOffset, zOffset);
+        if (!cubeOffsetBasedOnResourcePackLimitation.isZero()) debug = true;
+        if (originalBoneName.equals("right_claw"))
+            Developer.debug("right claw " + Developer.vectorToString(cubeOffsetBasedOnResourcePackLimitation));
     }
 
-    private void writeCubes(Map<String, Object> boneJSON, Vector offset) {
+    private void writeCubes(Map<String, Object> textureReferencesClone) {
         List<Object> cubeJSONs = new ArrayList<>();
 
         //This generates the JSON for each individual cube
         for (CubeBlueprint cubeBlueprint : cubeBlueprintChildren)
-            cubeJSONs.add(cubeBlueprint.generateJSON(offset, modelSpaceOrigin));
+            cubeJSONs.add(cubeBlueprint.generateJSON(cubeOffsetBasedOnResourcePackLimitation));
 
-        boneJSON.put("elements", cubeJSONs);
+        textureReferencesClone.put("elements", cubeJSONs);
     }
 
-    private void setDisplay(Map<String, Object> boneJSON, double xOffset, double yOffset, double zOffset) {
-        //The hardcoded numbers adjust the item to the center of the armor stand
-        //The offsets are from shifting the model around, when relevant, in order to fit the model boundaries
-        //The offsets are scaled down
-        boneJSON.put("display", Map.of("head", Map.of("translation", List.of(calculateVisualOffset(32, xOffset, modelSpaceOrigin.getX()), calculateVisualOffset(25.5, yOffset, modelSpaceOrigin.getY()), calculateVisualOffset(32, zOffset, modelSpaceOrigin.getZ())), "scale", List.of(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE))));
+    /**
+     * Centers the model in the armor stand
+     *
+     * @param textureReferencesClone Map to modify
+     */
+    private void setDisplay(Map<String, Object> textureReferencesClone) {
+        textureReferencesClone.put("display", Map.of("head", Map.of("translation", List.of(
+                        calculateVisualOffset(32, cubeOffsetBasedOnResourcePackLimitation.getX(), modelSpaceOrigin.getX()),
+                        calculateVisualOffset(25.5, cubeOffsetBasedOnResourcePackLimitation.getY(), modelSpaceOrigin.getY()),
+                        calculateVisualOffset(32, cubeOffsetBasedOnResourcePackLimitation.getZ(), modelSpaceOrigin.getZ())),
+                "scale", List.of(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE))));
     }
 
     /**
@@ -175,13 +212,19 @@ public class BoneBlueprint {
      * @param constantAxisOffset     This is the offset required to center something on top of the pivot point of an armor stand head.
      * @param axisOffset             This is the offset obtained from shifting the model around in order to fit within MC limitations
      * @param modelSpaceOriginOffset This is the location of the origin; since the armor stand spawns on the boneBlueprint location, it's necessary to shift the display to be there
-     * @return
      */
     private double calculateVisualOffset(double constantAxisOffset, double axisOffset, double modelSpaceOriginOffset) {
+        if (originalBoneName.equals("bone17") && originalModelName.equals("animation_test"))
+            Developer.debug("Axis offset " + axisOffset);
+        //return constantAxisOffset - axisOffset * MODEL_SCALE *ARMOR_STAND_HEAD_SIZE_MULTIPLIER - modelSpaceOriginOffset;
         return constantAxisOffset - axisOffset * MODEL_SCALE - modelSpaceOriginOffset;
+        //return constantAxisOffset - 100 - modelSpaceOriginOffset;
+        //return constantAxisOffset - axisOffset - modelSpaceOriginOffset;
+        //return constantAxisOffset - modelSpaceOriginOffset;
     }
 
-    private void writeFile(String modelDirectory, String filename, Map<String, Object> boneJSON) {
+    private void writeFile(String modelName, String filename, Map<String, Object> boneJSON) {
+        String modelDirectory = getModelDirectory(modelName);
         Gson gson = new Gson();
         try {
             FileUtils.writeStringToFile(new File(modelDirectory + File.separatorChar + filename + ".json"), gson.toJson(boneJSON), StandardCharsets.UTF_8);
@@ -191,8 +234,12 @@ public class BoneBlueprint {
         }
     }
 
+    private void calculateArmorStandOffsetFromModel() {
+        boneOriginOffset = getBlockSpaceOrigin().subtract(new Vector(0, BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT(), 0));
+    }
+
     public Vector getArmorStandOffsetFromModel() {
-        return getBlockSpaceOrigin().subtract(new Vector(0, BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT(), 0));
+        return boneOriginOffset.clone();
     }
 
 }

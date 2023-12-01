@@ -44,10 +44,8 @@ public class FileModelConverter {
      * @param file bbmodel file to parse
      */
     public FileModelConverter(File file) {
-        if (file.getName().contains(".bbmodel"))
-            modelName = file.getName().replace(".bbmodel", "");
-        else if (file.getName().contains(".fmmodel"))
-            modelName = file.getName().replace(".fmmodel", "");
+        if (file.getName().contains(".bbmodel")) modelName = file.getName().replace(".bbmodel", "");
+        else if (file.getName().contains(".fmmodel")) modelName = file.getName().replace(".fmmodel", "");
         else {
             Bukkit.getLogger().warning("File " + file.getName() + " should not be in the models folder!");
             return;
@@ -91,24 +89,25 @@ public class FileModelConverter {
         for (int i = 0; i < texturesValues.size(); i++) {
             Map<?, ?> element = texturesValues.get(i);
             String imageName = ((String) element.get("name")).toLowerCase();
+            if (!imageName.contains(".png")) {
+                if (!imageName.contains(".")) imageName += ".png";
+                else imageName.split("\\.")[0] += ".png";
+            }
             String base64Image = (String) element.get("source");
             //So while there is an ID in blockbench it is not what it uses internally, what it uses internally is the ordered list of textures. Don't ask why.
             Integer id = i;
             textures.put(id, imageName.replace(".png", ""));
             base64Image = base64Image.split(",")[base64Image.split(",").length - 1];
-            if (!imageSize.containsKey(imageName))
-                try {
-                    ByteArrayInputStream inputStream = new ByteArrayInputStream(Base64Coder.decodeLines(base64Image));
-                    File imageFile = new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar +
-                            "output" + File.separatorChar + "FreeMinecraftModels" + File.separatorChar + "assets" + File.separatorChar +
-                            "freeminecraftmodels" + File.separatorChar + "textures" + File.separatorChar + "entity" + File.separatorChar + imageName);
-                    FileUtils.writeByteArrayToFile(imageFile, inputStream.readAllBytes());
-                    BufferedImage bufferedImage = ImageIO.read(imageFile);
-                    imageSize.put(imageName, bufferedImage.getWidth());
-                } catch (Exception ex) {
-                    Developer.warn("Failed to convert image " + imageName + " to its corresponding image file!");
-                    continue;
-                }
+            if (!imageSize.containsKey(imageName)) try {
+                ByteArrayInputStream inputStream = new ByteArrayInputStream(Base64Coder.decodeLines(base64Image));
+                File imageFile = new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar + "output" + File.separatorChar + "FreeMinecraftModels" + File.separatorChar + "assets" + File.separatorChar + "freeminecraftmodels" + File.separatorChar + "textures" + File.separatorChar + "entity" + File.separatorChar + imageName);
+                FileUtils.writeByteArrayToFile(imageFile, inputStream.readAllBytes());
+                BufferedImage bufferedImage = ImageIO.read(imageFile);
+                imageSize.put(imageName, bufferedImage.getWidth());
+            } catch (Exception ex) {
+                Developer.warn("Failed to convert image " + imageName + " to its corresponding image file!");
+                continue;
+            }
         }
 
         //This parses the blocks
@@ -134,7 +133,8 @@ public class FileModelConverter {
         skeletonBlueprint = new SkeletonBlueprint(projectResolution, outlinerValues, values, generateFileTextures(), modelName, null);//todo: pass path
 
         List animationList = (ArrayList) map.get("animations");
-        if (animationList != null) animationsBlueprint = new AnimationsBlueprint(animationList, modelName, skeletonBlueprint);
+        if (animationList != null)
+            animationsBlueprint = new AnimationsBlueprint(animationList, modelName, skeletonBlueprint);
         convertedFileModels.put(modelName, this);//todo: id needs to be more unique, add folder directory into it
     }
 
