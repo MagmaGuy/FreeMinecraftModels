@@ -69,7 +69,7 @@ public class CubeBlueprint {
     }
 
 
-    private void setRotation(Vector offset, Vector adjustedModelOrigin) {
+    private void setRotation(Vector offset) {
         if (cubeJSON.get("origin") == null) return;
         Map<String, Object> newRotationData = new HashMap<>();
 
@@ -89,7 +89,7 @@ public class CubeBlueprint {
             List<Double> rotations = (List<Double>) cubeJSON.get("rotation");
             for (int i = rotations.size() - 1; i >= 0; i--) {
                 if (rotations.get(i) != 0) {
-                    angle = rotations.get(i);
+                    angle = Round.oneDecimalPlace(rotations.get(i));
                     switch (i) {
                         case 0 -> axis = "x";
                         case 1 -> axis = "y";
@@ -116,9 +116,9 @@ public class CubeBlueprint {
         cubeJSON.put("to", List.of(to.getX() + offset.getX(), to.getY() + offset.getY(), to.getZ() + offset.getZ()));
     }
 
-    public Map<String, Object> generateJSON(Vector offset, Vector origin) {
+    public Map<String, Object> generateJSON(Vector offset) {
         correctPosition(offset);
-        setRotation(offset, origin);
+        setRotation(offset);
         return cubeJSON;
     }
 }

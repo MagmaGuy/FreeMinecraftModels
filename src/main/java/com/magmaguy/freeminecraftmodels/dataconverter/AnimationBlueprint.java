@@ -32,6 +32,7 @@ public class AnimationBlueprint {
         this.skeletonBlueprint = skeletonBlueprint;
         initializeGlobalValues(animationData);
 
+        if (animationData.get("animators") == null) return;
         //In BBModel files, each bone holds the data for their transformations, so data is stored from the bone's perspective
         ((Map<String, Object>) animationData.get("animators")).entrySet().forEach(pair -> initializeBones((Map<String, Object>) pair.getValue(), modelName, animationName));
 

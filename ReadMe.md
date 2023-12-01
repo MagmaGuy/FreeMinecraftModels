@@ -15,8 +15,8 @@ Consider supporting the development at https://www.patreon.com/magmaguy !
 It can:
 
 - Import .bbmodel or fmmodel (FFM's custom format) models
-- Generate resource packs with models that exceed normal Minecraft resource pack model limits (up to 112x112x112 units
-  or 7x7x7 in-game blocks)
+- Generate resource packs with models that exceed normal Minecraft resource pack model limits (up to ~~112x112x112~~
+  106x106x106 units or 7x7x7 in-game blocks)
 - Display these models in-game through the use of the command `/fmm spawn static <id>` where the id is the file name of
   the model, in lowercase and without the file extension
 - Animate these models as they were configured to be animated in Blockbench
@@ -49,28 +49,44 @@ lowercase and without the file extension.
 
 ## What can FreeMinecraftModels (FMM) do for modelers?
 
-FMM follows the standard resource pack rules for resource pack generation. Furthermore, it tries to be as compatible with models compatible with ModelEngine as possible in order to try to standardize model creation across plugins.
+FMM follows the standard resource pack rules for resource pack generation. Furthermore, it tries to be as compatible
+with models compatible with ModelEngine as possible in order to try to standardize model creation across plugins.
 
 ### Model generation features / restrictions
 
-If you have ever created models for ModelEngine, you will be familiar with a lot of the Minecraft resource pack generation restrictions:
+If you have ever created models for ModelEngine, you will be familiar with a lot of the Minecraft resource pack
+generation restrictions:
 
 #### **Cubes:**
+
 Cubes are the same here as they are in Blockbench, they are the cubes that make up the model.
-- Cubes can go up to 112x112x112 "pixels" (Blockbench units) or 7x7x7 in-game blocks (normal Minecraft restrictions bypassed using display sizes, soon to be further bypassed for 1.19.4+ thanks to display entities)
+
+- Cubes can go up to ~~112x112x112~~ 106x106x106 "pixels" (Blockbench units) or 7x7x7 in-game blocks (normal Minecraft
+  restrictions bypassed using display sizes, soon to be further bypassed for 1.19.4+ thanks to display entities)
 - Legal rotations for cubes are 0, 22.5, -22.5, 45 and -45. No other rotation works.
-- Cubes only rotate in one axis, meaning that a rotation of [22.5, 0, 0] is fine, a rotation of [22.5, 0, 45] will not fully work and only rotate on one axis.
+- Cubes only rotate in one axis, meaning that a rotation of [22.5, 0, 0] is fine, a rotation of [22.5, 0, 45] will not
+  fully work and only rotate on one axis.
 
 #### **Bones:**
-Bones are what Blockbench calls "groups". They serve to group the cubes together, and should be used to group bones together for animationsBlueprint.
-- Bones can go up to 112x112x112 "pixels" (Blockbench units) or 7x7x7 in-game blocks. *Please note that the size of bones is set by what they have, so if you have cubes that are more than 7 blocks apart, you will probably exceed this size limit. Bypassing this limit is as easy as putting the blocks in a different boneBlueprint not contained in the first boneBlueprint!*
+
+Bones are what Blockbench calls "groups". They serve to group the cubes together, and should be used to group bones
+together for animationsBlueprint.
+
+- Bones can go up to ~~112x112x112~~ 106x106x106 (should be 112, not sure why this is) "pixels" (Blockbench units) or
+  7x7x7 in-game blocks. *Please note that the size of bones is set by what they have, so if you have cubes that are more
+  than 7 blocks apart, you will probably exceed this size limit. Bypassing this limit is as easy as putting the blocks
+  in a different boneBlueprint not contained in the first boneBlueprint!*
 - Can have any rotation!
 
-Bones are significantly more flexible than cubes, but you should use as few bones as possible! In FMM, due to Minecraft limitations, each boneBlueprint is a different entity. At a scale, this will affect performance rather quickly! Always use as few bones as you can, and be mindful of how many of that model you are planning to spawn - the more of it you plan to have, the fewer bones you should have!
+Bones are significantly more flexible than cubes, but you should use as few bones as possible! In FMM, due to Minecraft
+limitations, each boneBlueprint is a different entity. At a scale, this will affect performance rather quickly! Always
+use as few bones as you can, and be mindful of how many of that model you are planning to spawn - the more of it you
+plan to have, the fewer bones you should have!
 
 #### **Virtual Bones**
 
-If you are coming from ModelEngine, you probably want to know if/how virtual bones are implemented in FMM. Virtual bones have been earmarked, but are not currently implemented beyond very basic groundwork.
+If you are coming from ModelEngine, you probably want to know if/how virtual bones are implemented in FMM. Virtual bones
+have been earmarked, but are not currently implemented beyond very basic groundwork.
 
 However, at the very least, the following virtual bones will be compatible with FMM soon:
 
