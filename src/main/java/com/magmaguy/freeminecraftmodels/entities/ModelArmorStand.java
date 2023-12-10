@@ -24,8 +24,6 @@ public class ModelArmorStand {
         armorStand.setMarker(true);
         armorStand.setPersistent(false);
         armorStand.setVisible(false);
-        if (bone.getBoneBlueprint().isDebug())
-            armorStand.setVisible(true);
         //This should only really be true for name tags and maybe other utility bones later on
         if (bone.getBoneBlueprint().getCubeBlueprintChildren().isEmpty() ||
                 !bone.getBoneBlueprint().isDisplayModel()) {
