@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.dataconverter;
 import com.magmaguy.freeminecraftmodels.utils.Developer;
 import com.magmaguy.freeminecraftmodels.utils.Round;
 import lombok.Getter;
+import lombok.Setter;
 import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 public class CubeBlueprint {
+    @Getter
     private final Map<String, Object> cubeJSON;
     @Getter
     private Vector to;
@@ -18,6 +20,9 @@ public class CubeBlueprint {
     private Vector from;
     @Getter
     private boolean validatedData = false;
+    @Getter
+    @Setter
+    private Vector boneOffset = new Vector();
 
     public CubeBlueprint(double projectResolution, Map<String, Object> cubeJSON) {
         this.cubeJSON = cubeJSON;
@@ -30,6 +35,8 @@ public class CubeBlueprint {
         cubeJSON.remove("autouv");
         cubeJSON.remove("name");
         cubeJSON.remove("box_uv");
+        cubeJSON.remove("render_order");
+        cubeJSON.remove("allow_mirror_modeling");
         //process face textures
         processFace(projectResolution, (Map<String, Object>) cubeJSON.get("faces"), "north");
         processFace(projectResolution, (Map<String, Object>) cubeJSON.get("faces"), "east");
@@ -41,13 +48,18 @@ public class CubeBlueprint {
         //The model is scaled up 4x to reach the maximum theoretical size for large models, thus needs to be scaled correctly here
         //Note that how much it is scaled relies on the scaling of the head slot, it's somewhat arbitrary and just
         //works out that this is the right amount to get the right final size.
-        double scaleFactor = 0.4D;
         ArrayList<Double> fromList = (ArrayList<Double>) cubeJSON.get("from");
         if (fromList == null) return;
-        from = new Vector(Round.fourDecimalPlaces(fromList.get(0) * scaleFactor), Round.fourDecimalPlaces(fromList.get(1) * scaleFactor), Round.fourDecimalPlaces(fromList.get(2) * scaleFactor));
+        from = new Vector(
+                Round.fourDecimalPlaces(fromList.get(0) * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER),
+                Round.fourDecimalPlaces(fromList.get(1) * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER),
+                Round.fourDecimalPlaces(fromList.get(2) * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER));
         ArrayList<Double> toList = (ArrayList<Double>) cubeJSON.get("to");
         if (toList == null) return;
-        to = new Vector(Round.fourDecimalPlaces(toList.get(0) * scaleFactor), Round.fourDecimalPlaces(toList.get(1) * scaleFactor), Round.fourDecimalPlaces(toList.get(2) * scaleFactor));
+        to = new Vector(
+                Round.fourDecimalPlaces(toList.get(0) * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER),
+                Round.fourDecimalPlaces(toList.get(1) * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER),
+                Round.fourDecimalPlaces(toList.get(2) * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER));
         validatedData = true;
     }
 
@@ -65,11 +77,21 @@ public class CubeBlueprint {
         ArrayList<Double> originalUV = (ArrayList<Double>) map.get("uv");
         //For some reason Minecraft really wants images to be 16x16 so here we scale the UV to fit that
         double uvMultiplier = 16 / projectResolution;
-        map.put("uv", List.of(Round.fourDecimalPlaces(originalUV.get(0) * uvMultiplier), Round.fourDecimalPlaces(originalUV.get(1) * uvMultiplier), Round.fourDecimalPlaces(originalUV.get(2) * uvMultiplier), Round.fourDecimalPlaces(originalUV.get(3) * uvMultiplier)));
+        map.put("uv", List.of(
+                Round.fourDecimalPlaces(originalUV.get(0) * uvMultiplier),
+                Round.fourDecimalPlaces(originalUV.get(1) * uvMultiplier),
+                Round.fourDecimalPlaces(originalUV.get(2) * uvMultiplier),
+                Round.fourDecimalPlaces(originalUV.get(3) * uvMultiplier)));
     }
 
+    public void shiftPosition() {
+        from.subtract(boneOffset);
+        to.subtract(boneOffset);
+        cubeJSON.put("from", List.of(from.getX(), from.getY(), from.getZ()));
+        cubeJSON.put("to", List.of(to.getX(), to.getY(), to.getZ()));
+    }
 
-    private void setRotation(Vector offset) {
+    public void shiftRotation() {
         if (cubeJSON.get("origin") == null) return;
         Map<String, Object> newRotationData = new HashMap<>();
 
@@ -78,9 +100,9 @@ public class CubeBlueprint {
         //Adjust the origin
         double xOrigin, yOrigin, zOrigin;
         List<Double> originData = (ArrayList<Double>) cubeJSON.get("origin");
-        xOrigin = originData.get(0) * scaleFactor + offset.getX();
-        yOrigin = originData.get(1) * scaleFactor + offset.getY();
-        zOrigin = originData.get(2) * scaleFactor + offset.getZ();
+        xOrigin = originData.get(0) * scaleFactor - boneOffset.getX();
+        yOrigin = originData.get(1) * scaleFactor - boneOffset.getY();
+        zOrigin = originData.get(2) * scaleFactor - boneOffset.getZ();
         newRotationData.put("origin", List.of(xOrigin, yOrigin, zOrigin));
 
         double angle = 0;
@@ -103,22 +125,6 @@ public class CubeBlueprint {
         newRotationData.put("angle", angle);
         newRotationData.put("axis", axis);
         cubeJSON.put("rotation", newRotationData);
-    }
-
-
-    /**
-     * Blocks can only go from -16 to +32 in Minecraft. This shifts the bones to hit either edge, so that any legal
-     * size will work, even if it goes beyond the technical limitations.
-     * Use bones to bypass this limitation.
-     */
-    private void correctPosition(Vector offset) {
-        cubeJSON.put("from", List.of(from.getX() + offset.getX(), from.getY() + offset.getY(), from.getZ() + offset.getZ()));
-        cubeJSON.put("to", List.of(to.getX() + offset.getX(), to.getY() + offset.getY(), to.getZ() + offset.getZ()));
-    }
-
-    public Map<String, Object> generateJSON(Vector offset) {
-        correctPosition(offset);
-        setRotation(offset);
-        return cubeJSON;
+        cubeJSON.remove("origin");
     }
 }
