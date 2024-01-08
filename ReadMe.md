@@ -8,6 +8,9 @@ packs, spawning entities in-game and managing their animations is all working, i
 
 Consider supporting the development at https://www.patreon.com/magmaguy !
 
+The exported resource pack contents are licensed under the CC0 license, no rights reserved. You are free to use,
+distribute, modify for any purposes without restrictions or the need for attribution.
+
 # Using this plugin
 
 ## What can FreeMinecraftModels (FMM) do for Minecraft server admins?
@@ -116,11 +119,16 @@ Maven:
 
 ```xml
 
+<repository>
+    <id>ossrh-public</id>
+    <url>https://s01.oss.sonatype.org/content/groups/snapshots/</url>
+</repository>
+
 <dependency>
-    <groupId>com.magmaguy</groupId>
-    <artifactId>FreeMinecraftModels</artifactId>
-    <version>1.1.2-SNAPSHOT</version>
-    <scope>provided</scope>
+<groupId>com.magmaguy</groupId>
+<artifactId>FreeMinecraftModels</artifactId>
+<version>1.1.3-SNAPSHOT</version>
+<scope>provided</scope>
 </dependency>
 ```
 
