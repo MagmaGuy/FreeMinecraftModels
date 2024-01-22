@@ -56,7 +56,7 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         super.spawn();
         syncSkeletonWithEntity();
         if (getSkeletonBlueprint().getHitbox() != null)
-            NMSManager.getAdapter().setCustomHitbox(entity, (float) getSkeletonBlueprint().getHitbox().getWidth() / 2f, (float) getSkeletonBlueprint().getHitbox().getHeight() / 2f, true);
+            NMSManager.getAdapter().setCustomHitbox(entity, (float) getSkeletonBlueprint().getHitbox().getWidth(), (float) getSkeletonBlueprint().getHitbox().getHeight(), true);
     }
 
     private void syncSkeletonWithEntity() {
