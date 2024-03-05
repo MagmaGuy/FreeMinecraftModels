@@ -28,6 +28,7 @@ public class QuaternionHelper {
     }
 
     public static EulerAngle quaternionToEuler(Quaternion q) {
+        if (q == null) return new EulerAngle(0, 0, 0);
         // Ensure the quaternion is normalized
         q.normalize();
 

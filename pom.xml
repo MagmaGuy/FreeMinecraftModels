@@ -4,7 +4,7 @@
 
     <groupId>com.magmaguy</groupId>
     <artifactId>FreeMinecraftModels</artifactId>
-    <version>1.1.4-SNAPSHOT</version>
+    <version>1.7.4-SNAPSHOT</version>
 
     <repositories>
         <!-- This adds the Spigot Maven repository to the build -->
@@ -69,7 +69,7 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Geyser -->
+        <!-- Floodgate (geyser) -->
         <dependency>
             <groupId>org.geysermc.floodgate</groupId>
             <artifactId>api</artifactId>
