@@ -41,12 +41,19 @@ public class BoneBlueprint {
     //This is the vector offset from the entity's location that the pivot point of the boneBlueprint should be in, outside of animations
     private Vector armorStandOffsetFromModel;
     @Getter
+    private final Vector displayEntityModelSpaceOriginOffset = new Vector();
+    @Getter
     @Setter
     private Integer modelID = null;
     @Getter
     private EulerAngle armorStandHeadRotation = new EulerAngle(0, 0, 0);
+    private Vector displayEntityStandOffsetFromModel;
+
     private Vector blockSpaceOrigin = new Vector();
-    private Vector modelSpaceOriginOffset = new Vector();
+    @Getter
+    private EulerAngle displayEntityBoneRotation = new EulerAngle(0, 0, 0);
+    @Getter
+    private Vector armorStandModelSpaceOriginOffset = new Vector();
     @Getter
     private boolean nameTag = false;
     @Getter
@@ -55,6 +62,8 @@ public class BoneBlueprint {
     private boolean isDisplayModel = true;
     private Object boneRotation;
     private Vector cubeOffset = new Vector();
+    @Getter
+    private Vector originsForDisplayEntityLocationShiftBasedOnRotation = new Vector();
 
     public BoneBlueprint(double projectResolution, Map<String, Object> boneJSON, HashMap<String, Object> values, Map<String, Map<String, Object>> textureReferences, String modelName, BoneBlueprint parent, SkeletonBlueprint skeletonBlueprint) {
         this.originalBoneName = (String) boneJSON.get("name");
@@ -127,14 +136,17 @@ public class BoneBlueprint {
         cubeOffset.multiply(MODEL_SCALE * -1);
 
         //Leather armor seems to be placed 4 blocks too high on an armor stand, this centers it
-        modelSpaceOriginOffset.subtract(new Vector(0, -4 * 1.6, 0));
+        armorStandModelSpaceOriginOffset.subtract(new Vector(0, -4 * 1.6, 0));
 
-        modelSpaceOriginOffset.add(cubeOffset);
+        armorStandModelSpaceOriginOffset.add(cubeOffset);
+
+        displayEntityModelSpaceOriginOffset.add(cubeOffset);
     }
 
     private void processBoneValues(Map<String, Object> boneJSON) {
         setOrigin(boneJSON);
         calculateArmorStandOffsetFromModel();
+        calculateDisplayEntityOffsetFromModel();
         if (cubeBlueprintChildren.isEmpty()) return;
         setBoneRotation(boneJSON);
     }
@@ -161,8 +173,18 @@ public class BoneBlueprint {
         return blockSpaceOrigin.clone();
     }
 
+    /**
+     * This centers the model correctly
+     */
     public Vector getArmorStandOffsetFromModel() {
-        return armorStandOffsetFromModel.clone();
+        return new Vector(0, -BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT(), 0);
+    }
+
+    /**
+     * This centers the model correctly
+     */
+    public Vector getDisplayModelOffsetFromModel() {
+        return new Vector(0, 0.5, 0);
     }
 
     private void setBoneRotation(Map<?, ?> boneJSON) {
@@ -171,6 +193,8 @@ public class BoneBlueprint {
         List<Double> rotations = (List<Double>) boneRotation;
         //todo: this requires a negative x and y value. I don't know why. But I really need to figure it out.
         armorStandHeadRotation = new EulerAngle(-Math.toRadians(rotations.get(0)), -Math.toRadians(rotations.get(1)), Math.toRadians(rotations.get(2)));
+        displayEntityBoneRotation = new EulerAngle(Math.toRadians(rotations.get(0)), Math.toRadians(rotations.get(1)), Math.toRadians(rotations.get(2)));
+        originsForDisplayEntityLocationShiftBasedOnRotation = new Vector(rotations.get(0), -rotations.get(1), rotations.get(2));
     }
 
     private void setOrigin(Map<String, Object> boneJSON) {
@@ -184,7 +208,7 @@ public class BoneBlueprint {
                 origins.get(2) / 16d);
         //This in the origin in "model space", meaning it is adjusted to the resource pack / Blockbench unit size (16x smaller than real space)
         //It also adjusts the scaling to fit the head
-        modelSpaceOriginOffset = new Vector(
+        armorStandModelSpaceOriginOffset = new Vector(
                 origins.get(0) * 1.6,
                 origins.get(1) * 1.6,
                 origins.get(2) * 1.6);
@@ -219,11 +243,14 @@ public class BoneBlueprint {
      * @param textureReferencesClone Map to modify
      */
     private void setDisplay(Map<String, Object> textureReferencesClone) {
-        textureReferencesClone.put("display", Map.of("head", Map.of("translation", List.of(
-                        -modelSpaceOriginOffset.getX(),
-                        -modelSpaceOriginOffset.getY(),
-                        -modelSpaceOriginOffset.getZ()),
-                "scale", List.of(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE))));
+        textureReferencesClone.put("display", Map.of(
+                "head", Map.of(
+                        "translation", List.of(
+                                -armorStandModelSpaceOriginOffset.getX(),
+                                -armorStandModelSpaceOriginOffset.getY(),
+                                -armorStandModelSpaceOriginOffset.getZ()),
+                        "scale", List.of(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE))
+        ));
     }
 
     private void writeFile(String modelName, String filename, Map<String, Object> boneJSON) {
@@ -239,6 +266,10 @@ public class BoneBlueprint {
 
     private void calculateArmorStandOffsetFromModel() {
         armorStandOffsetFromModel = getBlockSpaceOrigin().subtract(new Vector(0, BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT(), 0));
+    }
+
+    private void calculateDisplayEntityOffsetFromModel() {
+        displayEntityStandOffsetFromModel = getBlockSpaceOrigin().add(new Vector(0, 0.5, 0));
     }
 
 }

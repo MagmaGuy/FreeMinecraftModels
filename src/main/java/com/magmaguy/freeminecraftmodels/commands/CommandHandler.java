@@ -14,14 +14,19 @@ import com.magmaguy.freeminecraftmodels.ReloadHandler;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.customentity.StaticEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.freeminecraftmodels.packets.PushArmorStandState;
 import com.magmaguy.freeminecraftmodels.utils.Developer;
 import net.kyori.adventure.platform.bukkit.BukkitAudiences;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Horse;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.RayTraceResult;
 
 import java.lang.reflect.Method;
@@ -95,6 +100,39 @@ public class CommandHandler {
             else if (((String) context.get("spawnType")).equalsIgnoreCase("dynamic"))
                 DynamicEntity.create(context.get("entityID"), (LivingEntity) location.getWorld().spawnEntity(location, EntityType.PIG));
         }));
+
+        manager.command(builder.literal("mount")
+                .argument(StringArgument.<CommandSender>newBuilder("entityID")
+                        .withSuggestionsProvider(((objectCommandContext, s) -> entityIDs)), ArgumentDescription.of("Entity ID"))
+                .meta(CommandMeta.DESCRIPTION, "Makes you mount the specific model").handler(context -> {
+                    DynamicEntity dynamicEntity = DynamicEntity.create(context.get("entityID"), (LivingEntity) ((Player) context.getSender()).getWorld().spawnEntity(((Player) context.getSender()).getLocation(), EntityType.HORSE));
+//                    ((Horse) dynamicEntity.getLivingEntity()).setTamed(true);
+//                    ((Horse) dynamicEntity.getLivingEntity()).setOwner((Player) context.getSender());
+//                    ((Horse) dynamicEntity.getLivingEntity()).getInventory().setArmor(new ItemStack(Material.SADDLE));
+//                    Bukkit.getScheduler().scheduleSyncDelayedTask(MetadataHandler.PLUGIN,()->{
+//                        dynamicEntity.getLivingEntity().addPassenger((Player) context.getSender());
+//                    }, 5);
+
+                    Bukkit.getScheduler().scheduleSyncDelayedTask(MetadataHandler.PLUGIN, () -> {
+                        ((Horse) dynamicEntity.getLivingEntity()).setTamed(true);
+                        ((Horse) dynamicEntity.getLivingEntity()).setOwner((Player) context.getSender());
+                        ((Horse) dynamicEntity.getLivingEntity()).getInventory().setSaddle(new ItemStack(Material.SADDLE));
+                        dynamicEntity.getLivingEntity().addPassenger((Player) context.getSender());
+                    }, 5);
+                }));
+
+        manager.command(builder.literal("test").handler(context -> {
+            RayTraceResult rayTraceResult = ((Player) context.getSender()).rayTraceBlocks(300);
+            if (rayTraceResult == null) {
+                context.getSender().sendMessage("[FMM] You need to be looking at the ground to spawn a mob!");
+                return;
+            }
+            Location location = rayTraceResult.getHitBlock().getLocation().add(0.5, 1, 0.5);
+            location.setPitch(0);
+            location.setYaw(180);
+            PushArmorStandState.test((Player) context.getSender(), location);
+        }));
+
 
         manager.command(builder.literal("reload").handler(context -> ReloadHandler.reload(context.getSender())));
     }

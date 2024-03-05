@@ -11,6 +11,7 @@ import com.magmaguy.freeminecraftmodels.customentity.ModeledEntityEvents;
 import com.magmaguy.freeminecraftmodels.customentity.StaticEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.LegacyHitDetection;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.freeminecraftmodels.utils.VersionChecker;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.Bukkit;
 import org.bukkit.event.HandlerList;
@@ -36,6 +37,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(new LegacyHitDetection(), this);
         NMSManager.initializeAdapter(this);
         new CommandHandler();
+        VersionChecker.checkPluginVersion();
     }
 
     @Override
