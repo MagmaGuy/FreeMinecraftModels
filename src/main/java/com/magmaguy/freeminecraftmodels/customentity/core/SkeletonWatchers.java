@@ -1,0 +1,64 @@
+package com.magmaguy.freeminecraftmodels.customentity.core;
+
+import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
+import org.bukkit.event.Listener;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
+
+import java.util.*;
+
+//This class manages who the display packets are sent to
+public class SkeletonWatchers implements Listener {
+    private final Skeleton skeleton;
+    private final Set<UUID> viewers = Collections.synchronizedSet(new HashSet<>());
+    private BukkitTask tick;
+
+    public SkeletonWatchers(Skeleton skeleton) {
+        this.skeleton = skeleton;
+        tick();
+    }
+
+    public void remove() {
+        tick.cancel();
+    }
+
+    private void tick() {
+        tick = new BukkitRunnable() {
+            @Override
+            public void run() {
+                updateWatcherList();
+                sendPackets();
+            }
+        }.runTaskTimerAsynchronously(MetadataHandler.PLUGIN, 0, 1);
+    }
+
+    private void updateWatcherList() {
+        List<UUID> newPlayers = new ArrayList<>();
+        for (Player player : skeleton.getCurrentLocation().getWorld().getPlayers())
+            if (player.getLocation().distanceSquared(skeleton.getCurrentLocation()) < Math.pow(2, Bukkit.getSimulationDistance() * 16D)) {
+                newPlayers.add(player.getUniqueId());
+                if (!viewers.contains(player.getUniqueId())) displayTo(player);
+            }
+        viewers.stream().toList().forEach(viewer -> {
+            if (!newPlayers.contains(viewer))
+                hideFrom(Bukkit.getPlayer(viewer));
+        });
+    }
+
+    private void displayTo(Player player) {
+        viewers.add(player.getUniqueId());
+        skeleton.getBones().forEach(bone -> bone.displayTo(player));
+    }
+
+    private void hideFrom(Player player) {
+        viewers.remove(player);
+        skeleton.getBones().forEach(bone -> bone.hideFrom(player));
+    }
+
+    private void sendPackets() {
+        if (viewers.isEmpty()) return;
+        skeleton.getBones().forEach(Bone::sendUpdatePacket);
+    }
+}
