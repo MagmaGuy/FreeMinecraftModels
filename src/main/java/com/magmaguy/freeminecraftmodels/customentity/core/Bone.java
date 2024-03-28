@@ -28,13 +28,12 @@ public class Bone {
     @Getter
     private final Bone parent;
     private final Skeleton skeleton;
+    private final TransformationMatrix localMatrix = new TransformationMatrix();
     //Relative to the parent
     private PacketModelEntity packetArmorStandEntity = null;
     private PacketModelEntity packetDisplayEntity = null;
     private Vector animationTranslation = new Vector();
     private Vector animationRotation = new Vector();
-
-    private final TransformationMatrix localMatrix = new TransformationMatrix();
     private TransformationMatrix globalMatrix = new TransformationMatrix();
 
 
@@ -195,7 +194,8 @@ public class Bone {
     }
 
     public void hideFrom(UUID playerUUID) {
-        packetArmorStandEntity.hideFrom(playerUUID);
+        if (packetArmorStandEntity != null)
+            packetArmorStandEntity.hideFrom(playerUUID);
         if (packetDisplayEntity != null)
             packetDisplayEntity.hideFrom(playerUUID);
     }
