@@ -5,7 +5,6 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.persistence.PersistentDataType;
-import org.jetbrains.annotations.NotNull;
 
 public class RegisterModelEntity {
     public static final NamespacedKey ARMOR_STAND_KEY = new NamespacedKey(MetadataHandler.PLUGIN, "armor_stand");
@@ -14,19 +13,19 @@ public class RegisterModelEntity {
     private RegisterModelEntity() {
     }
 
-    public static void registerModelArmorStand(@NotNull ArmorStand armorStand, @NotNull String name) {
+    public static void registerModelArmorStand(ArmorStand armorStand, String name) {
         armorStand.getPersistentDataContainer().set(ENTITY_KEY, PersistentDataType.STRING, name);
     }
 
-    public static void registerModelEntity(@NotNull Entity entity, @NotNull String name) {
+    public static void registerModelEntity(Entity entity, String name) {
         entity.getPersistentDataContainer().set(ENTITY_KEY, PersistentDataType.STRING, name);
     }
 
-    public static boolean isModelArmorStand(@NotNull Entity entity) {
+    public static boolean isModelArmorStand(Entity entity) {
         return entity.getPersistentDataContainer().getKeys().contains(ARMOR_STAND_KEY);
     }
 
-    public static boolean isModelEntity(@NotNull Entity entity) {
+    public static boolean isModelEntity(Entity entity) {
         return entity.getPersistentDataContainer().getKeys().contains(ENTITY_KEY);
     }
 }

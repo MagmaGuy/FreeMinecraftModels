@@ -72,14 +72,9 @@ public class BoneBlueprint {
         skeletonBlueprint.getBoneMap().put(originalBoneName, this);
     }
 
-    public Vector getDisplayEntityBlueprintModelCenter() {
+    public Vector getModelCenter() {
+        //this multiplication moves it to real space
         return blueprintModelCenter.clone().multiply(5 / 32f);
-    }
-
-    public Vector getArmorStandBlueprintModelCenter() {
-        return blueprintModelCenter.clone()
-                .multiply(5 / 32f)
-                .subtract(new Vector(0, ARMOR_STAND_PIVOT_POINT_HEIGHT, 0));
     }
 
     public Vector getBlueprintModelPivot() {
@@ -176,7 +171,7 @@ public class BoneBlueprint {
         if (obj == null) return;
         List<Double> origins = (List<Double>) obj;
         //This is the origin in "real space", meaning it is adjusted to the in-game unit size (16x larger than model space)
-        blueprintModelPivot = getDisplayEntityBlueprintModelCenter().clone().subtract(new Vector(
+        blueprintModelPivot = getModelCenter().clone().subtract(new Vector(
                 origins.get(0),
                 origins.get(1),
                 origins.get(2))
