@@ -5,6 +5,7 @@ import com.magmaguy.easyminecraftgoals.internal.PacketModelEntity;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.thirdparty.Floodgate;
+import com.magmaguy.freeminecraftmodels.utils.TransformationMatrix;
 import com.magmaguy.freeminecraftmodels.utils.VersionChecker;
 import lombok.Getter;
 import org.bukkit.Color;
@@ -33,10 +34,9 @@ public class Bone {
     private Vector animationTranslation = new Vector();
     private Vector animationRotation = new Vector();
 
-    @Getter
-    private ArmorStandBone armorStandBone;
-    @Getter
-    private DisplayEntityBone displayEntityBone;
+    private final TransformationMatrix localMatrix = new TransformationMatrix();
+    private TransformationMatrix globalMatrix = new TransformationMatrix();
+
 
     public Bone(BoneBlueprint boneBlueprint, Bone parent, Skeleton skeleton) {
         this.boneBlueprint = boneBlueprint;
@@ -54,19 +54,54 @@ public class Bone {
         animationTranslation = new Vector(x, y, z);
     }
 
+    public void updateLocalTransform() {
+        localMatrix.resetToIdentityMatrix();
+        //Shift to model center
+        localMatrix.translate(boneBlueprint.getModelCenter());
+
+        //The bone is relative to its parent, so remove the offset of the parent
+        if (parent != null) localMatrix.translate(parent.boneBlueprint.getModelCenter().multiply(-1));
+
+        //Add the pivot point for the rotation - is removed later
+        localMatrix.translate((float) -boneBlueprint.getBlueprintModelPivot().getX(), (float) -boneBlueprint.getBlueprintModelPivot().getY(), (float) -boneBlueprint.getBlueprintModelPivot().getZ());
+
+        //Animate
+        localMatrix.rotate((float) animationRotation.getX(), (float) animationRotation.getY(), (float) animationRotation.getZ());
+        localMatrix.translate((float) animationTranslation.getX(), (float) animationTranslation.getY(), (float) animationTranslation.getZ());
+
+        //Apply the bone's default rotation to the matrix
+        localMatrix.rotate(
+                (float) boneBlueprint.getBlueprintOriginalBoneRotation().getX(),
+                (float) boneBlueprint.getBlueprintOriginalBoneRotation().getY(),
+                (float) boneBlueprint.getBlueprintOriginalBoneRotation().getZ());
+
+
+        //Remove the pivot point, go back to the model center
+        localMatrix.translate((float) boneBlueprint.getBlueprintModelPivot().getX(), (float) boneBlueprint.getBlueprintModelPivot().getY(), (float) boneBlueprint.getBlueprintModelPivot().getZ());
+
+        //rotate by yaw amount
+        if (parent == null) {
+            localMatrix.rotate(0, -(float) Math.toRadians(skeleton.getCurrentLocation().getYaw() + 180), 0);
+        }
+    }
+
+    public void updateGlobalTransform() {
+        if (parent != null) TransformationMatrix.multiplyMatrices(parent.globalMatrix, localMatrix, globalMatrix);
+        else globalMatrix = localMatrix;
+    }
+
     //Note that several optimizations might be possible here, but that syncing with a base entity is necessary.
     public void transform() {
-        //Inherit rotation and translation values from parents
-        if (armorStandBone != null)
-            armorStandBone.transform(animationRotation, animationTranslation, skeleton.getCurrentLocation().getYaw());
-        if (displayEntityBone != null)
-            displayEntityBone.transform(animationRotation, animationTranslation, skeleton.getCurrentLocation().getYaw());
+        updateLocalTransform();
+        updateGlobalTransform();
 
         boneChildren.forEach(Bone::transform);
         skeleton.getSkeletonWatchers().sendPackets(this);
     }
 
     public void generateDisplay() {
+        updateLocalTransform();
+        updateGlobalTransform();
         if (boneBlueprint.getModelID() != null) {
             initializeDisplayEntityBone();
             initializeArmorStandBone();
@@ -76,27 +111,7 @@ public class Bone {
 
     private void initializeDisplayEntityBone() {
         if (!DefaultConfig.useDisplayEntitiesWhenPossible) return;
-        if (parent == null || parent.getDisplayEntityBone() == null)
-            displayEntityBone = new DisplayEntityBone(
-                    boneBlueprint.getDisplayEntityBlueprintModelCenter(),
-                    null,
-                    boneBlueprint.getBlueprintModelPivot(),
-                    boneBlueprint.getBlueprintOriginalBoneRotation(),
-                    true,
-                    null);
-        else
-            displayEntityBone = new DisplayEntityBone(
-                    boneBlueprint.getDisplayEntityBlueprintModelCenter(),
-                    parent.getBoneBlueprint().getDisplayEntityBlueprintModelCenter(),
-                    boneBlueprint.getBlueprintModelPivot(),
-                    boneBlueprint.getBlueprintOriginalBoneRotation(),
-                    parent == null,
-                    parent.getDisplayEntityBone().getGlobalMatrix());
-
         packetDisplayEntity = NMSManager.getAdapter().createPacketDisplayEntity(getDisplayEntityTargetLocation());
-
-        updateDisplayEntityBone();
-
         packetDisplayEntity.initializeModel(getDisplayEntityTargetLocation(), boneBlueprint.getModelID());
         packetDisplayEntity.setScale(2.5f);
         packetDisplayEntity.sendLocationAndRotationPacket(getDisplayEntityTargetLocation(), getDisplayEntityRotation());
@@ -104,66 +119,31 @@ public class Bone {
 
     private void initializeArmorStandBone() {
         //todo: add way to disable armor stands later via config
-        if (parent == null || parent.getArmorStandBone() == null)
-            armorStandBone = new ArmorStandBone(boneBlueprint.getArmorStandBlueprintModelCenter(),
-                    null,
-                    boneBlueprint.getBlueprintModelPivot(),
-                    boneBlueprint.getBlueprintOriginalBoneRotation(),
-                    true,
-                    null);
-        else
-            armorStandBone = new ArmorStandBone(boneBlueprint.getArmorStandBlueprintModelCenter(),
-                    parent.getBoneBlueprint().getArmorStandBlueprintModelCenter(),
-                    boneBlueprint.getBlueprintModelPivot(),
-                    boneBlueprint.getBlueprintOriginalBoneRotation(),
-                    parent == null,
-                    parent.getArmorStandBone().getGlobalMatrix());
-
         packetArmorStandEntity = NMSManager.getAdapter().createPacketArmorStandEntity(getArmorStandTargetLocation());
-
-        updateArmorStandBone();
-
         packetArmorStandEntity.initializeModel(getArmorStandTargetLocation(), boneBlueprint.getModelID());
         packetArmorStandEntity.sendLocationAndRotationPacket(getArmorStandTargetLocation(), getArmorStandEntityRotation());
     }
 
-    private void updateDisplayEntityBone() {
-        displayEntityBone.updateLocalTransform(animationRotation, animationTranslation, skeleton.getCurrentLocation().getYaw());
-        if (parent == null || parent.getDisplayEntityBone() == null) {
-            displayEntityBone.updateGlobalTransform();
-        } else {
-            displayEntityBone.updateGlobalTransform();
-        }
-    }
-
-    private void updateArmorStandBone() {
-        armorStandBone.updateLocalTransform(animationRotation, animationTranslation, skeleton.getCurrentLocation().getYaw());
-        if (parent == null || parent.getArmorStandBone() == null) {
-            armorStandBone.updateGlobalTransform();
-        } else {
-            armorStandBone.updateGlobalTransform();
-        }
-    }
-
     private Location getArmorStandTargetLocation() {
-        float[] translatedGlobalMatrix = armorStandBone.getGlobalMatrix().applyTransformation(new float[]{0, 0, 0, 1});
+        float[] translatedGlobalMatrix = globalMatrix.applyTransformation(new float[]{0, 0, 0, 1});
         Location armorStandLocation = new Location(skeleton.getCurrentLocation().getWorld(), translatedGlobalMatrix[0], translatedGlobalMatrix[1], translatedGlobalMatrix[2]).add(skeleton.getCurrentLocation());
         armorStandLocation.setYaw(180);
+        armorStandLocation.subtract(new Vector(0, BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT(), 0));
         return armorStandLocation;
     }
 
     private Location getDisplayEntityTargetLocation() {
-        float[] translatedGlobalMatrix = displayEntityBone.getGlobalMatrix().applyTransformation(new float[]{0, 0, 0, 1});
+        float[] translatedGlobalMatrix = globalMatrix.applyTransformation(new float[]{0, 0, 0, 1});
         return new Location(skeleton.getCurrentLocation().getWorld(), translatedGlobalMatrix[0], translatedGlobalMatrix[1], translatedGlobalMatrix[2]).add(skeleton.getCurrentLocation());
     }
 
     private EulerAngle getDisplayEntityRotation() {
-        float[] rotation = displayEntityBone.getGlobalMatrix().getRotation();
+        float[] rotation = globalMatrix.getRotation();
         return new EulerAngle(rotation[0], rotation[1], rotation[2]);
     }
 
     private EulerAngle getArmorStandEntityRotation() {
-        float[] rotation = armorStandBone.getGlobalMatrix().getRotation();
+        float[] rotation = globalMatrix.getRotation();
         return new EulerAngle(-rotation[0], -rotation[1], rotation[2]);
     }
 

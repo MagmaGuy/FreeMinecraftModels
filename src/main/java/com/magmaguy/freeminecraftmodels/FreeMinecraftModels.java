@@ -1,7 +1,7 @@
 package com.magmaguy.freeminecraftmodels;
 
 import com.magmaguy.easyminecraftgoals.NMSManager;
-import com.magmaguy.freeminecraftmodels.commands.CommandHandler;
+import com.magmaguy.freeminecraftmodels.commands.CommandManager;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.config.ImportsFolder;
 import com.magmaguy.freeminecraftmodels.config.ModelsFolder;
@@ -36,8 +36,8 @@ public final class FreeMinecraftModels extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(new ModeledEntityEvents(), this);
         Bukkit.getPluginManager().registerEvents(new LegacyHitDetection(), this);
         NMSManager.initializeAdapter(this);
-        new CommandHandler();
         VersionChecker.checkPluginVersion();
+        new CommandManager(this);
     }
 
     @Override
