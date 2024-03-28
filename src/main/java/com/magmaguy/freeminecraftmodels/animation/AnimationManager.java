@@ -112,6 +112,18 @@ public class AnimationManager {
         return true;
     }
 
+    private static int getAdjustedAnimationPosition(Animation animation) {
+        int adjustedAnimationPosition;
+        if (animation.getCounter() >= animation.getAnimationBlueprint().getDuration() && animation.getAnimationBlueprint().getLoopType() == LoopType.HOLD)
+            //Case where the animation is technically over but also is set to hold
+            adjustedAnimationPosition = animation.getAnimationBlueprint().getDuration() - 1;
+        else {
+            //Normal case, looping
+            adjustedAnimationPosition = (int) (animation.getCounter() - Math.floor(animation.getCounter() / (double) animation.getAnimationBlueprint().getDuration()) * animation.getAnimationBlueprint().getDuration());
+        }
+        return adjustedAnimationPosition;
+    }
+
     private void playAnimationFrame(Animation animation) {
         if (!animation.getAnimationBlueprint().getLoopType().equals(LoopType.LOOP) && animation.getCounter() >= animation.getAnimationBlueprint().getDuration()) {
             //Case where the animation doesn't loop, and it's over
@@ -120,31 +132,20 @@ public class AnimationManager {
                 modeledEntity.remove();
             return;
         }
-        int adjustedAnimationPosition;
-        if (animation.getCounter() >= animation.getAnimationBlueprint().getDuration() && animation.getAnimationBlueprint().getLoopType() == LoopType.HOLD)
-            //Case where the animation is technically over but also is set to hold
-            adjustedAnimationPosition = animation.getAnimationBlueprint().getDuration() - 1;
-        else
-            //Normal case, looping
-            adjustedAnimationPosition = (int) (animation.getCounter() - Math.floor(animation.getCounter() / (double) animation.getAnimationBlueprint().getDuration()) * animation.getAnimationBlueprint().getDuration());
-
+        int adjustedAnimationPosition = getAdjustedAnimationPosition(animation);
         //Handle rotations
-        animation.getAnimationFrames().entrySet().forEach(boneEntry -> {
-            boneEntry.getKey().rotateTo(
-                    boneEntry.getValue()[adjustedAnimationPosition].xRotation,
-                    boneEntry.getValue()[adjustedAnimationPosition].yRotation,
-                    boneEntry.getValue()[adjustedAnimationPosition].zRotation);
-        });
+        animation.getAnimationFrames().forEach((key, value) -> key.updateAnimationRotation(
+                value[adjustedAnimationPosition].xRotation,
+                value[adjustedAnimationPosition].yRotation,
+                value[adjustedAnimationPosition].zRotation));
 
         //Handle translations
-        animation.getAnimationFrames().entrySet().forEach(boneEntry -> {
-            boneEntry.getKey().translateTo(
-                    boneEntry.getValue()[adjustedAnimationPosition].xPosition,
-                    boneEntry.getValue()[adjustedAnimationPosition].yPosition,
-                    boneEntry.getValue()[adjustedAnimationPosition].zPosition);
-        });
+        animation.getAnimationFrames().forEach((key, value) -> key.updateAnimationTranslation(
+                value[adjustedAnimationPosition].xPosition,
+                value[adjustedAnimationPosition].yPosition,
+                value[adjustedAnimationPosition].zPosition));
 
-        animation.setCounter(animation.getCounter() + 1);
+        animation.incrementCounter();
     }
 
     public void stop() {

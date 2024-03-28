@@ -16,7 +16,7 @@ public class PushArmorStandState {
     public static void test(Player player, Location location) {
         PacketModelEntity packetArmorStandEntityInterface = NMSManager.getAdapter().createPacketDisplayEntity(player.getLocation());
         packetArmorStandEntityInterface.initializeModel(location, 1);
-        packetArmorStandEntityInterface.displayTo(player);
+        packetArmorStandEntityInterface.displayTo(player.getUniqueId());
     }
 
 }

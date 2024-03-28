@@ -26,7 +26,6 @@ public class BoneBlueprint {
     @Getter
     private static final double ARMOR_STAND_PIVOT_POINT_HEIGHT = 1.438D;
     //This multiplier converts resource pack units back to bbmodel units
-    private static final double ARMOR_STAND_SCALING_RECIPROCAL = 2.5;
     public static NamespacedKey nameTagKey = new NamespacedKey(MetadataHandler.PLUGIN, "NameTag");
     @Getter
     private final List<BoneBlueprint> boneBlueprintChildren = new ArrayList<>();
@@ -38,32 +37,22 @@ public class BoneBlueprint {
     private final String originalModelName;
     @Getter
     private final String originalBoneName;
-    //This is the vector offset from the entity's location that the pivot point of the boneBlueprint should be in, outside of animations
-    private Vector armorStandOffsetFromModel;
-    @Getter
-    private final Vector displayEntityModelSpaceOriginOffset = new Vector();
     @Getter
     @Setter
     private Integer modelID = null;
-    @Getter
-    private EulerAngle armorStandHeadRotation = new EulerAngle(0, 0, 0);
-    private Vector displayEntityStandOffsetFromModel;
 
-    private Vector blockSpaceOrigin = new Vector();
-    @Getter
-    private EulerAngle displayEntityBoneRotation = new EulerAngle(0, 0, 0);
-    @Getter
-    private Vector armorStandModelSpaceOriginOffset = new Vector();
     @Getter
     private boolean nameTag = false;
     @Getter
     private BoneBlueprint parent = null;
     @Getter
     private boolean isDisplayModel = true;
-    private Object boneRotation;
-    private Vector cubeOffset = new Vector();
+    //Actual center of the model in the model space
+    private Vector blueprintModelCenter = new Vector();
+    //Pivot point relative to the model center
+    private Vector blueprintModelPivot;
     @Getter
-    private Vector originsForDisplayEntityLocationShiftBasedOnRotation = new Vector();
+    private EulerAngle blueprintOriginalBoneRotation = new EulerAngle(0, 0, 0);
 
     public BoneBlueprint(double projectResolution, Map<String, Object> boneJSON, HashMap<String, Object> values, Map<String, Map<String, Object>> textureReferences, String modelName, BoneBlueprint parent, SkeletonBlueprint skeletonBlueprint) {
         this.originalBoneName = (String) boneJSON.get("name");
@@ -75,12 +64,26 @@ public class BoneBlueprint {
         if (originalBoneName.startsWith("b_")) isDisplayModel = false;
         //Initialize child data
         processChildren(boneJSON, modelName, projectResolution, values, textureReferences, skeletonBlueprint);
-        processBoneValues(boneJSON);
         adjustCubes();
+        processBoneValues(boneJSON);
         String filename = originalBoneName.toLowerCase().replace(" ", "_");
         generateAndWriteCubes(filename, textureReferences, modelName);
         //Add bone to the map
         skeletonBlueprint.getBoneMap().put(originalBoneName, this);
+    }
+
+    public Vector getDisplayEntityBlueprintModelCenter() {
+        return blueprintModelCenter.clone().multiply(5 / 32f);
+    }
+
+    public Vector getArmorStandBlueprintModelCenter() {
+        return blueprintModelCenter.clone()
+                .multiply(5 / 32f)
+                .subtract(new Vector(0, ARMOR_STAND_PIVOT_POINT_HEIGHT, 0));
+    }
+
+    public Vector getBlueprintModelPivot() {
+        return blueprintModelPivot.clone();
     }
 
     private void adjustCubes() {
@@ -120,7 +123,7 @@ public class BoneBlueprint {
         double zOffset = lowestZ - newLowestZ;
 
         //Get offset based on the cube shift, this is technically in normal resource pack units as the shifts need to be done in that unit size
-        cubeOffset = new Vector(xOffset, yOffset, zOffset);
+        Vector cubeOffset = new Vector(xOffset, yOffset, zOffset);
 
         //Uniformly shift the cubes and finalize writing their JSON data
         for (CubeBlueprint cubeBlueprint : cubeBlueprintChildren) {
@@ -132,21 +135,12 @@ public class BoneBlueprint {
         //This should shift the origin so it is adequately centered on 8,8,8
         cubeOffset.add(new Vector(8, 8, 8));
 
-        //todo this is cursed, and needs to be cleaned up
-        cubeOffset.multiply(MODEL_SCALE * -1);
-
-        //Leather armor seems to be placed 4 blocks too high on an armor stand, this centers it
-        armorStandModelSpaceOriginOffset.subtract(new Vector(0, -4 * 1.6, 0));
-
-        armorStandModelSpaceOriginOffset.add(cubeOffset);
-
-        displayEntityModelSpaceOriginOffset.add(cubeOffset);
+        //This is actually how much the center of the blocks has shifted from 0,0,0 in the model space
+        blueprintModelCenter = cubeOffset.clone();
     }
 
     private void processBoneValues(Map<String, Object> boneJSON) {
         setOrigin(boneJSON);
-        calculateArmorStandOffsetFromModel();
-        calculateDisplayEntityOffsetFromModel();
         if (cubeBlueprintChildren.isEmpty()) return;
         setBoneRotation(boneJSON);
     }
@@ -169,32 +163,12 @@ public class BoneBlueprint {
         }
     }
 
-    public Vector getBlockSpaceOrigin() {
-        return blockSpaceOrigin.clone();
-    }
-
-    /**
-     * This centers the model correctly
-     */
-    public Vector getArmorStandOffsetFromModel() {
-        return new Vector(0, -BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT(), 0);
-    }
-
-    /**
-     * This centers the model correctly
-     */
-    public Vector getDisplayModelOffsetFromModel() {
-        return new Vector(0, 0.5, 0);
-    }
-
     private void setBoneRotation(Map<?, ?> boneJSON) {
-        boneRotation = boneJSON.get("rotation");
+        Object boneRotation = boneJSON.get("rotation");
         if (boneRotation == null) return;
         List<Double> rotations = (List<Double>) boneRotation;
         //todo: this requires a negative x and y value. I don't know why. But I really need to figure it out.
-        armorStandHeadRotation = new EulerAngle(-Math.toRadians(rotations.get(0)), -Math.toRadians(rotations.get(1)), Math.toRadians(rotations.get(2)));
-        displayEntityBoneRotation = new EulerAngle(Math.toRadians(rotations.get(0)), Math.toRadians(rotations.get(1)), Math.toRadians(rotations.get(2)));
-        originsForDisplayEntityLocationShiftBasedOnRotation = new Vector(rotations.get(0), -rotations.get(1), rotations.get(2));
+        blueprintOriginalBoneRotation = new EulerAngle(Math.toRadians(rotations.get(0)), Math.toRadians(rotations.get(1)), Math.toRadians(rotations.get(2)));
     }
 
     private void setOrigin(Map<String, Object> boneJSON) {
@@ -202,16 +176,11 @@ public class BoneBlueprint {
         if (obj == null) return;
         List<Double> origins = (List<Double>) obj;
         //This is the origin in "real space", meaning it is adjusted to the in-game unit size (16x larger than model space)
-        blockSpaceOrigin = new Vector(
-                origins.get(0) / 16d,
-                origins.get(1) / 16d,
-                origins.get(2) / 16d);
-        //This in the origin in "model space", meaning it is adjusted to the resource pack / Blockbench unit size (16x smaller than real space)
-        //It also adjusts the scaling to fit the head
-        armorStandModelSpaceOriginOffset = new Vector(
-                origins.get(0) * 1.6,
-                origins.get(1) * 1.6,
-                origins.get(2) * 1.6);
+        blueprintModelPivot = getDisplayEntityBlueprintModelCenter().clone().subtract(new Vector(
+                origins.get(0),
+                origins.get(1),
+                origins.get(2))
+                .multiply(1 / 16f));
     }
 
     private void generateAndWriteCubes(String filename, Map<String, Map<String, Object>> textureReferences, String modelName) {
@@ -246,9 +215,9 @@ public class BoneBlueprint {
         textureReferencesClone.put("display", Map.of(
                 "head", Map.of(
                         "translation", List.of(
-                                -armorStandModelSpaceOriginOffset.getX(),
-                                -armorStandModelSpaceOriginOffset.getY(),
-                                -armorStandModelSpaceOriginOffset.getZ()),
+                                0,
+                                -6.4,
+                                0),
                         "scale", List.of(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE))
         ));
     }
@@ -262,14 +231,6 @@ public class BoneBlueprint {
             Developer.warn("Failed to write boneBlueprint resource packs for boneBlueprint " + filename + "!");
             throw new RuntimeException(e);
         }
-    }
-
-    private void calculateArmorStandOffsetFromModel() {
-        armorStandOffsetFromModel = getBlockSpaceOrigin().subtract(new Vector(0, BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT(), 0));
-    }
-
-    private void calculateDisplayEntityOffsetFromModel() {
-        displayEntityStandOffsetFromModel = getBlockSpaceOrigin().add(new Vector(0, 0.5, 0));
     }
 
 }

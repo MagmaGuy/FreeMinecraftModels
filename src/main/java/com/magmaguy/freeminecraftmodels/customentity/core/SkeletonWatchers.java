@@ -29,7 +29,7 @@ public class SkeletonWatchers implements Listener {
             @Override
             public void run() {
                 updateWatcherList();
-                sendPackets();
+//                sendPackets(); moved to the bone
             }
         }.runTaskTimerAsynchronously(MetadataHandler.PLUGIN, 0, 1);
     }
@@ -43,7 +43,7 @@ public class SkeletonWatchers implements Listener {
             }
         viewers.stream().toList().forEach(viewer -> {
             if (!newPlayers.contains(viewer))
-                hideFrom(Bukkit.getPlayer(viewer));
+                hideFrom(viewer);
         });
     }
 
@@ -52,13 +52,13 @@ public class SkeletonWatchers implements Listener {
         skeleton.getBones().forEach(bone -> bone.displayTo(player));
     }
 
-    private void hideFrom(Player player) {
-        viewers.remove(player);
-        skeleton.getBones().forEach(bone -> bone.hideFrom(player));
+    private void hideFrom(UUID uuid) {
+        viewers.remove(uuid);
+        skeleton.getBones().forEach(bone -> bone.hideFrom(uuid));
     }
 
-    private void sendPackets() {
+    public void sendPackets(Bone bone) {
         if (viewers.isEmpty()) return;
-        skeleton.getBones().forEach(Bone::sendUpdatePacket);
+        bone.sendUpdatePacket();
     }
 }
