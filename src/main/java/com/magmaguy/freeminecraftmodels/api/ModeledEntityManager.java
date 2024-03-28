@@ -1,6 +1,6 @@
 package com.magmaguy.freeminecraftmodels.api;
 
-import com.magmaguy.freeminecraftmodels.ReloadHandler;
+import com.magmaguy.freeminecraftmodels.commands.ReloadCommand;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.customentity.StaticEntity;
@@ -58,6 +58,6 @@ public class ModeledEntityManager {
      * Safely handles reloading the plugin, importing new data and reinitializing models
      */
     public static void reload() {
-        ReloadHandler.reload(Bukkit.getConsoleSender());
+        ReloadCommand.reloadPlugin(Bukkit.getConsoleSender());
     }
 }

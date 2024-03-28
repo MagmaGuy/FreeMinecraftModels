@@ -4,7 +4,7 @@
 
     <groupId>com.magmaguy</groupId>
     <artifactId>FreeMinecraftModels</artifactId>
-    <version>1.7.4-SNAPSHOT</version>
+    <version>1.2.0-SNAPSHOT</version>
 
     <repositories>
         <!-- This adds the Spigot Maven repository to the build -->
@@ -26,32 +26,6 @@
             <artifactId>spigot-api</artifactId>
             <version>1.20.1-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
-        </dependency>
-
-        <!-- CloudCommandFramework -->
-        <dependency>
-            <groupId>cloud.commandframework</groupId>
-            <artifactId>cloud-paper</artifactId>
-            <version>1.7.0</version>
-        </dependency>
-        <!--
-        ~    Optional: Allows you to use annotated methods
-        ~    to declare commands
-        -->
-        <dependency>
-            <groupId>cloud.commandframework</groupId>
-            <artifactId>cloud-annotations</artifactId>
-            <version>1.7.0</version>
-        </dependency>
-        <dependency>
-            <groupId>cloud.commandframework</groupId>
-            <artifactId>cloud-minecraft-extras</artifactId>
-            <version>1.5.0</version>
-        </dependency>
-        <dependency>
-            <groupId>net.kyori</groupId>
-            <artifactId>adventure-platform-bukkit</artifactId>
-            <version>4.0.0-SNAPSHOT</version>
         </dependency>
 
         <!-- GSON for json parsing and easy file saving -->
@@ -92,17 +66,11 @@
             <scope>compile</scope>
         </dependency>
 
-        <!-- Quaternion rotations -->
-        <dependency>
-            <groupId>org.apache.commons</groupId>
-            <artifactId>commons-math3</artifactId>
-            <version>3.6.1</version> <!-- Use the latest version available -->
-        </dependency>
-
+        <!-- EasyMinecraftGoals for hitboxes and soon pathfinding -->
         <dependency>
             <groupId>com.magmaguy</groupId>
             <artifactId>EasyMinecraftGoals-dist</artifactId>
-            <version>1.7.4-SNAPSHOT</version>
+            <version>1.8.0-SNAPSHOT</version>
         </dependency>
 
 
@@ -117,38 +85,6 @@
                 <configuration>
                     <source>17</source>
                     <target>17</target>
-                </configuration>
-            </plugin>
-
-            <!-- Cloud commands -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>3.3.0</version>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>shade</goal>
-                        </goals>
-                        <configuration>
-                            <createDependencyReducedPom>false</createDependencyReducedPom>
-                        </configuration>
-                    </execution>
-                </executions>
-                <configuration>
-                    <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
-                    </dependencyReducedPomLocation>
-                    <relocations>
-                        <relocation>
-                            <pattern>cloud.commandframework</pattern>
-                            <shadedPattern>com.magmaguy.freeminecraftmodels.shaded.cloud</shadedPattern>
-                        </relocation>
-                        <relocation>
-                            <pattern>io.leangen.geantyref</pattern>
-                            <shadedPattern>com.magmaguy.freeminecraftmodels.shaded.typetoken</shadedPattern>
-                        </relocation>
-                    </relocations>
                 </configuration>
             </plugin>
 
