@@ -45,44 +45,12 @@ public class Bone {
             boneChildren.add(new Bone(child, this, skeleton));
     }
 
-    public void updateAnimationRotation(double x, double y, double z) {
-        animationRotation = new Vector(Math.toRadians(x), -Math.toRadians(y), Math.toRadians(z));
-    }
+    private int counter = 0;
 
     public void updateAnimationTranslation(double x, double y, double z) {
         animationTranslation = new Vector(x, y, z);
     }
-
-    public void updateLocalTransform() {
-        localMatrix.resetToIdentityMatrix();
-        //Shift to model center
-        localMatrix.translate(boneBlueprint.getModelCenter());
-
-        //The bone is relative to its parent, so remove the offset of the parent
-        if (parent != null) localMatrix.translate(parent.boneBlueprint.getModelCenter().multiply(-1));
-
-        //Add the pivot point for the rotation - is removed later
-        localMatrix.translate((float) -boneBlueprint.getBlueprintModelPivot().getX(), (float) -boneBlueprint.getBlueprintModelPivot().getY(), (float) -boneBlueprint.getBlueprintModelPivot().getZ());
-
-        //Animate
-        localMatrix.rotate((float) animationRotation.getX(), (float) animationRotation.getY(), (float) animationRotation.getZ());
-        localMatrix.translate((float) animationTranslation.getX(), (float) animationTranslation.getY(), (float) animationTranslation.getZ());
-
-        //Apply the bone's default rotation to the matrix
-        localMatrix.rotate(
-                (float) boneBlueprint.getBlueprintOriginalBoneRotation().getX(),
-                (float) boneBlueprint.getBlueprintOriginalBoneRotation().getY(),
-                (float) boneBlueprint.getBlueprintOriginalBoneRotation().getZ());
-
-
-        //Remove the pivot point, go back to the model center
-        localMatrix.translate((float) boneBlueprint.getBlueprintModelPivot().getX(), (float) boneBlueprint.getBlueprintModelPivot().getY(), (float) boneBlueprint.getBlueprintModelPivot().getZ());
-
-        //rotate by yaw amount
-        if (parent == null) {
-            localMatrix.rotate(0, -(float) Math.toRadians(skeleton.getCurrentLocation().getYaw() + 180), 0);
-        }
-    }
+    private int reset = 20 * 60;
 
     public void updateGlobalTransform() {
         if (parent != null) TransformationMatrix.multiplyMatrices(parent.globalMatrix, localMatrix, globalMatrix);
@@ -141,9 +109,8 @@ public class Bone {
         return new EulerAngle(rotation[0], rotation[1], rotation[2]);
     }
 
-    private EulerAngle getArmorStandEntityRotation() {
-        float[] rotation = globalMatrix.getRotation();
-        return new EulerAngle(-rotation[0], -rotation[1], rotation[2]);
+    public void updateAnimationRotation(double x, double y, double z) {
+        animationRotation = new Vector(Math.toRadians(x), Math.toRadians(y), Math.toRadians(z));
     }
 
 
@@ -172,7 +139,48 @@ public class Bone {
         });
     }
 
+    public void updateLocalTransform() {
+        localMatrix.resetToIdentityMatrix();
+        //Shift to model center
+        localMatrix.translate(boneBlueprint.getModelCenter());
+
+        //The bone is relative to its parent, so remove the offset of the parent
+        if (parent != null) localMatrix.translate(parent.boneBlueprint.getModelCenter().multiply(-1));
+
+        //Add the pivot point for the rotation - is removed later
+        localMatrix.translate((float) -boneBlueprint.getBlueprintModelPivot().getX(), (float) -boneBlueprint.getBlueprintModelPivot().getY(), (float) -boneBlueprint.getBlueprintModelPivot().getZ());
+
+        //Animate
+        localMatrix.rotate((float) animationRotation.getX(), (float) -(animationRotation.getY() + Math.PI), (float) animationRotation.getZ());
+        localMatrix.translate((float) animationTranslation.getX(), (float) animationTranslation.getY(), (float) animationTranslation.getZ());
+
+        //Apply the bone's default rotation to the matrix
+        localMatrix.rotate(
+                (float) boneBlueprint.getBlueprintOriginalBoneRotation().getX(),
+                (float) (boneBlueprint.getBlueprintOriginalBoneRotation().getY() + Math.PI),
+                (float) -boneBlueprint.getBlueprintOriginalBoneRotation().getZ());
+
+
+        //Remove the pivot point, go back to the model center
+        localMatrix.translate((float) boneBlueprint.getBlueprintModelPivot().getX(), (float) boneBlueprint.getBlueprintModelPivot().getY(), (float) boneBlueprint.getBlueprintModelPivot().getZ());
+
+        //rotate by yaw amount
+        if (parent == null) {
+            localMatrix.rotate(0, (float) -Math.toRadians(skeleton.getCurrentLocation().getYaw() + 180), 0);
+        }
+    }
+
+    private EulerAngle getArmorStandEntityRotation() {
+        float[] rotation = globalMatrix.getRotation();
+        return new EulerAngle(rotation[0], rotation[1], rotation[2]);
+    }
+
     public void sendUpdatePacket() {
+        counter++;
+        if (counter > reset) {
+            counter = 0;
+            skeleton.getSkeletonWatchers().reset();
+        }
         if (packetArmorStandEntity != null)
             packetArmorStandEntity.sendLocationAndRotationPacket(
                     getArmorStandTargetLocation(),
