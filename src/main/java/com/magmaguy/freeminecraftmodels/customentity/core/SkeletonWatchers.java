@@ -57,6 +57,14 @@ public class SkeletonWatchers implements Listener {
         skeleton.getBones().forEach(bone -> bone.hideFrom(uuid));
     }
 
+    public void reset() {
+        Set<UUID> tempViewers = Collections.synchronizedSet(new HashSet<>(viewers));
+        tempViewers.forEach(viewer -> {
+            hideFrom(viewer);
+            displayTo(Bukkit.getPlayer(viewer));
+        });
+    }
+
     public void sendPackets(Bone bone) {
         if (viewers.isEmpty()) return;
         bone.sendUpdatePacket();

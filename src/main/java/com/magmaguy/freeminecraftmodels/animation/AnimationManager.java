@@ -119,6 +119,7 @@ public class AnimationManager {
             adjustedAnimationPosition = animation.getAnimationBlueprint().getDuration() - 1;
         else {
             //Normal case, looping
+
             adjustedAnimationPosition = (int) (animation.getCounter() - Math.floor(animation.getCounter() / (double) animation.getAnimationBlueprint().getDuration()) * animation.getAnimationBlueprint().getDuration());
         }
         return adjustedAnimationPosition;
