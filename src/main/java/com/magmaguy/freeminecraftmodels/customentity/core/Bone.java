@@ -35,7 +35,8 @@ public class Bone {
     private Vector animationTranslation = new Vector();
     private Vector animationRotation = new Vector();
     private TransformationMatrix globalMatrix = new TransformationMatrix();
-
+    private final int reset = 20 * 60;
+    private int counter = 0;
 
     public Bone(BoneBlueprint boneBlueprint, Bone parent, Skeleton skeleton) {
         this.boneBlueprint = boneBlueprint;
@@ -45,12 +46,9 @@ public class Bone {
             boneChildren.add(new Bone(child, this, skeleton));
     }
 
-    private int counter = 0;
-
     public void updateAnimationTranslation(double x, double y, double z) {
         animationTranslation = new Vector(x, y, z);
     }
-    private int reset = 20 * 60;
 
     public void updateGlobalTransform() {
         if (parent != null) TransformationMatrix.multiplyMatrices(parent.globalMatrix, localMatrix, globalMatrix);
@@ -172,7 +170,7 @@ public class Bone {
 
     private EulerAngle getArmorStandEntityRotation() {
         float[] rotation = globalMatrix.getRotation();
-        return new EulerAngle(rotation[0], rotation[1], rotation[2]);
+        return new EulerAngle(-rotation[0], -rotation[1], rotation[2]);
     }
 
     public void sendUpdatePacket() {
