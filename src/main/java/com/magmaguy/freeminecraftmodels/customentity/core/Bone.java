@@ -29,13 +29,13 @@ public class Bone {
     private final Bone parent;
     private final Skeleton skeleton;
     private final TransformationMatrix localMatrix = new TransformationMatrix();
+    private final int reset = 20 * 60;
     //Relative to the parent
     private PacketModelEntity packetArmorStandEntity = null;
     private PacketModelEntity packetDisplayEntity = null;
     private Vector animationTranslation = new Vector();
     private Vector animationRotation = new Vector();
     private TransformationMatrix globalMatrix = new TransformationMatrix();
-    private final int reset = 20 * 60;
     private int counter = 0;
 
     public Bone(BoneBlueprint boneBlueprint, Bone parent, Skeleton skeleton) {
@@ -99,12 +99,25 @@ public class Bone {
 
     private Location getDisplayEntityTargetLocation() {
         float[] translatedGlobalMatrix = globalMatrix.applyTransformation(new float[]{0, 0, 0, 1});
-        return new Location(skeleton.getCurrentLocation().getWorld(), translatedGlobalMatrix[0], translatedGlobalMatrix[1], translatedGlobalMatrix[2]).add(skeleton.getCurrentLocation());
+
+        Location armorStandLocation = new Location(skeleton.getCurrentLocation().getWorld(), translatedGlobalMatrix[0], translatedGlobalMatrix[1], translatedGlobalMatrix[2]).add(skeleton.getCurrentLocation());
+        if (!VersionChecker.serverVersionOlderThan(20, 0))
+            armorStandLocation.setYaw(180);
+        return armorStandLocation;
     }
 
     private EulerAngle getDisplayEntityRotation() {
         float[] rotation = globalMatrix.getRotation();
-        return new EulerAngle(rotation[0], rotation[1], rotation[2]);
+        if (VersionChecker.serverVersionOlderThan(20, 0))
+            return new EulerAngle(rotation[0], rotation[1], rotation[2]);
+        else
+            return new EulerAngle(-rotation[0], rotation[1], -rotation[2]);
+
+    }
+
+    private EulerAngle getArmorStandEntityRotation() {
+        float[] rotation = globalMatrix.getRotation();
+        return new EulerAngle(-rotation[0], -rotation[1], rotation[2]);
     }
 
     public void updateAnimationRotation(double x, double y, double z) {
@@ -166,11 +179,6 @@ public class Bone {
         if (parent == null) {
             localMatrix.rotate(0, (float) -Math.toRadians(skeleton.getCurrentLocation().getYaw() + 180), 0);
         }
-    }
-
-    private EulerAngle getArmorStandEntityRotation() {
-        float[] rotation = globalMatrix.getRotation();
-        return new EulerAngle(-rotation[0], -rotation[1], rotation[2]);
     }
 
     public void sendUpdatePacket() {
