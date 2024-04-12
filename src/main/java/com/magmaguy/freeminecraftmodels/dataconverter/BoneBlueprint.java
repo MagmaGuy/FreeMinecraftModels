@@ -7,7 +7,6 @@ import lombok.Getter;
 import lombok.Setter;
 import org.apache.commons.io.FileUtils;
 import org.bukkit.NamespacedKey;
-import org.bukkit.util.EulerAngle;
 import org.bukkit.util.Vector;
 
 import java.io.File;
@@ -45,14 +44,14 @@ public class BoneBlueprint {
     private boolean nameTag = false;
     @Getter
     private BoneBlueprint parent = null;
-    @Getter
     private boolean isDisplayModel = true;
     //Actual center of the model in the model space
     private Vector blueprintModelCenter = new Vector();
     //Pivot point relative to the model center
     private Vector blueprintModelPivot;
     @Getter
-    private EulerAngle blueprintOriginalBoneRotation = new EulerAngle(0, 0, 0);
+//    private EulerAngle blueprintOriginalBoneRotation = new EulerAngle(0, 0, 0);
+    private Vector blueprintOriginalBoneRotation = new Vector();
 
     public BoneBlueprint(double projectResolution, Map<String, Object> boneJSON, HashMap<String, Object> values, Map<String, Map<String, Object>> textureReferences, String modelName, BoneBlueprint parent, SkeletonBlueprint skeletonBlueprint) {
         this.originalBoneName = (String) boneJSON.get("name");
@@ -61,7 +60,8 @@ public class BoneBlueprint {
         this.parent = parent;
         if (originalBoneName.startsWith("tag_")) nameTag = true;
         //Some bones should not be displayed because they just hold metadata
-        if (originalBoneName.startsWith("b_")) isDisplayModel = false;
+        if (originalBoneName.startsWith("b_") || originalBoneName.toLowerCase().equals("hitbox"))
+            isDisplayModel = false;
         //Initialize child data
         processChildren(boneJSON, modelName, projectResolution, values, textureReferences, skeletonBlueprint);
         adjustCubes();
@@ -70,6 +70,14 @@ public class BoneBlueprint {
         generateAndWriteCubes(filename, textureReferences, modelName);
         //Add bone to the map
         skeletonBlueprint.getBoneMap().put(originalBoneName, this);
+    }
+
+    public Vector getBlueprintOriginalBoneRotation() {
+        return blueprintOriginalBoneRotation.clone();
+    }
+
+    public boolean isDisplayModel() {
+        return isDisplayModel && modelID != null;
     }
 
     public Vector getModelCenter() {
@@ -136,7 +144,7 @@ public class BoneBlueprint {
 
     private void processBoneValues(Map<String, Object> boneJSON) {
         setOrigin(boneJSON);
-        if (cubeBlueprintChildren.isEmpty()) return;
+//        if (cubeBlueprintChildren.isEmpty()) return;
         setBoneRotation(boneJSON);
     }
 
@@ -163,7 +171,7 @@ public class BoneBlueprint {
         if (boneRotation == null) return;
         List<Double> rotations = (List<Double>) boneRotation;
         //todo: this requires a negative x and y value. I don't know why. But I really need to figure it out.
-        blueprintOriginalBoneRotation = new EulerAngle(Math.toRadians(rotations.get(0)), Math.toRadians(rotations.get(1)), Math.toRadians(rotations.get(2)));
+        blueprintOriginalBoneRotation = new Vector(Math.toRadians(rotations.get(0)), Math.toRadians(rotations.get(1)), Math.toRadians(rotations.get(2)));
     }
 
     private void setOrigin(Map<String, Object> boneJSON) {
