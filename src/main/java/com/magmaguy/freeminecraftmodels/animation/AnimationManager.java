@@ -39,6 +39,18 @@ public class AnimationManager {
         spawnAnimation = animations.getAnimations().get("spawn");
     }
 
+    private static int getAdjustedAnimationPosition(Animation animation) {
+        int adjustedAnimationPosition;
+        if (animation.getCounter() >= animation.getAnimationBlueprint().getDuration() && animation.getAnimationBlueprint().getLoopType() == LoopType.HOLD)
+            //Case where the animation is technically over but also is set to hold
+            adjustedAnimationPosition = animation.getAnimationBlueprint().getDuration() - 1;
+        else {
+            //Normal case, looping
+            adjustedAnimationPosition = (int) (animation.getCounter() - Math.floor(animation.getCounter() / (double) animation.getAnimationBlueprint().getDuration()) * animation.getAnimationBlueprint().getDuration());
+        }
+        return adjustedAnimationPosition;
+    }
+
     public void start() {
         if (spawnAnimation != null) {
             states.add(spawnAnimation);
@@ -110,19 +122,6 @@ public class AnimationManager {
         animation.resetCounter();
         states.add(animation);
         return true;
-    }
-
-    private static int getAdjustedAnimationPosition(Animation animation) {
-        int adjustedAnimationPosition;
-        if (animation.getCounter() >= animation.getAnimationBlueprint().getDuration() && animation.getAnimationBlueprint().getLoopType() == LoopType.HOLD)
-            //Case where the animation is technically over but also is set to hold
-            adjustedAnimationPosition = animation.getAnimationBlueprint().getDuration() - 1;
-        else {
-            //Normal case, looping
-
-            adjustedAnimationPosition = (int) (animation.getCounter() - Math.floor(animation.getCounter() / (double) animation.getAnimationBlueprint().getDuration()) * animation.getAnimationBlueprint().getDuration());
-        }
-        return adjustedAnimationPosition;
     }
 
     private void playAnimationFrame(Animation animation) {
