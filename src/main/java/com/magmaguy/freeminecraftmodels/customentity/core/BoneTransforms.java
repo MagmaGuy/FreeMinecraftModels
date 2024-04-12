@@ -4,7 +4,6 @@ import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.PacketModelEntity;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
-import com.magmaguy.freeminecraftmodels.utils.Developer;
 import com.magmaguy.freeminecraftmodels.utils.TransformationMatrix;
 import com.magmaguy.freeminecraftmodels.utils.VersionChecker;
 import lombok.Getter;
@@ -14,13 +13,9 @@ import org.bukkit.util.Vector;
 
 public class BoneTransforms {
 
-    private final TransformationMatrix specialMatrix = new TransformationMatrix();
     private final Bone parent;
     private final Bone bone;
     private final TransformationMatrix localMatrix = new TransformationMatrix();
-    TransformationMatrix globalTestRotationMatrix = new TransformationMatrix();
-    Vector testFinalLocation = new Vector();
-    Vector testFinalRotation = new Vector();
     private TransformationMatrix globalMatrix = new TransformationMatrix();
     @Getter
     private PacketModelEntity packetArmorStandEntity = null;
@@ -39,7 +34,6 @@ public class BoneTransforms {
 
     public void updateGlobalTransform() {
         if (parent != null) {
-//            TransformationMatrix.multiplyMatrices(localMatrix, parent.getBoneTransforms().globalMatrix, globalMatrix);
             TransformationMatrix.multiplyMatrices(parent.getBoneTransforms().globalMatrix, localMatrix, globalMatrix);
         } else {
             globalMatrix = localMatrix;
@@ -48,20 +42,12 @@ public class BoneTransforms {
 
     public void updateLocalTransform() {
         localMatrix.resetToIdentityMatrix();
-        //Shift to model center
         translateModelCenter();
-
-        //Add the pivot point for the rotation - is removed later
         shiftPivotPoint();
-
         rotateDefaultBoneRotation();
-
         translateAnimation();
-
         rotateAnimation();
-
         shiftPivotPointBack();
-
         rotateByEntityYaw();
     }
 
@@ -87,10 +73,6 @@ public class BoneTransforms {
     private void rotateAnimation() {
         Vector test = new Vector(bone.getAnimationRotation().getX(), bone.getAnimationRotation().getY(), -bone.getAnimationRotation().getZ());
         test.rotateAroundY(Math.PI);
-//        localMatrix.rotate(
-//                (float) -bone.getAnimationRotation().getX(),
-//                (float) bone.getAnimationRotation().getY(),
-//                (float) -bone.getAnimationRotation().getZ());
         localMatrix.rotate(
                 (float) test.getX(),
                 (float) test.getY(),
@@ -111,9 +93,6 @@ public class BoneTransforms {
 
     public void generateDisplay() {
         transform();
-        specialMatrix.rotate(0, (float) Math.PI, 0);
-        if (bone.getBoneBlueprint().getBoneName().contains("bone10"))
-            Developer.warn(String.format("rotation post generation %s, %s, %s", Math.toDegrees(globalMatrix.getRotation()[0]), Math.toDegrees(globalMatrix.getRotation()[1]), Math.toDegrees(globalMatrix.getRotation()[2])));
         if (bone.getBoneBlueprint().isDisplayModel()) {
             initializeDisplayEntityBone();
             initializeArmorStandBone();
@@ -158,8 +137,6 @@ public class BoneTransforms {
         float[] translatedGlobalMatrix = globalMatrix.applyTransformation(new float[]{0, 0, 0, 1});
         Location armorStandLocation;
         if (!VersionChecker.serverVersionOlderThan(20, 0)) {
-//            testFinalLocation = new Vector(-translatedGlobalMatrix[0], translatedGlobalMatrix[1], -translatedGlobalMatrix[2]);
-//            testFinalLocation.rotateAroundY(Math.PI);
             armorStandLocation = new Location(bone.getSkeleton().getCurrentLocation().getWorld(),
                     translatedGlobalMatrix[0],
                     translatedGlobalMatrix[1],
@@ -180,16 +157,13 @@ public class BoneTransforms {
         if (VersionChecker.serverVersionOlderThan(20, 0))
             return new EulerAngle(rotation[0], rotation[1], rotation[2]);
         else {
-//            testFinalRotation = new Vector(-rotation[0], rotation[1], -rotation[2]);
-//            testFinalRotation.rotateAroundY(Math.PI);
             return new EulerAngle(-rotation[0], rotation[1], -rotation[2]);
-//            return new EulerAngle( testFinalRotation.getX(), testFinalRotation.getY(), testFinalRotation.getZ());
         }
     }
 
     protected EulerAngle getArmorStandEntityRotation() {
         float[] rotation = globalMatrix.getRotation();
-        return new EulerAngle(rotation[0], rotation[1], rotation[2]);
+        return new EulerAngle(-rotation[0], -rotation[1], rotation[2]);
     }
 
 }
