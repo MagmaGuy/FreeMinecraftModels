@@ -41,10 +41,13 @@ public class SkeletonWatchers implements Listener {
                 newPlayers.add(player.getUniqueId());
                 if (!viewers.contains(player.getUniqueId())) displayTo(player);
             }
+        List<UUID> toRemove = new ArrayList<>();
         viewers.stream().toList().forEach(viewer -> {
             if (!newPlayers.contains(viewer))
-                hideFrom(viewer);
+                toRemove.add(viewer);
         });
+
+        toRemove.forEach(this::hideFrom);
     }
 
     private void displayTo(Player player) {
