@@ -42,7 +42,7 @@ public class ModeledEntity implements ModeledEntityInterface {
         this.entityID = entityID;
         this.spawnLocation = spawnLocation;
         this.lastSeenLocation = spawnLocation;
-        ModeledEntityEvents.addLoadedModeledEntity(this);
+//        ModeledEntityEvents.addLoadedModeledEntity(this);
         FileModelConverter fileModelConverter = FileModelConverter.getConvertedFileModels().get(entityID);
         if (fileModelConverter == null) return;
         skeletonBlueprint = fileModelConverter.getSkeletonBlueprint();
@@ -91,8 +91,8 @@ public class ModeledEntity implements ModeledEntityInterface {
     public void remove() {
         skeleton.remove();
         if (livingEntity != null) livingEntity.remove();
-        ModeledEntityEvents.removeLoadedModeledEntity(this);
-        ModeledEntityEvents.removeUnloadedModeledEntity(this);
+//        ModeledEntityEvents.removeLoadedModeledEntity(this);
+//        ModeledEntityEvents.removeUnloadedModeledEntity(this);
         terminateAnimation();
     }
 
