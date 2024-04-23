@@ -22,6 +22,7 @@ public class CommandManager implements CommandExecutor, TabCompleter {
     private void registerCommands() {
         registerCommand(new SpawnCommand());
         registerCommand(new ReloadCommand());
+        registerCommand(new VersionCommand());
     }
 
     public void registerCommand(AdvancedCommand command) {

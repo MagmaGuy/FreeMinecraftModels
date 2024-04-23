@@ -26,6 +26,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         Bukkit.getLogger().info("|   |   |__|.-----.-----.----.----.---.-.'  _|  |_|   |   |.-----.--|  |.-----.|  |.-----.");
         Bukkit.getLogger().info("|       |  ||     |  -__|  __|   _|  _  |   _|   _|       ||  _  |  _  ||  -__||  ||__ --|");
         Bukkit.getLogger().info("|__|_|__|__||__|__|_____|____|__| |___._|__| |____|__|_|__||_____|_____||_____||__||_____|");
+        Bukkit.getLogger().info("Version " + this.getDescription().getVersion());
         MetadataHandler.PLUGIN = this;
         //Initialize plugin configuration files
         DefaultConfig.initializeConfig();
@@ -35,6 +36,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         Metrics metrics = new Metrics(this, 19337);
         Bukkit.getPluginManager().registerEvents(new ModeledEntityEvents(), this);
         Bukkit.getPluginManager().registerEvents(new LegacyHitDetection(), this);
+        Bukkit.getPluginManager().registerEvents(new VersionChecker.VersionCheckerEvents(), this);
         NMSManager.initializeAdapter(this);
         VersionChecker.checkPluginVersion();
         new CommandManager(this);
