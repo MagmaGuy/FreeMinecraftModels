@@ -1,15 +1,15 @@
 package com.magmaguy.freeminecraftmodels.dataconverter;
 
 public class AnimationFrame {
-    public double xRotation;
-    public double yRotation;
-    public double zRotation;
-    public double xPosition;
-    public double yPosition;
-    public double zPosition;
-    public double xScale;
-    public double yScale;
-    public double zScale;
+    public float xRotation;
+    public float yRotation;
+    public float zRotation;
+    public float xPosition;
+    public float yPosition;
+    public float zPosition;
+    public float xScale;
+    public float yScale;
+    public float zScale;
 
     public AnimationFrame(){
     }

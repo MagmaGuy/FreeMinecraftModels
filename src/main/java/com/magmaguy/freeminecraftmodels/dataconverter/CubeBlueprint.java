@@ -4,7 +4,7 @@ import com.magmaguy.freeminecraftmodels.utils.Developer;
 import com.magmaguy.freeminecraftmodels.utils.Round;
 import lombok.Getter;
 import lombok.Setter;
-import org.bukkit.util.Vector;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -15,14 +15,14 @@ public class CubeBlueprint {
     @Getter
     private final Map<String, Object> cubeJSON;
     @Getter
-    private Vector to;
+    private Vector3f to;
     @Getter
-    private Vector from;
+    private Vector3f from;
     @Getter
     private boolean validatedData = false;
     @Getter
     @Setter
-    private Vector boneOffset = new Vector();
+    private Vector3f boneOffset = new Vector3f();
 
     public CubeBlueprint(double projectResolution, Map<String, Object> cubeJSON) {
         this.cubeJSON = cubeJSON;
@@ -50,16 +50,16 @@ public class CubeBlueprint {
         //works out that this is the right amount to get the right final size.
         ArrayList<Double> fromList = (ArrayList<Double>) cubeJSON.get("from");
         if (fromList == null) return;
-        from = new Vector(
-                Round.fourDecimalPlaces(fromList.get(0) * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER),
-                Round.fourDecimalPlaces(fromList.get(1) * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER),
-                Round.fourDecimalPlaces(fromList.get(2) * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER));
+        from = new Vector3f(
+                Round.fourDecimalPlaces(fromList.get(0).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER),
+                Round.fourDecimalPlaces(fromList.get(1).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER),
+                Round.fourDecimalPlaces(fromList.get(2).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER));
         ArrayList<Double> toList = (ArrayList<Double>) cubeJSON.get("to");
         if (toList == null) return;
-        to = new Vector(
-                Round.fourDecimalPlaces(toList.get(0) * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER),
-                Round.fourDecimalPlaces(toList.get(1) * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER),
-                Round.fourDecimalPlaces(toList.get(2) * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER));
+        to = new Vector3f(
+                Round.fourDecimalPlaces(toList.get(0).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER),
+                Round.fourDecimalPlaces(toList.get(1).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER),
+                Round.fourDecimalPlaces(toList.get(2).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER));
         validatedData = true;
     }
 
@@ -85,10 +85,10 @@ public class CubeBlueprint {
     }
 
     public void shiftPosition() {
-        from.subtract(boneOffset);
-        to.subtract(boneOffset);
-        cubeJSON.put("from", List.of(from.getX(), from.getY(), from.getZ()));
-        cubeJSON.put("to", List.of(to.getX(), to.getY(), to.getZ()));
+        from.sub(boneOffset);
+        to.sub(boneOffset);
+        cubeJSON.put("from", List.of(from.get(0), from.get(1), from.get(2)));
+        cubeJSON.put("to", List.of(to.get(0), to.get(1), to.get(2)));
     }
 
     public void shiftRotation() {
@@ -100,9 +100,9 @@ public class CubeBlueprint {
         //Adjust the origin
         double xOrigin, yOrigin, zOrigin;
         List<Double> originData = (ArrayList<Double>) cubeJSON.get("origin");
-        xOrigin = originData.get(0) * scaleFactor - boneOffset.getX();
-        yOrigin = originData.get(1) * scaleFactor - boneOffset.getY();
-        zOrigin = originData.get(2) * scaleFactor - boneOffset.getZ();
+        xOrigin = originData.get(0) * scaleFactor - boneOffset.get(0);
+        yOrigin = originData.get(1) * scaleFactor - boneOffset.get(1);
+        zOrigin = originData.get(2) * scaleFactor - boneOffset.get(2);
         newRotationData.put("origin", List.of(xOrigin, yOrigin, zOrigin));
 
         double angle = 0;
