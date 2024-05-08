@@ -8,7 +8,7 @@ import lombok.Getter;
 import org.bukkit.Color;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Player;
-import org.bukkit.util.Vector;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -24,14 +24,13 @@ public class Bone {
     private final Bone parent;
     @Getter
     private final Skeleton skeleton;
-    private final int reset = 20 * 30;
     @Getter
     private final BoneTransforms boneTransforms;
     @Getter
-    private Vector animationTranslation = new Vector();
+    private Vector3f animationTranslation = new Vector3f();
     private int counter = 0;
     @Getter
-    private Vector animationRotation = new Vector();
+    private Vector3f animationRotation = new Vector3f();
 
     public Bone(BoneBlueprint boneBlueprint, Bone parent, Skeleton skeleton) {
         this.boneBlueprint = boneBlueprint;
@@ -42,12 +41,12 @@ public class Bone {
             boneChildren.add(new Bone(child, this, skeleton));
     }
 
-    public void updateAnimationTranslation(double x, double y, double z) {
-        animationTranslation = new Vector(x, y, z);
+    public void updateAnimationTranslation(float x, float y, float z) {
+        animationTranslation = new Vector3f(x, y, z);
     }
 
     public void updateAnimationRotation(double x, double y, double z) {
-        animationRotation = new Vector(Math.toRadians(x), Math.toRadians(y), Math.toRadians(z));
+        animationRotation = new Vector3f((float) Math.toRadians(x), (float) Math.toRadians(y), (float) Math.toRadians(z));
     }
 
     //Note that several optimizations might be possible here, but that syncing with a base entity is necessary.
@@ -89,6 +88,7 @@ public class Bone {
 
     public void sendUpdatePacket() {
         counter++;
+        int reset = 20 * 60 * 2;
         if (counter > reset) {
             counter = 0;
             skeleton.getSkeletonWatchers().reset();
