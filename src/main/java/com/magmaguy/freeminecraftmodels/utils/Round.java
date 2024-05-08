@@ -23,12 +23,21 @@ public class Round {
         return Math.round(value * number) / number;
     }
 
+    public static float decimalPlaces(final float value, final int places) {
+        final double number = Math.pow(10, places);
+        return Math.round(value * number) / (float) number;
+    }
+
     /**
      * Rounds a number to 4 decimal places.
      * @param value The number to round.
      * @return The rounded number.
      */
     public static double fourDecimalPlaces(final double value) {
+        return decimalPlaces(value, 4);
+    }
+
+    public static float fourDecimalPlaces(final float value) {
         return decimalPlaces(value, 4);
     }
 

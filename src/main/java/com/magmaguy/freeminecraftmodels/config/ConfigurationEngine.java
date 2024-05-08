@@ -156,20 +156,20 @@ public class ConfigurationEngine {
 //        try {
 //            material = Material.valueOf(fileConfiguration.getString(key + ".material"));
 //        } catch (Exception ex) {
-//            new WarningMessage("Material type " + fileConfiguration.getString(key + ".material") + " is not valid! Correct it to make a valid item.");
+//            Developer.warn("Material type " + fileConfiguration.getString(key + ".material") + " is not valid! Correct it to make a valid item.");
 //            return null;
 //        }
 //        String name = "";
 //        try {
 //            name = fileConfiguration.getString(key + ".name");
 //        } catch (Exception ex) {
-//            new WarningMessage("Item name " + fileConfiguration.getString(key + ".name") + " is not valid! Correct it to make a valid item.");
+//            Developer.warn("Item name " + fileConfiguration.getString(key + ".name") + " is not valid! Correct it to make a valid item.");
 //        }
 //        List<String> lore = new ArrayList<>();
 //        try {
 //            lore = fileConfiguration.getStringList(key + ".lore");
 //        } catch (Exception ex) {
-//            new WarningMessage("Item lore " + fileConfiguration.getString(key + ".lore") + " is not valid! Correct it to make a valid item.");
+//            Developer.warn("Item lore " + fileConfiguration.getString(key + ".lore") + " is not valid! Correct it to make a valid item.");
 //        }
 //        ItemStack fileItemStack = ItemStackGenerator.generateItemStack(material, name, lore);
 //        if (material == Material.PLAYER_HEAD)
@@ -189,20 +189,20 @@ public class ConfigurationEngine {
 //        try {
 //            material = Material.valueOf(fileConfiguration.getString(key + ".material"));
 //        } catch (Exception ex) {
-//            new WarningMessage("Material type " + fileConfiguration.getString(key + ".material") + " is not valid! Correct it to make a valid item.");
+//            Developer.warn("Material type " + fileConfiguration.getString(key + ".material") + " is not valid! Correct it to make a valid item.");
 //            return null;
 //        }
 //        String name = "";
 //        try {
 //            name = setString(file, fileConfiguration, key+".name", null, true);
 //        } catch (Exception ex) {
-//            new WarningMessage("Item name " + fileConfiguration.getString(key + ".name") + " is not valid! Correct it to make a valid item.");
+//            Developer.warn("Item name " + fileConfiguration.getString(key + ".name") + " is not valid! Correct it to make a valid item.");
 //        }
 //        List<String> lore = new ArrayList<>();
 //        try {
 //            lore = setList(file, fileConfiguration, key+".lore", null, true);
 //        } catch (Exception ex) {
-//            new WarningMessage("Item lore " + fileConfiguration.getString(key + ".lore") + " is not valid! Correct it to make a valid item.");
+//            Developer.warn("Item lore " + fileConfiguration.getString(key + ".lore") + " is not valid! Correct it to make a valid item.");
 //        }
 //        ItemStack fileItemStack = ItemStackGenerator.generateItemStack(material, name, lore);
 //        if (material == Material.PLAYER_HEAD)

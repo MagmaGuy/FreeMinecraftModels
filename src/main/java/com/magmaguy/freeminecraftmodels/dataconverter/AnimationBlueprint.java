@@ -45,7 +45,7 @@ public class AnimationBlueprint {
         }
     }
 
-    public static double lerp(double start, double end, double t) {
+    public static float lerp(float start, float end, float t) {
         return (1 - t) * start + t * end;
     }
 
@@ -118,9 +118,9 @@ public class AnimationBlueprint {
             int durationBetweenKeyframes = Math.min(animationFrame.getTimeInTicks(), duration) - previousFrame.getTimeInTicks();
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                animationFramesArray[currentFrame].xRotation = lerp(previousFrame.getDataX(), animationFrame.getDataX(), j / (double) durationBetweenKeyframes);
-                animationFramesArray[currentFrame].yRotation = -lerp(previousFrame.getDataY(), animationFrame.getDataY(), j / (double) durationBetweenKeyframes);
-                animationFramesArray[currentFrame].zRotation = lerp(previousFrame.getDataZ(), animationFrame.getDataZ(), j / (double) durationBetweenKeyframes);
+                animationFramesArray[currentFrame].xRotation = lerp(previousFrame.getDataX(), animationFrame.getDataX(), j / (float) durationBetweenKeyframes);
+                animationFramesArray[currentFrame].yRotation = -lerp(previousFrame.getDataY(), animationFrame.getDataY(), j / (float) durationBetweenKeyframes);
+                animationFramesArray[currentFrame].zRotation = lerp(previousFrame.getDataZ(), animationFrame.getDataZ(), j / (float) durationBetweenKeyframes);
             }
             previousFrame = animationFrame;
             if (animationFrame.getTimeInTicks() > lastFrame.getTimeInTicks()) lastFrame = animationFrame;
@@ -161,9 +161,9 @@ public class AnimationBlueprint {
             int durationBetweenKeyframes = animationFrame.getTimeInTicks() - previousFrame.getTimeInTicks();
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                animationFramesArray[currentFrame].xPosition = -lerp(previousFrame.getDataX(), animationFrame.getDataX(), j / (double) durationBetweenKeyframes) / 16d;
-                animationFramesArray[currentFrame].yPosition = lerp(previousFrame.getDataY(), animationFrame.getDataY(), j / (double) durationBetweenKeyframes) / 16d;
-                animationFramesArray[currentFrame].zPosition = lerp(previousFrame.getDataZ(), animationFrame.getDataZ(), j / (double) durationBetweenKeyframes) / 16d;
+                animationFramesArray[currentFrame].xPosition = -lerp(previousFrame.getDataX(), animationFrame.getDataX(), j / (float) durationBetweenKeyframes) / 16f;
+                animationFramesArray[currentFrame].yPosition = lerp(previousFrame.getDataY(), animationFrame.getDataY(), j / (float) durationBetweenKeyframes) / 16f;
+                animationFramesArray[currentFrame].zPosition = lerp(previousFrame.getDataZ(), animationFrame.getDataZ(), j / (float) durationBetweenKeyframes) / 16f;
             }
             previousFrame = animationFrame;
             if (animationFrame.getTimeInTicks() > lastFrame.getTimeInTicks()) lastFrame = animationFrame;
@@ -173,18 +173,18 @@ public class AnimationBlueprint {
             int durationBetweenKeyframes = duration - lastFrame.getTimeInTicks();
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                animationFramesArray[currentFrame].xPosition = -lastFrame.getDataX() / 16d;
-                animationFramesArray[currentFrame].yPosition = lastFrame.getDataY() / 16d;
-                animationFramesArray[currentFrame].zPosition = lastFrame.getDataZ() / 16d;
+                animationFramesArray[currentFrame].xPosition = -lastFrame.getDataX() / 16f;
+                animationFramesArray[currentFrame].yPosition = lastFrame.getDataY() / 16f;
+                animationFramesArray[currentFrame].zPosition = lastFrame.getDataZ() / 16f;
             }
         }
         if (firstFrame != null && firstFrame.getTimeInTicks() > 0) {
             int durationBetweenKeyframes = firstFrame.getTimeInTicks();
             durationBetweenKeyframes = Math.min(durationBetweenKeyframes, duration - 1);
             for (int j = 0; j < durationBetweenKeyframes; j++) {
-                animationFramesArray[j].xPosition = -firstFrame.getDataX() / 16d;
-                animationFramesArray[j].yPosition = firstFrame.getDataY() / 16d;
-                animationFramesArray[j].zPosition = firstFrame.getDataZ() / 16d;
+                animationFramesArray[j].xPosition = -firstFrame.getDataX() / 16f;
+                animationFramesArray[j].yPosition = firstFrame.getDataY() / 16f;
+                animationFramesArray[j].zPosition = firstFrame.getDataZ() / 16f;
             }
         }
     }
@@ -201,9 +201,9 @@ public class AnimationBlueprint {
             int durationBetweenKeyframes = animationFrame.getTimeInTicks() - previousFrame.getTimeInTicks();
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                animationFramesArray[currentFrame].xScale = lerp(previousFrame.getDataX(), animationFrame.getDataX(), j / (double) durationBetweenKeyframes); //note: probably needs a multiplier here depending on implementation
-                animationFramesArray[currentFrame].yScale = lerp(previousFrame.getDataY(), animationFrame.getDataY(), j / (double) durationBetweenKeyframes);
-                animationFramesArray[currentFrame].zScale = lerp(previousFrame.getDataZ(), animationFrame.getDataZ(), j / (double) durationBetweenKeyframes);
+                animationFramesArray[currentFrame].xScale = lerp(previousFrame.getDataX(), animationFrame.getDataX(), j / (float) durationBetweenKeyframes); //note: probably needs a multiplier here depending on implementation
+                animationFramesArray[currentFrame].yScale = lerp(previousFrame.getDataY(), animationFrame.getDataY(), j / (float) durationBetweenKeyframes);
+                animationFramesArray[currentFrame].zScale = lerp(previousFrame.getDataZ(), animationFrame.getDataZ(), j / (float) durationBetweenKeyframes);
             }
             previousFrame = animationFrame;
         }
