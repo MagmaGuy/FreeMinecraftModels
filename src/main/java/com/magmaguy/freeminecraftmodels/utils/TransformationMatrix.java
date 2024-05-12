@@ -52,27 +52,13 @@ public class TransformationMatrix {
     }
 
     public void rotateLocal(float x, float y, float z, Vector3f pivotPoint) {
-        Vector3f rot = new Vector3f(x, y, z);
-        Vector3f euler = new Vector3f();
-        matrix.getNormalizedRotation(new Quaternionf()).getEulerAnglesYXZ(euler);
-        rot.rotateX(euler.get(0));
-        rot.rotateZ(euler.get(2));
-        rot.rotateY(euler.get(1));
-//        rot.rotate(matrix.getNormalizedRotation(new Quaternionf()));
-
-        // Translate to pivot point
-        matrix.translate(pivotPoint.negate());
-
-        // Apply local rotation
-        Quaternionf localRotation = new Quaternionf().rotateXYZ(rot.x, rot.y, rot.z);
-
+        // Translate matrix to pivot, apply rotation, and translate back
+        matrix.translate(pivotPoint.negate()); // Move to pivot
+        Quaternionf localRotation = new Quaternionf().rotateXYZ(x, y, z);
         Matrix4f localRotationMatrix = new Matrix4f().rotate(localRotation);
         matrix.mul(localRotationMatrix);
-
-        // Translate back from pivot point
-        matrix.translate(pivotPoint.negate());
+        matrix.translate(pivotPoint.negate()); // Correctly move back from pivot
     }
-
 
     public float[] getTranslation() {
         Vector3f translation = new Vector3f();
@@ -85,6 +71,11 @@ public class TransformationMatrix {
 //        Bukkit.getLogger().info("rotation " + eulerAngles.toString());
         return new float[]{eulerAngles.x, eulerAngles.y, eulerAngles.z};
 
+    }
+
+    public Vector3f getExperimentalRotation() {
+        return new Matrix4f(matrix).invert().getEulerAnglesZYX(new Vector3f());
+//        return matrix.getEulerAnglesXYZ(new Vector3f());
     }
 
 }
