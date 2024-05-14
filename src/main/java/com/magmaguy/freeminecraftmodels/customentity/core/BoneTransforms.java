@@ -42,22 +42,10 @@ public class BoneTransforms {
 
     public void updateLocalTransform() {
         internalMatrix.resetToIdentity();
-
-        // Shift to pivot point
-//        shiftPivotPoint();
-
         translateModelCenter();
-
-//        internalMatrix.rotate(0, (float) Math.PI, 0);
-
         rotateDefaultBoneRotation();
-
         rotateAnimation();
         translateAnimation();
-
-        // Shift back from pivot point
-//        shiftPivotPointBack();
-
         // Finally, adjust for the model's center (which might include adjustments relative to the parent bone)
         rotateByEntityYaw();
     }
@@ -103,10 +91,12 @@ public class BoneTransforms {
 
 
     private void rotateDefaultBoneRotation() {
+        shiftPivotPoint();
         internalMatrix.rotate(
-                -bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(0),
-                -bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(1),
+                bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(0),
+                bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(1),
                 bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(2));
+        shiftPivotPointBack();
     }
 
     public void generateDisplay() {
@@ -171,18 +161,10 @@ public class BoneTransforms {
     }
 
     protected EulerAngle getDisplayEntityRotation() {
-//        externalMatrix.rotateLocal(0, (float)Math.PI, 0, new Vector3f());
-
-        //todo shouldnt this be local y? probably
         Vector3f newRotation = externalMatrix.getExperimentalRotation();
-
-//        newRotation.rotateY((float) Math.PI);
-
-//        float[] rotation = externalMatrix.getRotation();
         if (VersionChecker.serverVersionOlderThan(20, 0))
             return new EulerAngle(newRotation.get(0), newRotation.get(1), newRotation.get(2));
         else {
-//            return new EulerAngle(-rotation[0], rotation[1], -rotation[2]); todo: not sure about this
             return new EulerAngle(newRotation.get(0), newRotation.get(1), newRotation.get(2));
         }
     }
