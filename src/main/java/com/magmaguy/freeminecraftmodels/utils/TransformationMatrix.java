@@ -1,25 +1,32 @@
 package com.magmaguy.freeminecraftmodels.utils;
 
+import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 public class TransformationMatrix {
-    private final Quaternionf rotation = new Quaternionf();
     private Matrix4f matrix = new Matrix4f();
 
     public TransformationMatrix() {
         resetToIdentity();
     }
 
-    public static void multiplyMatrices(TransformationMatrix firstMatrix, TransformationMatrix secondMatrix, TransformationMatrix resultMatrix) {
-        resultMatrix.matrix = new Matrix4f(firstMatrix.matrix);
-        resultMatrix.matrix.mul(secondMatrix.matrix);
+    public static void multiplyMatrices(TransformationMatrix firstMatrix,
+                                        TransformationMatrix secondMatrix,
+                                        TransformationMatrix resultMatrix,
+                                        Vector3f pivot,
+                                        BoneBlueprint boneBlueprint) {
+        resultMatrix.matrix = new Matrix4f(firstMatrix.matrix)
+                .translate(pivot.negate())
+                .mul(secondMatrix.matrix)
+                .translate(pivot.negate());
+
+//        resultMatrix.matrix.mul(firstMatrix.matrix);
     }
 
     public void resetToIdentity() {
         matrix.identity();
-        rotation.identity();
     }
 
     public void translate(Vector3f vector) {
@@ -34,24 +41,28 @@ public class TransformationMatrix {
         matrix.scale(x, y, z);
     }
 
-    public void rotate(float x, float y, float z) {
-        rotation.rotateXYZ(x, y, z);
-        applyDefaultRotation();
-    }
+    public void rotateDefaultPosition(float x, float y, float z, Vector3f pivotPoint) {
+//        rotation.rotateXYZ(x, y, z);
+//        rotation.rotateX(x).rotateY(y).rotateZ(z); NO
+//        rotation.rotateX(x).rotateZ(z).rotateY(y); NO
+//        rotation.rotateZ(z).rotateX(x).rotateY(y); NO
+//        rotation.rotateZ(z).rotateY(y).rotateX(x); UNLIKELY
 
-    public void applyDefaultRotation() {
-        Matrix4f rotationMatrix = new Matrix4f().rotation(rotation);
-        matrix.mul(rotationMatrix);
-        rotation.identity(); // Reset the quaternion
-    }
+        Quaternionf defaultRotation = new Quaternionf();
+        matrix.translate(pivotPoint.negate()); // Move to pivot
 
+        //most probably the right rotation orders
+//        defaultRotation.rotateY(y).rotateZ(z).rotateX(x).normalize();
+        defaultRotation.rotateY(y).rotateX(x).rotateZ(z).normalize();
+        matrix.rotate(defaultRotation);
+        matrix.translate(pivotPoint.negate()); // Correctly move back from pivot
+    }
 
     public void rotateY(float y) {
-        rotation.rotateY(y);
-        applyDefaultRotation();
+        matrix.rotateY(y);
     }
 
-    public void rotateLocal(float x, float y, float z, Vector3f pivotPoint) {
+    public void animationRotation(float x, float y, float z, Vector3f pivotPoint) {
         // Translate matrix to pivot, apply rotation, and translate back
         matrix.translate(pivotPoint.negate()); // Move to pivot
         Quaternionf localRotation = new Quaternionf().rotateXYZ(x, y, z);
@@ -66,12 +77,26 @@ public class TransformationMatrix {
     }
 
     public float[] getRotation() {
-        Vector3f eulerAngles = matrix.getEulerAnglesZYX(new Vector3f());
+        Vector3f eulerAngles = matrix.getEulerAnglesXYZ(new Vector3f());
+//        return new float[]{eulerAngles.x, eulerAngles.y, eulerAngles.z};
         return new float[]{eulerAngles.x, eulerAngles.y, eulerAngles.z};
     }
 
     public Vector3f getExperimentalRotation() {
-        return new Matrix4f(matrix).invert().getEulerAnglesXYZ(new Vector3f());
+//        return new Matrix4f(matrix).invert().getNormalizedRotation(new Quaternionf()).getEulerAnglesXYZ(new Vector3f());
+        return new Matrix4f(matrix).invert().getNormalizedRotation(new Quaternionf()).getEulerAnglesYXZ(new Vector3f());
+//        return new Matrix4f(matrix).invert().getNormalizedRotation(new Quaternionf()).getEulerAnglesYZX(new Vector3f());
+
+//        return matrix.getEulerAnglesXYZ(new Vector3f());
+//        Quaternionf test = new Quaternionf();
+//        matrix.getNormalizedRotation(test);
+////        return test.getEulerAnglesZXY(new Vector3f());
+//
+//        Quaternionf testRotation = new Quaternionf();
+//        testRotation.rotateLocalY((float) Math.PI);
+//        test.premul(testRotation);
+//        test.normalize();
+//        return test.getEulerAnglesZXY(new Vector3f());
     }
 
 }

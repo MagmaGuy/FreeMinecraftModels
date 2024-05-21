@@ -34,7 +34,7 @@ public class BoneTransforms {
 
     public void updateGlobalTransform() {
         if (parent != null) {
-            TransformationMatrix.multiplyMatrices(parent.getBoneTransforms().externalMatrix, internalMatrix, externalMatrix);
+            TransformationMatrix.multiplyMatrices(parent.getBoneTransforms().externalMatrix, internalMatrix, externalMatrix, bone.getBoneBlueprint().getBlueprintModelPivot(), bone.getBoneBlueprint());
         } else {
             externalMatrix = internalMatrix;
         }
@@ -42,12 +42,14 @@ public class BoneTransforms {
 
     public void updateLocalTransform() {
         internalMatrix.resetToIdentity();
+//        if (parent == null) internalMatrix.mirrorZ();
+//        if (parent == null) internalMatrix.rotateY((float) Math.PI);
         translateModelCenter();
         rotateDefaultBoneRotation();
         rotateAnimation();
         translateAnimation();
         // Finally, adjust for the model's center (which might include adjustments relative to the parent bone)
-        rotateByEntityYaw();
+//        rotateByEntityYaw();
     }
 
     //Shift to model center
@@ -86,17 +88,18 @@ public class BoneTransforms {
 //        test.rotateY((float) Math.PI);
 
         // Applying the rotation
-        internalMatrix.rotateLocal(test.x, test.y, test.z, bone.getBoneBlueprint().getBlueprintModelPivot());
+        internalMatrix.animationRotation(test.x, test.y, test.z, bone.getBoneBlueprint().getBlueprintModelPivot());
     }
 
 
     private void rotateDefaultBoneRotation() {
-        shiftPivotPoint();
-        internalMatrix.rotate(
-                bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(0),
-                bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(1),
-                bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(2));
-        shiftPivotPointBack();
+//        shiftPivotPoint();
+        internalMatrix.rotateDefaultPosition(
+                -bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(0),
+                -bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(1),
+                bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(2),
+                bone.getBoneBlueprint().getBlueprintModelPivot());
+//        shiftPivotPointBack();
     }
 
     public void generateDisplay() {
