@@ -111,7 +111,7 @@ public class CubeBlueprint {
             List<Double> rotations = (List<Double>) cubeJSON.get("rotation");
             for (int i = rotations.size() - 1; i >= 0; i--) {
                 if (rotations.get(i) != 0) {
-                    angle = Round.oneDecimalPlace(rotations.get(i));
+                    angle = Round.fourDecimalPlaces(rotations.get(i));
                     switch (i) {
                         case 0 -> axis = "x";
                         case 1 -> axis = "y";
