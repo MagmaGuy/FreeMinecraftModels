@@ -118,7 +118,7 @@ public class AnimationBlueprint {
             int durationBetweenKeyframes = Math.min(animationFrame.getTimeInTicks(), duration) - previousFrame.getTimeInTicks();
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                animationFramesArray[currentFrame].xRotation = lerp(previousFrame.getDataX(), animationFrame.getDataX(), j / (float) durationBetweenKeyframes);
+                animationFramesArray[currentFrame].xRotation = -lerp(previousFrame.getDataX(), animationFrame.getDataX(), j / (float) durationBetweenKeyframes);
                 animationFramesArray[currentFrame].yRotation = -lerp(previousFrame.getDataY(), animationFrame.getDataY(), j / (float) durationBetweenKeyframes);
                 animationFramesArray[currentFrame].zRotation = lerp(previousFrame.getDataZ(), animationFrame.getDataZ(), j / (float) durationBetweenKeyframes);
             }
@@ -130,7 +130,7 @@ public class AnimationBlueprint {
             int durationBetweenKeyframes = duration - lastFrame.getTimeInTicks();
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                animationFramesArray[currentFrame].xRotation = lastFrame.getDataX();
+                animationFramesArray[currentFrame].xRotation = -lastFrame.getDataX();
                 animationFramesArray[currentFrame].yRotation = -lastFrame.getDataY();
                 animationFramesArray[currentFrame].zRotation = lastFrame.getDataZ();
             }
