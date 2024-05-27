@@ -35,7 +35,7 @@ public class BoneTransforms {
 
     public void updateGlobalTransform() {
         if (parent != null) {
-            TransformationMatrix.multiplyMatrices(parent.getBoneTransforms().externalMatrix, internalMatrix, externalMatrix, bone.getBoneBlueprint().getBlueprintModelPivot(), bone.getBoneBlueprint());
+            TransformationMatrix.multiplyMatrices(parent.getBoneTransforms().externalMatrix, internalMatrix, externalMatrix, getPivotPoint(), bone.getBoneBlueprint());
         } else {
             externalMatrix = internalMatrix;
         }
@@ -93,7 +93,7 @@ public class BoneTransforms {
 //        test.rotateY((float) Math.PI);
 
         // Applying the rotation
-        internalMatrix.animationRotation(test.x, test.y, test.z, bone.getBoneBlueprint().getBlueprintModelPivot());
+        internalMatrix.animationRotation(test.x, test.y, test.z, getPivotPoint());
     }
 
 
@@ -103,7 +103,7 @@ public class BoneTransforms {
                 bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(0),
                 bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(1),
                 bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(2),
-                bone.getBoneBlueprint().getBlueprintModelPivot());
+                getPivotPoint());
 //        shiftPivotPointBack();
     }
 
@@ -180,6 +180,12 @@ public class BoneTransforms {
     protected EulerAngle getArmorStandEntityRotation() {
         float[] rotation = externalMatrix.getRotation();
         return new EulerAngle(-rotation[0], -rotation[1], rotation[2]);
+    }
+
+    public Vector3f getPivotPoint() {
+        Vector3f pivot = bone.getBoneBlueprint().getBlueprintModelPivot();
+//        if (parent != null) pivot.add(parent.getBoneTransforms().externalMatrix.getTranslationVector());
+        return pivot;
     }
 
 }
