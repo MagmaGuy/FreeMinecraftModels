@@ -22,6 +22,7 @@ public class BoneTransforms {
     @Getter
     private PacketModelEntity packetDisplayEntity = null;
 
+
     public BoneTransforms(Bone bone, Bone parent) {
         this.bone = bone;
         this.parent = parent;
@@ -64,24 +65,28 @@ public class BoneTransforms {
         }
     }
 
-    private void shiftPivotPoint() {
-        Vector3f pivotPoint = bone.getBoneBlueprint().getBlueprintModelPivot();
-        internalMatrix.translate(new Vector3f(-pivotPoint.get(0), -pivotPoint.get(1), -pivotPoint.get(2)));
-    }
-
-    private void shiftPivotPointBack() {
-        Vector3f pivotPoint = bone.getBoneBlueprint().getBlueprintModelPivot();
-        internalMatrix.translate(pivotPoint);
-    }
+//    private void shiftPivotPoint() {
+//        Vector3f pivotPoint = bone.getBoneBlueprint().getBlueprintModelPivot();
+//        internalMatrix.translate(new Vector3f(-pivotPoint.get(0), -pivotPoint.get(1), -pivotPoint.get(2)));
+//    }
+//
+//    private void shiftPivotPointBack() {
+//        Vector3f pivotPoint = bone.getBoneBlueprint().getBlueprintModelPivot();
+//        internalMatrix.translate(pivotPoint);
+//    }
 
     private void translateAnimation() {
-        internalMatrix.translateLocal(bone.getAnimationTranslation());
+        Vector3f testVector = new Vector3f();
+        testVector.x = bone.getAnimationTranslation().get(0);
+        testVector.y = bone.getAnimationTranslation().get(1);
+        testVector.z = bone.getAnimationTranslation().get(2);
+        internalMatrix.translateLocal(testVector);
     }
 
     private void rotateAnimation() {
         Vector3f test = new Vector3f(
-                -bone.getAnimationRotation().get(0),
-                -bone.getAnimationRotation().get(1),
+                bone.getAnimationRotation().get(0),
+                bone.getAnimationRotation().get(1),
                 bone.getAnimationRotation().get(2));
 
         // Rotating by π (180 degrees) around the Y axis to align with the game's reference system
@@ -95,8 +100,8 @@ public class BoneTransforms {
     private void rotateDefaultBoneRotation() {
 //        shiftPivotPoint();
         internalMatrix.rotateDefaultPosition(
-                -bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(0),
-                -bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(1),
+                bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(0),
+                bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(1),
                 bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(2),
                 bone.getBoneBlueprint().getBlueprintModelPivot());
 //        shiftPivotPointBack();
@@ -153,7 +158,7 @@ public class BoneTransforms {
                     translatedGlobalMatrix[1],
                     translatedGlobalMatrix[2])
                     .add(bone.getSkeleton().getCurrentLocation());
-            armorStandLocation.setYaw(180);
+//            armorStandLocation.setYaw(180);
         } else
             armorStandLocation = new Location(bone.getSkeleton().getCurrentLocation().getWorld(),
                     translatedGlobalMatrix[0],
