@@ -46,14 +46,18 @@ public class TransformationMatrix {
 //        rotation.rotateX(x).rotateY(y).rotateZ(z); NO
 //        rotation.rotateX(x).rotateZ(z).rotateY(y); NO
 //        rotation.rotateZ(z).rotateX(x).rotateY(y); NO
-//        rotation.rotateZ(z).rotateY(y).rotateX(x); UNLIKELY
+
+//        pivotPoint.rotateY((float) Math.PI);
 
         Quaternionf defaultRotation = new Quaternionf();
         matrix.translate(pivotPoint.negate()); // Move to pivot
 
+//        defaultRotation.rotateXYZ(x,y,z);
+
         //most probably the right rotation orders
-//        defaultRotation.rotateY(y).rotateZ(z).rotateX(x).normalize();
-        defaultRotation.rotateY(y).rotateX(x).rotateZ(z).normalize();
+        defaultRotation.rotateY(y).rotateZ(z).rotateX(x).normalize();
+//        defaultRotation.rotateY(y).rotateX(x).rotateZ(z).normalize();
+//        defaultRotation.rotateZ(z).rotateY(y).rotateX(x); //UNLIKELY
         matrix.rotate(defaultRotation);
         matrix.translate(pivotPoint.negate()); // Correctly move back from pivot
     }
@@ -83,20 +87,11 @@ public class TransformationMatrix {
     }
 
     public Vector3f getExperimentalRotation() {
+        return new Matrix4f(matrix).getNormalizedRotation(new Quaternionf()).rotateLocalY((float) Math.PI).getEulerAnglesXYZ(new Vector3f());
+//        return new Matrix4f(matrix).getNormalizedRotation(new Quaternionf()).getEulerAnglesXYZ(new Vector3f());
 //        return new Matrix4f(matrix).invert().getNormalizedRotation(new Quaternionf()).getEulerAnglesXYZ(new Vector3f());
-        return new Matrix4f(matrix).invert().getNormalizedRotation(new Quaternionf()).getEulerAnglesYXZ(new Vector3f());
+//        return new Matrix4f(matrix).invert().getNormalizedRotation(new Quaternionf()).getEulerAnglesYXZ(new Vector3f());
 //        return new Matrix4f(matrix).invert().getNormalizedRotation(new Quaternionf()).getEulerAnglesYZX(new Vector3f());
-
-//        return matrix.getEulerAnglesXYZ(new Vector3f());
-//        Quaternionf test = new Quaternionf();
-//        matrix.getNormalizedRotation(test);
-////        return test.getEulerAnglesZXY(new Vector3f());
-//
-//        Quaternionf testRotation = new Quaternionf();
-//        testRotation.rotateLocalY((float) Math.PI);
-//        test.premul(testRotation);
-//        test.normalize();
-//        return test.getEulerAnglesZXY(new Vector3f());
     }
 
 }
