@@ -43,11 +43,11 @@ public class BoneTransforms {
 
     public void updateLocalTransform() {
         localMatrix.resetToIdentityMatrix();
-        translateModelCenter();
         shiftPivotPoint();
-        rotateDefaultBoneRotation();
+        translateModelCenter();
         translateAnimation();
         rotateAnimation();
+        rotateDefaultBoneRotation();
         shiftPivotPointBack();
         rotateByEntityYaw();
     }
@@ -78,7 +78,7 @@ public class BoneTransforms {
     private void rotateAnimation() {
         Vector test = new Vector(bone.getAnimationRotation().get(0), bone.getAnimationRotation().get(1), -bone.getAnimationRotation().get(2));
         test.rotateAroundY(Math.PI);
-        localMatrix.rotate(
+        localMatrix.rotateAnimation(
                 (float) test.getX(),
                 (float) test.getY(),
                 (float) test.getZ());
