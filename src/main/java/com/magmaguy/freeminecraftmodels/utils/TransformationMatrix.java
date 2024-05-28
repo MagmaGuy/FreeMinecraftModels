@@ -13,6 +13,7 @@ public class TransformationMatrix {
     }
 
     public static void multiplyMatrices(TransformationMatrix firstMatrix, TransformationMatrix secondMatrix, TransformationMatrix resultMatrix) {
+        resultMatrix.replacementMatrix = new Matrix4f(firstMatrix.replacementMatrix).mul(secondMatrix.replacementMatrix);
         // Assume resultMatrix is already initialized to the correct dimensions (4x4)
         for (int row = 0; row < 4; row++) {
             for (int col = 0; col < 4; col++) {
@@ -25,7 +26,6 @@ public class TransformationMatrix {
     }
 
     public void resetToIdentityMatrix() {
-        Developer.warn("RESET");
         replacementMatrix.identity();
         for (int i = 0; i < 4; i++) {
             for (int j = 0; j < 4; j++) {
@@ -36,9 +36,7 @@ public class TransformationMatrix {
 
     public void translate(Vector3f vector) {
         translate((float) vector.get(0), (float) vector.get(1), (float) vector.get(2));
-        Developer.warn("pre " + replacementMatrix.getTranslation(new Vector3f()).toString());
-        replacementMatrix.translate(vector);
-        Developer.warn("pos " + replacementMatrix.getTranslation(new Vector3f()).toString());
+//        replacementMatrix.translate(vector.mul(1/2));
     }
 
     public void translate(float x, float y, float z) {
@@ -47,7 +45,8 @@ public class TransformationMatrix {
         translationMatrix.matrix[1][3] = y;
         translationMatrix.matrix[2][3] = z;
         multiplyWith(translationMatrix);
-        replacementMatrix.translate(new Vector3f(x, y, z));
+        replacementMatrix.translateLocal(new Vector3f(x, y, z));
+//        Developer.warn("translation " + x + ' ' + y + ' ' + z);
     }
 
     public void scale(float x, float y, float z) {
@@ -65,7 +64,33 @@ public class TransformationMatrix {
         rotateZ(z);
         rotateY(y);
         rotateX(x);
-        replacementMatrix.rotateZYX(new Vector3f(x, y, z));
+//        replacementMatrix.rotateZYX(new Vector3f(x, y, z));
+//        Quaternionf rotation = new Quaternionf();
+//        rotation.rotateZYX(z, y, x);
+//        replacementMatrix.rotat(rotation);
+        replacementMatrix.rotateLocalZ(z);
+        replacementMatrix.rotateLocalY(y);
+        replacementMatrix.rotateLocalX(x);
+//        replacementMatrix.rotateZYX(z,y,x);
+//        replacementMatrix.rotate(new Quaternionf().rotateXYZ(x,y,z));
+//        replacementMatrix.rotateLocal(new Quaternionf().rotateXYZ(x,y,z));
+//        replacementMatrix.rotateLocal(new Quaternionf().rotateYXZ(y,x,z));
+//        replacementMatrix.rotateLocal(new Quaternionf().rotateZYX(z,y,x));
+
+    }
+
+    public void rotateAnimation(float x, float y, float z) {
+        rotateZ(z);
+        rotateY(y);
+        rotateX(x);
+//        replacementMatrix.rotateZYX(new Vector3f(z, y, x));
+//        replacementMatrix.rotate(new Quaternionf().rotateXYZ(x,y,z));
+//        replacementMatrix.rotateLocal(new Quaternionf().rotateXYZ(x,y,z));
+//        replacementMatrix.rotateLocal(new Quaternionf().rotateYXZ(y,x,z));
+//        replacementMatrix.rotateLocal(new Quaternionf().rotateZYX(z,y,x));
+        replacementMatrix.rotateLocalZ(z);
+        replacementMatrix.rotateLocalY(y);
+        replacementMatrix.rotateLocalX(x);
     }
 
     public void rotateX(float angleRadians) {
@@ -106,7 +131,7 @@ public class TransformationMatrix {
     }
 
     private void multiplyWith(TransformationMatrix other) {
-        replacementMatrix.mul(other.replacementMatrix);
+//        replacementMatrix.mul(other.replacementMatrix);
         float[][] result = new float[4][4];
         for (int i = 0; i < 4; i++) {
             for (int j = 0; j < 4; j++) {
