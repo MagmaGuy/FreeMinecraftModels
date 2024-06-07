@@ -57,8 +57,7 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         RegisterModelEntity.registerModelEntity(entity, getSkeletonBlueprint().getModelName());
         super.spawn();
         syncSkeletonWithEntity();
-        if (getSkeletonBlueprint().getHitbox() != null)
-            NMSManager.getAdapter().setCustomHitbox(entity, (float) getSkeletonBlueprint().getHitbox().getWidth(), (float) getSkeletonBlueprint().getHitbox().getHeight(), true);
+        setHitbox();
     }
 
     private void syncSkeletonWithEntity() {
@@ -81,6 +80,11 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         if (livingEntity != null)
             livingEntity.remove();
         if (skeletonSync != null) skeletonSync.cancel();
+    }
+
+    private void setHitbox() {
+        if (getSkeletonBlueprint().getHitbox() != null)
+            NMSManager.getAdapter().setCustomHitbox(super.livingEntity, (float) getSkeletonBlueprint().getHitbox().getWidth(), (float) getSkeletonBlueprint().getHitbox().getHeight(), true);
     }
 
     @Override

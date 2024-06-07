@@ -127,7 +127,7 @@ Maven:
 <dependency>
 <groupId>com.magmaguy</groupId>
 <artifactId>FreeMinecraftModels</artifactId>
-<version>1.1.3-SNAPSHOT</version>
+<version>VERSION.HERE-SNAPSHOT</version>
 <scope>provided</scope>
 </dependency>
 ```
@@ -135,7 +135,7 @@ Maven:
 Gradle:
 
 ```kotlin
-compileOnly group : 'com.magmaguy', name: 'FreeMinecraftModels', version: '1.1.2-SNAPSHOT'
+compileOnly group : 'com.magmaguy', name: 'FreeMinecraftModels', version: 'VERSION.HERE-SNAPSHOT'
 ```
 
 *Note FreeMinecraftModels is mean to be used as an API, and will require installation of the plugin on the server. Do
