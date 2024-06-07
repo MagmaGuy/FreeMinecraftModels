@@ -15,10 +15,15 @@ import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.utils.VersionChecker;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.Bukkit;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
+import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public final class FreeMinecraftModels extends JavaPlugin {
+public final class FreeMinecraftModels extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
@@ -42,6 +47,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         VersionChecker.checkPluginVersion();
         new CommandManager(this);
         new PropsConfig();
+        Bukkit.getPluginManager().registerEvents(this, this);
     }
 
     @Override
@@ -53,5 +59,13 @@ public final class FreeMinecraftModels extends JavaPlugin {
         LegacyHitDetection.shutdown();
         Bukkit.getServer().getScheduler().cancelTasks(MetadataHandler.PLUGIN);
         HandlerList.unregisterAll(MetadataHandler.PLUGIN);
+    }
+
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onEntityDamagedByEntityEvent(EntityDamageByEntityEvent event) {
+        if (!event.isCancelled()) return;
+        if (!(event.getEntity() instanceof LivingEntity livingEntity)) return;
+        if (DynamicEntity.isDynamicEntity(livingEntity))
+            event.setCancelled(false);
     }
 }
