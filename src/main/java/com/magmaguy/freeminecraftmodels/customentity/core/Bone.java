@@ -3,7 +3,6 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.thirdparty.Floodgate;
-import com.magmaguy.freeminecraftmodels.utils.Developer;
 import com.magmaguy.freeminecraftmodels.utils.VersionChecker;
 import lombok.Getter;
 import org.bukkit.Color;
@@ -58,11 +57,6 @@ public class Bone {
     }
 
     public void generateDisplay() {
-        if (getBoneBlueprint().getOriginalModelName().equals("cube")) {
-            Developer.warn(getBoneBlueprint().getBoneName() + " pivot " + getBoneBlueprint().getBlueprintModelPivot().toString());
-        }
-
-
         boneTransforms.generateDisplay();
         boneChildren.forEach(Bone::generateDisplay);
     }
