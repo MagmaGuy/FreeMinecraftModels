@@ -24,12 +24,13 @@ public class Skeleton {
     @Getter
     private final HashMap<String, Bone> boneMap = new HashMap<>();
     private final SkeletonBlueprint skeletonBlueprint;
-    @Setter
-    private Location currentLocation = null;
-    private BoneBlueprint hitbox;
-    private BukkitTask damageTintTask = null;
     @Getter
     private final SkeletonWatchers skeletonWatchers;
+    @Setter
+    private Location currentLocation = null;
+    //    private BoneBlueprint hitbox;
+    private final List<Bone> nametags = new ArrayList<>();
+    private BukkitTask damageTintTask = null;
 
     public Skeleton(SkeletonBlueprint skeletonBlueprint) {
         this.skeletonBlueprint = skeletonBlueprint;
@@ -53,6 +54,9 @@ public class Skeleton {
             if (bone.getParent() == null) {
                 bone.generateDisplay();
             }
+        });
+        boneMap.values().forEach(bone -> {
+            if (bone.getBoneBlueprint().isNameTag()) nametags.add(bone);
         });
     }
 
