@@ -70,7 +70,7 @@
         <dependency>
             <groupId>com.magmaguy</groupId>
             <artifactId>EasyMinecraftGoals-dist</artifactId>
-            <version>1.11.1-SNAPSHOT</version>
+            <version>1.11.2-SNAPSHOT</version>
         </dependency>
 
         <!-- Reflections for configuration files -->
