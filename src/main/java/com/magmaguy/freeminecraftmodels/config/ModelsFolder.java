@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
-import com.magmaguy.freeminecraftmodels.utils.Developer;
+import com.magmaguy.magmacore.util.Logger;
 import org.apache.commons.io.FileUtils;
 
 import java.io.File;
@@ -19,14 +19,21 @@ public class ModelsFolder {
     public static void initializeConfig() {
         counter = 1;
         folderCounter = 50;
-        File file = ConfigurationEngine.directoryCreator("models");
+
+        File file = new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar + "models");
+
         if (!file.exists()) {
-            Developer.warn("Failed to create models directory!");
+            file.mkdirs();
+            file.mkdir();
+        }
+
+        if (!file.exists()) {
+            Logger.warn("Failed to create models directory!");
             return;
         }
 
         if (!file.isDirectory()) {
-            Developer.warn("Directory models was not a directory!");
+            Logger.warn("Directory models was not a directory!");
             return;
         }
 
@@ -47,7 +54,7 @@ public class ModelsFolder {
                             + "leather_horse_armor.json"),
                     gson.toJson(leatherHorseArmor), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            Developer.warn("Failed to generate the iron horse armor file!");
+            Logger.warn("Failed to generate the iron horse armor file!");
             throw new RuntimeException(e);
         }
     }
@@ -62,7 +69,7 @@ public class ModelsFolder {
                 if (!boneBlueprint.getBoneName().equals("hitbox"))
                     assignBoneModelID(leatherHorseArmor, boneBlueprint);
         } catch (Exception e) {
-            Developer.warn("Failed to parse model " + childFile.getName() + "! Warn the developer about this");
+            Logger.warn("Failed to parse model " + childFile.getName() + "! Warn the developer about this");
             e.printStackTrace();
         }
     }

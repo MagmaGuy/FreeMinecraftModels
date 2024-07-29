@@ -2,7 +2,7 @@ package com.magmaguy.freeminecraftmodels.dataconverter;
 
 import com.google.gson.Gson;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
-import com.magmaguy.freeminecraftmodels.utils.Developer;
+import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import org.apache.commons.io.FileUtils;
 import org.bukkit.Bukkit;
@@ -60,7 +60,7 @@ public class FileModelConverter {
         try {
             reader = Files.newBufferedReader(Paths.get(file.getPath()));
         } catch (Exception ex) {
-            Developer.warn("Failed to read file " + file.getAbsolutePath());
+            Logger.warn("Failed to read file " + file.getAbsolutePath());
             return;
         }
 
@@ -78,7 +78,7 @@ public class FileModelConverter {
         try {
             reader.close();
         } catch (Exception exception) {
-            Developer.warn("Failed to close reader for file!");
+            Logger.warn("Failed to close reader for file!");
             return;
         }
 
@@ -105,8 +105,7 @@ public class FileModelConverter {
                 BufferedImage bufferedImage = ImageIO.read(imageFile);
                 imageSize.put(imageName, bufferedImage.getWidth());
             } catch (Exception ex) {
-                Developer.warn("Failed to convert image " + imageName + " to its corresponding image file!");
-                continue;
+                Logger.warn("Failed to convert image " + imageName + " to its corresponding image file!");
             }
         }
 

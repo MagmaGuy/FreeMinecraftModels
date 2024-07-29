@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.config.props;
 
-import com.magmaguy.freeminecraftmodels.config.CustomConfig;
+import com.magmaguy.magmacore.config.CustomConfig;
+import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.command.CommandSender;
 
 import java.util.HashMap;
@@ -23,7 +24,7 @@ public class PropsConfig extends CustomConfig {
 
     public static void CreateProp(CommandSender commandSender, String propFilename) {
         if (propsConfigs.containsKey(propFilename)) {
-            commandSender.sendMessage("[FreeMinecraftModel] This prop already exists! You can simply add more locations.");
+            Logger.warn("[FreeMinecraftModel] This prop already exists! You can simply add more locations.");
             return;
         }
         propsConfigs.put(propFilename, new PropsConfigFields(propFilename, true));

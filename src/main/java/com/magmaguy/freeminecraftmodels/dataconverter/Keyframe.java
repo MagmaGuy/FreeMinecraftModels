@@ -1,8 +1,8 @@
 package com.magmaguy.freeminecraftmodels.dataconverter;
 
-import com.magmaguy.freeminecraftmodels.utils.Developer;
 import com.magmaguy.freeminecraftmodels.utils.InterpolationType;
 import com.magmaguy.freeminecraftmodels.utils.TransformationType;
+import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 
 import java.util.List;
@@ -41,7 +41,7 @@ public class Keyframe {
         try {
             return (float) Double.parseDouble(rawValue);
         } catch (Exception e) {
-            Developer.warn("Failed to parse supposed number value " + rawValue + " in animation " + animationName + " for model " + modelName + "!");
+            Logger.warn("Failed to parse supposed number value " + rawValue + " in animation " + animationName + " for model " + modelName + "!");
             return 0;
         }
     }

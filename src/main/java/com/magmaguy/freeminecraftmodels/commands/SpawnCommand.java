@@ -3,9 +3,11 @@ package com.magmaguy.freeminecraftmodels.commands;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.customentity.StaticEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.magmacore.command.AdvancedCommand;
+import com.magmaguy.magmacore.command.CommandData;
+import com.magmaguy.magmacore.command.SenderType;
+import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.Location;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandSender;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -20,44 +22,35 @@ public class SpawnCommand extends AdvancedCommand {
     List<String> entityIDs = new ArrayList<>();
 
     public SpawnCommand() {
-        super(List.of("spawn"), "Spawns a custom models", "*", true, "/fmm spawn <static/dynamic> <modelID>");
+        super(List.of("spawn"));
+        addArgument("type", List.of("STATIC", "DYNAMIC"));
         entityIDs = new ArrayList<>();
         FileModelConverter.getConvertedFileModels().values().forEach(fileModelConverter -> entityIDs.add(fileModelConverter.getID()));
+        addArgument("model", entityIDs);
+        setDescription("Spawns a custom models");
+        setPermission("freeminecraftmodels.*");
+        setUsage("/fmm spawn <static/dynamic> <modelID>");
+        setSenderType(SenderType.PLAYER);
     }
 
-    private boolean spawnCommand(CommandSender commandSender, String[] args) {
-        Player player = (Player) commandSender;
-        if (!entityIDs.contains(args[2])) {
-            commandSender.sendMessage("[FreeMinecraftModels] Invalid entity ID!");
-            return false;
+    @Override
+    public void execute(CommandData commandData) {
+        Player player = commandData.getPlayerSender();
+        if (!entityIDs.contains(commandData.getStringArgument("model"))) {
+            Logger.sendMessage(commandData.getCommandSender(), "Invalid entity ID!");
+            return;
         }
         RayTraceResult rayTraceResult = player.rayTraceBlocks(300);
         if (rayTraceResult == null) {
-            player.sendMessage("[FMM] You need to be looking at the ground to spawn a mob!");
-            return false;
+            Logger.sendMessage(commandData.getCommandSender(), "You need to be looking at the ground to spawn a mob!");
+            return;
         }
         Location location = rayTraceResult.getHitBlock().getLocation().add(0.5, 1, 0.5);
         location.setPitch(0);
         location.setYaw(180);
-        if (args[1].equalsIgnoreCase("static"))
-            StaticEntity.create(args[2], location);
-        else if (args[1].equalsIgnoreCase("dynamic"))
-            DynamicEntity.create(args[2], (LivingEntity) location.getWorld().spawnEntity(location, EntityType.PIG));
-        return true;
+        if (commandData.getStringArgument("type").equalsIgnoreCase("static"))
+            StaticEntity.create(commandData.getStringArgument("model"), location);
+        else if (commandData.getStringArgument("type").equalsIgnoreCase("dynamic"))
+            DynamicEntity.create(commandData.getStringArgument("model"), (LivingEntity) location.getWorld().spawnEntity(location, EntityType.PIG));
     }
-
-    @Override
-    public void execute(CommandSender sender, String[] arguments) {
-        spawnCommand(sender, arguments);
-    }
-
-    public List<String> onTabComplete(CommandSender sender,
-                                      Command command,
-                                      String alias,
-                                      String[] args) {
-        if (args.length == 2) return trimSuggestions(spawnTypes, args[1]);
-        else if (args.length == 3) return trimSuggestions(entityIDs, args[2]);
-        return null;
-    }
-
 }

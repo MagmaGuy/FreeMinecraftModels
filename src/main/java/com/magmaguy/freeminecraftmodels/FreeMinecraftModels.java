@@ -1,9 +1,8 @@
 package com.magmaguy.freeminecraftmodels;
 
 import com.magmaguy.easyminecraftgoals.NMSManager;
-import com.magmaguy.freeminecraftmodels.commands.CommandManager;
+import com.magmaguy.freeminecraftmodels.commands.*;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
-import com.magmaguy.freeminecraftmodels.config.ImportsFolder;
 import com.magmaguy.freeminecraftmodels.config.ModelsFolder;
 import com.magmaguy.freeminecraftmodels.config.OutputFolder;
 import com.magmaguy.freeminecraftmodels.config.props.PropsConfig;
@@ -13,6 +12,8 @@ import com.magmaguy.freeminecraftmodels.customentity.StaticEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.LegacyHitDetection;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.utils.VersionChecker;
+import com.magmaguy.magmacore.MagmaCore;
+import com.magmaguy.magmacore.command.CommandManager;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.LivingEntity;
@@ -34,9 +35,10 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         Bukkit.getLogger().info("|__|_|__|__||__|__|_____|____|__| |___._|__| |____|__|_|__||_____|_____||_____||__||_____|");
         Bukkit.getLogger().info("Version " + this.getDescription().getVersion());
         MetadataHandler.PLUGIN = this;
+        MagmaCore.createInstance(this);
         //Initialize plugin configuration files
-        DefaultConfig.initializeConfig();
-        ImportsFolder.initializeConfig();
+        new DefaultConfig();
+        MagmaCore.initializeImporter();
         ModelsFolder.initializeConfig();
         OutputFolder.initializeConfig();
         Metrics metrics = new Metrics(this, 19337);
@@ -45,7 +47,12 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         Bukkit.getPluginManager().registerEvents(new VersionChecker.VersionCheckerEvents(), this);
         NMSManager.initializeAdapter(this);
         VersionChecker.checkPluginVersion();
-        new CommandManager(this);
+        CommandManager manager = new CommandManager(this, "freeminecraftmodels");
+        manager.registerCommand(new MountCommand());
+        manager.registerCommand(new PropCommand());
+        manager.registerCommand(new ReloadCommand());
+        manager.registerCommand(new SpawnCommand());
+        manager.registerCommand(new VersionCommand());
         new PropsConfig();
         Bukkit.getPluginManager().registerEvents(this, this);
     }
@@ -53,6 +60,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
     @Override
     public void onDisable() {
         // Plugin shutdown logic
+        MagmaCore.shutdown();
         FileModelConverter.shutdown();
         StaticEntity.shutdown();
         DynamicEntity.shutdown();

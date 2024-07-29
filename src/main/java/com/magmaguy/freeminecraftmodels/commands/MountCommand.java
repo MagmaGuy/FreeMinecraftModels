@@ -3,14 +3,15 @@ package com.magmaguy.freeminecraftmodels.commands;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.magmacore.command.AdvancedCommand;
+import com.magmaguy.magmacore.command.CommandData;
+import com.magmaguy.magmacore.command.SenderType;
+import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandSender;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Horse;
 import org.bukkit.entity.LivingEntity;
-import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
@@ -21,31 +22,32 @@ public class MountCommand extends AdvancedCommand {
     List<String> entityIDs = new ArrayList<>();
 
     public MountCommand() {
-        super(List.of("mount"), "Mounts a model (experimental!)", "*", true, "/fmm mount <modelID>");
+        super(List.of("mount"));
+        setDescription("Mounts a model (experimental!)");
+        setPermission("freeminecraftmodels.*");
+        setDescription("/fmm mount <modelID>");
+        setSenderType(SenderType.PLAYER);
         entityIDs = new ArrayList<>();
         FileModelConverter.getConvertedFileModels().values().forEach(fileModelConverter -> entityIDs.add(fileModelConverter.getID()));
+        addArgument("models", entityIDs);
     }
 
     @Override
-    public void execute(CommandSender sender, String[] arguments) {
-        if (!entityIDs.contains(arguments[1])) {
-            sender.sendMessage("[FreeMinecraftModels] Invalid entity ID!");
+    public void execute(CommandData commandData) {
+        if (!entityIDs.contains(commandData.getStringArgument("models"))) {
+            Logger.sendMessage(commandData.getCommandSender(), "Invalid entity ID!");
             return;
         }
 
-        DynamicEntity dynamicEntity = DynamicEntity.create(arguments[0], (LivingEntity) ((Player) sender).getWorld().spawnEntity(((Player) sender).getLocation(), EntityType.HORSE));
+        DynamicEntity dynamicEntity = DynamicEntity.create(
+                commandData.getStringArgument("models"),
+                (LivingEntity) commandData.getPlayerSender().getWorld().spawnEntity((commandData.getPlayerSender()).getLocation(), EntityType.HORSE));
 
         Bukkit.getScheduler().scheduleSyncDelayedTask(MetadataHandler.PLUGIN, () -> {
             ((Horse) dynamicEntity.getLivingEntity()).setTamed(true);
-            ((Horse) dynamicEntity.getLivingEntity()).setOwner(((Player) sender));
+            ((Horse) dynamicEntity.getLivingEntity()).setOwner(commandData.getPlayerSender());
             ((Horse) dynamicEntity.getLivingEntity()).getInventory().setSaddle(new ItemStack(Material.SADDLE));
-            dynamicEntity.getLivingEntity().addPassenger(((Player) sender));
+            dynamicEntity.getLivingEntity().addPassenger(commandData.getPlayerSender());
         }, 5);
-    }
-
-    @Override
-    public List<String> onTabComplete(CommandSender commandSender, Command command, String label, String[] args) {
-        if (args.length == 2) return trimSuggestions(entityIDs, args[1]);
-        return null;
     }
 }
