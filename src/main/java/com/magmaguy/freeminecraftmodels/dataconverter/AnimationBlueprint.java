@@ -1,7 +1,7 @@
 package com.magmaguy.freeminecraftmodels.dataconverter;
 
-import com.magmaguy.freeminecraftmodels.utils.Developer;
 import com.magmaguy.freeminecraftmodels.utils.LoopType;
+import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 
 import java.util.*;
@@ -24,7 +24,7 @@ public class AnimationBlueprint {
         try {
             animationData = (Map<String, Object>) data;
         } catch (Exception e) {
-            Developer.warn("Failed to get animation data! Model format is not as expected, this version of BlockBench is not compatible with FreeMinecraftModels!");
+            Logger.warn("Failed to get animation data! Model format is not as expected, this version of BlockBench is not compatible with FreeMinecraftModels!");
             e.printStackTrace();
             return;
         }
@@ -40,7 +40,7 @@ public class AnimationBlueprint {
         try {
             interpolateKeyframes();
         } catch (Exception e) {
-            Developer.warn("Failed to interpolate animations for model " + modelName + "! Animation name: " + animationName);
+            Logger.warn("Failed to interpolate animations for model " + modelName + "! Animation name: " + animationName);
             e.printStackTrace();
         }
     }
@@ -62,7 +62,7 @@ public class AnimationBlueprint {
         //hitboxes do not get animated!
         if (boneName.equalsIgnoreCase("hitbox")) return;
         if (boneBlueprint == null) {
-            Developer.warn("Failed to get bone " + boneName + " from model " + modelName + "!");
+            Logger.warn("Failed to get bone " + boneName + " from model " + modelName + "!");
             return;
         }
         List<Keyframe> keyframes = new ArrayList<>();

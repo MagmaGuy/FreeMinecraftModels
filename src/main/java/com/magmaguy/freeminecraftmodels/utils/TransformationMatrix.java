@@ -46,7 +46,7 @@ public class TransformationMatrix {
         translationMatrix.matrix[2][3] = z;
         multiplyWith(translationMatrix);
         replacementMatrix.translateLocal(new Vector3f(x, y, z));
-//        Developer.warn("translation " + x + ' ' + y + ' ' + z);
+//        Logger.warn("translation " + x + ' ' + y + ' ' + z);
     }
 
     public void scale(float x, float y, float z) {
@@ -150,8 +150,8 @@ public class TransformationMatrix {
      */
     public float[] getTranslation() {
 //        Vector3f vector3f = replacementMatrix.getTranslation(new Vector3f());
-//        Developer.warn("later " + replacementMatrix.getTranslation(new Vector3f()).toString());
-//        Developer.warn("pos " + vector3f.toString());
+//        Logger.warn("later " + replacementMatrix.getTranslation(new Vector3f()).toString());
+//        Logger.warn("pos " + vector3f.toString());
 //        return new float[]{vector3f.get(0), vector3f.get(1), vector3f.get(2)};
         // Extract translation components directly from the matrix
         return new float[]{matrix[0][3], matrix[1][3], matrix[2][3]};

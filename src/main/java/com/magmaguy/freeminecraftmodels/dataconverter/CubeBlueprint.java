@@ -1,7 +1,7 @@
 package com.magmaguy.freeminecraftmodels.dataconverter;
 
-import com.magmaguy.freeminecraftmodels.utils.Developer;
-import com.magmaguy.freeminecraftmodels.utils.Round;
+import com.magmaguy.magmacore.util.Logger;
+import com.magmaguy.magmacore.util.Round;
 import lombok.Getter;
 import lombok.Setter;
 import org.joml.Vector3f;
@@ -116,7 +116,7 @@ public class CubeBlueprint {
                         case 0 -> axis = "x";
                         case 1 -> axis = "y";
                         case 2 -> axis = "z";
-                        default -> Developer.warn("Unexpected amount of rotation axes!");
+                        default -> Logger.warn("Unexpected amount of rotation axes!");
                     }
                 }
             }

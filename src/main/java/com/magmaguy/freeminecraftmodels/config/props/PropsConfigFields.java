@@ -1,7 +1,7 @@
 package com.magmaguy.freeminecraftmodels.config.props;
 
-import com.magmaguy.freeminecraftmodels.config.CustomConfigFields;
 import com.magmaguy.freeminecraftmodels.utils.ConfigurationLocation;
+import com.magmaguy.magmacore.config.CustomConfigFields;
 import lombok.Getter;
 import org.bukkit.Location;
 
