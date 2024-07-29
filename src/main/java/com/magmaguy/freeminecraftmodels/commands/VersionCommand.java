@@ -1,23 +1,21 @@
 package com.magmaguy.freeminecraftmodels.commands;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandSender;
+import com.magmaguy.magmacore.command.AdvancedCommand;
+import com.magmaguy.magmacore.command.CommandData;
+import com.magmaguy.magmacore.util.Logger;
 
 import java.util.List;
 
 public class VersionCommand extends AdvancedCommand {
     public VersionCommand() {
-        super(List.of("version"), "Reports the FreeMinecraftModels version", "", false, "/fmm version");
+        super(List.of("version"));
+        setDescription("Reports the FreeMinecraftModels version");
+        setUsage("/fmm version");
     }
 
     @Override
-    public void execute(CommandSender sender, String[] arguments) {
-        sender.sendMessage("[FreeMinecraftModels] This server is running FreeMinecraftModels version " + MetadataHandler.PLUGIN.getDescription().getVersion());
-    }
-
-    @Override
-    public List<String> onTabComplete(CommandSender commandSender, Command command, String label, String[] args) {
-        return List.of();
+    public void execute(CommandData commandData) {
+        Logger.sendMessage(commandData.getCommandSender(), "This server is running FreeMinecraftModels version " + MetadataHandler.PLUGIN.getDescription().getVersion());
     }
 }

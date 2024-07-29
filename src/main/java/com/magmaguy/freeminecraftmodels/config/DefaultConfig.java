@@ -1,15 +1,22 @@
 package com.magmaguy.freeminecraftmodels.config;
 
+import com.magmaguy.magmacore.config.ConfigurationEngine;
+import com.magmaguy.magmacore.config.ConfigurationFile;
 import org.bukkit.configuration.file.FileConfiguration;
 
 import java.io.File;
 import java.util.List;
 
-public class DefaultConfig {
+public class DefaultConfig extends ConfigurationFile {
 
     public static boolean useDisplayEntitiesWhenPossible;
 
-    public static void initializeConfig() {
+    public DefaultConfig() {
+        super("config.yml");
+    }
+
+    @Override
+    public void initializeValues() {
         File file = ConfigurationEngine.fileCreator("config.yml");
         FileConfiguration fileConfiguration = ConfigurationEngine.fileConfigurationCreator(file);
         useDisplayEntitiesWhenPossible = ConfigurationEngine.setBoolean(
