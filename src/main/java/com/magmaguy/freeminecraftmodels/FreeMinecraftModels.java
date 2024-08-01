@@ -28,7 +28,6 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-
         Bukkit.getLogger().info(" _______ __                               ___ __   _______           __         __        ");
         Bukkit.getLogger().info("|   |   |__|.-----.-----.----.----.---.-.'  _|  |_|   |   |.-----.--|  |.-----.|  |.-----.");
         Bukkit.getLogger().info("|       |  ||     |  -__|  __|   _|  _  |   _|   _|       ||  _  |  _  ||  -__||  ||__ --|");
@@ -39,8 +38,8 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         //Initialize plugin configuration files
         new DefaultConfig();
         MagmaCore.initializeImporter();
-        ModelsFolder.initializeConfig();
         OutputFolder.initializeConfig();
+        ModelsFolder.initializeConfig();
         Metrics metrics = new Metrics(this, 19337);
         Bukkit.getPluginManager().registerEvents(new ModeledEntityEvents(), this);
         Bukkit.getPluginManager().registerEvents(new LegacyHitDetection(), this);
@@ -55,6 +54,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         manager.registerCommand(new VersionCommand());
         new PropsConfig();
         Bukkit.getPluginManager().registerEvents(this, this);
+        OutputFolder.zipResourcePack();
     }
 
     @Override
