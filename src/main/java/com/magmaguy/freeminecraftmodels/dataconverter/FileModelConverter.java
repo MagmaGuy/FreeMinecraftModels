@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.dataconverter;
 
 import com.google.gson.Gson;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.utils.StringToResourcePackFilename;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import org.apache.commons.io.FileUtils;
@@ -51,7 +52,7 @@ public class FileModelConverter {
             return;
         }
 
-        modelName = modelName.toLowerCase();
+        modelName = StringToResourcePackFilename.convert(modelName);
 
         Gson gson = new Gson();
 
@@ -88,7 +89,7 @@ public class FileModelConverter {
         List<Map<?, ?>> texturesValues = (ArrayList<Map<?, ?>>) map.get("textures");
         for (int i = 0; i < texturesValues.size(); i++) {
             Map<?, ?> element = texturesValues.get(i);
-            String imageName = ((String) element.get("name")).toLowerCase();
+            String imageName = StringToResourcePackFilename.convert((String) element.get("name"));
             if (!imageName.contains(".png")) {
                 if (!imageName.contains(".")) imageName += ".png";
                 else imageName.split("\\.")[0] += ".png";

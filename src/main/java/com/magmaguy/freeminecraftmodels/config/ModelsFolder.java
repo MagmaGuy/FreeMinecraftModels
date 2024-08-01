@@ -100,7 +100,7 @@ public class ModelsFolder {
             boneBlueprint.setModelID(counter + folderCounter * 1000);
             counter++;
         }
-        entryMap.put("model", boneBlueprint.getBoneName().toLowerCase());
+        entryMap.put("model", boneBlueprint.getBoneName());
         ironHorseArmorFile.computeIfAbsent("overrides", k -> new ArrayList<Map<String, Object>>());
         List<Map<String, Object>> existingList = ((List<Map<String, Object>>) ironHorseArmorFile.get("overrides"));
         existingList.add(entryMap);
