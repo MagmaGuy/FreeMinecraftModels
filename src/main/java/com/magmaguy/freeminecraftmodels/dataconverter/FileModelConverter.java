@@ -101,7 +101,7 @@ public class FileModelConverter {
             base64Image = base64Image.split(",")[base64Image.split(",").length - 1];
             if (!imageSize.containsKey(imageName)) try {
                 ByteArrayInputStream inputStream = new ByteArrayInputStream(Base64Coder.decodeLines(base64Image));
-                File imageFile = new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar + "output" + File.separatorChar + "FreeMinecraftModels" + File.separatorChar + "assets" + File.separatorChar + "freeminecraftmodels" + File.separatorChar + "textures" + File.separatorChar + "entity" + File.separatorChar + imageName);
+                File imageFile = new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar + "output" + File.separatorChar + "FreeMinecraftModels" + File.separatorChar + "assets" + File.separatorChar + "freeminecraftmodels" + File.separatorChar + "textures" + File.separatorChar + "entity" + File.separatorChar + modelName + File.separatorChar + imageName);
                 FileUtils.writeByteArrayToFile(imageFile, inputStream.readAllBytes());
                 BufferedImage bufferedImage = ImageIO.read(imageFile);
                 imageSize.put(imageName, bufferedImage.getWidth());
@@ -147,7 +147,7 @@ public class FileModelConverter {
         Map<String, Map<String, Object>> texturesMap = new HashMap<>();
         Map<String, Object> textureContents = new HashMap<>();
         for (Integer key : textures.keySet())
-            textureContents.put("" + key, "freeminecraftmodels:entity/" + textures.get(key));
+            textureContents.put("" + key, "freeminecraftmodels:entity/" + modelName + "/" + textures.get(key));
         texturesMap.put("textures", textureContents);
         return texturesMap;
     }
