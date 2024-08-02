@@ -94,14 +94,14 @@
         <dependency>
             <groupId>com.magmaguy</groupId>
             <artifactId>MagmaCore</artifactId>
-            <version>1.0</version>
+            <version>1.8</version>
             <scope>compile</scope>
         </dependency>
 
         <dependency>
             <groupId>com.magmaguy</groupId>
             <artifactId>ResourcePackManager</artifactId>
-            <version>0.0.2</version>
+            <version>1.0.0</version>
             <scope>provided</scope>
         </dependency>
 
