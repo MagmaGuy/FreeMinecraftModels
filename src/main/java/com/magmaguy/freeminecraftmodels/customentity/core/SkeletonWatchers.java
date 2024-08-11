@@ -8,11 +8,11 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArraySet;
 
-//This class manages who the display packets are sent to
 public class SkeletonWatchers implements Listener {
     private final Skeleton skeleton;
-    private final Set<UUID> viewers = Collections.synchronizedSet(new HashSet<>());
+    private final Set<UUID> viewers = new CopyOnWriteArraySet<>();
     private BukkitTask tick;
 
     public SkeletonWatchers(Skeleton skeleton) {
@@ -29,24 +29,28 @@ public class SkeletonWatchers implements Listener {
             @Override
             public void run() {
                 updateWatcherList();
-//                sendPackets(); moved to the bone
             }
         }.runTaskTimerAsynchronously(MetadataHandler.PLUGIN, 0, 1);
     }
 
     private void updateWatcherList() {
         List<UUID> newPlayers = new ArrayList<>();
-        for (Player player : skeleton.getCurrentLocation().getWorld().getPlayers())
+        for (Player player : skeleton.getCurrentLocation().getWorld().getPlayers()) {
             if (player.getLocation().distanceSquared(skeleton.getCurrentLocation()) < Math.pow(2, Bukkit.getSimulationDistance() * 16D)) {
                 newPlayers.add(player.getUniqueId());
-                if (!viewers.contains(player.getUniqueId())) displayTo(player);
+                if (!viewers.contains(player.getUniqueId())) {
+                    displayTo(player);
+                }
             }
-        List<UUID> toRemove = new ArrayList<>();
-        viewers.stream().toList().forEach(viewer -> {
-            if (!newPlayers.contains(viewer))
-                toRemove.add(viewer);
-        });
+        }
 
+        List<UUID> toRemove = new ArrayList<>();
+        for (UUID viewer : viewers) {
+            if (!newPlayers.contains(viewer)) {
+                toRemove.add(viewer);
+            }
+        }
+        viewers.removeAll(toRemove);
         toRemove.forEach(this::hideFrom);
     }
 

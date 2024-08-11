@@ -9,19 +9,19 @@ import com.magmaguy.freeminecraftmodels.utils.VersionChecker;
 import lombok.Getter;
 import org.bukkit.Location;
 import org.bukkit.util.EulerAngle;
+import org.bukkit.util.Vector;
 import org.joml.Vector3f;
 
 public class BoneTransforms {
 
     private final Bone parent;
     private final Bone bone;
-    private final TransformationMatrix internalMatrix = new TransformationMatrix();
-    private TransformationMatrix externalMatrix = new TransformationMatrix();
+    private final TransformationMatrix localMatrix = new TransformationMatrix();
+    private TransformationMatrix globalMatrix = new TransformationMatrix();
     @Getter
     private PacketModelEntity packetArmorStandEntity = null;
     @Getter
     private PacketModelEntity packetDisplayEntity = null;
-
 
     public BoneTransforms(Bone bone, Bone parent) {
         this.bone = bone;
@@ -35,76 +35,71 @@ public class BoneTransforms {
 
     public void updateGlobalTransform() {
         if (parent != null) {
-            TransformationMatrix.multiplyMatrices(parent.getBoneTransforms().externalMatrix, internalMatrix, externalMatrix, getPivotPoint(), bone.getBoneBlueprint());
+            TransformationMatrix.multiplyMatrices(parent.getBoneTransforms().globalMatrix, localMatrix, globalMatrix);
+            if (bone.getBoneBlueprint().isHead()) {
+                globalMatrix.resetRotation();
+                float yaw = -bone.getSkeleton().getCurrentHeadYaw() + 180;
+                globalMatrix.rotateY((float) Math.toRadians(yaw));
+                globalMatrix.rotateX(-(float) Math.toRadians(bone.getSkeleton().getCurrentHeadPitch()));
+            }
         } else {
-            externalMatrix = internalMatrix;
+            globalMatrix = localMatrix;
         }
     }
 
     public void updateLocalTransform() {
-        internalMatrix.resetToIdentity();
-//        if (parent == null) internalMatrix.mirrorZ();
-//        if (parent == null) internalMatrix.rotateY((float) Math.PI);
+        localMatrix.resetToIdentityMatrix();
+        shiftPivotPoint();
         translateModelCenter();
-        rotateDefaultBoneRotation();
-        rotateAnimation();
         translateAnimation();
-        // Finally, adjust for the model's center (which might include adjustments relative to the parent bone)
-//        rotateByEntityYaw();
+        rotateAnimation();
+        rotateDefaultBoneRotation();
+        shiftPivotPointBack();
+        rotateByEntityYaw();
     }
 
     //Shift to model center
     private void translateModelCenter() {
-        internalMatrix.translate(bone.getBoneBlueprint().getModelCenter());
+        localMatrix.translate(bone.getBoneBlueprint().getModelCenter());
 
         //The bone is relative to its parent, so remove the offset of the parent
         if (parent != null) {
             Vector3f modelCenter = parent.getBoneBlueprint().getModelCenter();
             modelCenter.mul(-1);
-            internalMatrix.translate(modelCenter);
+            localMatrix.translate(modelCenter);
         }
     }
 
-//    private void shiftPivotPoint() {
-//        Vector3f pivotPoint = bone.getBoneBlueprint().getBlueprintModelPivot();
-//        internalMatrix.translate(new Vector3f(-pivotPoint.get(0), -pivotPoint.get(1), -pivotPoint.get(2)));
-//    }
-//
-//    private void shiftPivotPointBack() {
-//        Vector3f pivotPoint = bone.getBoneBlueprint().getBlueprintModelPivot();
-//        internalMatrix.translate(pivotPoint);
-//    }
+    private void shiftPivotPoint() {
+        localMatrix.translate(bone.getBoneBlueprint().getBlueprintModelPivot().mul(-1));
+    }
 
     private void translateAnimation() {
-        Vector3f testVector = new Vector3f();
-        testVector.x = bone.getAnimationTranslation().get(0);
-        testVector.y = bone.getAnimationTranslation().get(1);
-        testVector.z = bone.getAnimationTranslation().get(2);
-        internalMatrix.translateLocal(testVector);
+        localMatrix.translate(
+                bone.getAnimationTranslation().get(0),
+                bone.getAnimationTranslation().get(1),
+                bone.getAnimationTranslation().get(2));
     }
 
     private void rotateAnimation() {
-        Vector3f test = new Vector3f(
-                bone.getAnimationRotation().get(0),
-                bone.getAnimationRotation().get(1),
-                bone.getAnimationRotation().get(2));
-
-        // Rotating by π (180 degrees) around the Y axis to align with the game's reference system
-//        test.rotateY((float) Math.PI);
-
-        // Applying the rotation
-        internalMatrix.animationRotation(test.x, test.y, test.z, getPivotPoint());
+        Vector test = new Vector(bone.getAnimationRotation().get(0), bone.getAnimationRotation().get(1), -bone.getAnimationRotation().get(2));
+        test.rotateAroundY(Math.PI);
+        localMatrix.rotateAnimation(
+                (float) test.getX(),
+                (float) test.getY(),
+                (float) test.getZ());
     }
 
-
     private void rotateDefaultBoneRotation() {
-//        shiftPivotPoint();
-        internalMatrix.rotateDefaultPosition(
+        localMatrix.rotate(
                 bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(0),
                 bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(1),
-                bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(2),
-                getPivotPoint());
-//        shiftPivotPointBack();
+                bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(2));
+    }
+
+    private void shiftPivotPointBack() {
+        //Remove the pivot point, go back to the model center
+        localMatrix.translate(bone.getBoneBlueprint().getBlueprintModelPivot());
     }
 
     public void generateDisplay() {
@@ -133,24 +128,24 @@ public class BoneTransforms {
     private void rotateByEntityYaw() {
         //rotate by yaw amount
         if (parent == null) {
-            internalMatrix.rotateY((float) -Math.toRadians(bone.getSkeleton().getCurrentLocation().getYaw() + 180));
+            localMatrix.rotate(0, (float) -Math.toRadians(bone.getSkeleton().getCurrentLocation().getYaw() + 180), 0);
         }
     }
 
     protected Location getArmorStandTargetLocation() {
-        float[] translatedGlobalMatrix = externalMatrix.getTranslation();
+        float[] translatedGlobalMatrix = globalMatrix.applyTransformation(new float[]{0, 0, 0, 1});
         Location armorStandLocation = new Location(bone.getSkeleton().getCurrentLocation().getWorld(),
                 translatedGlobalMatrix[0],
                 translatedGlobalMatrix[1],
                 translatedGlobalMatrix[2])
                 .add(bone.getSkeleton().getCurrentLocation());
         armorStandLocation.setYaw(180);
-        armorStandLocation.toVector().toVector3f().sub(new Vector3f(0f, BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT(), 0f));
+        armorStandLocation.subtract(new Vector(0, BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT(), 0));
         return armorStandLocation;
     }
 
     protected Location getDisplayEntityTargetLocation() {
-        float[] translatedGlobalMatrix = externalMatrix.getTranslation();
+        float[] translatedGlobalMatrix = globalMatrix.getTranslation();
         Location armorStandLocation;
         if (!VersionChecker.serverVersionOlderThan(20, 0)) {
             armorStandLocation = new Location(bone.getSkeleton().getCurrentLocation().getWorld(),
@@ -158,7 +153,7 @@ public class BoneTransforms {
                     translatedGlobalMatrix[1],
                     translatedGlobalMatrix[2])
                     .add(bone.getSkeleton().getCurrentLocation());
-//            armorStandLocation.setYaw(180);
+            armorStandLocation.setYaw(180);
         } else
             armorStandLocation = new Location(bone.getSkeleton().getCurrentLocation().getWorld(),
                     translatedGlobalMatrix[0],
@@ -169,23 +164,17 @@ public class BoneTransforms {
     }
 
     protected EulerAngle getDisplayEntityRotation() {
-        Vector3f newRotation = externalMatrix.getExperimentalRotation();
+        float[] rotation = globalMatrix.getRotation();
         if (VersionChecker.serverVersionOlderThan(20, 0))
-            return new EulerAngle(newRotation.get(0), newRotation.get(1), newRotation.get(2));
+            return new EulerAngle(rotation[0], rotation[1], rotation[2]);
         else {
-            return new EulerAngle(newRotation.get(0), newRotation.get(1), newRotation.get(2));
+            return new EulerAngle(-rotation[0], rotation[1], -rotation[2]);
         }
     }
 
     protected EulerAngle getArmorStandEntityRotation() {
-        float[] rotation = externalMatrix.getRotation();
+        float[] rotation = globalMatrix.getRotation();
         return new EulerAngle(-rotation[0], -rotation[1], rotation[2]);
-    }
-
-    public Vector3f getPivotPoint() {
-        Vector3f pivot = bone.getBoneBlueprint().getBlueprintModelPivot();
-//        if (parent != null) pivot.add(parent.getBoneTransforms().externalMatrix.getTranslationVector());
-        return pivot;
     }
 
 }

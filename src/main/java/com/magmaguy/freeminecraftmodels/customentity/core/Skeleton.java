@@ -24,12 +24,18 @@ public class Skeleton {
     @Getter
     private final HashMap<String, Bone> boneMap = new HashMap<>();
     private final SkeletonBlueprint skeletonBlueprint;
-    @Setter
-    private Location currentLocation = null;
-    private BoneBlueprint hitbox;
-    private BukkitTask damageTintTask = null;
     @Getter
     private final SkeletonWatchers skeletonWatchers;
+    private final List<Bone> nametags = new ArrayList<>();
+    @Setter
+    private Location currentLocation = null;
+    @Getter
+    @Setter
+    private float currentHeadPitch = 0;
+    @Getter
+    @Setter
+    private float currentHeadYaw = 0;
+    private BukkitTask damageTintTask = null;
 
     public Skeleton(SkeletonBlueprint skeletonBlueprint) {
         this.skeletonBlueprint = skeletonBlueprint;
@@ -53,6 +59,9 @@ public class Skeleton {
             if (bone.getParent() == null) {
                 bone.generateDisplay();
             }
+        });
+        boneMap.values().forEach(bone -> {
+            if (bone.getBoneBlueprint().isNameTag()) nametags.add(bone);
         });
     }
 
@@ -120,5 +129,12 @@ public class Skeleton {
                 boneMap.values().forEach(bone -> bone.setHorseLeatherArmorColor(Color.fromRGB(255, (int) (255 / (double) counter), (int) (255 / (double) counter))));
             }
         }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
+    }
+
+    public void teleport(Location location) {
+        currentLocation = location;
+        boneMap.values().forEach(bone -> {
+            if (bone.getParent() == null) bone.teleport();
+        });
     }
 }

@@ -1,10 +1,17 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.magmaguy</groupId>
     <artifactId>FreeMinecraftModels</artifactId>
-    <version>1.2.2-SNAPSHOT</version>
+    <version>1.4.2</version>
+
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
 
     <repositories>
         <!-- This adds the Spigot Maven repository to the build -->
@@ -16,6 +23,16 @@
         <repository>
             <id>opencollab-snapshot</id>
             <url>https://repo.opencollab.dev/maven-snapshots/</url>
+        </repository>
+        <repository>
+            <id>magmaguy-repo-releases</id>
+            <name>MagmaGuy's Repository</name>
+            <url>https://repo.magmaguy.com/releases</url>
+        </repository>
+        <repository>
+            <id>magmaguy-repo-snapshots</id>
+            <name>MagmaGuy's Snapshot Repository</name>
+            <url>https://repo.magmaguy.com/snapshots</url>
         </repository>
     </repositories>
 
@@ -66,20 +83,32 @@
             <scope>compile</scope>
         </dependency>
 
-        <!-- EasyMinecraftGoals for hitboxes and soon pathfinding -->
         <dependency>
             <groupId>com.magmaguy</groupId>
             <artifactId>EasyMinecraftGoals-dist</artifactId>
-            <version>1.10.0-SNAPSHOT</version>
+            <version>1.13.0</version>
         </dependency>
 
-        <!-- Reflections for configuration files -->
         <dependency>
-            <groupId>org.reflections</groupId>
-            <artifactId>reflections</artifactId>
-            <version>0.10.2</version>
+            <groupId>com.magmaguy</groupId>
+            <artifactId>EliteMobs</artifactId>
+            <version>9.1.0</version>
+            <scope>provided</scope>
         </dependency>
 
+        <dependency>
+            <groupId>com.magmaguy</groupId>
+            <artifactId>MagmaCore</artifactId>
+            <version>1.0-SNAPSHOT</version>
+            <scope>compile</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.magmaguy</groupId>
+            <artifactId>ResourcePackManager</artifactId>
+            <version>1.0.0</version>
+            <scope>provided</scope>
+        </dependency>
 
     </dependencies>
 
@@ -99,7 +128,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.3.0</version>
+                <version>3.6.0</version>
                 <configuration>
                     <relocations>
                         <relocation>
@@ -122,12 +151,13 @@
 
     <distributionManagement>
         <snapshotRepository>
-            <id>ossrh</id>
-            <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+            <id>magmaguy-repo-snapshots</id>
+            <url>https://repo.magmaguy.com/snapshots</url>
         </snapshotRepository>
         <repository>
-            <id>ossrh</id>
-            <url>https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+            <id>magmaguy-repo-snapshots</id>
+            <name>MagmaGuy's Repository</name>
+            <url>https://repo.magmaguy.com/releases</url>
         </repository>
     </distributionManagement>
 </project>

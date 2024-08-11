@@ -29,6 +29,11 @@ public class Animation {
                     break;
                 }
         });
+        modeledEntity.getSkeleton().getBones().forEach(bone -> {
+            if (!animationFrames.containsKey(bone)) {
+                animationFrames.put(bone, null);
+            }
+        });
     }
 
     public void resetCounter() {

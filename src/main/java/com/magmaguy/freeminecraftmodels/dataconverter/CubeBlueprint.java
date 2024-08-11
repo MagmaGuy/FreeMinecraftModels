@@ -1,7 +1,7 @@
 package com.magmaguy.freeminecraftmodels.dataconverter;
 
-import com.magmaguy.freeminecraftmodels.utils.Developer;
-import com.magmaguy.freeminecraftmodels.utils.Round;
+import com.magmaguy.magmacore.util.Logger;
+import com.magmaguy.magmacore.util.Round;
 import lombok.Getter;
 import lombok.Setter;
 import org.joml.Vector3f;
@@ -23,8 +23,11 @@ public class CubeBlueprint {
     @Getter
     @Setter
     private Vector3f boneOffset = new Vector3f();
+    //Fun bug, if a single face does not have a texture but the rest of the cube does it breaks Minecraft.
+    //Null means uninitialized. False means initialized with no texture. True means initialized with a texture.
+    private Boolean textureDataExists = null;
 
-    public CubeBlueprint(double projectResolution, Map<String, Object> cubeJSON) {
+    public CubeBlueprint(double projectResolution, Map<String, Object> cubeJSON, String modelName) {
         this.cubeJSON = cubeJSON;
         //Sanitize data from ModelEngine which is not used by Minecraft resource packs
         cubeJSON.remove("rescale");
@@ -38,12 +41,12 @@ public class CubeBlueprint {
         cubeJSON.remove("render_order");
         cubeJSON.remove("allow_mirror_modeling");
         //process face textures
-        processFace(projectResolution, (Map<String, Object>) cubeJSON.get("faces"), "north");
-        processFace(projectResolution, (Map<String, Object>) cubeJSON.get("faces"), "east");
-        processFace(projectResolution, (Map<String, Object>) cubeJSON.get("faces"), "south");
-        processFace(projectResolution, (Map<String, Object>) cubeJSON.get("faces"), "west");
-        processFace(projectResolution, (Map<String, Object>) cubeJSON.get("faces"), "up");
-        processFace(projectResolution, (Map<String, Object>) cubeJSON.get("faces"), "down");
+        processFace(projectResolution, (Map<String, Object>) cubeJSON.get("faces"), "north", modelName);
+        processFace(projectResolution, (Map<String, Object>) cubeJSON.get("faces"), "east", modelName);
+        processFace(projectResolution, (Map<String, Object>) cubeJSON.get("faces"), "south", modelName);
+        processFace(projectResolution, (Map<String, Object>) cubeJSON.get("faces"), "west", modelName);
+        processFace(projectResolution, (Map<String, Object>) cubeJSON.get("faces"), "up", modelName);
+        processFace(projectResolution, (Map<String, Object>) cubeJSON.get("faces"), "down", modelName);
 
         //The model is scaled up 4x to reach the maximum theoretical size for large models, thus needs to be scaled correctly here
         //Note that how much it is scaled relies on the scaling of the head slot, it's somewhat arbitrary and just
@@ -63,12 +66,20 @@ public class CubeBlueprint {
         validatedData = true;
     }
 
-    private void processFace(double projectResolution, Map<String, Object> map, String faceName) {
-        setTextureData(projectResolution, (Map<String, Object>) map.get(faceName));
+    private void processFace(double projectResolution, Map<String, Object> map, String faceName, String modelName) {
+        setTextureData(projectResolution, (Map<String, Object>) map.get(faceName), modelName);
     }
 
-    private void setTextureData(double projectResolution, Map<String, Object> map) {
-        if (map == null || map.get("texture") == null) return;
+    private void setTextureData(double projectResolution, Map<String, Object> map, String modelName) {
+        if (map == null || map.get("texture") == null) {
+            if (textureDataExists != null && textureDataExists)
+                Logger.warn("A cube in the model " + modelName + " has a face which does not have a texture while the rest of the cube has a texture. Minecraft does not allow this. Go through every cube in that model and make sure they all either have or do not have textures on all faces, but don't mix having and not having textures for the same cube. The model will appear with the debug black and purple cube texture until fixed.");
+            textureDataExists = false;
+            return;
+        }
+        if (textureDataExists != null && !textureDataExists)
+            Logger.warn("A cube in the model " + modelName + " has a face which does not have a texture while the rest of the cube has a texture. Minecraft does not allow this. Go through every cube in that model and make sure they all either have or do not have textures on all faces, but don't mix having and not having textures for the same cube. The model will appear with the debug black and purple cube texture until fixed.");
+        textureDataExists = true;
         Double textureDouble = (Double) map.get("texture");
         int textureValue = (int) Math.round(textureDouble);
         map.put("texture", "#" + textureValue);
@@ -116,7 +127,7 @@ public class CubeBlueprint {
                         case 0 -> axis = "x";
                         case 1 -> axis = "y";
                         case 2 -> axis = "z";
-                        default -> Developer.warn("Unexpected amount of rotation axes!");
+                        default -> Logger.warn("Unexpected amount of rotation axes!");
                     }
                 }
             }
