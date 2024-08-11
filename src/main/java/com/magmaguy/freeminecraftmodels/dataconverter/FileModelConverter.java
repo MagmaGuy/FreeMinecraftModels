@@ -2,7 +2,8 @@ package com.magmaguy.freeminecraftmodels.dataconverter;
 
 import com.google.gson.Gson;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
-import com.magmaguy.freeminecraftmodels.utils.Developer;
+import com.magmaguy.freeminecraftmodels.utils.StringToResourcePackFilename;
+import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import org.apache.commons.io.FileUtils;
 import org.bukkit.Bukkit;
@@ -51,7 +52,7 @@ public class FileModelConverter {
             return;
         }
 
-        modelName = modelName.toLowerCase();
+        modelName = StringToResourcePackFilename.convert(modelName);
 
         Gson gson = new Gson();
 
@@ -60,7 +61,7 @@ public class FileModelConverter {
         try {
             reader = Files.newBufferedReader(Paths.get(file.getPath()));
         } catch (Exception ex) {
-            Developer.warn("Failed to read file " + file.getAbsolutePath());
+            Logger.warn("Failed to read file " + file.getAbsolutePath());
             return;
         }
 
@@ -78,7 +79,7 @@ public class FileModelConverter {
         try {
             reader.close();
         } catch (Exception exception) {
-            Developer.warn("Failed to close reader for file!");
+            Logger.warn("Failed to close reader for file!");
             return;
         }
 
@@ -88,7 +89,7 @@ public class FileModelConverter {
         List<Map<?, ?>> texturesValues = (ArrayList<Map<?, ?>>) map.get("textures");
         for (int i = 0; i < texturesValues.size(); i++) {
             Map<?, ?> element = texturesValues.get(i);
-            String imageName = ((String) element.get("name")).toLowerCase();
+            String imageName = StringToResourcePackFilename.convert((String) element.get("name"));
             if (!imageName.contains(".png")) {
                 if (!imageName.contains(".")) imageName += ".png";
                 else imageName.split("\\.")[0] += ".png";
@@ -100,13 +101,12 @@ public class FileModelConverter {
             base64Image = base64Image.split(",")[base64Image.split(",").length - 1];
             if (!imageSize.containsKey(imageName)) try {
                 ByteArrayInputStream inputStream = new ByteArrayInputStream(Base64Coder.decodeLines(base64Image));
-                File imageFile = new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar + "output" + File.separatorChar + "FreeMinecraftModels" + File.separatorChar + "assets" + File.separatorChar + "freeminecraftmodels" + File.separatorChar + "textures" + File.separatorChar + "entity" + File.separatorChar + imageName);
+                File imageFile = new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar + "output" + File.separatorChar + "FreeMinecraftModels" + File.separatorChar + "assets" + File.separatorChar + "freeminecraftmodels" + File.separatorChar + "textures" + File.separatorChar + "entity" + File.separatorChar + modelName + File.separatorChar + imageName);
                 FileUtils.writeByteArrayToFile(imageFile, inputStream.readAllBytes());
                 BufferedImage bufferedImage = ImageIO.read(imageFile);
                 imageSize.put(imageName, bufferedImage.getWidth());
             } catch (Exception ex) {
-                Developer.warn("Failed to convert image " + imageName + " to its corresponding image file!");
-                continue;
+                Logger.warn("Failed to convert image " + imageName + " to its corresponding image file!");
             }
         }
 
@@ -147,7 +147,7 @@ public class FileModelConverter {
         Map<String, Map<String, Object>> texturesMap = new HashMap<>();
         Map<String, Object> textureContents = new HashMap<>();
         for (Integer key : textures.keySet())
-            textureContents.put("" + key, "freeminecraftmodels:entity/" + textures.get(key));
+            textureContents.put("" + key, "freeminecraftmodels:entity/" + modelName + "/" + textures.get(key));
         texturesMap.put("textures", textureContents);
         return texturesMap;
     }

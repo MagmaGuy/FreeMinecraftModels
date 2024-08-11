@@ -14,10 +14,12 @@ import org.bukkit.World;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.TextDisplay;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class ModeledEntity implements ModeledEntityInterface {
@@ -37,6 +39,8 @@ public class ModeledEntity implements ModeledEntityInterface {
     private Location lastSeenLocation;
     @Getter
     private Skeleton skeleton;
+    @Getter
+    private List<TextDisplay> nametags = new ArrayList<>();
 
     public ModeledEntity(String entityID, Location spawnLocation) {
         this.entityID = entityID;
@@ -191,5 +195,9 @@ public class ModeledEntity implements ModeledEntityInterface {
                     Location location = new Location(getWorld(), newX, newY, newZ);
                     location.getWorld().spawnParticle(Particle.FLAME, location, 1, 0, 0, 0, 0);
                 }
+    }
+
+    public void teleport(Location location) {
+        skeleton.teleport(location);
     }
 }

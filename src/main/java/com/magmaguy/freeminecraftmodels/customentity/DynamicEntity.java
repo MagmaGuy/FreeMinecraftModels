@@ -7,12 +7,13 @@ import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityInterface
 import com.magmaguy.freeminecraftmodels.customentity.core.RegisterModelEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import lombok.Getter;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.BoundingBox;
@@ -27,6 +28,20 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     @Getter
     private final String name = "default";
     private BukkitTask skeletonSync = null;
+
+    private static NamespacedKey namespacedKey = new NamespacedKey(MetadataHandler.PLUGIN, "DynamicEntity");
+
+    public static boolean isDynamicEntity(LivingEntity livingEntity) {
+        if (livingEntity == null) return false;
+        return livingEntity.getPersistentDataContainer().has(namespacedKey, PersistentDataType.BYTE);
+    }
+
+    public static DynamicEntity getDynamicEntity(LivingEntity livingEntity) {
+        for (DynamicEntity dynamicEntity : dynamicEntities)
+            if (dynamicEntity.getLivingEntity().equals(livingEntity))
+                return dynamicEntity;
+        return null;
+    }
 
     //Coming soon
     public DynamicEntity(String entityID, Location targetLocation) {
@@ -46,9 +61,14 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         if (fileModelConverter == null) return null;
         DynamicEntity dynamicEntity = new DynamicEntity(entityID, livingEntity.getLocation());
         dynamicEntity.spawn(livingEntity);
-//        livingEntity.setVisibleByDefault(false);
-        livingEntity.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, Integer.MAX_VALUE, 0));
+        livingEntity.setVisibleByDefault(false);
+        Bukkit.getOnlinePlayers().forEach(player -> {
+            if (player.getLocation().getWorld().equals(dynamicEntity.getLocation().getWorld())) {
+                player.hideEntity(MetadataHandler.PLUGIN, livingEntity);
+            }
+        });
 
+        livingEntity.getPersistentDataContainer().set(namespacedKey, PersistentDataType.BYTE, (byte) 0);
         return dynamicEntity;
     }
 
@@ -69,7 +89,12 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
                     cancel();
                     return;
                 }
-                getSkeleton().setCurrentLocation(livingEntity.getLocation());
+                Location entityLocation = livingEntity.getLocation();
+                entityLocation.setYaw(NMSManager.getAdapter().getBodyRotation(livingEntity));
+                getSkeleton().setCurrentLocation(entityLocation);
+                getSkeleton().setCurrentHeadPitch(livingEntity.getEyeLocation().getPitch());
+                getSkeleton().setCurrentHeadYaw(livingEntity.getEyeLocation().getYaw());
+
             }
         }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
     }
@@ -83,8 +108,8 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     }
 
     private void setHitbox() {
-        if (getSkeletonBlueprint().getHitbox() != null)
-            NMSManager.getAdapter().setCustomHitbox(super.livingEntity, (float) getSkeletonBlueprint().getHitbox().getWidth(), (float) getSkeletonBlueprint().getHitbox().getHeight(), true);
+        if (getSkeletonBlueprint().getHitbox() == null) return;
+        NMSManager.getAdapter().setCustomHitbox(super.livingEntity, (float) getSkeletonBlueprint().getHitbox().getWidth(), (float) getSkeletonBlueprint().getHitbox().getHeight(), true);
     }
 
     @Override
