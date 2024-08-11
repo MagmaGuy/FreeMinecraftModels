@@ -14,7 +14,7 @@ public class SkeletonBlueprint {
     @Getter
     private final List<BoneBlueprint> mainModel = new ArrayList<>();
     @Getter
-    private final String modelName;
+    private String modelName;
     @Getter
     private HitboxBlueprint hitbox;
 
@@ -25,13 +25,22 @@ public class SkeletonBlueprint {
                              String modelName,
                              String pathName) {
         this.modelName = modelName;
+
+        //Create a root bone for everything
+        BoneBlueprint rootBone = new BoneBlueprint(modelName, null, this);
+        List<BoneBlueprint> rootChildren = new ArrayList<>();
+
         for (int i = 0; i < outlinerJSON.size(); i++) {
             if (!(outlinerJSON.get(i) instanceof Map<?, ?>)) continue;
             Map<String, Object> bone = (Map<String, Object>) outlinerJSON.get(i);
             if (((String) bone.get("name")).equalsIgnoreCase("hitbox"))
                 hitbox = new HitboxBlueprint(bone, values, modelName, null);
-            else
-                mainModel.add(new BoneBlueprint(projectResolution, bone, values, textureReferences, modelName, null, this));
+            else {
+                rootChildren.add(new BoneBlueprint(projectResolution, bone, values, textureReferences, modelName, rootBone, this));
+            }
         }
+
+        rootBone.setBoneBlueprintChildren(rootChildren);
+        mainModel.add(rootBone);
     }
 }

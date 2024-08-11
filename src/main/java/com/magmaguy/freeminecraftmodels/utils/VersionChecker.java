@@ -1,6 +1,8 @@
 package com.magmaguy.freeminecraftmodels.utils;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.magmacore.util.ChatColorConverter;
+import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -114,7 +116,7 @@ public class VersionChecker {
                 public void run() {
                     if (!event.getPlayer().isOnline()) return;
                     if (!pluginIsUpToDate)
-                        event.getPlayer().sendMessage(ChatColorConverter.convert("&a[FreeMinecraftModels] &cYour version of FreeMinecraftModels is outdated." +
+                        Logger.sendMessage(event.getPlayer(), ChatColorConverter.convert("&a[FreeMinecraftModels] &cYour version of FreeMinecraftModels is outdated." +
                                 " &aYou can download the latest version from &3&n&ohttps://www.spigotmc.org/resources/free-minecraft-models.111660/"));
                 }
             }.runTaskLater(MetadataHandler.PLUGIN, 20L * 3);

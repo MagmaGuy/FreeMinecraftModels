@@ -3,7 +3,6 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.thirdparty.Floodgate;
-import com.magmaguy.freeminecraftmodels.utils.Developer;
 import com.magmaguy.freeminecraftmodels.utils.VersionChecker;
 import lombok.Getter;
 import org.bukkit.Color;
@@ -58,11 +57,6 @@ public class Bone {
     }
 
     public void generateDisplay() {
-        if (getBoneBlueprint().getOriginalModelName().equals("cube")) {
-            Developer.warn(getBoneBlueprint().getBoneName() + " pivot " + getBoneBlueprint().getBlueprintModelPivot().toString());
-        }
-
-
         boneTransforms.generateDisplay();
         boneChildren.forEach(Bone::generateDisplay);
     }
@@ -103,10 +97,11 @@ public class Bone {
             boneTransforms.getPacketArmorStandEntity().sendLocationAndRotationPacket(
                     boneTransforms.getArmorStandTargetLocation(),
                     boneTransforms.getArmorStandEntityRotation());
-        if (boneTransforms.getPacketDisplayEntity() != null)
+        if (boneTransforms.getPacketDisplayEntity() != null) {
             boneTransforms.getPacketDisplayEntity().sendLocationAndRotationPacket(
                     boneTransforms.getDisplayEntityTargetLocation(),
                     boneTransforms.getDisplayEntityRotation());
+        }
     }
 
     public void displayTo(Player player) {
@@ -131,5 +126,27 @@ public class Bone {
             boneTransforms.getPacketArmorStandEntity().setHorseLeatherArmorColor(color);
         if (boneTransforms.getPacketDisplayEntity() != null)
             boneTransforms.getPacketDisplayEntity().setHorseLeatherArmorColor(color);
+    }
+
+    public void teleport() {
+        boneTransforms.transform();
+        boneChildren.forEach(Bone::transform);
+        sendTeleportPacket();
+        boneChildren.forEach(Bone::teleport);
+    }
+
+    private void sendTeleportPacket() {
+        counter++;
+        int reset = 20 * 60 * 2;
+        if (counter > reset) {
+            counter = 0;
+            skeleton.getSkeletonWatchers().reset();
+        }
+        if (boneTransforms.getPacketArmorStandEntity() != null) {
+            boneTransforms.getPacketArmorStandEntity().teleport(boneTransforms.getArmorStandTargetLocation());
+        }
+        if (boneTransforms.getPacketDisplayEntity() != null) {
+            boneTransforms.getPacketDisplayEntity().teleport(boneTransforms.getDisplayEntityTargetLocation());
+        }
     }
 }

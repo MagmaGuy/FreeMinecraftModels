@@ -120,22 +120,27 @@ Maven:
 ```xml
 
 <repository>
-    <id>ossrh-public</id>
-    <url>https://s01.oss.sonatype.org/content/groups/snapshots/</url>
+    <id>magmaguy-repo-releases</id>
+    <name>MagmaGuy's Repository</name>
+    <url>https://repo.magmaguy.com/releases</url>
 </repository>
 
 <dependency>
 <groupId>com.magmaguy</groupId>
 <artifactId>FreeMinecraftModels</artifactId>
-<version>VERSION.HERE-SNAPSHOT</version>
-<scope>provided</scope>
+<version>1.4.1</version>
 </dependency>
 ```
 
 Gradle:
 
 ```kotlin
-compileOnly group : 'com.magmaguy', name: 'FreeMinecraftModels', version: 'VERSION.HERE-SNAPSHOT'
+maven {
+    name = "magmaguyRepoReleases"
+    url = uri("https://repo.magmaguy.com/releases")
+}
+
+compileOnly group : 'com.magmaguy', name: 'FreeMinecraftModels', version: '1.4.1'
 ```
 
 *Note FreeMinecraftModels is mean to be used as an API, and will require installation of the plugin on the server. Do

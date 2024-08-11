@@ -1,7 +1,7 @@
 package com.magmaguy.freeminecraftmodels.dataconverter;
 
-import com.magmaguy.freeminecraftmodels.utils.Developer;
 import com.magmaguy.freeminecraftmodels.utils.LoopType;
+import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 
 import java.util.*;
@@ -24,7 +24,7 @@ public class AnimationBlueprint {
         try {
             animationData = (Map<String, Object>) data;
         } catch (Exception e) {
-            Developer.warn("Failed to get animation data! Model format is not as expected, this version of BlockBench is not compatible with FreeMinecraftModels!");
+            Logger.warn("Failed to get animation data! Model format is not as expected, this version of BlockBench is not compatible with FreeMinecraftModels!");
             e.printStackTrace();
             return;
         }
@@ -40,7 +40,7 @@ public class AnimationBlueprint {
         try {
             interpolateKeyframes();
         } catch (Exception e) {
-            Developer.warn("Failed to interpolate animations for model " + modelName + "! Animation name: " + animationName);
+            Logger.warn("Failed to interpolate animations for model " + modelName + "! Animation name: " + animationName);
             e.printStackTrace();
         }
     }
@@ -62,11 +62,11 @@ public class AnimationBlueprint {
         //hitboxes do not get animated!
         if (boneName.equalsIgnoreCase("hitbox")) return;
         if (boneBlueprint == null) {
-            Developer.warn("Failed to get bone " + boneName + " from model " + modelName + "!");
+            Logger.warn("Failed to get bone " + boneName + " from model " + modelName + "!");
             return;
         }
         List<Keyframe> keyframes = new ArrayList<>();
-        for (Object keyframeData : ((List) animationData.get("keyframes"))) {
+        for (Object keyframeData : (List) animationData.get("keyframes")) {
             keyframes.add(new Keyframe(keyframeData, modelName, animationName));
         }
         keyframes.sort(Comparator.comparingInt(Keyframe::getTimeInTicks));
@@ -118,7 +118,7 @@ public class AnimationBlueprint {
             int durationBetweenKeyframes = Math.min(animationFrame.getTimeInTicks(), duration) - previousFrame.getTimeInTicks();
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                animationFramesArray[currentFrame].xRotation = -lerp(previousFrame.getDataX(), animationFrame.getDataX(), j / (float) durationBetweenKeyframes);
+                animationFramesArray[currentFrame].xRotation = lerp(previousFrame.getDataX(), animationFrame.getDataX(), j / (float) durationBetweenKeyframes);
                 animationFramesArray[currentFrame].yRotation = -lerp(previousFrame.getDataY(), animationFrame.getDataY(), j / (float) durationBetweenKeyframes);
                 animationFramesArray[currentFrame].zRotation = lerp(previousFrame.getDataZ(), animationFrame.getDataZ(), j / (float) durationBetweenKeyframes);
             }
@@ -130,7 +130,7 @@ public class AnimationBlueprint {
             int durationBetweenKeyframes = duration - lastFrame.getTimeInTicks();
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                animationFramesArray[currentFrame].xRotation = -lastFrame.getDataX();
+                animationFramesArray[currentFrame].xRotation = lastFrame.getDataX();
                 animationFramesArray[currentFrame].yRotation = -lastFrame.getDataY();
                 animationFramesArray[currentFrame].zRotation = lastFrame.getDataZ();
             }

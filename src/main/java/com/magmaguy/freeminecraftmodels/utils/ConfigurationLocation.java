@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.utils;
 
+import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -53,7 +54,7 @@ public class ConfigurationLocation {
                         !slicedString[0].equalsIgnoreCase("same_as_boss") &&
                         !notLoadedWorldNames.contains(slicedString[0]) && !silent) {
 //                    if (!notLoadedWorldNames.isEmpty())
-//                        Developer.warn(("Some NPCs/bosses don't have their world installed! If you need help setting things up, you can go to " + DiscordLinks.mainLink + " !");
+//                        Logger.warn(("Some NPCs/bosses don't have their world installed! If you need help setting things up, you can go to " + DiscordLinks.mainLink + " !");
 //                    new InfoMessage("World " + slicedString[0] + " is not yet loaded! Entities that should spawn there have been queued.");
                     notLoadedWorldNames.add(slicedString[0]);
                 }
@@ -77,9 +78,9 @@ public class ConfigurationLocation {
         } catch (Exception ex) {
             if (locationString.equals("null"))
                 return null;
-            Developer.warn("Attempted to deserialize an invalid location!");
-            Developer.warn("Expected location format: worldname,x,y,z,pitch,yaw");
-            Developer.warn("Actual location format: " + locationString);
+            Logger.warn("Attempted to deserialize an invalid location!");
+            Logger.warn("Expected location format: worldname,x,y,z,pitch,yaw");
+            Logger.warn("Actual location format: " + locationString);
             return null;
         }
         return new Location(world, x, y, z, yaw, pitch);
