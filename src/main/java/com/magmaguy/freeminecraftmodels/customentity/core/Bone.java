@@ -97,10 +97,11 @@ public class Bone {
             boneTransforms.getPacketArmorStandEntity().sendLocationAndRotationPacket(
                     boneTransforms.getArmorStandTargetLocation(),
                     boneTransforms.getArmorStandEntityRotation());
-        if (boneTransforms.getPacketDisplayEntity() != null)
+        if (boneTransforms.getPacketDisplayEntity() != null) {
             boneTransforms.getPacketDisplayEntity().sendLocationAndRotationPacket(
                     boneTransforms.getDisplayEntityTargetLocation(),
                     boneTransforms.getDisplayEntityRotation());
+        }
     }
 
     public void displayTo(Player player) {
@@ -125,5 +126,27 @@ public class Bone {
             boneTransforms.getPacketArmorStandEntity().setHorseLeatherArmorColor(color);
         if (boneTransforms.getPacketDisplayEntity() != null)
             boneTransforms.getPacketDisplayEntity().setHorseLeatherArmorColor(color);
+    }
+
+    public void teleport() {
+        boneTransforms.transform();
+        boneChildren.forEach(Bone::transform);
+        sendTeleportPacket();
+        boneChildren.forEach(Bone::teleport);
+    }
+
+    private void sendTeleportPacket() {
+        counter++;
+        int reset = 20 * 60 * 2;
+        if (counter > reset) {
+            counter = 0;
+            skeleton.getSkeletonWatchers().reset();
+        }
+        if (boneTransforms.getPacketArmorStandEntity() != null) {
+            boneTransforms.getPacketArmorStandEntity().teleport(boneTransforms.getArmorStandTargetLocation());
+        }
+        if (boneTransforms.getPacketDisplayEntity() != null) {
+            boneTransforms.getPacketDisplayEntity().teleport(boneTransforms.getDisplayEntityTargetLocation());
+        }
     }
 }

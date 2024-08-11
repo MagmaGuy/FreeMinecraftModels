@@ -35,8 +35,7 @@ public class TransformationMatrix {
     }
 
     public void translate(Vector3f vector) {
-        translate((float) vector.get(0), (float) vector.get(1), (float) vector.get(2));
-//        replacementMatrix.translate(vector.mul(1/2));
+        translate(vector.get(0), vector.get(1), vector.get(2));
     }
 
     public void translate(float x, float y, float z) {
@@ -64,30 +63,15 @@ public class TransformationMatrix {
         rotateZ(z);
         rotateY(y);
         rotateX(x);
-//        replacementMatrix.rotateZYX(new Vector3f(x, y, z));
-//        Quaternionf rotation = new Quaternionf();
-//        rotation.rotateZYX(z, y, x);
-//        replacementMatrix.rotat(rotation);
         replacementMatrix.rotateLocalZ(z);
         replacementMatrix.rotateLocalY(y);
         replacementMatrix.rotateLocalX(x);
-//        replacementMatrix.rotateZYX(z,y,x);
-//        replacementMatrix.rotate(new Quaternionf().rotateXYZ(x,y,z));
-//        replacementMatrix.rotateLocal(new Quaternionf().rotateXYZ(x,y,z));
-//        replacementMatrix.rotateLocal(new Quaternionf().rotateYXZ(y,x,z));
-//        replacementMatrix.rotateLocal(new Quaternionf().rotateZYX(z,y,x));
-
     }
 
     public void rotateAnimation(float x, float y, float z) {
         rotateZ(z);
         rotateY(y);
         rotateX(x);
-//        replacementMatrix.rotateZYX(new Vector3f(z, y, x));
-//        replacementMatrix.rotate(new Quaternionf().rotateXYZ(x,y,z));
-//        replacementMatrix.rotateLocal(new Quaternionf().rotateXYZ(x,y,z));
-//        replacementMatrix.rotateLocal(new Quaternionf().rotateYXZ(y,x,z));
-//        replacementMatrix.rotateLocal(new Quaternionf().rotateZYX(z,y,x));
         replacementMatrix.rotateLocalZ(z);
         replacementMatrix.rotateLocalY(y);
         replacementMatrix.rotateLocalX(x);
@@ -131,7 +115,6 @@ public class TransformationMatrix {
     }
 
     private void multiplyWith(TransformationMatrix other) {
-//        replacementMatrix.mul(other.replacementMatrix);
         float[][] result = new float[4][4];
         for (int i = 0; i < 4; i++) {
             for (int j = 0; j < 4; j++) {
@@ -149,10 +132,6 @@ public class TransformationMatrix {
      * @return [x, y, z]
      */
     public float[] getTranslation() {
-//        Vector3f vector3f = replacementMatrix.getTranslation(new Vector3f());
-//        Logger.warn("later " + replacementMatrix.getTranslation(new Vector3f()).toString());
-//        Logger.warn("pos " + vector3f.toString());
-//        return new float[]{vector3f.get(0), vector3f.get(1), vector3f.get(2)};
         // Extract translation components directly from the matrix
         return new float[]{matrix[0][3], matrix[1][3], matrix[2][3]};
     }
@@ -163,9 +142,6 @@ public class TransformationMatrix {
      * @return [x, y, z]
      */
     public float[] getRotation() {
-//        Vector3f rotationXYZ = replacementMatrix.getEulerAnglesXYZ(new Vector3f());
-//        return  new float[]{rotationXYZ.get(0), rotationXYZ.get(1), rotationXYZ.get(2)};
-
         // Assuming the rotation matrix is "pure" (no scaling) and follows XYZ order
         float[] rotation = new float[3];
 
@@ -188,129 +164,34 @@ public class TransformationMatrix {
         return rotation; // Returns rotations in radians
     }
 
+    public void resetRotation() {
+        // Create a new identity matrix to reset rotation
+        float[][] identityRotation = {
+                {1, 0, 0, 0},
+                {0, 1, 0, 0},
+                {0, 0, 1, 0},
+                {0, 0, 0, 1}
+        };
 
-//        /**
-//     * Extracts a rotation in radians using the ZYX convention
-//     *
-//     * @return [x, y, z]
-//     */
-//    public float[] getRotation() {
-//        // Assuming the rotation matrix is "pure" (no scaling) and follows ZYX order
-//        float[] rotation = new float[3];
-//        // Yaw (rotation around Z axis)
-//        rotation[2] = (float) Math.atan2(-matrix[0][1], matrix[0][0]);
-//        // Check the special case where cos(yaw) is close to 0
-//        if (Math.abs(matrix[0][1]) < 1e-6 && Math.abs(matrix[0][0]) < 1e-6) {
-//            // Pitch (rotation around Y axis)
-//            rotation[1] = (float) Math.atan2(matrix[0][2], matrix[1][2]);
-//            // Roll (rotation around X axis) is indeterminate: set to 0 or use previous value
-//            rotation[0] = 0;
-//        } else {
-//            // Pitch (rotation around Y axis)
-//            rotation[1] = (float) Math.atan2(-matrix[1][2], matrix[2][2]);
-//            // Roll (rotation around X axis)
-//            rotation[0] = (float) Math.atan2(-matrix[2][1], matrix[1][1]);
-//        }
-//        return rotation; // Returns rotations in radians
-//    }
+        // Keep the translation values intact
+        identityRotation[0][3] = matrix[0][3];
+        identityRotation[1][3] = matrix[1][3];
+        identityRotation[2][3] = matrix[2][3];
 
-//        /**
-//     * Extracts a rotation in radians using the ZXY convention
-//     *
-//     * @return [x, y, z]
-//     */
-//    public float[] getRotation() {
-//        // Assuming the rotation matrix is "pure" (no scaling) and follows ZXY order
-//        float[] rotation = new float[3];
-//        // Yaw (rotation around Z axis)
-//        rotation[2] = (float) Math.atan2(matrix[1][0], matrix[0][0]);
-//
-//        // Check the special case where cos(yaw) is close to 0
-//        if (Math.abs(matrix[1][0]) < 1e-6 && Math.abs(matrix[0][0]) < 1e-6) {
-//            // Pitch (rotation around Y axis)
-//            rotation[1] = (float) Math.atan2(-matrix[2][0], matrix[1][1]);
-//            // Roll (rotation around X axis) is indeterminate: set to 0 or use previous value
-//            rotation[0] = 0;
-//        } else {
-//            // Roll (rotation around X axis)
-//            rotation[0] = (float) Math.atan2(matrix[2][1], matrix[2][2]);
-//            // Pitch (rotation around Y axis)
-//            rotation[1] = (float) Math.atan2(matrix[1][2], matrix[1][1]);
-//        }
-//        return rotation; // Returns rotations in radians
-//    }
+        // Replace the current matrix's rotation part with the identity matrix
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                matrix[i][j] = identityRotation[i][j];
+            }
+        }
 
-//        /**
-//     * Extracts a rotation in radians using the XZY convention
-//     *
-//     * @return [x, y, z]
-//     */
-//    public float[] getRotation() {
-//        // Assuming the rotation matrix is "pure" (no scaling) and follows XZY order
-//        float[] rotation = new float[3];
-//        // Roll (rotation around X axis)
-//        rotation[0] = (float) Math.atan2(-matrix[1][2], matrix[2][2]);
-//        // As a special case, if cos(roll) is close to 0, use an alternative calculation
-//        if (Math.abs(matrix[1][2]) < 1e-6 && Math.abs(matrix[2][2]) < 1e-6) {
-//            // Yaw (rotation around Z axis)
-//            rotation[2] = (float) Math.atan2(-matrix[0][1], matrix[0][0]);
-//            // Pitch (rotation around Y axis) is indeterminate: set to 0 or use previous value
-//            rotation[1] = 0;
-//        } else {
-//            // Yaw (rotation around Z axis)
-//            rotation[2] = (float) Math.atan2(matrix[0][1], matrix[1][1]);
-//            // Pitch (rotation around Y axis)
-//            rotation[1] = (float) Math.atan2(-matrix[2][0], matrix[0][0]);
-//        }
-//        return rotation; // Returns rotations in radians
-//    }
-//
-//    public void changeBasis(Vector newBasisX, Vector newBasisY, Vector newBasisZ) {
-//        TransformationMatrix basisChangeMatrix = new TransformationMatrix();
-//        // Set the matrix columns to the new basis vectors
-//        basisChangeMatrix.matrix[0][0] = (float) newBasisX.getX();
-//        basisChangeMatrix.matrix[1][0] = (float) newBasisX.getY();
-//        basisChangeMatrix.matrix[2][0] = (float) newBasisX.getZ();
-//
-//        basisChangeMatrix.matrix[0][1] = (float) newBasisY.getX();
-//        basisChangeMatrix.matrix[1][1] = (float) newBasisY.getY();
-//        basisChangeMatrix.matrix[2][1] = (float) newBasisY.getZ();
-//
-//        basisChangeMatrix.matrix[0][2] = (float) newBasisZ.getX();
-//        basisChangeMatrix.matrix[1][2] = (float) newBasisZ.getY();
-//        basisChangeMatrix.matrix[2][2] = (float) newBasisZ.getZ();
-//
-//        // Since this matrix transforms from the new basis to the original, to change the basis of this matrix,
-//        // we multiply it with the basisChangeMatrix.
-//        multiplyWith(basisChangeMatrix);
-//    }
-//
-//    public TransformationMatrix changeTo180DegYBasis() {
-//        Vector newX = new Vector(-1, 0, 0); // New X-axis after 180 rotation around Y
-//        Vector newY = new Vector(0, 1, 0);  // Y-axis remains unchanged
-//        Vector newZ = new Vector(0, 0, -1); // New Z-axis after 180 rotation around Y
-//
-//        changeBasis(newX, newY, newZ);
-//
-//        return this;
-//    }
-//
-//    public void flipX() {
-//        TransformationMatrix flipMatrix = new TransformationMatrix();
-//        flipMatrix.matrix[0][0] = -1;
-//        multiplyWith(flipMatrix);
-//    }
-//
-//    public void flipY() {
-//        TransformationMatrix flipMatrix = new TransformationMatrix();
-//        flipMatrix.matrix[1][1] = -1;
-//        multiplyWith(flipMatrix);
-//    }
-//
-//    public void flipZ() {
-//        TransformationMatrix flipMatrix = new TransformationMatrix();
-//        flipMatrix.matrix[2][2] = -1;
-//        multiplyWith(flipMatrix);
-//    }
+        // Reset the rotation part of replacementMatrix using the JOML library
+        replacementMatrix.m00(1).m01(0).m02(0);
+        replacementMatrix.m10(0).m11(1).m12(0);
+        replacementMatrix.m20(0).m21(0).m22(1);
+
+        // The translation part remains unchanged in replacementMatrix
+    }
+
 
 }

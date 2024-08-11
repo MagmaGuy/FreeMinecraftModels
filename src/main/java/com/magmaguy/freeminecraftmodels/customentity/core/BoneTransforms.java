@@ -36,6 +36,12 @@ public class BoneTransforms {
     public void updateGlobalTransform() {
         if (parent != null) {
             TransformationMatrix.multiplyMatrices(parent.getBoneTransforms().globalMatrix, localMatrix, globalMatrix);
+            if (bone.getBoneBlueprint().isHead()) {
+                globalMatrix.resetRotation();
+                float yaw = -bone.getSkeleton().getCurrentHeadYaw() + 180;
+                globalMatrix.rotateY((float) Math.toRadians(yaw));
+                globalMatrix.rotateX(-(float) Math.toRadians(bone.getSkeleton().getCurrentHeadPitch()));
+            }
         } else {
             globalMatrix = localMatrix;
         }
@@ -139,7 +145,6 @@ public class BoneTransforms {
     }
 
     protected Location getDisplayEntityTargetLocation() {
-//        float[] translatedGlobalMatrix = globalMatrix.applyTransformation(new float[]{0, 0, 0, 1});
         float[] translatedGlobalMatrix = globalMatrix.getTranslation();
         Location armorStandLocation;
         if (!VersionChecker.serverVersionOlderThan(20, 0)) {
