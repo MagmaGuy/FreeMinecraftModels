@@ -53,7 +53,6 @@ public class ModeledEntity implements ModeledEntityInterface {
         skeleton = new Skeleton(skeletonBlueprint);
         if (fileModelConverter.getAnimationsBlueprint() != null)
             animationManager = new AnimationManager(this, fileModelConverter.getAnimationsBlueprint());
-
     }
 
     private static boolean isNameTag(ArmorStand armorStand) {
@@ -196,5 +195,9 @@ public class ModeledEntity implements ModeledEntityInterface {
                     Location location = new Location(getWorld(), newX, newY, newZ);
                     location.getWorld().spawnParticle(Particle.FLAME, location, 1, 0, 0, 0, 0);
                 }
+    }
+
+    public void teleport(Location location) {
+        skeleton.teleport(location);
     }
 }

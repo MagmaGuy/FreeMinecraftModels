@@ -36,6 +36,13 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         return livingEntity.getPersistentDataContainer().has(namespacedKey, PersistentDataType.BYTE);
     }
 
+    public static DynamicEntity getDynamicEntity(LivingEntity livingEntity) {
+        for (DynamicEntity dynamicEntity : dynamicEntities)
+            if (dynamicEntity.getLivingEntity().equals(livingEntity))
+                return dynamicEntity;
+        return null;
+    }
+
     //Coming soon
     public DynamicEntity(String entityID, Location targetLocation) {
         super(entityID, targetLocation);
@@ -82,7 +89,12 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
                     cancel();
                     return;
                 }
-                getSkeleton().setCurrentLocation(livingEntity.getLocation());
+                Location entityLocation = livingEntity.getLocation();
+                entityLocation.setYaw(NMSManager.getAdapter().getBodyRotation(livingEntity));
+                getSkeleton().setCurrentLocation(entityLocation);
+                getSkeleton().setCurrentHeadPitch(livingEntity.getEyeLocation().getPitch());
+                getSkeleton().setCurrentHeadYaw(livingEntity.getEyeLocation().getYaw());
+
             }
         }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
     }
