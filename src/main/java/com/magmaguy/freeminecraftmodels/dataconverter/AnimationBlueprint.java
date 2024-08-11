@@ -66,7 +66,7 @@ public class AnimationBlueprint {
             return;
         }
         List<Keyframe> keyframes = new ArrayList<>();
-        for (Object keyframeData : ((List) animationData.get("keyframes"))) {
+        for (Object keyframeData : (List) animationData.get("keyframes")) {
             keyframes.add(new Keyframe(keyframeData, modelName, animationName));
         }
         keyframes.sort(Comparator.comparingInt(Keyframe::getTimeInTicks));

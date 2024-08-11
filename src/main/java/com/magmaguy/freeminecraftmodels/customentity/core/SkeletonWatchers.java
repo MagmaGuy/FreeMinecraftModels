@@ -29,7 +29,6 @@ public class SkeletonWatchers implements Listener {
             @Override
             public void run() {
                 updateWatcherList();
-                // sendPackets(); moved to the bone
             }
         }.runTaskTimerAsynchronously(MetadataHandler.PLUGIN, 0, 1);
     }

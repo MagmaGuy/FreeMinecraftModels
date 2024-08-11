@@ -106,13 +106,16 @@ public class AnimationManager {
         }
     }
 
+    private BukkitTask graceResetTask = null;
+
     public boolean playAnimation(String animationName, boolean blendAnimation) {
         Animation animation = animations.getAnimations().get(animationName);
         if (animation == null) return false;
+        if (graceResetTask != null) graceResetTask.cancel();
         if (!blendAnimation) {
             states.clear();
             animationGracePeriod = true;
-            new BukkitRunnable() {
+            graceResetTask = new BukkitRunnable() {
                 @Override
                 public void run() {
                     animationGracePeriod = false;
@@ -134,16 +137,26 @@ public class AnimationManager {
         }
         int adjustedAnimationPosition = getAdjustedAnimationPosition(animation);
         //Handle rotations
-        animation.getAnimationFrames().forEach((key, value) -> key.updateAnimationRotation(
-                value[adjustedAnimationPosition].xRotation,
-                value[adjustedAnimationPosition].yRotation,
-                value[adjustedAnimationPosition].zRotation));
+        animation.getAnimationFrames().forEach((key, value) -> {
+            if (value == null)
+                key.updateAnimationRotation(0, 0, 0);
+            else
+                key.updateAnimationRotation(
+                        value[adjustedAnimationPosition].xRotation,
+                        value[adjustedAnimationPosition].yRotation,
+                        value[adjustedAnimationPosition].zRotation);
+        });
 
         //Handle translations
-        animation.getAnimationFrames().forEach((key, value) -> key.updateAnimationTranslation(
-                value[adjustedAnimationPosition].xPosition,
-                value[adjustedAnimationPosition].yPosition,
-                value[adjustedAnimationPosition].zPosition));
+        animation.getAnimationFrames().forEach((key, value) -> {
+            if (value == null)
+                key.updateAnimationTranslation(0, 0, 0);
+            else
+                key.updateAnimationTranslation(
+                        value[adjustedAnimationPosition].xPosition,
+                        value[adjustedAnimationPosition].yPosition,
+                        value[adjustedAnimationPosition].zPosition);
+        });
 
         animation.incrementCounter();
     }
