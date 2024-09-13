@@ -8,6 +8,11 @@ authors: [ MagmaGuy ]
 description: Welcome to the new age of custom Minecraft models.
 website: magmaguy.com
 
+libraries:
+  - commons-io:commons-io:2.16.1
+  - org.bstats:bstats-bukkit:3.0.3
+  - com.google.code.gson:gson:2.11.0
+
 commands:
   freeminecraftmodels:
     aliases:
