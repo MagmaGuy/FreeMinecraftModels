@@ -133,7 +133,15 @@
                     <relocations>
                         <relocation>
                             <pattern>org.bstats</pattern>
-                            <shadedPattern>com.magmaguy.freeminecraftmodels</shadedPattern>
+                            <shadedPattern>com.magmaguy.freeminecraftmodels.bstats</shadedPattern>
+                        </relocation>
+                        <relocation>
+                            <pattern>com.magmaguy.magmacore</pattern>
+                            <shadedPattern>com.magmaguy.freeminecraftmodels.magmacore</shadedPattern>
+                        </relocation>
+                        <relocation>
+                            <pattern>com.magmaguy.easyminecraftgoals</pattern>
+                            <shadedPattern>com.magmaguy.freeminecraftmodels.easyminecraftgoals</shadedPattern>
                         </relocation>
                     </relocations>
                 </configuration>

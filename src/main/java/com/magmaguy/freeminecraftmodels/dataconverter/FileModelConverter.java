@@ -99,12 +99,12 @@ public class FileModelConverter {
             Integer id = i;
             textures.put(id, imageName.replace(".png", ""));
             base64Image = base64Image.split(",")[base64Image.split(",").length - 1];
-            if (!imageSize.containsKey(imageName)) try {
+            if (!imageSize.containsKey(modelName + "/" + imageName)) try {
                 ByteArrayInputStream inputStream = new ByteArrayInputStream(Base64Coder.decodeLines(base64Image));
                 File imageFile = new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar + "output" + File.separatorChar + "FreeMinecraftModels" + File.separatorChar + "assets" + File.separatorChar + "freeminecraftmodels" + File.separatorChar + "textures" + File.separatorChar + "entity" + File.separatorChar + modelName + File.separatorChar + imageName);
                 FileUtils.writeByteArrayToFile(imageFile, inputStream.readAllBytes());
                 BufferedImage bufferedImage = ImageIO.read(imageFile);
-                imageSize.put(imageName, bufferedImage.getWidth());
+                imageSize.put(modelName + "/" + imageName, bufferedImage.getWidth());
             } catch (Exception ex) {
                 Logger.warn("Failed to convert image " + imageName + " to its corresponding image file!");
             }
