@@ -2,9 +2,11 @@ package com.magmaguy.freeminecraftmodels.entities;
 
 import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
 import com.magmaguy.freeminecraftmodels.customentity.core.RegisterModelEntity;
+import com.magmaguy.freeminecraftmodels.utils.VersionChecker;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.EntityType;
 import org.bukkit.inventory.ItemStack;
@@ -34,7 +36,12 @@ public class ModelArmorStand {
         LeatherArmorMeta itemMeta = (LeatherArmorMeta) leatherHorseArmor.getItemMeta();
         itemMeta.setColor(Color.WHITE);
         if (bone.getBoneBlueprint().getModelID() != null)
-            itemMeta.setCustomModelData(bone.getBoneBlueprint().getModelID());
+            if (VersionChecker.serverVersionOlderThan(21, 4)) {
+                itemMeta.setCustomModelData(Integer.valueOf(bone.getBoneBlueprint().getModelID()));
+            } else {
+                itemMeta.setItemModel(NamespacedKey.fromString(bone.getBoneBlueprint().getModelID()));
+            }
+
         leatherHorseArmor.setItemMeta(itemMeta);
         armorStand.setHelmet(leatherHorseArmor);
         RegisterModelEntity.registerModelArmorStand(armorStand, bone.getBoneBlueprint().getBoneName());

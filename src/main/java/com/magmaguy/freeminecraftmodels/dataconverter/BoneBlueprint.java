@@ -40,7 +40,7 @@ public class BoneBlueprint {
     private List<BoneBlueprint> boneBlueprintChildren = new ArrayList<>();
     @Getter
     @Setter
-    private Integer modelID = null;
+    private String modelID = null;
 
     @Getter
     private boolean nameTag = false;
@@ -56,6 +56,8 @@ public class BoneBlueprint {
     @Getter
     private boolean isHead = false;
 
+    @Getter
+    private File file;
     /**
      * This is for the empty root bone only
      *
@@ -266,7 +268,7 @@ public class BoneBlueprint {
         String modelDirectory = getModelDirectory(modelName);
         Gson gson = new Gson();
         try {
-            FileUtils.writeStringToFile(new File(modelDirectory + File.separatorChar + filename + ".json"), gson.toJson(boneJSON), StandardCharsets.UTF_8);
+            FileUtils.writeStringToFile(file = new File(modelDirectory + File.separatorChar + filename + ".json"), gson.toJson(boneJSON), StandardCharsets.UTF_8);
         } catch (Exception e) {
             Logger.warn("Failed to write boneBlueprint resource packs for boneBlueprint " + filename + "!");
             throw new RuntimeException(e);
