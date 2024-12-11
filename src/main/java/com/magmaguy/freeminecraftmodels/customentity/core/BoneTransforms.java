@@ -113,7 +113,10 @@ public class BoneTransforms {
     private void initializeDisplayEntityBone() {
         if (!DefaultConfig.useDisplayEntitiesWhenPossible) return;
         packetDisplayEntity = NMSManager.getAdapter().createPacketDisplayEntity(getDisplayEntityTargetLocation());
-        packetDisplayEntity.initializeModel(getDisplayEntityTargetLocation(), bone.getBoneBlueprint().getModelID());
+        if (VersionChecker.serverVersionOlderThan(21, 4))
+            packetDisplayEntity.initializeModel(getDisplayEntityTargetLocation(), Integer.parseInt(bone.getBoneBlueprint().getModelID()));
+        else
+            packetDisplayEntity.initializeModel(getDisplayEntityTargetLocation(), bone.getBoneBlueprint().getModelID());
         packetDisplayEntity.setScale(2.5f);
         packetDisplayEntity.sendLocationAndRotationPacket(getDisplayEntityTargetLocation(), getDisplayEntityRotation());
     }
@@ -121,7 +124,11 @@ public class BoneTransforms {
     private void initializeArmorStandBone() {
         //todo: add way to disable armor stands later via config
         packetArmorStandEntity = NMSManager.getAdapter().createPacketArmorStandEntity(getArmorStandTargetLocation());
-        packetArmorStandEntity.initializeModel(getArmorStandTargetLocation(), bone.getBoneBlueprint().getModelID());
+        if (VersionChecker.serverVersionOlderThan(21, 4))
+            packetArmorStandEntity.initializeModel(getArmorStandTargetLocation(), Integer.parseInt(bone.getBoneBlueprint().getModelID()));
+        else
+            packetArmorStandEntity.initializeModel(getArmorStandTargetLocation(), bone.getBoneBlueprint().getModelID());
+
         packetArmorStandEntity.sendLocationAndRotationPacket(getArmorStandTargetLocation(), getArmorStandEntityRotation());
     }
 
