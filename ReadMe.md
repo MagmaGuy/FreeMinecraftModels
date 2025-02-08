@@ -181,10 +181,9 @@ And here is how EliteMobs, my custom bosses plugin, uses dynamic entities:
 ```java
 package com.magmaguy.elitemobs.thirdparty.custommodels.freeminecraftmodels;
 
-import com.magmaguy.elitemobs.mobconstructor.custombosses.CustomBossEntity;
 import com.magmaguy.elitemobs.thirdparty.custommodels.CustomModelInterface;
-import com.magmaguy.freeminecraftmodels.api.ModeledEntityManager;
-import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
+import api.com.magmaguy.freeminecraftmodels.ModeledEntityManager;
+import customentity.com.magmaguy.freeminecraftmodels.DynamicEntity;
 import lombok.Getter;
 import org.bukkit.entity.LivingEntity;
 

@@ -6,6 +6,7 @@ import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.magmacore.command.AdvancedCommand;
 import com.magmaguy.magmacore.command.CommandData;
 import com.magmaguy.magmacore.command.SenderType;
+import com.magmaguy.magmacore.command.arguments.ListStringCommandArgument;
 import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.Location;
 import org.bukkit.entity.EntityType;
@@ -23,10 +24,10 @@ public class SpawnCommand extends AdvancedCommand {
 
     public SpawnCommand() {
         super(List.of("spawn"));
-        addArgument("type", List.of("STATIC", "DYNAMIC"));
+        addArgument("type", new ListStringCommandArgument(List.of("STATIC", "DYNAMIC"), "<spawn>"));
         entityIDs = new ArrayList<>();
         FileModelConverter.getConvertedFileModels().values().forEach(fileModelConverter -> entityIDs.add(fileModelConverter.getID()));
-        addArgument("model", entityIDs);
+        addArgument("model", new ListStringCommandArgument(entityIDs, "<model>"));
         setDescription("Spawns a custom models");
         setPermission("freeminecraftmodels.*");
         setUsage("/fmm spawn <static/dynamic> <modelID>");
