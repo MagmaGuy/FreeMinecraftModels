@@ -4,6 +4,7 @@ import com.magmaguy.freeminecraftmodels.config.props.PropsConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.magmacore.command.AdvancedCommand;
 import com.magmaguy.magmacore.command.CommandData;
+import com.magmaguy.magmacore.command.arguments.ListStringCommandArgument;
 import com.magmaguy.magmacore.util.Logger;
 
 import java.util.ArrayList;
@@ -14,7 +15,8 @@ public class PropCommand extends AdvancedCommand {
     public PropCommand() {
         super(List.of("prop"));
         addLiteral("create");
-        addArgument("model", new ArrayList<>());
+        //todo: this should be its own category of model so not adding all models here
+        addArgument("models", new ListStringCommandArgument(new ArrayList<>(), "<modelID>"));
         setDescription("Creates a prop's configuration file, allowing you to place a model as a permanent prop!");
         setPermission("freeminecraftmodels.*");
         setUsage("/fmm prop create <modelFilename>");
