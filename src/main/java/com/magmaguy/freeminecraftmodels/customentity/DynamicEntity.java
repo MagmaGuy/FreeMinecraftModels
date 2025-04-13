@@ -110,6 +110,9 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
                 getSkeleton().setCurrentHeadPitch(livingEntity.getEyeLocation().getPitch());
                 getSkeleton().setCurrentHeadYaw(livingEntity.getEyeLocation().getYaw());
 
+                // IF the entity has an animation manager, update the skeleton. Otherwise, the animation manager will update it
+                if (animationManager == null) getSkeleton().transform();
+
                 // Handle contact damage as part of the entity's internal clock
                 if (damagesOnContact) {
                     // Check collision every other tick for performance (still very responsive)
