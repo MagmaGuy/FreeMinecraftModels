@@ -81,7 +81,6 @@ public class LegacyHitDetection implements Listener {
         ModeledEntity modeledEntity = raytraceForModeledEntity(event.getPlayer());
         if (modeledEntity == null) return;
         event.setCancelled(true);
-        //todo: this requires maths
         damageCustomModelEntity(modeledEntity, event.getPlayer(), 2);
     }
 

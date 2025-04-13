@@ -10,6 +10,8 @@ import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntityEvents;
 import com.magmaguy.freeminecraftmodels.customentity.StaticEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.LegacyHitDetection;
+import com.magmaguy.freeminecraftmodels.customentity.core.OBBHitDetection;
+import com.magmaguy.freeminecraftmodels.customentity.core.OrientedBoundingBoxRayTracer;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.listeners.EntityTeleportEvent;
 import com.magmaguy.freeminecraftmodels.utils.VersionChecker;
@@ -43,7 +45,9 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         ModelsFolder.initializeConfig();
         Metrics metrics = new Metrics(this, 19337);
         Bukkit.getPluginManager().registerEvents(new ModeledEntityEvents(), this);
-        Bukkit.getPluginManager().registerEvents(new LegacyHitDetection(), this);
+//        Bukkit.getPluginManager().registerEvents(new LegacyHitDetection(), this);
+        Bukkit.getPluginManager().registerEvents(new OBBHitDetection(), this);
+
         Bukkit.getPluginManager().registerEvents(new VersionChecker.VersionCheckerEvents(), this);
         Bukkit.getPluginManager().registerEvents(new EntityTeleportEvent(), this);
         NMSManager.initializeAdapter(this);
@@ -51,6 +55,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         CommandManager manager = new CommandManager(this, "freeminecraftmodels");
         manager.registerCommand(new MountCommand());
         manager.registerCommand(new PropCommand());
+        manager.registerCommand(new OBBDebugCommand());
         manager.registerCommand(new ReloadCommand());
         manager.registerCommand(new SpawnCommand());
         manager.registerCommand(new VersionCommand());
@@ -72,6 +77,8 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         StaticEntity.shutdown();
         DynamicEntity.shutdown();
         LegacyHitDetection.shutdown();
+//        OBBHitDetection.shutdown();
+        OrientedBoundingBoxRayTracer.clearCache();
         Bukkit.getServer().getScheduler().cancelTasks(MetadataHandler.PLUGIN);
         HandlerList.unregisterAll(MetadataHandler.PLUGIN);
     }
