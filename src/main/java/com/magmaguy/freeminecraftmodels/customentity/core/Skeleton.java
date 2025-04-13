@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import lombok.Getter;
@@ -36,6 +37,9 @@ public class Skeleton {
     @Setter
     private float currentHeadYaw = 0;
     private BukkitTask damageTintTask = null;
+    @Getter
+    @Setter
+    private DynamicEntity dynamicEntity = null;
 
     public Skeleton(SkeletonBlueprint skeletonBlueprint) {
         this.skeletonBlueprint = skeletonBlueprint;
@@ -111,6 +115,9 @@ public class Skeleton {
             if (bone.getBoneBlueprint().getParent() == null)
                 bone.transform();
         });
+        if (dynamicEntity != null) {
+            ModeledEntityOBBExtension.updateOBB(dynamicEntity);
+        }
     }
 
     public void tint() {

@@ -86,7 +86,7 @@
         <dependency>
             <groupId>com.magmaguy</groupId>
             <artifactId>EasyMinecraftGoals-dist</artifactId>
-            <version>1.16.0</version>
+            <version>1.19.0-SNAPSHOT</version>
         </dependency>
 
         <dependency>
@@ -99,7 +99,7 @@
         <dependency>
             <groupId>com.magmaguy</groupId>
             <artifactId>MagmaCore</artifactId>
-            <version>1.8</version>
+            <version>1.13-SNAPSHOT</version>
             <scope>compile</scope>
         </dependency>
 
@@ -163,7 +163,7 @@
             <url>https://repo.magmaguy.com/snapshots</url>
         </snapshotRepository>
         <repository>
-            <id>magmaguy-repo-snapshots</id>
+            <id>magmaguy-repo</id>
             <name>MagmaGuy's Repository</name>
             <url>https://repo.magmaguy.com/releases</url>
         </repository>
