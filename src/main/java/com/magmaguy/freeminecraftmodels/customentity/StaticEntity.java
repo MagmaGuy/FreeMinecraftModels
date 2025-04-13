@@ -66,6 +66,13 @@ public class StaticEntity extends ModeledEntity implements ModeledEntityInterfac
     }
 
     @Override
+    public void damage(Player player) {
+        //If the health is -1, then the entity is not meant to be damageable.
+        if (health == -1) return;
+        else remove();
+    }
+
+    @Override
     public World getWorld() {
         Location spawnLocation = getSpawnLocation();
         if (spawnLocation == null) return null;

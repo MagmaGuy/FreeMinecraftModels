@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.freeminecraftmodels.animation.AnimationManager;
 import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityInterface;
+import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityOBBExtension;
 import com.magmaguy.freeminecraftmodels.customentity.core.Skeleton;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
@@ -69,6 +70,7 @@ public class ModeledEntity implements ModeledEntityInterface {
 
     public void spawn(Location location) {
         armorStandInitializer(location);
+        ModeledEntityOBBExtension.setOBBFromHitboxProperties(this);
         if (animationManager != null) animationManager.start();
     }
 
@@ -175,6 +177,11 @@ public class ModeledEntity implements ModeledEntityInterface {
 
     @Override
     public void damage(Player player, double damage) {
+        //Overriden by extending classes
+    }
+
+    @Override
+    public void damage(Player player) {
         //Overriden by extending classes
     }
 
