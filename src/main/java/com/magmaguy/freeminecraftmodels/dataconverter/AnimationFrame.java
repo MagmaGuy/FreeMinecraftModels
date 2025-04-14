@@ -7,9 +7,7 @@ public class AnimationFrame {
     public float xPosition;
     public float yPosition;
     public float zPosition;
-    public float xScale;
-    public float yScale;
-    public float zScale;
+    public float scale;
 
     public AnimationFrame(){
     }

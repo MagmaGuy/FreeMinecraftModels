@@ -49,20 +49,41 @@ public class BoneTransforms {
 
     public void updateLocalTransform() {
         localMatrix.resetToIdentityMatrix();
-        shiftPivotPoint();
-        translateModelCenter();
-        translateAnimation();
-        rotateAnimation();
-        rotateDefaultBoneRotation();
-        shiftPivotPointBack();
-        rotateByEntityYaw();
-    }
 
-    //Shift to model center
-    private void translateModelCenter() {
+        // 1. Translate to pivot point
+        localMatrix.translate(bone.getBoneBlueprint().getBlueprintModelPivot());
+
+        // 2. Apply rotations (default bone rotation + animation)
+        Vector3f defaultRotation = bone.getBoneBlueprint().getBlueprintOriginalBoneRotation();
+        localMatrix.rotateLocal(
+                defaultRotation.get(0),
+                defaultRotation.get(1),
+                defaultRotation.get(2));
+
+        localMatrix.rotateLocal(
+                bone.getAnimationRotation().get(0),
+                bone.getAnimationRotation().get(1),
+                bone.getAnimationRotation().get(2));
+
+        // 3. Translate back from pivot point
+        localMatrix.translate(new Vector3f(
+                -bone.getBoneBlueprint().getBlueprintModelPivot().x,
+                -bone.getBoneBlueprint().getBlueprintModelPivot().y,
+                -bone.getBoneBlueprint().getBlueprintModelPivot().z));
+
+        // 4. Translate to model center
         localMatrix.translate(bone.getBoneBlueprint().getModelCenter());
 
-        //The bone is relative to its parent, so remove the offset of the parent
+        // 5. Apply animation translation
+        localMatrix.translate(
+                bone.getAnimationTranslation().get(0),
+                bone.getAnimationTranslation().get(1),
+                bone.getAnimationTranslation().get(2));
+
+        // 6. Scale
+        localMatrix.scale(bone.getAnimationScale());
+
+        // 7. Handle parent model center offset
         if (parent != null) {
             Vector3f modelCenter = parent.getBoneBlueprint().getModelCenter();
             modelCenter.mul(-1);
@@ -70,40 +91,7 @@ public class BoneTransforms {
         }
     }
 
-    private void shiftPivotPoint() {
-        localMatrix.translate(bone.getBoneBlueprint().getBlueprintModelPivot().mul(-1));
-    }
-
-    private void translateAnimation() {
-        localMatrix.translate(
-                bone.getAnimationTranslation().get(0),
-                bone.getAnimationTranslation().get(1),
-                bone.getAnimationTranslation().get(2));
-    }
-
-    private void rotateAnimation() {
-        Vector test = new Vector(bone.getAnimationRotation().get(0), bone.getAnimationRotation().get(1), -bone.getAnimationRotation().get(2));
-        test.rotateAroundY(Math.PI);
-        localMatrix.rotateAnimation(
-                (float) test.getX(),
-                (float) test.getY(),
-                (float) test.getZ());
-    }
-
-    private void rotateDefaultBoneRotation() {
-        localMatrix.rotate(
-                bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(0),
-                bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(1),
-                bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(2));
-    }
-
-    private void shiftPivotPointBack() {
-        //Remove the pivot point, go back to the model center
-        localMatrix.translate(bone.getBoneBlueprint().getBlueprintModelPivot());
-    }
-
     public void generateDisplay() {
-        transform();
         if (bone.getBoneBlueprint().isDisplayModel()) {
             initializeDisplayEntityBone();
             initializeArmorStandBone();
@@ -112,13 +100,13 @@ public class BoneTransforms {
 
     private void initializeDisplayEntityBone() {
         if (!DefaultConfig.useDisplayEntitiesWhenPossible) return;
-        packetDisplayEntity = NMSManager.getAdapter().createPacketDisplayEntity(getDisplayEntityTargetLocation());
+        Location displayEntityLocation = getDisplayEntityTargetLocation();
+        packetDisplayEntity = NMSManager.getAdapter().createPacketDisplayEntity(displayEntityLocation);
         if (VersionChecker.serverVersionOlderThan(21, 4))
-            packetDisplayEntity.initializeModel(getDisplayEntityTargetLocation(), Integer.parseInt(bone.getBoneBlueprint().getModelID()));
+            packetDisplayEntity.initializeModel(displayEntityLocation, Integer.parseInt(bone.getBoneBlueprint().getModelID()));
         else
-            packetDisplayEntity.initializeModel(getDisplayEntityTargetLocation(), bone.getBoneBlueprint().getModelID());
-        packetDisplayEntity.setScale(2.5f);
-        packetDisplayEntity.sendLocationAndRotationPacket(getDisplayEntityTargetLocation(), getDisplayEntityRotation());
+            packetDisplayEntity.initializeModel(displayEntityLocation, bone.getBoneBlueprint().getModelID());
+        sendDisplayEntityUpdatePacket();
     }
 
     private void initializeArmorStandBone() {
@@ -128,15 +116,7 @@ public class BoneTransforms {
             packetArmorStandEntity.initializeModel(getArmorStandTargetLocation(), Integer.parseInt(bone.getBoneBlueprint().getModelID()));
         else
             packetArmorStandEntity.initializeModel(getArmorStandTargetLocation(), bone.getBoneBlueprint().getModelID());
-
-        packetArmorStandEntity.sendLocationAndRotationPacket(getArmorStandTargetLocation(), getArmorStandEntityRotation());
-    }
-
-    private void rotateByEntityYaw() {
-        //rotate by yaw amount
-        if (parent == null) {
-            localMatrix.rotate(0, (float) -Math.toRadians(bone.getSkeleton().getCurrentLocation().getYaw() + 180), 0);
-        }
+        sendArmorStandUpdatePacket();
     }
 
     protected Location getArmorStandTargetLocation() {
@@ -146,42 +126,88 @@ public class BoneTransforms {
                 translatedGlobalMatrix[1],
                 translatedGlobalMatrix[2])
                 .add(bone.getSkeleton().getCurrentLocation());
-        armorStandLocation.setYaw(180);
+        // Remove this line: armorStandLocation.setYaw(180);
         armorStandLocation.subtract(new Vector(0, BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT(), 0));
         return armorStandLocation;
     }
 
     protected Location getDisplayEntityTargetLocation() {
-        float[] translatedGlobalMatrix = globalMatrix.getTranslation();
-        Location armorStandLocation;
-        if (!VersionChecker.serverVersionOlderThan(20, 0)) {
-            armorStandLocation = new Location(bone.getSkeleton().getCurrentLocation().getWorld(),
-                    translatedGlobalMatrix[0],
-                    translatedGlobalMatrix[1],
-                    translatedGlobalMatrix[2])
-                    .add(bone.getSkeleton().getCurrentLocation());
-            armorStandLocation.setYaw(180);
-        } else
-            armorStandLocation = new Location(bone.getSkeleton().getCurrentLocation().getWorld(),
-                    translatedGlobalMatrix[0],
-                    translatedGlobalMatrix[1],
-                    translatedGlobalMatrix[2])
-                    .add(bone.getSkeleton().getCurrentLocation());
-        return armorStandLocation;
+        // Get translation from global matrix
+        float[] translation = globalMatrix.getTranslation();
+
+        // Create location in world space
+        Location skeletonLocation = bone.getSkeleton().getCurrentLocation();
+        Location entityLocation = new Location(
+                skeletonLocation.getWorld(),
+                translation[0] + skeletonLocation.getX(),
+                translation[1] + skeletonLocation.getY(),
+                translation[2] + skeletonLocation.getZ()
+        );
+
+        return entityLocation; // Remove the setYaw(180) call
     }
 
     protected EulerAngle getDisplayEntityRotation() {
         float[] rotation = globalMatrix.getRotation();
-        if (VersionChecker.serverVersionOlderThan(20, 0))
-            return new EulerAngle(rotation[0], rotation[1], rotation[2]);
-        else {
-            return new EulerAngle(-rotation[0], rotation[1], -rotation[2]);
+
+        // For all actual bone entities (non-root)
+        if (parent != null) {
+            // For a 180° Y rotation:
+            rotation[0] = -rotation[0];  // Invert X rotation
+            rotation[1] = rotation[1] + (float) Math.PI;  // Add 180° to Y
+            rotation[2] = -rotation[2];  // Invert Z rotation
+
+            // Normalize Y rotation to keep it in -π to π range
+            if (rotation[1] > Math.PI) {
+                rotation[1] -= 2 * Math.PI;
+            } else if (rotation[1] < -Math.PI) {
+                rotation[1] += 2 * Math.PI;
+            }
         }
+
+        return new EulerAngle(rotation[0], rotation[1], rotation[2]);
     }
 
     protected EulerAngle getArmorStandEntityRotation() {
         float[] rotation = globalMatrix.getRotation();
-        return new EulerAngle(-rotation[0], -rotation[1], rotation[2]);
+
+        // For all actual bone entities (non-root)
+        if (parent != null) {
+            // For a 180° Y rotation:
+            rotation[0] = -rotation[0];  // Invert X rotation
+            rotation[1] = rotation[1] + (float) Math.PI;  // Add 180° to Y
+            rotation[2] = -rotation[2];  // Invert Z rotation
+
+            // Normalize Y rotation to keep it in -π to π range
+            if (rotation[1] > Math.PI) {
+                rotation[1] -= 2 * Math.PI;
+            } else if (rotation[1] < -Math.PI) {
+                rotation[1] += 2 * Math.PI;
+            }
+        }
+
+        return new EulerAngle(rotation[0], rotation[1], rotation[2]);
+    }
+
+    protected float getDisplayEntityScale() {
+        return bone.getAnimationScale() * 2.5f;
+    }
+
+    public void sendUpdatePacket() {
+        sendArmorStandUpdatePacket();
+        sendDisplayEntityUpdatePacket();
+    }
+
+    private void sendArmorStandUpdatePacket() {
+        if (packetArmorStandEntity != null) {
+            packetArmorStandEntity.sendLocationAndRotationPacket(getArmorStandTargetLocation(), getArmorStandEntityRotation());
+        }
+    }
+
+    private void sendDisplayEntityUpdatePacket() {
+        if (packetDisplayEntity != null) {
+            packetDisplayEntity.sendLocationAndRotationAndScalePacket(getDisplayEntityTargetLocation(), getDisplayEntityRotation(), getDisplayEntityScale());
+        }
     }
 
 }

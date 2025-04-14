@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
+import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.animation.AnimationManager;
 import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityInterface;
 import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityOBBExtension;
@@ -17,10 +18,12 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 
 public class ModeledEntity implements ModeledEntityInterface {
@@ -33,7 +36,8 @@ public class ModeledEntity implements ModeledEntityInterface {
     protected Integer chunkHash = null;
     @Getter
     protected LivingEntity livingEntity = null;
-    AnimationManager animationManager;
+    @Getter
+    private static final HashSet<ModeledEntity> loadedModeledEntities = new HashSet<>();
     @Getter
     private SkeletonBlueprint skeletonBlueprint = null;
     @Getter
@@ -42,6 +46,7 @@ public class ModeledEntity implements ModeledEntityInterface {
     private Skeleton skeleton;
     @Getter
     private List<TextDisplay> nametags = new ArrayList<>();
+    AnimationManager animationManager = null;
 
     public ModeledEntity(String entityID, Location spawnLocation) {
         this.entityID = entityID;
@@ -54,6 +59,17 @@ public class ModeledEntity implements ModeledEntityInterface {
         skeleton = new Skeleton(skeletonBlueprint);
         if (fileModelConverter.getAnimationsBlueprint() != null)
             animationManager = new AnimationManager(this, fileModelConverter.getAnimationsBlueprint());
+        loadedModeledEntities.add(this);
+    }
+
+    public static void shutdown() {
+        loadedModeledEntities.clear();
+    }
+
+    public void tick() {
+        if (this instanceof DynamicEntity || animationManager != null)
+            getSkeleton().transform();
+        //overriden by extending classes
     }
 
     private static boolean isNameTag(ArmorStand armorStand) {
@@ -64,12 +80,18 @@ public class ModeledEntity implements ModeledEntityInterface {
         return spawnLocation.clone();
     }
 
-    protected void armorStandInitializer(Location targetLocation) {
+    protected void displayInitializer(Location targetLocation) {
         skeleton.generateDisplays(targetLocation);
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                skeleton.transform();
+            }
+        }.runTaskLater(MetadataHandler.PLUGIN, 1);
     }
 
     public void spawn(Location location) {
-        armorStandInitializer(location);
+        displayInitializer(location);
         ModeledEntityOBBExtension.setOBBFromHitboxProperties(this);
         if (animationManager != null) animationManager.start();
     }
@@ -96,6 +118,7 @@ public class ModeledEntity implements ModeledEntityInterface {
 
     public void remove() {
         skeleton.remove();
+        loadedModeledEntities.remove(this);
         if (livingEntity != null) livingEntity.remove();
 //        ModeledEntityEvents.removeLoadedModeledEntity(this);
 //        ModeledEntityEvents.removeUnloadedModeledEntity(this);

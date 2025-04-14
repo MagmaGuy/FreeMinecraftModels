@@ -6,9 +6,7 @@ import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.config.ModelsFolder;
 import com.magmaguy.freeminecraftmodels.config.OutputFolder;
 import com.magmaguy.freeminecraftmodels.config.props.PropsConfig;
-import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
-import com.magmaguy.freeminecraftmodels.customentity.ModeledEntityEvents;
-import com.magmaguy.freeminecraftmodels.customentity.StaticEntity;
+import com.magmaguy.freeminecraftmodels.customentity.*;
 import com.magmaguy.freeminecraftmodels.customentity.core.LegacyHitDetection;
 import com.magmaguy.freeminecraftmodels.customentity.core.OBBHitDetection;
 import com.magmaguy.freeminecraftmodels.customentity.core.OrientedBoundingBoxRayTracer;
@@ -62,6 +60,8 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         new PropsConfig();
         Bukkit.getPluginManager().registerEvents(this, this);
         OutputFolder.zipResourcePack();
+
+        ModeledEntitiesClock.start();
     }
 
     @Override
@@ -76,6 +76,8 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         FileModelConverter.shutdown();
         StaticEntity.shutdown();
         DynamicEntity.shutdown();
+        ModeledEntity.shutdown();
+        ModeledEntitiesClock.shutdown();
         LegacyHitDetection.shutdown();
 //        OBBHitDetection.shutdown();
         OrientedBoundingBoxRayTracer.clearCache();
