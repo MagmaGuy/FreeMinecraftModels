@@ -14,8 +14,6 @@ import org.bukkit.World;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.BoundingBox;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joml.Vector3f;
@@ -27,18 +25,22 @@ import java.util.stream.Collectors;
 public class DynamicEntity extends ModeledEntity implements ModeledEntityInterface {
     @Getter
     private static final List<DynamicEntity> dynamicEntities = new ArrayList<>();
+    private static final NamespacedKey namespacedKey = new NamespacedKey(MetadataHandler.PLUGIN, "DynamicEntity");
     @Getter
     private final String name = "default";
-    private BukkitTask skeletonSync = null;
 
+    // Contact damage detection is integrated into the entity's internal clock
     // Contact damage properties
     @Getter
     @Setter
     private boolean damagesOnContact = true;
 
-    // Contact damage detection is integrated into the entity's internal clock
-
-    private static NamespacedKey namespacedKey = new NamespacedKey(MetadataHandler.PLUGIN, "DynamicEntity");
+    //Coming soon
+    public DynamicEntity(String entityID, Location targetLocation) {
+        super(entityID, targetLocation);
+        dynamicEntities.add(this);
+        super.getSkeleton().setDynamicEntity(this);
+    }
 
     public static boolean isDynamicEntity(LivingEntity livingEntity) {
         if (livingEntity == null) return false;
@@ -50,13 +52,6 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
             if (dynamicEntity.getLivingEntity().equals(livingEntity))
                 return dynamicEntity;
         return null;
-    }
-
-    //Coming soon
-    public DynamicEntity(String entityID, Location targetLocation) {
-        super(entityID, targetLocation);
-        dynamicEntities.add(this);
-        super.getSkeleton().setDynamicEntity(this);
     }
 
     public static void shutdown() {
@@ -90,40 +85,40 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         setHitbox();
     }
 
+    @Override
+    public void tick() {
+        super.tick();
+        syncSkeletonWithEntity();
+    }
+
     private void syncSkeletonWithEntity() {
-        skeletonSync = new BukkitRunnable() {
-            // Counter to throttle collision checks for performance
-            private int collisionCheckCounter = 0;
+        Logger.debug("Syncing skeleton with entity");
+        if (livingEntity == null || !livingEntity.isValid()) {
+            remove();
+            return;
+        }
+        Logger.debug("Entity is valid");
 
-            @Override
-            public void run() {
-                if (livingEntity == null || !livingEntity.isValid()) {
-                    remove();
-                    cancel();
-                    return;
-                }
+        // Counter to throttle collision checks for performance
+        int collisionCheckCounter = 0;
 
-                // Update skeleton position and rotation
-                Location entityLocation = livingEntity.getLocation();
-                entityLocation.setYaw(NMSManager.getAdapter().getBodyRotation(livingEntity));
-                getSkeleton().setCurrentLocation(entityLocation);
-                getSkeleton().setCurrentHeadPitch(livingEntity.getEyeLocation().getPitch());
-                getSkeleton().setCurrentHeadYaw(livingEntity.getEyeLocation().getYaw());
+        // Update skeleton position and rotation
+        Location entityLocation = livingEntity.getLocation();
+        entityLocation.setYaw(NMSManager.getAdapter().getBodyRotation(livingEntity));
+        getSkeleton().setCurrentLocation(entityLocation);
+        getSkeleton().setCurrentHeadPitch(livingEntity.getEyeLocation().getPitch());
+        getSkeleton().setCurrentHeadYaw(livingEntity.getEyeLocation().getYaw());
 
-                // IF the entity has an animation manager, update the skeleton. Otherwise, the animation manager will update it
-                if (animationManager == null) getSkeleton().transform();
-
-                // Handle contact damage as part of the entity's internal clock
-                if (damagesOnContact) {
-                    // Check collision every other tick for performance (still very responsive)
-                    collisionCheckCounter++;
-                    if (collisionCheckCounter >= 2) {
-                        collisionCheckCounter = 0;
-                        checkPlayerCollisions();
-                    }
-                }
+        // Handle contact damage as part of the entity's internal clock
+        if (damagesOnContact) {
+            // Check collision every other tick for performance (still very responsive)
+            collisionCheckCounter++;
+            if (collisionCheckCounter >= 2) {
+                collisionCheckCounter = 0;
+                checkPlayerCollisions();
             }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
+
+        }
     }
 
     @Override
@@ -131,7 +126,6 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         super.remove();
         if (livingEntity != null)
             livingEntity.remove();
-        if (skeletonSync != null) skeletonSync.cancel();
     }
 
     private void setHitbox() {

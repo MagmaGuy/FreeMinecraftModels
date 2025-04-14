@@ -68,7 +68,7 @@ public class AnimationManager {
             public void run() {
                 updateStates();
                 states.forEach(animation -> playAnimationFrame(animation));
-                modeledEntity.getSkeleton().transform();
+//                modeledEntity.getSkeleton().transform(); todo: check if this causes a big problem, it moved to the dynamic entity instead
             }
         }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
 
@@ -93,12 +93,13 @@ public class AnimationManager {
             overrideStates(walkAnimation);
             return;
         }
-        overrideStates(idleAnimation);
+        if (idleAnimation != null) overrideStates(idleAnimation);
         //Jump
         //if (!modeledEntity.getEntity().isDead())
     }
 
     private void overrideStates(Animation animation) {
+//        if (animation == null) return;
         if (!states.contains(animation)) {
             states.clear();
             animation.resetCounter();
@@ -156,6 +157,14 @@ public class AnimationManager {
                         value[adjustedAnimationPosition].xPosition,
                         value[adjustedAnimationPosition].yPosition,
                         value[adjustedAnimationPosition].zPosition);
+        });
+
+        //Handle scale
+        animation.getAnimationFrames().forEach((key, value) -> {
+            if (value == null)
+                key.updateAnimationScale(1);
+            else
+                key.updateAnimationScale(value[adjustedAnimationPosition].scale);
         });
 
         animation.incrementCounter();

@@ -40,6 +40,7 @@ public class Skeleton {
     @Getter
     @Setter
     private DynamicEntity dynamicEntity = null;
+    private Bone rootBone = null;
 
     public Skeleton(SkeletonBlueprint skeletonBlueprint) {
         this.skeletonBlueprint = skeletonBlueprint;
@@ -48,6 +49,7 @@ public class Skeleton {
                 Bone bone = new Bone(value, null, this);
                 boneMap.put(key, bone);
                 bone.getAllChildren(boneMap);
+                rootBone = bone;
             }
         });
         skeletonWatchers = new SkeletonWatchers(this);
@@ -59,11 +61,7 @@ public class Skeleton {
 
     public void generateDisplays(Location location) {
         currentLocation = location;
-        boneMap.values().forEach(bone -> {
-            if (bone.getParent() == null) {
-                bone.generateDisplay();
-            }
-        });
+        rootBone.generateDisplay();
         boneMap.values().forEach(bone -> {
             if (bone.getBoneBlueprint().isNameTag()) nametags.add(bone);
         });
@@ -111,10 +109,7 @@ public class Skeleton {
      * This updates animations. The plugin runs this automatically, don't use it unless you know what you're doing!
      */
     public void transform() {
-        boneMap.values().forEach(bone -> {
-            if (bone.getBoneBlueprint().getParent() == null)
-                bone.transform();
-        });
+        rootBone.transform();
         if (dynamicEntity != null) {
             ModeledEntityOBBExtension.updateOBB(dynamicEntity);
         }
@@ -140,8 +135,6 @@ public class Skeleton {
 
     public void teleport(Location location) {
         currentLocation = location;
-        boneMap.values().forEach(bone -> {
-            if (bone.getParent() == null) bone.teleport();
-        });
+        rootBone.teleport();
     }
 }

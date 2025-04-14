@@ -4,6 +4,7 @@ import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.thirdparty.Floodgate;
 import com.magmaguy.freeminecraftmodels.utils.VersionChecker;
+import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import org.bukkit.Color;
 import org.bukkit.entity.ArmorStand;
@@ -31,6 +32,8 @@ public class Bone {
     private int counter = 0;
     @Getter
     private Vector3f animationRotation = new Vector3f();
+    @Getter
+    private float animationScale = 1;
 
     public Bone(BoneBlueprint boneBlueprint, Bone parent, Skeleton skeleton) {
         this.boneBlueprint = boneBlueprint;
@@ -49,8 +52,13 @@ public class Bone {
         animationRotation = new Vector3f((float) Math.toRadians(x), (float) Math.toRadians(y), (float) Math.toRadians(z));
     }
 
+    public void updateAnimationScale(float animationScale) {
+        this.animationScale = animationScale;
+    }
+
     //Note that several optimizations might be possible here, but that syncing with a base entity is necessary.
     public void transform() {
+        //todo: reenable, this is just for testing the default placement
         boneTransforms.transform();
         boneChildren.forEach(Bone::transform);
         skeleton.getSkeletonWatchers().sendPackets(this);
@@ -93,15 +101,7 @@ public class Bone {
             counter = 0;
             skeleton.getSkeletonWatchers().reset();
         }
-        if (boneTransforms.getPacketArmorStandEntity() != null)
-            boneTransforms.getPacketArmorStandEntity().sendLocationAndRotationPacket(
-                    boneTransforms.getArmorStandTargetLocation(),
-                    boneTransforms.getArmorStandEntityRotation());
-        if (boneTransforms.getPacketDisplayEntity() != null) {
-            boneTransforms.getPacketDisplayEntity().sendLocationAndRotationPacket(
-                    boneTransforms.getDisplayEntityTargetLocation(),
-                    boneTransforms.getDisplayEntityRotation());
-        }
+        boneTransforms.sendUpdatePacket();
     }
 
     public void displayTo(Player player) {
@@ -129,7 +129,8 @@ public class Bone {
     }
 
     public void teleport() {
-        boneTransforms.transform();
+        Logger.debug("Teleporting bone " + boneBlueprint.getBoneName());
+//        boneTransforms.transform(); todo: check if this is causing issues
         boneChildren.forEach(Bone::transform);
         sendTeleportPacket();
         boneChildren.forEach(Bone::teleport);
