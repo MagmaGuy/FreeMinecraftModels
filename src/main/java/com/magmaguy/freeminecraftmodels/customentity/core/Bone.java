@@ -4,7 +4,6 @@ import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.thirdparty.Floodgate;
 import com.magmaguy.freeminecraftmodels.utils.VersionChecker;
-import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import org.bukkit.Color;
 import org.bukkit.entity.ArmorStand;
@@ -33,7 +32,7 @@ public class Bone {
     @Getter
     private Vector3f animationRotation = new Vector3f();
     @Getter
-    private float animationScale = 1;
+    private float animationScale = -1;
 
     public Bone(BoneBlueprint boneBlueprint, Bone parent, Skeleton skeleton) {
         this.boneBlueprint = boneBlueprint;
@@ -58,7 +57,6 @@ public class Bone {
 
     //Note that several optimizations might be possible here, but that syncing with a base entity is necessary.
     public void transform() {
-        //todo: reenable, this is just for testing the default placement
         boneTransforms.transform();
         boneChildren.forEach(Bone::transform);
         skeleton.getSkeletonWatchers().sendPackets(this);
@@ -129,9 +127,6 @@ public class Bone {
     }
 
     public void teleport() {
-        Logger.debug("Teleporting bone " + boneBlueprint.getBoneName());
-//        boneTransforms.transform(); todo: check if this is causing issues
-        boneChildren.forEach(Bone::transform);
         sendTeleportPacket();
         boneChildren.forEach(Bone::teleport);
     }
