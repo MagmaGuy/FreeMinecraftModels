@@ -37,7 +37,7 @@ public class Keyframe {
     private float tryParseFloat(Object rawObject, String modelName, String animationName) {
         if (!(rawObject instanceof String rawValue)) return ((Double) rawObject).floatValue();
         rawValue = rawValue.replaceAll("\\n", "");
-        if (rawValue.isEmpty()) return 0;
+        if (rawValue.isEmpty()) return transformationType == TransformationType.SCALE ? 1f : 0f;
         try {
             return (float) Double.parseDouble(rawValue);
         } catch (Exception e) {

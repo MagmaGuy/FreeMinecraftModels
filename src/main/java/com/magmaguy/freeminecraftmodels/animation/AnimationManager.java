@@ -68,7 +68,6 @@ public class AnimationManager {
             public void run() {
                 updateStates();
                 states.forEach(animation -> playAnimationFrame(animation));
-//                modeledEntity.getSkeleton().transform(); todo: check if this causes a big problem, it moved to the dynamic entity instead
             }
         }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
 
@@ -163,8 +162,11 @@ public class AnimationManager {
         animation.getAnimationFrames().forEach((key, value) -> {
             if (value == null)
                 key.updateAnimationScale(1);
-            else
-                key.updateAnimationScale(value[adjustedAnimationPosition].scale);
+            else {
+                Float scale = value[adjustedAnimationPosition].scale;
+                if (scale == null) scale = 1f;
+                key.updateAnimationScale(scale);
+            }
         });
 
         animation.incrementCounter();

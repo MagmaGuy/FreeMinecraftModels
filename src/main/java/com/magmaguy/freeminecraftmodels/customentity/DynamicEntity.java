@@ -92,15 +92,10 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     }
 
     private void syncSkeletonWithEntity() {
-        Logger.debug("Syncing skeleton with entity");
         if (livingEntity == null || !livingEntity.isValid()) {
             remove();
             return;
         }
-        Logger.debug("Entity is valid");
-
-        // Counter to throttle collision checks for performance
-        int collisionCheckCounter = 0;
 
         // Update skeleton position and rotation
         Location entityLocation = livingEntity.getLocation();
@@ -109,16 +104,8 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         getSkeleton().setCurrentHeadPitch(livingEntity.getEyeLocation().getPitch());
         getSkeleton().setCurrentHeadYaw(livingEntity.getEyeLocation().getYaw());
 
-        // Handle contact damage as part of the entity's internal clock
-        if (damagesOnContact) {
-            // Check collision every other tick for performance (still very responsive)
-            collisionCheckCounter++;
-            if (collisionCheckCounter >= 2) {
-                collisionCheckCounter = 0;
-                checkPlayerCollisions();
-            }
-
-        }
+        //todo: might want to run every other tick for performance
+        if (damagesOnContact) checkPlayerCollisions();
     }
 
     @Override
