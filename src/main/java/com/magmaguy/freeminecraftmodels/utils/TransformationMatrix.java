@@ -45,9 +45,9 @@ public class TransformationMatrix {
      * This is the standard "Yaw-Pitch-Roll" order used in many 3D applications.
      */
     public void rotateLocal(float x, float y, float z) {
+        matrix.rotateLocalX(x);
         matrix.rotateLocalY(y);
         matrix.rotateLocalZ(z);
-        matrix.rotateLocalX(x);
     }
 
     public void rotateLocal(Vector3f rotation) {
