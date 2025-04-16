@@ -1,6 +1,5 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
-import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.animation.AnimationManager;
 import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityInterface;
 import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityOBBExtension;
@@ -18,7 +17,6 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
 
@@ -82,12 +80,6 @@ public class ModeledEntity implements ModeledEntityInterface {
 
     protected void displayInitializer(Location targetLocation) {
         skeleton.generateDisplays(targetLocation);
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                skeleton.transform();
-            }
-        }.runTaskLater(MetadataHandler.PLUGIN, 1);
     }
 
     public void spawn(Location location) {

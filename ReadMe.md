@@ -1,3 +1,12 @@
+# Insane findings
+
+This section is just for developers to be aware of some of the insane findings I've made and had to account for while
+developing this.
+
+- Blockbench uses one X and Y rotations for posing the bones, and the inverse rotations for animating those bones. This
+  means that FMM has to invert the raw rotation data for either posing or animating. For some reason, this does not
+  happen with the Z axis.
+
 # ***Before you start!***
 
 FreeMinecraftModels (FMM) is currently in **alpha**! This means that several features are not yet done, and are actively

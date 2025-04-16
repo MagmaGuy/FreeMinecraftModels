@@ -208,7 +208,7 @@ public class BoneBlueprint {
         List<Double> rotations = (List<Double>) boneRotation;
         blueprintOriginalBoneRotation = new Vector3f(
                 (float) Math.toRadians(rotations.get(0)),
-                -(float) Math.toRadians(rotations.get(1)),
+                (float) Math.toRadians(rotations.get(1)),
                 (float) Math.toRadians(rotations.get(2)));
     }
 
