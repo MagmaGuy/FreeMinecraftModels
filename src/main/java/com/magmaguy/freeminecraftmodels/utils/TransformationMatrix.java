@@ -51,20 +51,14 @@ public class TransformationMatrix {
      * This method creates a combined rotation from all three axes.
      */
     public void rotateLocal(float x, float y, float z) {
-        // Create a temporary quaternion for this rotation
-        Quaternionf tempQuat = new Quaternionf().rotationZYX(z, y, x);
-//        Quaternionf tempQuat = new Quaternionf().rotationYXZ(y,x,z);
-//        Quaternionf tempQuat = new Quaternionf().rotationXYZ(x, y, z);
+        // Apply rotations directly to the matrix in ZYX order
+        // This approach is intentionally prone to gimbal lock
+        matrix.rotateLocalY(y);
+        matrix.rotateLocalZ(z);
+        matrix.rotateLocalX(x);
 
-        // Apply the new rotation in local space (right-multiply)
-        rotation.mul(tempQuat);
-
-//        matrix.rotateLocalX(x);
-//        matrix.rotateLocalY(y);
-//        matrix.rotateLocalZ(z);
-
-        // Update the matrix with the new combined rotation
-        updateMatrixRotation();
+        // Update the stored quaternion to match the matrix rotation
+        rotation.setFromUnnormalized(matrix);
     }
 
     public void rotateLocal(Vector3f rotationVec) {
