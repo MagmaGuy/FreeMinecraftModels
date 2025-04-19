@@ -1,23 +1,29 @@
 package com.magmaguy.freeminecraftmodels.utils;
 
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 import org.joml.Vector3f;
-import org.joml.Vector4f;
 
 public class TransformationMatrix {
     private final Matrix4f matrix;
+    private final Quaternionf rotation;  // Store current rotation as quaternion
 
     public TransformationMatrix() {
         // Initialize with identity matrix
         matrix = new Matrix4f().identity();
+        rotation = new Quaternionf(); // Initialize with identity quaternion
     }
 
     public static void multiplyMatrices(TransformationMatrix firstMatrix, TransformationMatrix secondMatrix, TransformationMatrix resultMatrix) {
         resultMatrix.matrix.set(firstMatrix.matrix).mul(secondMatrix.matrix);
+
+        // Also update the resultMatrix's quaternion
+        resultMatrix.rotation.set(firstMatrix.rotation).mul(secondMatrix.rotation);
     }
 
     public void resetToIdentityMatrix() {
         matrix.identity();
+        rotation.identity();
     }
 
     public void translateLocal(Vector3f vector) {
@@ -41,44 +47,90 @@ public class TransformationMatrix {
     }
 
     /**
-     * Apply rotations in ZYX order using quaternions for better handling of combined rotations.
-     * This is the standard "Yaw-Pitch-Roll" order used in many 3D applications.
+     * Apply rotations using quaternions to avoid gimbal lock.
+     * This method creates a combined rotation from all three axes.
      */
     public void rotateLocal(float x, float y, float z) {
-        matrix.rotateLocalX(x);
-        matrix.rotateLocalY(y);
-        matrix.rotateLocalZ(z);
+        // Create a temporary quaternion for this rotation
+        Quaternionf tempQuat = new Quaternionf().rotationZYX(z, y, x);
+//        Quaternionf tempQuat = new Quaternionf().rotationYXZ(y,x,z);
+//        Quaternionf tempQuat = new Quaternionf().rotationXYZ(x, y, z);
+
+        // Apply the new rotation in local space (right-multiply)
+        rotation.mul(tempQuat);
+
+//        matrix.rotateLocalX(x);
+//        matrix.rotateLocalY(y);
+//        matrix.rotateLocalZ(z);
+
+        // Update the matrix with the new combined rotation
+        updateMatrixRotation();
     }
 
-    public void rotateLocal(Vector3f rotation) {
-        rotateLocal(rotation.x, rotation.y, rotation.z);
+    public void rotateLocal(Vector3f rotationVec) {
+        rotateLocal(rotationVec.x, rotationVec.y, rotationVec.z);
     }
 
     public void rotateX(float angleRadians) {
-        matrix.rotateLocalX(angleRadians);
+        // Create quaternion for X rotation
+        Quaternionf tempQuat = new Quaternionf().rotationX(angleRadians);
+
+        // Apply the new rotation in local space (right-multiply)
+        rotation.mul(tempQuat);
+
+        // Update the matrix
+        updateMatrixRotation();
     }
 
     public void rotateLocalY(float angleRadians) {
-        matrix.rotateLocalY(angleRadians);
+        // Create quaternion for Y rotation
+        Quaternionf tempQuat = new Quaternionf().rotationY(angleRadians);
+
+        // Apply the new rotation in local space (right-multiply)
+        rotation.mul(tempQuat);
+
+        // Update the matrix
+        updateMatrixRotation();
     }
 
     public void rotateGlobalY(float angleRadians) {
-        matrix.rotateY(angleRadians);
+        // For global rotation, the new rotation is applied first
+        // Create quaternion for Y rotation
+        Quaternionf tempQuat = new Quaternionf().rotationY(angleRadians);
+
+        // Apply the new rotation in global space (left-multiply)
+        // This is different from local rotation - the order is reversed
+        tempQuat.mul(rotation, rotation);
+
+        // Update the matrix
+        updateMatrixRotation();
     }
 
     public void rotateZ(float angleRadians) {
-        matrix.rotateLocalZ(angleRadians);
+        // Create quaternion for Z rotation
+        Quaternionf tempQuat = new Quaternionf().rotationZ(angleRadians);
+
+        // Apply the new rotation in local space (right-multiply)
+        rotation.mul(tempQuat);
+
+        // Update the matrix
+        updateMatrixRotation();
     }
 
-    public float[] applyTransformation(float[] point) {
-        Vector4f vector = new Vector4f(
-                point[0],
-                point[1],
-                point[2],
-                point.length > 3 ? point[3] : 1.0f
-        );
-        matrix.transform(vector);
-        return new float[]{vector.x, vector.y, vector.z, vector.w};
+    // Helper method to update matrix rotation from quaternion
+    private void updateMatrixRotation() {
+        // Save current translation and scale
+        Vector3f translation = new Vector3f();
+        matrix.getTranslation(translation);
+
+        Vector3f scale = new Vector3f();
+        matrix.getScale(scale);
+
+        // Reset to identity, then apply scale, rotation, and translation in that order
+        matrix.identity();
+        matrix.scale(scale);
+        matrix.rotate(rotation);
+        matrix.setTranslation(translation);
     }
 
     /**
@@ -93,40 +145,16 @@ public class TransformationMatrix {
     }
 
     /**
-     * Extracts a rotation in radians with a more robust method
-     * that handles multiple rotation axes correctly.
+     * Extracts a rotation in radians from the quaternion.
+     * This avoids the gimbal lock issues of the matrix-based approach.
      *
      * @return [x, y, z] rotation in radians
      */
     public float[] getRotation() {
-        float[] rotation = new float[3];
-
-        // Yaw (rotation around Y axis)
-        rotation[1] = (float) Math.atan2(-matrix.m20(), Math.sqrt(matrix.m00() * matrix.m00() + matrix.m10() * matrix.m10()));
-
-        // As a special case, if cos(yaw) is close to 0, use an alternative calculation
-        if (Math.abs(matrix.m20()) < 1e-6 && Math.abs(matrix.m22()) < 1e-6) {
-            // Pitch (rotation around X axis)
-            rotation[0] = (float) Math.atan2(matrix.m12(), matrix.m11());
-            // Roll (rotation around Z axis) is indeterminate: set to 0 or use previous value
-            rotation[2] = 0;
-        } else {
-            // Pitch (rotation around X axis)
-            rotation[0] = (float) Math.atan2(matrix.m21(), matrix.m22());
-            // Roll (rotation around Z axis)
-            rotation[2] = (float) Math.atan2(matrix.m10(), matrix.m00());
-        }
-
-        return rotation; // Returns rotations in radians
-    }
-
-    public void resetRotation() {
-        // Store the current translation
-        Vector3f translation = new Vector3f();
-        matrix.getTranslation(translation);
-
-        // Reset to identity and restore translation
-        matrix.identity().setTranslation(translation);
+        Vector3f eulerAngles = new Vector3f();
+        // Extract in XYZ order directly
+        rotation.getEulerAnglesXYZ(eulerAngles);
+        return new float[]{eulerAngles.x, eulerAngles.y, eulerAngles.z};
     }
 
     // Getter for the Matrix4f
