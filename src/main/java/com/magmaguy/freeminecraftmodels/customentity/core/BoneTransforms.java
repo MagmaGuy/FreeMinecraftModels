@@ -4,7 +4,6 @@ import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.PacketModelEntity;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
-import com.magmaguy.freeminecraftmodels.utils.CoordinateSystemConverter;
 import com.magmaguy.freeminecraftmodels.utils.TransformationMatrix;
 import com.magmaguy.freeminecraftmodels.utils.VersionChecker;
 import lombok.Getter;
@@ -53,8 +52,7 @@ public class BoneTransforms {
 
         // Apply animation rotation
         // Replace your existing animation rotation application with this:
-        Vector3f animRot = CoordinateSystemConverter.convertBlockbenchAnimationToMinecraftRotation(
-                bone.getAnimationRotation());
+        Vector3f animRot = bone.getAnimationRotation();
 
         // Apply animation rotation with converted values
         localMatrix.rotateLocal(
@@ -75,7 +73,7 @@ public class BoneTransforms {
 
         // 6. Apply animation translation
         localMatrix.translateLocal(
-                -bone.getAnimationTranslation().get(0),
+                bone.getAnimationTranslation().get(0),
                 bone.getAnimationTranslation().get(1),
                 bone.getAnimationTranslation().get(2));
 
@@ -88,11 +86,27 @@ public class BoneTransforms {
 
     public void updateGlobalMatrix() {
         if (parent == null) {
+            // For root bone, start with a clean global matrix
+            globalMatrix.resetToIdentityMatrix();
+
             Location currentLocation = bone.getSkeleton().getCurrentLocation();
-//            boneMatrix.rotateGlobalY((float) Math.toRadians(currentLocation.getYaw()));
-//            boneMatrix.rotateGlobalY((float) Math.toRadians(currentLocation.getYaw() + 180));
-            localMatrix.translateGlobal((float) currentLocation.getX(), (float) currentLocation.getY(), (float) currentLocation.getZ());
-            globalMatrix.getMatrix().set(localMatrix.getMatrix());
+
+            // Then apply entity rotation (only convert to radians once)
+//            float yawInRadians = (float) Math.toRadians(currentLocation.getYaw() + 180);
+//            localMatrix.rotateLocalY(yawInRadians);
+
+            // First apply position
+            localMatrix.translateLocal(
+                    (float) currentLocation.getX(),
+                    (float) currentLocation.getY(),
+                    (float) currentLocation.getZ()
+            );
+
+//             Combine with local matrix
+//            TransformationMatrix tempMatrix = new TransformationMatrix();
+//            TransformationMatrix.multiplyMatrices(globalMatrix, localMatrix, tempMatrix);
+//            globalMatrix.getMatrix().set(localMatrix.getMatrix());
+            TransformationMatrix.multiplyMatrices(globalMatrix, localMatrix, globalMatrix);
         } else {
             //This is where the parent's global matrix is applied to the local matrix
             TransformationMatrix.multiplyMatrices(parent.getBoneTransforms().globalMatrix, localMatrix, globalMatrix);
@@ -153,25 +167,28 @@ public class BoneTransforms {
     protected Location getDisplayEntityTargetLocation() {
         // Get translation from global matrix
         float[] translation = globalMatrix.getTranslation();
-
-        return new Location(
-                bone.getSkeleton().getCurrentLocation().getWorld(),
+        Location displayEntityLocation = new Location(bone.getSkeleton().getCurrentLocation().getWorld(),
                 translation[0],
                 translation[1],
-                translation[2]
-        );
+                translation[2]);
+//        displayEntityLocation.setYaw(bone.getSkeleton().getCurrentLocation().getYaw());
+
+        return displayEntityLocation;
     }
 
     protected EulerAngle getBoneRotationForDisplayEntity() {
         // Use entityMatrix to get the global rotation
         float[] rotation = globalMatrix.getRotation();
 
+        return new EulerAngle(rotation[0], rotation[1], rotation[2]);
+//        return new EulerAngle(rotation[0], rotation[1]+ (float) Math.PI , rotation[2]);
+
         // Apply consistent transformation for display entities
-        return new EulerAngle(
-                -rotation[0],                 // Invert X
-                rotation[1] + (float) Math.PI, // Add 180° to Y
-                rotation[2]                   // Keep Z
-        );
+//        return new EulerAngle(
+//                -rotation[0],                 // Invert X
+//                rotation[1] + (float) Math.PI, // Add 180° to Y
+//                rotation[2]                   // Keep Z
+//        );
     }
 
     protected EulerAngle getBoneRotationForArmorStandEntity() {
