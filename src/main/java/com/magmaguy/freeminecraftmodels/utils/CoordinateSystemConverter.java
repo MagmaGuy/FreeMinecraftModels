@@ -12,8 +12,8 @@ public class CoordinateSystemConverter {
 
     public static Vector3f convertBlockbenchAnimationToMinecraftRotation(Vector3f rotVec) {
         return new Vector3f(
-                -rotVec.x,  // Invert X rotation
-                -rotVec.y,  // Invert Y rotation
+                rotVec.x,  // Invert X rotation
+                rotVec.y,  // Invert Y rotation
                 rotVec.z    // Keep Z as is
         );
     }
