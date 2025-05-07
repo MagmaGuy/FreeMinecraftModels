@@ -31,8 +31,8 @@ public class TransformationMatrix {
         matrix.translate(x, y, z);
     }
 
-    public void scale(float x) {
-        matrix.scaleLocal(x, x, x);
+    public void scale(float singleValue) {
+        matrix.scaleLocal(singleValue, singleValue, singleValue);
     }
 
     public void scale(float x, float y, float z) {
@@ -43,28 +43,21 @@ public class TransformationMatrix {
      * Apply rotations in XYZ order
      */
     public void rotateLocal(float x, float y, float z) {
-        // Apply rotations in XYZ order
+        // Apply in XYZ order
         matrix.rotateLocalX(x);
-
-
         matrix.rotateLocalY(y);
-
         matrix.rotateLocalZ(z);
-
-
-        // Optional debug output for rotation values
-        // System.out.println("Applied rotation: X=" + Math.toDegrees(x) +
-        //                  ", Y=" + Math.toDegrees(y) +
-        //                  ", Z=" + Math.toDegrees(z));
     }
 
+    /**
+     * Overload for vector rotations
+     */
     public void rotateLocal(Vector3f rotationVec) {
         rotateLocal(rotationVec.x, rotationVec.y, rotationVec.z);
     }
 
     /**
-     * Extracts rotation in radians from the matrix directly.
-     * Return format is [x, y, z]
+     * Extract rotation in XYZ order
      */
     public float[] getRotation() {
         Vector3f eulerAngles = new Vector3f();
@@ -74,8 +67,6 @@ public class TransformationMatrix {
 
     /**
      * Extracts a xyz position
-     *
-     * @return [x, y, z]
      */
     public float[] getTranslation() {
         Vector3f translation = new Vector3f();
@@ -83,7 +74,7 @@ public class TransformationMatrix {
         return new float[]{translation.x, translation.y, translation.z};
     }
 
-    // Simple direct rotation methods
+    // Direct rotation methods
     public void rotateX(float angleRadians) {
         matrix.rotateX(angleRadians);
     }
@@ -96,6 +87,10 @@ public class TransformationMatrix {
         matrix.rotateLocalY(angleRadians);
     }
 
+    public void rotateLocalZ(float angleRadians) {
+        matrix.rotateLocalZ(angleRadians);
+    }
+
     public void rotateZ(float angleRadians) {
         matrix.rotateZ(angleRadians);
     }
@@ -104,5 +99,4 @@ public class TransformationMatrix {
     public Matrix4f getMatrix() {
         return matrix;
     }
-
 }
