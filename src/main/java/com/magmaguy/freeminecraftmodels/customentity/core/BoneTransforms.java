@@ -54,8 +54,13 @@ public class BoneTransforms {
         translateAnimation();
         rotateAnimation();
         rotateDefaultBoneRotation();
+        scaleAnimation();
         shiftPivotPointBack();
         rotateByEntityYaw();
+    }
+
+    private void scaleAnimation() {
+        localMatrix.scale(getDisplayEntityScale() / 2.5f, getDisplayEntityScale() / 2.5f, getDisplayEntityScale() / 2.5f);
     }
 
     //Shift to model center
@@ -117,7 +122,7 @@ public class BoneTransforms {
             packetDisplayEntity.initializeModel(getDisplayEntityTargetLocation(), Integer.parseInt(bone.getBoneBlueprint().getModelID()));
         else
             packetDisplayEntity.initializeModel(getDisplayEntityTargetLocation(), bone.getBoneBlueprint().getModelID());
-        packetDisplayEntity.setScale(2.5f);
+//        packetDisplayEntity.setScale(2.5f);
         packetDisplayEntity.sendLocationAndRotationPacket(getDisplayEntityTargetLocation(), getDisplayEntityRotation());
     }
 
@@ -140,7 +145,7 @@ public class BoneTransforms {
     }
 
     protected Location getArmorStandTargetLocation() {
-        float[] translatedGlobalMatrix = globalMatrix.applyTransformation(new float[]{0, 0, 0, 1});
+        float[] translatedGlobalMatrix = globalMatrix.getTranslation();
         Location armorStandLocation = new Location(bone.getSkeleton().getCurrentLocation().getWorld(),
                 translatedGlobalMatrix[0],
                 translatedGlobalMatrix[1],
@@ -191,7 +196,10 @@ public class BoneTransforms {
 
     private void sendArmorStandUpdatePacket() {
         if (packetArmorStandEntity != null) {
-            packetArmorStandEntity.sendLocationAndRotationPacket(getArmorStandTargetLocation(), getArmorStandEntityRotation());
+            packetArmorStandEntity.sendLocationAndRotationAndScalePacket(
+                    getArmorStandTargetLocation(),
+                    getArmorStandEntityRotation(),
+                    1f);
         }
     }
 
@@ -199,9 +207,10 @@ public class BoneTransforms {
         return bone.getAnimationScale() == -1 ? 2.5f : bone.getAnimationScale() * 2.5f;
     }
 
+
     private void sendDisplayEntityUpdatePacket() {
         if (packetDisplayEntity != null) {
-            packetDisplayEntity.sendLocationAndRotationAndScalePacket(getDisplayEntityTargetLocation(), getDisplayEntityRotation(), getDisplayEntityScale());
+            packetDisplayEntity.sendLocationAndRotationAndScalePacket(getDisplayEntityTargetLocation(), getDisplayEntityRotation(), globalMatrix.getScale()[0] * 2.5f);
         }
     }
 

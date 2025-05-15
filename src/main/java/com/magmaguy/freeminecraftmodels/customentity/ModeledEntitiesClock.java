@@ -4,6 +4,8 @@ import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.util.ArrayList;
+
 public class ModeledEntitiesClock {
     private static BukkitTask clock = null;
 
@@ -24,6 +26,7 @@ public class ModeledEntitiesClock {
     }
 
     public static void tick() {
-        ModeledEntity.getLoadedModeledEntities().forEach(ModeledEntity::tick);
+        // Create a copy of the collection before iterating
+        new ArrayList<>(ModeledEntity.getLoadedModeledEntities()).forEach(ModeledEntity::tick);
     }
 }

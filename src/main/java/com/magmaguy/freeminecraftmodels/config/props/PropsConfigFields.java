@@ -1,19 +1,16 @@
 package com.magmaguy.freeminecraftmodels.config.props;
 
-import com.magmaguy.freeminecraftmodels.utils.ConfigurationLocation;
+import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.magmacore.config.CustomConfigFields;
 import lombok.Getter;
 import org.bukkit.Location;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Objects;
 
 public class PropsConfigFields extends CustomConfigFields {
 
-    private List<String> deserializedPropLocations;
     @Getter
-    private List<Location> propLocations;
+    private boolean onlyRemovableByOPs = true;
 
     /**
      * Used by plugin-generated files (defaults)
@@ -27,19 +24,14 @@ public class PropsConfigFields extends CustomConfigFields {
 
     @Override
     public void processConfigFields() {
-        this.deserializedPropLocations = processStringList("propLocations", deserializedPropLocations, new ArrayList<>(), false);
-        deserializedPropLocations.forEach(deserializedPropLocation -> addLocation(ConfigurationLocation.serialize(deserializedPropLocation))
-        );
+        onlyRemovableByOPs = processBoolean("onlyRemovableByOPs", onlyRemovableByOPs, onlyRemovableByOPs, false);
     }
 
-    public void addLocation(Location location) {
-        this.propLocations.add(location);
-        this.deserializedPropLocations.add(ConfigurationLocation.deserialize(location));
-        fileConfiguration.set("propLocations", deserializedPropLocations);
-        try {
-            fileConfiguration.save(file);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+    public void permanentlyAddLocation(Location location) {
+        spawnPropEntity(location);
+    }
+
+    public void spawnPropEntity(Location location) {
+        PropEntity.spawnPropEntity(filename.replace(".yml", ""), Objects.requireNonNull(location));
     }
 }

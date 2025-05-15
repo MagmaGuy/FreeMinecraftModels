@@ -45,6 +45,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         Bukkit.getPluginManager().registerEvents(new ModeledEntityEvents(), this);
 //        Bukkit.getPluginManager().registerEvents(new LegacyHitDetection(), this);
         Bukkit.getPluginManager().registerEvents(new OBBHitDetection(), this);
+        Bukkit.getPluginManager().registerEvents(new PropEntity.PropEntityEvents(), this);
 
         Bukkit.getPluginManager().registerEvents(new VersionChecker.VersionCheckerEvents(), this);
         Bukkit.getPluginManager().registerEvents(new EntityTeleportEvent(), this);
@@ -62,6 +63,8 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         OutputFolder.zipResourcePack();
 
         ModeledEntitiesClock.start();
+
+        PropEntity.onStartup();
     }
 
     @Override
@@ -81,6 +84,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         LegacyHitDetection.shutdown();
 //        OBBHitDetection.shutdown();
         OrientedBoundingBoxRayTracer.clearCache();
+        PropEntity.onShutdown();
         Bukkit.getServer().getScheduler().cancelTasks(MetadataHandler.PLUGIN);
         HandlerList.unregisterAll(MetadataHandler.PLUGIN);
     }
