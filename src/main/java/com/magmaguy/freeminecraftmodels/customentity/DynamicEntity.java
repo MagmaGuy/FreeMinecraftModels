@@ -4,15 +4,18 @@ import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.core.*;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.magmacore.util.AttributeManager;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import lombok.Setter;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
+import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.BoundingBox;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -28,12 +31,14 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     private static final NamespacedKey namespacedKey = new NamespacedKey(MetadataHandler.PLUGIN, "DynamicEntity");
     @Getter
     private final String name = "default";
-
+    boolean oneTimeDamageWarning = false;
     // Contact damage detection is integrated into the entity's internal clock
     // Contact damage properties
     @Getter
     @Setter
     private boolean damagesOnContact = true;
+    @Getter
+    private int customDamage = 1;
 
     //Coming soon
     public DynamicEntity(String entityID, Location targetLocation) {
@@ -66,15 +71,24 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         if (fileModelConverter == null) return null;
         DynamicEntity dynamicEntity = new DynamicEntity(entityID, livingEntity.getLocation());
         dynamicEntity.spawn(livingEntity);
-        livingEntity.setVisibleByDefault(false);
-        Bukkit.getOnlinePlayers().forEach(player -> {
-            if (player.getLocation().getWorld().equals(dynamicEntity.getLocation().getWorld())) {
-                player.hideEntity(MetadataHandler.PLUGIN, livingEntity);
-            }
-        });
+//        livingEntity.setVisibleByDefault(false);
+//        Bukkit.getOnlinePlayers().forEach(player -> {
+//            if (player.getLocation().getWorld().equals(dynamicEntity.getLocation().getWorld())) {
+//                player.hideEntity(MetadataHandler.PLUGIN, livingEntity);
+//            }
+//        });
 
         livingEntity.getPersistentDataContainer().set(namespacedKey, PersistentDataType.BYTE, (byte) 0);
         return dynamicEntity;
+    }
+
+    /**
+     * This value only gets used if damagesOnContact is set to true and the entity doesn ot have an attack damage attribute
+     *
+     * @param customDamage
+     */
+    public void setCustomDamage(int customDamage) {
+        this.customDamage = customDamage;
     }
 
     public void spawn(LivingEntity entity) {
@@ -83,11 +97,16 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         super.spawn();
         syncSkeletonWithEntity();
         setHitbox();
+        ItemDisplay display = getLocation().getWorld().spawn(getLocation(), ItemDisplay.class);
+        display.setItemStack(new ItemStack(Material.CACTUS));
     }
 
     @Override
     public void tick() {
         super.tick();
+        livingEntity.setVisibleByDefault(true);
+        livingEntity.setInvisible(false);
+//        Logger.debug("sanity test " + getLocation());
         syncSkeletonWithEntity();
     }
 
@@ -137,7 +156,6 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     @Override
     public void damage(Player player) {
         if (livingEntity == null) return;
-        Logger.debug("damaged");
         player.attack(livingEntity);
         getSkeleton().tint();
     }
@@ -170,7 +188,16 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         // For each nearby player, check collision and apply damage if colliding
         for (Player player : nearbyPlayers) {
             if (isPlayerColliding(player)) {
-                livingEntity.attack(player);
+                if (livingEntity.getAttribute(AttributeManager.getAttribute("generic_attack_damage")) != null)
+                    livingEntity.attack(player);
+                else {
+                    //This is not ideal, the underlying entity should have a damage attribute
+                    player.damage(customDamage, livingEntity);
+                    if (!oneTimeDamageWarning) {
+                        Logger.info("Damaged player " + player.getName() + " for " + customDamage + " damage using custom damage value!");
+                        oneTimeDamageWarning = true;
+                    }
+                }
             }
         }
     }

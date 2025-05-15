@@ -24,7 +24,7 @@ public class StaticEntity extends ModeledEntity implements ModeledEntityInterfac
     @Getter
     private BoundingBox hitbox = null;
 
-    private StaticEntity(String entityID, Location targetLocation) {
+    protected StaticEntity(String entityID, Location targetLocation) {
         super(entityID, targetLocation);
         staticEntities.add(this);
         chunkHash = ChunkHasher.hash(targetLocation);
@@ -77,5 +77,16 @@ public class StaticEntity extends ModeledEntity implements ModeledEntityInterfac
         Location spawnLocation = getSpawnLocation();
         if (spawnLocation == null) return null;
         return spawnLocation.getWorld();
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        syncSkeletonWithEntity();
+    }
+
+    private void syncSkeletonWithEntity() {
+        //todo: maybe implement this in the future
+//        if (damagesOnContact) checkPlayerCollisions();
     }
 }

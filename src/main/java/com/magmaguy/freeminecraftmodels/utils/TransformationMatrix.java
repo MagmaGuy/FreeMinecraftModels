@@ -77,6 +77,51 @@ public class TransformationMatrix {
         replacementMatrix.rotateLocalX(x);
     }
 
+    /**
+     * Extracts the scale factors from the transformation matrix
+     *
+     * @return [scaleX, scaleY, scaleZ]
+     */
+    public float[] getScale() {
+        float[] scale = new float[3];
+
+        // Extract scale by calculating the magnitude of the basis vectors
+        scale[0] = (float) Math.sqrt(
+                matrix[0][0] * matrix[0][0] +
+                        matrix[1][0] * matrix[1][0] +
+                        matrix[2][0] * matrix[2][0]
+        );
+
+        scale[1] = (float) Math.sqrt(
+                matrix[0][1] * matrix[0][1] +
+                        matrix[1][1] * matrix[1][1] +
+                        matrix[2][1] * matrix[2][1]
+        );
+
+        scale[2] = (float) Math.sqrt(
+                matrix[0][2] * matrix[0][2] +
+                        matrix[1][2] * matrix[1][2] +
+                        matrix[2][2] * matrix[2][2]
+        );
+
+        // Optional: Verify with the JOML matrix
+        // You can use this as an alternative or for verification
+        Vector3f jomlScale = new Vector3f();
+        replacementMatrix.getScale(jomlScale);
+
+        // Uncomment if you want to ensure both matrices stay in sync
+        // if (Math.abs(scale[0] - jomlScale.x) > 0.001f ||
+        //     Math.abs(scale[1] - jomlScale.y) > 0.001f ||
+        //     Math.abs(scale[2] - jomlScale.z) > 0.001f) {
+        //     // Sync with JOML if there's a discrepancy
+        //     scale[0] = jomlScale.x;
+        //     scale[1] = jomlScale.y;
+        //     scale[2] = jomlScale.z;
+        // }
+
+        return scale;
+    }
+
     public void rotateX(float angleRadians) {
         TransformationMatrix rotationMatrix = new TransformationMatrix();
         rotationMatrix.matrix[1][1] = (float) Math.cos(angleRadians);

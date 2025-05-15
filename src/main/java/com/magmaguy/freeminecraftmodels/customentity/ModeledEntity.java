@@ -8,6 +8,7 @@ import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import com.magmaguy.freeminecraftmodels.utils.ChunkHasher;
+import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import org.bukkit.Location;
 import org.bukkit.Particle;
@@ -50,13 +51,32 @@ public class ModeledEntity implements ModeledEntityInterface {
         this.entityID = entityID;
         this.spawnLocation = spawnLocation;
         this.lastSeenLocation = spawnLocation;
-//        ModeledEntityEvents.addLoadedModeledEntity(this);
+//  ModeledEntityEvents.addLoadedModeledEntity(this);
+
         FileModelConverter fileModelConverter = FileModelConverter.getConvertedFileModels().get(entityID);
-        if (fileModelConverter == null) return;
+        if (fileModelConverter == null) {
+            Logger.warn("Failed to initialize ModeledEntity: FileModelConverter not found for entityID: " + entityID);
+            return;
+        }
+
         skeletonBlueprint = fileModelConverter.getSkeletonBlueprint();
+        if (skeletonBlueprint == null) {
+            Logger.warn("Failed to initialize ModeledEntity: SkeletonBlueprint not found for entityID: " + entityID);
+            return;
+        }
+
         skeleton = new Skeleton(skeletonBlueprint);
-        if (fileModelConverter.getAnimationsBlueprint() != null)
-            animationManager = new AnimationManager(this, fileModelConverter.getAnimationsBlueprint());
+
+        if (fileModelConverter.getAnimationsBlueprint() != null) {
+            try {
+                animationManager = new AnimationManager(this, fileModelConverter.getAnimationsBlueprint());
+            } catch (Exception e) {
+                Logger.warn("Failed to initialize AnimationManager for entityID: " + entityID + ". Error: " + e.getMessage());
+            }
+        } else {
+            Logger.warn("No AnimationsBlueprint found for entityID: " + entityID + ". AnimationManager not initialized.");
+        }
+
         loadedModeledEntities.add(this);
     }
 
