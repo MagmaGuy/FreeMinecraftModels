@@ -1,9 +1,12 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
+import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityManager;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import org.bukkit.Location;
+import org.bukkit.Particle;
 import org.bukkit.entity.Player;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 import org.joml.Vector3f;
 
@@ -22,23 +25,23 @@ public class OrientedBoundingBoxRayTracer {
     /**
      * Get a fresh OBB for a modeled entity
      */
-    public static OrientedBoundingBox getOrCreateOBB(ModeledEntity entity) {
+    public static OrientedBoundingBox createOBB(ModeledEntity entity) {
         // Get the entity's dimensions from its Skeleton
         float width = 1.0f; // Default width
         float height = 2.0f; // Default height
         float depth = 1.0f; // Default depth
 
         if (entity.getSkeletonBlueprint() != null && entity.getSkeletonBlueprint().getHitbox() != null) {
-            width = (float) entity.getSkeletonBlueprint().getHitbox().getWidth();
+            width = (float) entity.getSkeletonBlueprint().getHitbox().getWidthX();
             height = (float) entity.getSkeletonBlueprint().getHitbox().getHeight();
-            depth = width; // Using width for depth for backward compatibility
+            depth = (float) entity.getSkeletonBlueprint().getHitbox().getWidthZ();
         }
 
         // Create a new OBB - adjust Y position to place bottom of box at entity's feet
         Location entityLoc = entity.getLocation();
         // Move center up by half height so bottom of box is at entity's feet
         Location adjustedLoc = entityLoc.clone().add(0, height / 2, 0);
-        OrientedBoundingBox obb = new OrientedBoundingBox(adjustedLoc, width, height, depth);
+        OrientedBoundingBox obb = new OrientedBoundingBox(adjustedLoc, depth, height, width);
 
         // Apply rotation if this is a dynamic entity
         if (entity.getSkeleton() != null && entity.getSkeleton().getCurrentLocation() != null) {
@@ -46,27 +49,6 @@ public class OrientedBoundingBoxRayTracer {
         }
 
         return obb;
-    }
-
-    /**
-     * Update the OBB for a modeled entity - now just creates a fresh OBB
-     */
-    public static OrientedBoundingBox updateOBB(ModeledEntity entity) {
-        return getOrCreateOBB(entity);
-    }
-
-    /**
-     * Remove an entity's OBB from the cache - now a no-op since we don't cache
-     */
-    public static void removeOBB(ModeledEntity entity) {
-        // No-op since we don't cache anymore
-    }
-
-    /**
-     * Clear the entire OBB cache - now a no-op since we don't cache
-     */
-    public static void clearCache() {
-        // No-op since we don't cache anymore
     }
 
     /**
@@ -117,7 +99,7 @@ public class OrientedBoundingBoxRayTracer {
         // Check each entity for intersection
         for (ModeledEntity entity : entities) {
             // Get a fresh OBB for the entity every time
-            OrientedBoundingBox obb = getOrCreateOBB(entity);
+            OrientedBoundingBox obb = createOBB(entity);
 
             // Check for ray intersection
             float distance = obb.rayIntersection(origin, direction, maxDistance);
@@ -130,5 +112,53 @@ public class OrientedBoundingBoxRayTracer {
         }
 
         return Optional.ofNullable(closestEntity);
+    }
+
+    public static void visualizeOBB(ModeledEntity entity, int durationTicks) {
+        new BukkitRunnable() {
+            private int ticksRemaining = durationTicks;
+
+            @Override
+            public void run() {
+                if (ticksRemaining <= 0 || entity.getWorld() == null) {
+                    this.cancel();
+                    return;
+                }
+
+                // Get a fresh OBB every time
+                OrientedBoundingBox obb = createOBB(entity);
+
+                // Get the corners of the OBB
+                Vector3f[] corners = obb.getCorners();
+
+                // Define the edges of the cube (pairs of corner indices)
+                int[][] edges = {
+                        {0, 1}, {1, 3}, {3, 2}, {2, 0},  // Top face
+                        {4, 5}, {5, 7}, {7, 6}, {6, 4},  // Bottom face
+                        {0, 4}, {1, 5}, {2, 6}, {3, 7}   // Connecting edges
+                };
+
+                // Draw particles along each edge
+                for (int[] edge : edges) {
+                    Vector3f start = corners[edge[0]];
+                    Vector3f end = corners[edge[1]];
+
+                    // Number of particles to place along the edge
+                    int particleCount = 10;
+
+                    for (int i = 0; i <= particleCount; i++) {
+                        float t = i / (float) particleCount;
+                        float x = start.x + t * (end.x - start.x);
+                        float y = start.y + t * (end.y - start.y);
+                        float z = start.z + t * (end.z - start.z);
+
+                        Location particleLoc = new Location(entity.getWorld(), x, y, z);
+                        entity.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, particleLoc, 1, 0, 0, 0, 0);
+                    }
+                }
+
+                ticksRemaining--;
+            }
+        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
     }
 }

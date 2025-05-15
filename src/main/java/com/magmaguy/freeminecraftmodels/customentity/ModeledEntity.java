@@ -2,7 +2,6 @@ package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.freeminecraftmodels.animation.AnimationManager;
 import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityInterface;
-import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityOBBExtension;
 import com.magmaguy.freeminecraftmodels.customentity.core.Skeleton;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
@@ -104,7 +103,7 @@ public class ModeledEntity implements ModeledEntityInterface {
 
     public void spawn(Location location) {
         displayInitializer(location);
-        ModeledEntityOBBExtension.setOBBFromHitboxProperties(this);
+//        ModeledEntityOBBExtension.setOBBFromHitboxProperties(this);
         if (animationManager != null) animationManager.start();
     }
 

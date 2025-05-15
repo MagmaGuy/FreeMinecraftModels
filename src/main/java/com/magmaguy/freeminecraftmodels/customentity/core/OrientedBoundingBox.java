@@ -1,9 +1,7 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import org.bukkit.Location;
-import org.bukkit.util.Vector;
 import org.joml.Matrix3f;
-import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 /**
@@ -55,20 +53,6 @@ public class OrientedBoundingBox {
     }
 
     /**
-     * Update the box's center position
-     */
-    public void setCenter(Vector3f center) {
-        this.center = new Vector3f(center);
-    }
-
-    /**
-     * Update the box's center position from a Bukkit location
-     */
-    public void setCenter(Location location) {
-        this.center = new Vector3f((float) location.getX(), (float) location.getY(), (float) location.getZ());
-    }
-
-    /**
      * Get the half-extents of the box
      */
     public Vector3f getHalfExtents() {
@@ -107,25 +91,8 @@ public class OrientedBoundingBox {
      */
     public void setRotationFromLocation(Location location) {
         float yaw = (float) Math.toRadians(-location.getYaw() - 90);
-        float pitch = (float) Math.toRadians(-location.getPitch());
-        setRotation(yaw, pitch, 0);
-    }
-
-    /**
-     * Apply a transformation matrix to this OBB
-     */
-    public void applyTransformation(Matrix4f transform) {
-        // Extract and apply rotation
-        Matrix3f newRotation = new Matrix3f();
-        transform.get3x3(newRotation);
-        this.rotation.mul(newRotation);
-
-        // Apply translation to center
-        Vector3f translation = new Vector3f();
-        transform.getTranslation(translation);
-        this.center.add(translation);
-
-        updateAxes();
+//        float pitch = (float) Math.toRadians(-location.getPitch());
+        setRotation(yaw, 0, 0);
     }
 
     /**
@@ -232,16 +199,5 @@ public class OrientedBoundingBox {
 
         // Return the nearest intersection distance
         return tMin > 0 ? tMin : tMax;
-    }
-
-    /**
-     * Checks if a ray from Bukkit vectors intersects with this OBB
-     */
-    public float rayIntersection(Vector origin, Vector direction, float maxDistance) {
-        return rayIntersection(
-                new Vector3f((float) origin.getX(), (float) origin.getY(), (float) origin.getZ()),
-                new Vector3f((float) direction.getX(), (float) direction.getY(), (float) direction.getZ()).normalize(),
-                maxDistance
-        );
     }
 }

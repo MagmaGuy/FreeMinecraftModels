@@ -111,7 +111,7 @@ public class Skeleton {
     public void transform() {
         rootBone.transform();
         if (dynamicEntity != null) {
-            ModeledEntityOBBExtension.updateOBB(dynamicEntity);
+            //todo: update cached bounding box
         }
     }
 
