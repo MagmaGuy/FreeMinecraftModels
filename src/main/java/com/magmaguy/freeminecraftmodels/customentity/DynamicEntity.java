@@ -8,10 +8,7 @@ import com.magmaguy.magmacore.util.AttributeManager;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import lombok.Setter;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.NamespacedKey;
-import org.bukkit.World;
+import org.bukkit.*;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -40,7 +37,6 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     @Getter
     private int customDamage = 1;
 
-    //Coming soon
     public DynamicEntity(String entityID, Location targetLocation) {
         super(entityID, targetLocation);
         dynamicEntities.add(this);
@@ -71,12 +67,12 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         if (fileModelConverter == null) return null;
         DynamicEntity dynamicEntity = new DynamicEntity(entityID, livingEntity.getLocation());
         dynamicEntity.spawn(livingEntity);
-//        livingEntity.setVisibleByDefault(false);
-//        Bukkit.getOnlinePlayers().forEach(player -> {
-//            if (player.getLocation().getWorld().equals(dynamicEntity.getLocation().getWorld())) {
-//                player.hideEntity(MetadataHandler.PLUGIN, livingEntity);
-//            }
-//        });
+        livingEntity.setVisibleByDefault(false);
+        Bukkit.getOnlinePlayers().forEach(player -> {
+            if (player.getLocation().getWorld().equals(dynamicEntity.getLocation().getWorld())) {
+                player.hideEntity(MetadataHandler.PLUGIN, livingEntity);
+            }
+        });
 
         livingEntity.getPersistentDataContainer().set(namespacedKey, PersistentDataType.BYTE, (byte) 0);
         return dynamicEntity;
@@ -104,9 +100,6 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     @Override
     public void tick() {
         super.tick();
-        livingEntity.setVisibleByDefault(true);
-        livingEntity.setInvisible(false);
-//        Logger.debug("sanity test " + getLocation());
         syncSkeletonWithEntity();
     }
 
@@ -136,7 +129,7 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
 
     private void setHitbox() {
         if (getSkeletonBlueprint().getHitbox() == null) return;
-        NMSManager.getAdapter().setCustomHitbox(super.livingEntity, (float) getSkeletonBlueprint().getHitbox().getWidth(), (float) getSkeletonBlueprint().getHitbox().getHeight(), true);
+        NMSManager.getAdapter().setCustomHitbox(super.livingEntity, getSkeletonBlueprint().getHitbox().getWidthX() < getSkeletonBlueprint().getHitbox().getWidthZ() ? (float) getSkeletonBlueprint().getHitbox().getWidthX() : (float) getSkeletonBlueprint().getHitbox().getWidthZ(), (float) getSkeletonBlueprint().getHitbox().getHeight(), true);
     }
 
     @Override
@@ -149,15 +142,20 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     public void damage(Player player, double damage) {
         if (livingEntity == null) return;
         OBBHitDetection.applyDamage = true;
-        player.attack(livingEntity);
+        livingEntity.damage(damage, player);
+        OBBHitDetection.applyDamage = false;
         getSkeleton().tint();
+        if (!livingEntity.isValid()) remove();
     }
 
     @Override
     public void damage(Player player) {
         if (livingEntity == null) return;
+        OBBHitDetection.applyDamage = true;
         player.attack(livingEntity);
+        OBBHitDetection.applyDamage = false;
         getSkeleton().tint();
+        if (!livingEntity.isValid()) remove();
     }
 
     @Override
@@ -207,7 +205,7 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
      */
     private boolean isPlayerColliding(Player player) {
         // Get fresh OBB for entity
-        OrientedBoundingBox entityOBB = ModeledEntityOBBExtension.getOBB(this);
+        OrientedBoundingBox entityOBB = OrientedBoundingBoxRayTracer.createOBB(this);
 
         // Get player's bounding box
         BoundingBox playerBB = player.getBoundingBox();

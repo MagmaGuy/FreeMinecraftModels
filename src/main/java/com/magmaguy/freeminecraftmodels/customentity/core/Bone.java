@@ -134,10 +134,10 @@ public class Bone {
     private void sendTeleportPacket() {
         counter++;
         int reset = 20 * 60 * 2;
-        if (counter > reset) {
-            counter = 0;
-            skeleton.getSkeletonWatchers().reset();
-        }
+//        if (counter > reset) {
+//            counter = 0;
+//            skeleton.getSkeletonWatchers().reset();
+//        }
         if (boneTransforms.getPacketArmorStandEntity() != null) {
             boneTransforms.getPacketArmorStandEntity().teleport(boneTransforms.getArmorStandTargetLocation());
         }

@@ -15,7 +15,9 @@ public class HitboxBlueprint {
     private Vector modelOffset = new Vector();
     private BoneBlueprint parent = null;
     @Getter
-    private double width;
+    private double widthX;
+    @Getter
+    private double widthZ;
     @Getter
     private double height;
 
@@ -48,11 +50,9 @@ public class HitboxBlueprint {
         Vector from = new Vector(Round.fourDecimalPlaces(fromList.get(0) * scaleFactor), Round.fourDecimalPlaces(fromList.get(1) * scaleFactor), Round.fourDecimalPlaces(fromList.get(2) * scaleFactor));
         ArrayList<Double> toList = (ArrayList<Double>) cubeJSON.get("to");
         Vector to = new Vector(Round.fourDecimalPlaces(toList.get(0) * scaleFactor), Round.fourDecimalPlaces(toList.get(1) * scaleFactor), Round.fourDecimalPlaces(toList.get(2) * scaleFactor));
-        width = Math.abs(to.getX() - from.getX());
-        if (Math.abs(Math.abs(to.getZ() - from.getZ()) - width) > .1)
-            Logger.warn("Model " + modelName + " has a different X and Z value for the hitbox! x=" + width + " / z=" + Math.abs(to.getZ() - from.getZ()) + " ! Only the X value will be used for the hitbox.");
+        widthX = Math.abs(to.getX() - from.getX());
+        widthZ = Math.abs(to.getZ() - from.getZ());
         height = Math.abs(from.getY() - to.getY());
-        //modelOffset = new Vector(from.getX() + width / 2D, from.getY() + height / 2D, from.getZ() + width / 2D);
         modelOffset = new Vector(0, 0, 0);
     }
 }

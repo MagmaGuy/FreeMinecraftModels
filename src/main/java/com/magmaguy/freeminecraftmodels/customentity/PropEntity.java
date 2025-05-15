@@ -3,7 +3,6 @@ package com.magmaguy.freeminecraftmodels.customentity;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.props.PropsConfig;
 import com.magmaguy.freeminecraftmodels.config.props.PropsConfigFields;
-import com.magmaguy.freeminecraftmodels.customentity.core.OBBHitDetection;
 import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.*;
 import org.bukkit.entity.ArmorStand;
@@ -24,6 +23,7 @@ public class PropEntity extends StaticEntity {
     public static HashMap<ArmorStand, PropEntity> propEntities = new HashMap<>();
     private ArmorStand armorStand;
     private PropsConfigFields propsConfigFields;
+    private double health = 3;
 
     public PropEntity(String entityID, Location spawnLocation) {
         super(entityID, spawnLocation);
@@ -90,8 +90,33 @@ public class PropEntity extends StaticEntity {
     @Override
     public void damage(Player player) {
         if (propsConfigFields.isOnlyRemovableByOPs() && !player.isOp()) return;
-        OBBHitDetection.applyDamage = true;
-        permanentlyRemove();
+        if (armorStand == null) {
+            permanentlyRemove();
+            Logger.warn("Failed to damage PropEntity: ArmorStand is null!");
+            return;
+        }
+//        OBBHitDetection.applyDamage = true;
+//        player.attack(armorStand);
+//        OBBHitDetection.applyDamage = false;
+        health -= 1;
+        getSkeleton().tint();
+        if (!armorStand.isValid() || health <= 0) permanentlyRemove();
+    }
+
+    @Override
+    public void damage(Player player, double damage) {
+        if (propsConfigFields.isOnlyRemovableByOPs() && !player.isOp()) return;
+        if (armorStand == null) {
+            permanentlyRemove();
+            Logger.warn("Failed to damage PropEntity: ArmorStand is null!");
+            return;
+        }
+//        OBBHitDetection.applyDamage = true;
+//        armorStand.damage(damage, player);
+//        OBBHitDetection.applyDamage = false;
+        health -= 1;
+        getSkeleton().tint();
+        if (!armorStand.isValid() || health <= 0) permanentlyRemove();
     }
 
     public void permanentlyRemove() {

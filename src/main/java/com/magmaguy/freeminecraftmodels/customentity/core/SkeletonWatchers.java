@@ -127,6 +127,7 @@ public class SkeletonWatchers implements Listener {
         skeleton.getBones().forEach(bone -> bone.hideFrom(uuid));
     }
 
+    //Todo: one day rounding errors might be fixed such that this is no longer needed
     public void reset() {
         Set<UUID> tempViewers = Collections.synchronizedSet(new HashSet<>(viewers));
         tempViewers.forEach(viewer -> {

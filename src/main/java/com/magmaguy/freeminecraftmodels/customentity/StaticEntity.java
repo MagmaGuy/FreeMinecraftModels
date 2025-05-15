@@ -49,12 +49,13 @@ public class StaticEntity extends ModeledEntity implements ModeledEntityInterfac
     public void spawn() {
         super.spawn();
         if (getSkeletonBlueprint().getHitbox() != null) {
-            double halfWidth = getSkeletonBlueprint().getHitbox().getWidth() / 2D;
+            double halfWidthX = getSkeletonBlueprint().getHitbox().getWidthX() / 2D;
+            double halfWidthZ = getSkeletonBlueprint().getHitbox().getWidthZ() / 2D;
             double height = getSkeletonBlueprint().getHitbox().getHeight();
             Vector modelOffset = getSkeletonBlueprint().getHitbox().getModelOffset();
             Location hitboxLocation = getSpawnLocation().add(modelOffset);
-            hitbox = new BoundingBox(hitboxLocation.getX() - halfWidth, hitboxLocation.getY(), hitboxLocation.getZ() - halfWidth,
-                    hitboxLocation.getX() + halfWidth, hitboxLocation.getY() + height, hitboxLocation.getZ() + halfWidth);
+            hitbox = new BoundingBox(hitboxLocation.getX() - halfWidthX, hitboxLocation.getY(), hitboxLocation.getZ() - halfWidthZ,
+                    hitboxLocation.getX() + halfWidthX, hitboxLocation.getY() + height, hitboxLocation.getZ() + halfWidthZ);
         }
     }
 
