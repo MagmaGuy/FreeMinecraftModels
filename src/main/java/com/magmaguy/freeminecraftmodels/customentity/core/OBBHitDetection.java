@@ -5,6 +5,7 @@ import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.PlayerAnimationEvent;
 import org.bukkit.event.player.PlayerAnimationType;
@@ -53,7 +54,33 @@ public class OBBHitDetection implements Listener {
             return;
         }
         event.setCancelled(true);
-        Logger.debug("cancelled damaged by entity");
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void blockBreakEvent(BlockBreakEvent event) {
+        // Get the block location and calculate distance to player
+        double blockDistance = event.getPlayer().getEyeLocation().distance(
+                event.getBlock().getLocation().add(0.5, 0.5, 0.5)); // Center of block
+
+        // Check for hit entity
+        Optional<ModeledEntity> hitEntityOpt = OrientedBoundingBoxRayTracer.raytraceFromPlayer(event.getPlayer());
+
+        // If no entity was hit, allow the block break
+        if (hitEntityOpt.isEmpty()) return;
+
+        // Get the hit entity and calculate its distance
+        ModeledEntity hitEntity = hitEntityOpt.get();
+        double entityDistance = event.getPlayer().getEyeLocation().distance(hitEntity.getLocation());
+
+        // Only cancel if the entity is closer than or at the same distance as the block
+        if (entityDistance <= blockDistance) {
+            event.setCancelled(true);
+            Logger.debug("Cancelled block break - entity in the way at distance " + entityDistance +
+                    " (block at " + blockDistance + ")");
+        } else {
+            Logger.debug("Allowing block break - entity is behind block (entity: " +
+                    entityDistance + ", block: " + blockDistance + ")");
+        }
     }
 
     //todo: this does not currently account for projectiles
