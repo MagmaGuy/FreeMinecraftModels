@@ -2,7 +2,6 @@ package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityInterface;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
-import com.magmaguy.freeminecraftmodels.utils.ChunkHasher;
 import lombok.Getter;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -27,7 +26,6 @@ public class StaticEntity extends ModeledEntity implements ModeledEntityInterfac
     protected StaticEntity(String entityID, Location targetLocation) {
         super(entityID, targetLocation);
         staticEntities.add(this);
-        chunkHash = ChunkHasher.hash(targetLocation);
     }
 
     public static void shutdown() {

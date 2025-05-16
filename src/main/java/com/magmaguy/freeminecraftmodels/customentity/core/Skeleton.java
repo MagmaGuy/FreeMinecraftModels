@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
+import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import lombok.Getter;
@@ -12,6 +13,7 @@ import org.bukkit.entity.ArmorStand;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -24,6 +26,7 @@ public class Skeleton {
     //In BlockBench models are referred to by name for animations, and names are unique
     @Getter
     private final HashMap<String, Bone> boneMap = new HashMap<>();
+    @Getter
     private final SkeletonBlueprint skeletonBlueprint;
     @Getter
     private final SkeletonWatchers skeletonWatchers;
@@ -40,10 +43,14 @@ public class Skeleton {
     @Getter
     @Setter
     private DynamicEntity dynamicEntity = null;
+    @Getter
+    @Setter
+    private ModeledEntity modeledEntity = null;
     private Bone rootBone = null;
 
-    public Skeleton(SkeletonBlueprint skeletonBlueprint) {
+    public Skeleton(SkeletonBlueprint skeletonBlueprint, ModeledEntity modeledEntity) {
         this.skeletonBlueprint = skeletonBlueprint;
+        this.modeledEntity = modeledEntity;
         skeletonBlueprint.getBoneMap().forEach((key, value) -> {
             if (value.getParent() == null) {
                 Bone bone = new Bone(value, null, this);
@@ -55,7 +62,9 @@ public class Skeleton {
         skeletonWatchers = new SkeletonWatchers(this);
     }
 
+    @Nullable
     public Location getCurrentLocation() {
+        if (currentLocation == null) return null;
         return currentLocation.clone();
     }
 
@@ -68,7 +77,6 @@ public class Skeleton {
     }
 
     public void remove() {
-        skeletonWatchers.remove();
         boneMap.values().forEach(Bone::remove);
     }
 
@@ -109,7 +117,8 @@ public class Skeleton {
      * This updates animations. The plugin runs this automatically, don't use it unless you know what you're doing!
      */
     public void transform() {
-        rootBone.transform();
+        skeletonWatchers.tick();
+        if (getSkeletonWatchers().hasObservers()) rootBone.transform();
         if (dynamicEntity != null) {
             //todo: update cached bounding box
         }

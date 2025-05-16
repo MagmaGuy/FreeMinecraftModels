@@ -31,7 +31,7 @@ public class OBBHitDetection implements Listener {
         }
 
         // Check for hit entity
-        Optional<ModeledEntity> hitEntity = OrientedBoundingBoxRayTracer.raytraceFromPlayer(event.getPlayer());
+        Optional<ModeledEntity> hitEntity = OrientedBoundingBox.raytraceFromPlayer(event.getPlayer());
 
         // If no entity was hit, allow normal processing
         if (hitEntity.isEmpty()) {
@@ -63,7 +63,7 @@ public class OBBHitDetection implements Listener {
                 event.getBlock().getLocation().add(0.5, 0.5, 0.5)); // Center of block
 
         // Check for hit entity
-        Optional<ModeledEntity> hitEntityOpt = OrientedBoundingBoxRayTracer.raytraceFromPlayer(event.getPlayer());
+        Optional<ModeledEntity> hitEntityOpt = OrientedBoundingBox.raytraceFromPlayer(event.getPlayer());
 
         // If no entity was hit, allow the block break
         if (hitEntityOpt.isEmpty()) return;
