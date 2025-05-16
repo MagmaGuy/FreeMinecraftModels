@@ -1,7 +1,6 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
-import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -75,11 +74,6 @@ public class OBBHitDetection implements Listener {
         // Only cancel if the entity is closer than or at the same distance as the block
         if (entityDistance <= blockDistance) {
             event.setCancelled(true);
-            Logger.debug("Cancelled block break - entity in the way at distance " + entityDistance +
-                    " (block at " + blockDistance + ")");
-        } else {
-            Logger.debug("Allowing block break - entity is behind block (entity: " +
-                    entityDistance + ", block: " + blockDistance + ")");
         }
     }
 

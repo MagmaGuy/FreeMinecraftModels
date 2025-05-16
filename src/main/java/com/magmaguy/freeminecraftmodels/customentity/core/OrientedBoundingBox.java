@@ -151,7 +151,7 @@ public class OrientedBoundingBox {
         // Check each entity for intersection
         for (ModeledEntity entity : entities) {
             // Get a fresh OBB for the entity every time
-            OrientedBoundingBox obb = createOBB(entity);
+            OrientedBoundingBox obb = entity.getObbHitbox();
 
             // Check for ray intersection
             double distance = obb.rayIntersection(location, maxDistance);
@@ -178,7 +178,7 @@ public class OrientedBoundingBox {
                 }
 
                 // Get a fresh OBB every time
-                OrientedBoundingBox obb = createOBB(entity);
+                OrientedBoundingBox obb = entity.getObbHitbox();
 
                 // Get the corners of the OBB
                 Vector3d[] corners = obb.getCorners();

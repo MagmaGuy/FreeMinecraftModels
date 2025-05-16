@@ -15,7 +15,6 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.persistence.PersistentDataType;
-import org.joml.Vector3d;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -100,8 +99,7 @@ public class ModeledEntity {
 
     public void tick() {
         getSkeleton().transform();
-        Location location = getLocation();
-        getObbHitbox().setCenter(new Vector3d(location.getX(), location.getY(), location.getZ()));
+        getObbHitbox().update(getLocation());
         if (animationManager != null)
             animationManager.tick();
         //overriden by extending classes
