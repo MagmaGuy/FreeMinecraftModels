@@ -2,21 +2,24 @@ package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
-import com.magmaguy.freeminecraftmodels.customentity.core.*;
+import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityInterface;
+import com.magmaguy.freeminecraftmodels.customentity.core.OBBHitDetection;
+import com.magmaguy.freeminecraftmodels.customentity.core.OrientedBoundingBox;
+import com.magmaguy.freeminecraftmodels.customentity.core.RegisterModelEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.magmacore.util.AttributeManager;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import lombok.Setter;
-import org.bukkit.*;
-import org.bukkit.entity.ItemDisplay;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
+import org.bukkit.World;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.BoundingBox;
 import org.checkerframework.checker.nullness.qual.Nullable;
-import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -93,8 +96,6 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         super.spawn();
         syncSkeletonWithEntity();
         setHitbox();
-        ItemDisplay display = getLocation().getWorld().spawn(getLocation(), ItemDisplay.class);
-        display.setItemStack(new ItemStack(Material.CACTUS));
     }
 
     @Override
@@ -130,12 +131,6 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     private void setHitbox() {
         if (getSkeletonBlueprint().getHitbox() == null) return;
         NMSManager.getAdapter().setCustomHitbox(super.livingEntity, getSkeletonBlueprint().getHitbox().getWidthX() < getSkeletonBlueprint().getHitbox().getWidthZ() ? (float) getSkeletonBlueprint().getHitbox().getWidthX() : (float) getSkeletonBlueprint().getHitbox().getWidthZ(), (float) getSkeletonBlueprint().getHitbox().getHeight(), true);
-    }
-
-    @Override
-    public BoundingBox getHitbox() {
-        if (livingEntity == null) return null;
-        return livingEntity.getBoundingBox();
     }
 
     @Override
@@ -205,46 +200,13 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
      */
     private boolean isPlayerColliding(Player player) {
         // Get fresh OBB for entity
-        OrientedBoundingBox entityOBB = OrientedBoundingBoxRayTracer.createOBB(this);
+        OrientedBoundingBox entityOBB = OrientedBoundingBox.createOBB(this);
 
         // Get player's bounding box
         BoundingBox playerBB = player.getBoundingBox();
 
         // Check for collision
-        return isAABBCollidingWithOBB(playerBB, entityOBB);
-    }
-
-    /**
-     * Checks if an AABB is colliding with an OBB
-     */
-    private boolean isAABBCollidingWithOBB(BoundingBox aabb, OrientedBoundingBox obb) {
-        // Get AABB center and half-extents
-        Vector3f aabbCenter = new Vector3f(
-                (float) ((aabb.getMinX() + aabb.getMaxX()) / 2),
-                (float) ((aabb.getMinY() + aabb.getMaxY()) / 2),
-                (float) ((aabb.getMinZ() + aabb.getMaxZ()) / 2)
-        );
-
-        Vector3f aabbHalfExtents = new Vector3f(
-                (float) ((aabb.getMaxX() - aabb.getMinX()) / 2),
-                (float) ((aabb.getMaxY() - aabb.getMinY()) / 2),
-                (float) ((aabb.getMaxZ() - aabb.getMinZ()) / 2)
-        );
-
-        // Get OBB center and half-extents
-        Vector3f obbCenter = obb.getCenter();
-        Vector3f obbHalfExtents = obb.getHalfExtents();
-
-        // Calculate distance between centers
-        float distX = Math.abs(obbCenter.x - aabbCenter.x);
-        float distY = Math.abs(obbCenter.y - aabbCenter.y);
-        float distZ = Math.abs(obbCenter.z - aabbCenter.z);
-
-        // Check if distances are less than sum of half-extents
-        // This is a simplified collision check that works well for most cases
-        return distX < (obbHalfExtents.x + aabbHalfExtents.x) &&
-                distY < (obbHalfExtents.y + aabbHalfExtents.y) &&
-                distZ < (obbHalfExtents.z + aabbHalfExtents.z);
+        return getObbHitbox().isAABBCollidingWithOBB(playerBB, entityOBB);
     }
 
 }

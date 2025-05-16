@@ -23,7 +23,6 @@ public class AnimationManager {
     private Animation jumpAnimation = null;
     private Animation deathAnimation = null;
     private Animation spawnAnimation = null;
-    private BukkitTask clock = null;
     //This one is used for preventing default animations other than death from playing for as long as it is true
     private boolean animationGracePeriod = false;
 
@@ -62,15 +61,11 @@ public class AnimationManager {
                     }
                 }.runTaskLater(MetadataHandler.PLUGIN, spawnAnimation.getAnimationBlueprint().getDuration());
         } else if (idleAnimation != null) states.add(idleAnimation);
+    }
 
-        clock = new BukkitRunnable() {
-            @Override
-            public void run() {
-                updateStates();
-                states.forEach(animation -> playAnimationFrame(animation));
-            }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
-
+    public void tick() {
+        updateStates();
+        states.forEach(animation -> playAnimationFrame(animation));
     }
 
     private void updateStates() {
@@ -179,9 +174,5 @@ public class AnimationManager {
 
     public boolean hasAnimation(String animationName) {
         return animations.getAnimations().containsKey(animationName);
-    }
-
-    public void end() {
-        if (clock != null) clock.cancel();
     }
 }
