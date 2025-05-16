@@ -3,8 +3,10 @@ package com.magmaguy.freeminecraftmodels.config.props;
 import com.magmaguy.magmacore.config.ConfigurationEngine;
 import com.magmaguy.magmacore.config.CustomConfig;
 import com.magmaguy.magmacore.config.CustomConfigFields;
+import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.entity.Player;
 
 import java.io.File;
 import java.util.HashMap;
@@ -23,12 +25,20 @@ public class PropsConfig extends CustomConfig {
                 propsConfigs.put(key, (PropsConfigFields) super.getCustomConfigFieldsHashMap().get(key));
     }
 
-    public static PropsConfigFields addPropConfigurationFile(String propFilename) {
-        PropsConfig.getPropsConfigs().put(propFilename, new PropsConfigFields(propFilename, true));
-        PropsConfigFields newProp = PropsConfig.getPropsConfigs().get(propFilename);
-        propsConfigs.put(propFilename, newProp);
-        INSTANCE.initialize(newProp);
-        return newProp;
+    public static PropsConfigFields addPropConfigurationFile(String propFilename, Player player) {
+        if (!propsConfigs.containsKey(propFilename)) {
+            PropsConfigFields newProp = new PropsConfigFields(propFilename, true);
+            propsConfigs.put(propFilename, newProp);
+            INSTANCE.initialize(newProp);
+
+            // Only show this message if a new config was created
+            Logger.sendMessage(player, "Created new prop config file at ~/plugins/FreeMinecraftModels/props/" + propFilename + ".yml");
+            return newProp;
+        } else {
+            // If the config already exists, inform the user where they can edit the values
+            Logger.sendMessage(player, "Using existing prop config. You can edit properties at ~/plugins/FreeMinecraftModels/props/" + propFilename + ".yml");
+            return propsConfigs.get(propFilename);
+        }
     }
 
     private void initialize(CustomConfigFields customConfigFields) {
@@ -51,5 +61,4 @@ public class PropsConfig extends CustomConfig {
         //Store for use by the plugin
         addCustomConfigFields(file.getName(), customConfigFields);
     }
-
 }
