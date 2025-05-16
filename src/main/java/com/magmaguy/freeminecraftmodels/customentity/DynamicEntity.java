@@ -4,7 +4,6 @@ import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityInterface;
 import com.magmaguy.freeminecraftmodels.customentity.core.OBBHitDetection;
-import com.magmaguy.freeminecraftmodels.customentity.core.OrientedBoundingBox;
 import com.magmaguy.freeminecraftmodels.customentity.core.RegisterModelEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.magmacore.util.AttributeManager;
@@ -18,7 +17,6 @@ import org.bukkit.World;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.util.BoundingBox;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
@@ -32,11 +30,12 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     @Getter
     private final String name = "default";
     boolean oneTimeDamageWarning = false;
+    int counter = 0;
     // Contact damage detection is integrated into the entity's internal clock
     // Contact damage properties
     @Getter
     @Setter
-    private boolean damagesOnContact = true;
+    private boolean damagesOnContact = false;
     @Getter
     private int customDamage = 1;
 
@@ -117,8 +116,8 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         getSkeleton().setCurrentHeadPitch(livingEntity.getEyeLocation().getPitch());
         getSkeleton().setCurrentHeadYaw(livingEntity.getEyeLocation().getYaw());
 
-        //todo: might want to run every other tick for performance
-        if (damagesOnContact) checkPlayerCollisions();
+        if (damagesOnContact && counter % 2 == 0) checkPlayerCollisions();
+        counter++;
     }
 
     @Override
@@ -175,7 +174,7 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
 
         // Check for nearby players (within 5 blocks)
         List<Player> nearbyPlayers = livingEntity.getWorld().getPlayers().stream()
-                .filter(player -> player.getLocation().distanceSquared(livingEntity.getLocation()) < 25)
+                .filter(player -> player.getLocation().distanceSquared(livingEntity.getLocation()) < Math.pow(10, 2))
                 .collect(Collectors.toList());
 
         // For each nearby player, check collision and apply damage if colliding
@@ -199,14 +198,8 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
      * Checks if a player is colliding with this entity
      */
     private boolean isPlayerColliding(Player player) {
-        // Get fresh OBB for entity
-        OrientedBoundingBox entityOBB = OrientedBoundingBox.createOBB(this);
-
-        // Get player's bounding box
-        BoundingBox playerBB = player.getBoundingBox();
-
         // Check for collision
-        return getObbHitbox().isAABBCollidingWithOBB(playerBB, entityOBB);
+        return getObbHitbox().isAABBCollidingWithOBB(player.getBoundingBox(), getObbHitbox());
     }
 
 }

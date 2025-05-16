@@ -2,7 +2,7 @@ package com.magmaguy.freeminecraftmodels.entities;
 
 import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
 import com.magmaguy.freeminecraftmodels.customentity.core.RegisterModelEntity;
-import com.magmaguy.freeminecraftmodels.utils.VersionChecker;
+import com.magmaguy.magmacore.util.VersionChecker;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;

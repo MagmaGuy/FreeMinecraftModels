@@ -1,23 +1,17 @@
-# Insane findings
-
-This section is just for developers to be aware of some of the insane findings I've made and had to account for while
-developing this.
-
-- Blockbench uses one X and Y rotations for posing the bones, and the inverse rotations for animating those bones. This
-  means that FMM has to invert the raw rotation data for either posing or animating. For some reason, this does not
-  happen with the Z axis.
-
 # ***Before you start!***
 
-FreeMinecraftModels (FMM) is currently in **alpha**! This means that several features are not yet done, and are actively
+FreeMinecraftModels (FMM) is currently in **active development**! This means that some features are not yet done, and
+are actively
 being worked on.
 
 However, at this moment, the core of the plugin is fully functional - converting bbmodel files, generating resource
-packs, spawning entities in-game and managing their animations is all working, if perhaps not 100% polished.
+packs, spawning entities in-game and managing their animations, the ability to place persistent prop, is all mostly
+working.
 
 Consider supporting the development at https://www.patreon.com/magmaguy !
 
-The exported resource pack contents are licensed under the CC0 license, no rights reserved. You are free to use,
+The exported resource pack contents are licensed under the CC0 license on FreeMinecraftModels' end, no rights reserved.
+You are free to use,
 distribute, modify for any purposes without restrictions or the need for attribution.
 
 # Using this plugin
@@ -27,28 +21,43 @@ distribute, modify for any purposes without restrictions or the need for attribu
 It can:
 
 - Import .bbmodel or fmmodel (FFM's custom format) models
-- Generate resource packs with models that exceed normal Minecraft resource pack model limits (up to ~~112x112x112~~
-  106x106x106 units or 7x7x7 in-game blocks)
-- Display these models in-game through the use of the command `/fmm spawn static <id>` where the id is the file name of
-  the model, in lowercase and without the file extension
+- Generate resource packs with models that exceed normal Minecraft resource pack model limits (up to 112x112x112 units
+  or 7x7x7 in-game blocks, functionally unlimited when using multiple bones)
+- Display these models in-game, sending specific bedrock-compatible packets to bedrock clients while also sending
+  display entities to 1.19.4+ java clients
 - Animate these models as they were configured to be animated in Blockbench
 - Handle default state animations without requiring other plugins (walk, idle, death, attack, spawn)
+- Handle hitboxes that rotate with the underlying entity and have a different x and z axis
+- Manage three types of models: static, dynamic and props
+    - Props are persistent and can be placed in the world in such a way that will persist even if the server is
+      restarted, and it is possible to distribute maps with props to other servers
+    - Dynamic models are for models that need an underlying living entity to function, ideally used by custom boss
+      plugins or pets plugins
+    - Static models are for non-persistent models that should not move around, so basically temporary decorations or
+      effects
 
 ### How do you add an existing model?
 
 To import a model, just drag the .bbmodel to the imports folder and do `/fmm reload`. This will generate a .fmmodel file in the `models` folder and add the model to the resource pack in the `outputs` folder.
 
-***You will need to use that resource pack to view the model correctly!*** It is a normal resource pack, so all you need to do is put it in your resource pack folder. Minecraft servers have a way to host resource packs on third party services such as google drive or a specialized service such as https://resourcepack.host/, that last website might be the easiest way of doing it.
+***You will need to use that resource pack to view the model correctly!*** It is a normal resource pack, so all you need
+to do is put it in your resource pack folder. Minecraft servers have a way to host resource packs. I recommend using my
+plugin, [ResourcePackManager](https://www.spigotmc.org/resources/resource-pack-manager.118574/), which automatically
+grabs the files and hosts them remotely for you, even merging them with the files of other plugins.
 
 ### How do you view the model in-game?
 
-There are two (planned) categories of models.
+It is important to note that while FreeMinecraftModels can be used as a standalone plugin for viewing props (basically
+custom models that you can place in the world), the plugin is usually at its best when paired with a plugin such
+as [EliteMobs](https://www.spigotmc.org/resources/elitemobs.40090/) where the models are actively used for something
+concrete, in this case boss fights.
 
-- `Static` models are for models that do not move (but can have animations), and serve more like decorations - think
-  something like a tower or a Christmas tree.
-- `Dynamic` models are for models that behave like Minecraft mobs, that is to say they move around and do various
-  behaviors associated to mobs. Think something like custom boss models or adding completely new entity types to
-  Minecraft.
+There are three types of models: static, dynamic and props.
+- Props are persistent and can be placed in the world in such a way that will persist even if the server is restarted,
+and it is possible to distribute maps with props to other servers
+- Dynamic models are for models that need an underlying living entity to function, ideally used by custom boss plugins
+or pets plugins
+- Static models are for non-persistent models that should not move around, so basically temporary decorations or effects
 
 #### Viewing static models in-game
 
@@ -57,6 +66,11 @@ To view static models in-game, use the command `/fmm spawn static <id>` where th
 #### Viewing dynamic models in-game
 
 To view dynamic models in-game, use the command `/fmm spawn dynamic <id>` where the id is the file name of the model, in
+lowercase and without the file extension.
+
+#### Viewing props in-game
+
+To view dynamic models in-game, use the command `/fmm spawn prop <id>` where the id is the file name of the model, in
 lowercase and without the file extension.
 
 ## What can FreeMinecraftModels (FMM) do for modelers?
@@ -73,7 +87,7 @@ generation restrictions:
 
 Cubes are the same here as they are in Blockbench, they are the cubes that make up the model.
 
-- Cubes can go up to ~~112x112x112~~ 106x106x106 "pixels" (Blockbench units) or 7x7x7 in-game blocks (normal Minecraft
+- Cubes can go up to 112x112x112 "pixels" (Blockbench units) or 7x7x7 in-game blocks (normal Minecraft
   restrictions bypassed using display sizes, soon to be further bypassed for 1.19.4+ thanks to display entities)
 - Legal rotations for cubes are 0, 22.5, -22.5, 45 and -45. No other rotation works.
 - Cubes only rotate in one axis, meaning that a rotation of [22.5, 0, 0] is fine, a rotation of [22.5, 0, 45] will not
@@ -84,28 +98,33 @@ Cubes are the same here as they are in Blockbench, they are the cubes that make 
 Bones are what Blockbench calls "groups". They serve to group the cubes together, and should be used to group bones
 together for animationsBlueprint.
 
-- Bones can go up to ~~112x112x112~~ 106x106x106 (should be 112, not sure why this is) "pixels" (Blockbench units) or
+- Bones can go up to 112x112x112 "pixels" (Blockbench units) or
   7x7x7 in-game blocks. *Please note that the size of bones is set by what they have, so if you have cubes that are more
   than 7 blocks apart, you will probably exceed this size limit. Bypassing this limit is as easy as putting the blocks
   in a different boneBlueprint not contained in the first boneBlueprint!*
-- Can have any rotation!
+- Can have any rotation! However, it is recommended to avoid using default rotations of 90, -90, 180 and -180, as these
+  can often lead to unexpected behavior. Note that this does not really apply to animations, just the default resting
+  position of the bones.
 
 Bones are significantly more flexible than cubes, but you should use as few bones as possible! In FMM, due to Minecraft
-limitations, each boneBlueprint is a different entity. At a scale, this will affect performance rather quickly! Always
+limitations, each bone is a different entity. At a scale, this will affect performance rather quickly! Always
 use as few bones as you can, and be mindful of how many of that model you are planning to spawn - the more of it you
 plan to have, the fewer bones you should have!
 
 #### **Virtual Bones**
 
-If you are coming from ModelEngine, you probably want to know if/how virtual bones are implemented in FMM. Virtual bones
-have been earmarked, but are not currently implemented beyond very basic groundwork.
+Virtual Bones is model engine terminology for bones that have a specific metadata, usually in the form of a specific
+name, which is used for a specific purpose.
 
-However, at the very least, the following virtual bones will be compatible with FMM soon:
+The following virtual bones have been implemented in FreeMinecraftModels:
 
-- Hitboxes / eye height: a boneBlueprint called "hitbox" with a cubeBlueprint that defines the boundaries, and has the same x and z value (the largest value will be picked if they are not the same) defines the hitbox. The eye level is set at the pivot point of the hitbox's boneBlueprint.
-- Name tag: a boneBlueprint whose name starts with "tag_". Honestly I would prefer being mode specific here and going with "tag_name" in order to use tags for other things, but that will be seriously considered later.
-
-No other virtual boneBlueprint feature is guaranteed to be added in the immediate future.
+- Hitboxes / eye height: a bone called "hitbox" with a cubeBlueprint that defines the boundaries, and has the same x and
+  z value (the largest value will be picked if they are not the same) defines the hitbox. The eye level is set at the
+  pivot point of the hitbox's boneBlueprint.
+- Name tag: a bone whose name starts with "tag_". Honestly I would prefer being mode specific here and going with "
+  tag_name" in order to use tags for other things, but that will be seriously considered later.
+- Head: a bone whose name starts with h_ . This is a virtual bone that is used to define the head of the model, which
+  will rotate based on the rotation of the head of the underlying entity.
 
 #### **Safer, easier, uneditable file distribution**
 
@@ -137,7 +156,7 @@ Maven:
 <dependency>
 <groupId>com.magmaguy</groupId>
 <artifactId>FreeMinecraftModels</artifactId>
-<version>1.4.1</version>
+<version>LATEST.VERSION.HERE</version>
 </dependency>
 ```
 
@@ -149,20 +168,29 @@ maven {
     url = uri("https://repo.magmaguy.com/releases")
 }
 
-compileOnly group : 'com.magmaguy', name: 'FreeMinecraftModels', version: '1.4.1'
+compileOnly group : 'com.magmaguy', name: 'FreeMinecraftModels', version: 'LATEST.VERSION.HERE'
 ```
 
-*Note FreeMinecraftModels is mean to be used as an API, and will require installation of the plugin on the server. Do
+*Note FreeMinecraftModels is meant to be used as an API, and will require installation of the plugin on the server. Do
 not shade it into your plugin!*
+
+## API usage
 
 FMM aims to be as easy as possible to use as an API.
 
-Right now, there is only one class you need to know about if you wish to use FMM as an API for your plugin, and that
-is `StaticEntity`.
+Right now, if you wish to use FreeMinecraftModels as an API to have access to using custom models, there's only four
+classes you need to know about:
+
+- `ModeledEntity` - the base class for all entities
+- `StaticEntity` - for when you want to use a non-permanent static model
+- `DynamicEntity` - for when you want to disguise another living entity with a model
+- `PropEntity` - for when you want to place a model in the world that persists even if the server is restarted
 
 Here is a snippet for handling a static model:
 
 ```java
+import org.bukkit.Bukkit;
+
 public class FreeMinecraftModelsModel {
     private StaticEntity staticEntity = null;
 
@@ -171,7 +199,7 @@ public class FreeMinecraftModelsModel {
         //This spawns the entity!
         staticEntity = StaticEntity.create(id, location);
         //This checks if the entity spawned correctly
-        if (staticEntity == null) Logger.warningMessage("FMM failed to find a model named " + id + " !");
+        if (staticEntity == null) Bukkit.getLogger().warning(("FMM failed to find a model named " + id + " !"));
     }
 
     public void remove() {
@@ -252,9 +280,6 @@ public class CustomModelFMM implements CustomModelInterface {
 Dynamic models are built on top of a living entity, which can be provided either when using the create method as in the
 example above, or when running the spawn method on a Dynamic entity.
 
-While there is no formal API resource right now, all elements intended for API use are contained within ModeledEntity (
-the base class for all entities), StaticEntity, DynamicEntity and ModeledEntityManager. 99% of developers should find
-all the methods they need spread across those three classes.
 
 # Contributing to the FreeMinecraftModels (FMM) project as a developer
 
@@ -274,7 +299,7 @@ To save you some time, here is a quick breakdown of the logic flow of FMM:
 
 1) Read the `imports` folder
 2) Move files from `imports` folder into the `models` folder. If the file is a `.bbmodel`, it gets converted
-   to `.fmmodel` in the models folder.
+   to `.fmmodel` in the `models` folder.
 3) Read the files in the `models` folder.
 4) Interpret all model structures, creating `Skeleton`s which contain groups of `Bone`s, and these bones contain groups
    of child `Bone`s and `Cube`s. `Cube`s and `Bone`s generate the JSON resource pack data they are each related to. This
@@ -295,12 +320,10 @@ Please note that these tricks are all completely invisible to users and model ma
 - Because resource pack models can only have models go from -16 to +32 in size, models are shifted in the background. This is completely invisible to players.
 - Leather horse armor is used to create models with a hue that can be influenced through code (i.e. for damage indications). The horse armor must be set to white to display the correct colors!
 - Blockbench uses a specific system of IDs for the textures, but actually reads the textures sequentially from config. IDs are assigned here based on their position in the list of textures, following how Blockbench does it.
-- Each boneBlueprint is a different armor stand entity due to Minecraft limitations
+- Each bone is a different entity due to Minecraft limitations
 - Leather horse armor is on the head slot of the armor stand
-- Armor stands are used for the default static items. //todo: soon I'll have to implement the new alternative display
-  system from MC 1.19.4+, it's way more efficient
-- To avoid collisions with other plugins which modify leather horse armor, FMM uses custom model data values starting at
-  50,000
+- Both armor stands and display entities are used for the default static items; bedrock clients get the armor stands,
+  and 1.19.4+ clients get the display entities (older clients will get armor stands)
 
 # Contributing to the FreeMinecraftModels (FMM) project in general
 
@@ -308,9 +331,10 @@ FMM is actually crowdfunded by the lovely people over at https://www.patreon.com
 
 # Currently planned features:
 - Bedrock client RSP generation
-- Server properties-independent RSP management with geyser integration
-- Custom entities (?)
+- RSP management with geyser integration
 - tag_projectile as meta bones from which projectiles can be shot (can have more than one per model)
 
-# Current weird limitations that need to be fixed:
-- If the pivot point (origin) of a boneBlueprint is set to be over 67ish the model starts floating
+# Current weird limitations that it would be nice to fix:
+
+- The TransformationMatrix is a mess, but no better solutions have been developed yet. They need some work from someone
+  who is good at matrices.

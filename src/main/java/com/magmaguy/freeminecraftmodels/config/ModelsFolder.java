@@ -4,8 +4,8 @@ import com.google.gson.Gson;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
-import com.magmaguy.freeminecraftmodels.utils.VersionChecker;
 import com.magmaguy.magmacore.util.Logger;
+import com.magmaguy.magmacore.util.VersionChecker;
 import org.apache.commons.io.FileUtils;
 
 import java.io.File;

@@ -1,7 +1,7 @@
 package com.magmaguy.freeminecraftmodels.thirdparty;
 
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
-import com.magmaguy.freeminecraftmodels.utils.VersionChecker;
+import com.magmaguy.magmacore.util.VersionChecker;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.geysermc.floodgate.api.FloodgateApi;

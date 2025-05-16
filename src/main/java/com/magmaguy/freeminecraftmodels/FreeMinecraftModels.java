@@ -10,7 +10,6 @@ import com.magmaguy.freeminecraftmodels.customentity.*;
 import com.magmaguy.freeminecraftmodels.customentity.core.OBBHitDetection;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.listeners.EntityTeleportEvent;
-import com.magmaguy.freeminecraftmodels.utils.VersionChecker;
 import com.magmaguy.magmacore.MagmaCore;
 import com.magmaguy.magmacore.command.CommandManager;
 import org.bstats.bukkit.Metrics;
@@ -34,6 +33,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         Bukkit.getLogger().info("Version " + this.getDescription().getVersion());
         MetadataHandler.PLUGIN = this;
         MagmaCore.onEnable();
+        MagmaCore.checkVersionUpdate("111660");
         //Initialize plugin configuration files
         new DefaultConfig();
         MagmaCore.initializeImporter();
@@ -41,17 +41,12 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         ModelsFolder.initializeConfig();
         Metrics metrics = new Metrics(this, 19337);
         Bukkit.getPluginManager().registerEvents(new ModeledEntityEvents(), this);
-//        Bukkit.getPluginManager().registerEvents(new LegacyHitDetection(), this);
         Bukkit.getPluginManager().registerEvents(new OBBHitDetection(), this);
         Bukkit.getPluginManager().registerEvents(new PropEntity.PropEntityEvents(), this);
-
-        Bukkit.getPluginManager().registerEvents(new VersionChecker.VersionCheckerEvents(), this);
         Bukkit.getPluginManager().registerEvents(new EntityTeleportEvent(), this);
         NMSManager.initializeAdapter(this);
-        VersionChecker.checkPluginVersion();
         CommandManager manager = new CommandManager(this, "freeminecraftmodels");
         manager.registerCommand(new MountCommand());
-        manager.registerCommand(new PropCommand());
         manager.registerCommand(new HitboxDebugCommand());
         manager.registerCommand(new ReloadCommand());
         manager.registerCommand(new SpawnCommand());
