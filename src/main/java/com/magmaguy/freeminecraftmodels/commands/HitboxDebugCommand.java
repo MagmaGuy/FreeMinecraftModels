@@ -2,7 +2,7 @@ package com.magmaguy.freeminecraftmodels.commands;
 
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityManager;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
-import com.magmaguy.freeminecraftmodels.customentity.core.OrientedBoundingBoxRayTracer;
+import com.magmaguy.freeminecraftmodels.customentity.core.OrientedBoundingBox;
 import com.magmaguy.magmacore.command.AdvancedCommand;
 import com.magmaguy.magmacore.command.CommandData;
 import com.magmaguy.magmacore.command.SenderType;
@@ -17,9 +17,9 @@ import java.util.stream.Collectors;
 /**
  * Debug command for the OBB hitbox system
  */
-public class OBBDebugCommand extends AdvancedCommand {
+public class HitboxDebugCommand extends AdvancedCommand {
 
-    public OBBDebugCommand() {
+    public HitboxDebugCommand() {
         super(List.of("hitbox"));
         addArgument("action", new ListStringCommandArgument(
                 List.of("visualize"),
@@ -68,7 +68,7 @@ public class OBBDebugCommand extends AdvancedCommand {
 
         int finalDuration = duration;
         nearbyEntities.forEach(entity -> {
-            OrientedBoundingBoxRayTracer.visualizeOBB(entity, finalDuration);
+            OrientedBoundingBox.visualizeOBB(entity, finalDuration);
         });
 
         Logger.sendMessage(player, ChatColor.GREEN + "Visualizing " + nearbyEntities.size() +

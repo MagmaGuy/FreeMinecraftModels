@@ -1,56 +1,53 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.freeminecraftmodels.animation.AnimationManager;
-import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityInterface;
+import com.magmaguy.freeminecraftmodels.customentity.core.OrientedBoundingBox;
 import com.magmaguy.freeminecraftmodels.customentity.core.Skeleton;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
-import com.magmaguy.freeminecraftmodels.utils.ChunkHasher;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import org.bukkit.Location;
-import org.bukkit.Particle;
 import org.bukkit.World;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.util.BoundingBox;
-import org.bukkit.util.Vector;
+import org.joml.Vector3d;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 
-public class ModeledEntity implements ModeledEntityInterface {
+public class ModeledEntity {
 
+    @Getter
+    private static final HashSet<ModeledEntity> loadedModeledEntities = new HashSet<>();
     @Getter
     private final String entityID;
     @Getter
     private final String name = "default";
     private final Location spawnLocation;
-    protected Integer chunkHash = null;
+    @Getter
+    private final List<TextDisplay> nametags = new ArrayList<>();
+    @Getter
+    private final Location lastSeenLocation;
     @Getter
     protected LivingEntity livingEntity = null;
     @Getter
-    private static final HashSet<ModeledEntity> loadedModeledEntities = new HashSet<>();
-    @Getter
     private SkeletonBlueprint skeletonBlueprint = null;
     @Getter
-    private Location lastSeenLocation;
-    @Getter
     private Skeleton skeleton;
+    private AnimationManager animationManager = null;
     @Getter
-    private List<TextDisplay> nametags = new ArrayList<>();
-    AnimationManager animationManager = null;
+    private OrientedBoundingBox obbHitbox = null;
 
     public ModeledEntity(String entityID, Location spawnLocation) {
         this.entityID = entityID;
         this.spawnLocation = spawnLocation;
         this.lastSeenLocation = spawnLocation;
-//  ModeledEntityEvents.addLoadedModeledEntity(this);
 
         FileModelConverter fileModelConverter = FileModelConverter.getConvertedFileModels().get(entityID);
         if (fileModelConverter == null) {
@@ -64,7 +61,7 @@ public class ModeledEntity implements ModeledEntityInterface {
             return;
         }
 
-        skeleton = new Skeleton(skeletonBlueprint);
+        skeleton = new Skeleton(skeletonBlueprint, this);
 
         if (fileModelConverter.getAnimationsBlueprint() != null) {
             try {
@@ -83,14 +80,31 @@ public class ModeledEntity implements ModeledEntityInterface {
         loadedModeledEntities.clear();
     }
 
-    public void tick() {
-        if (this instanceof DynamicEntity || animationManager != null)
-            getSkeleton().transform();
-        //overriden by extending classes
-    }
-
     private static boolean isNameTag(ArmorStand armorStand) {
         return armorStand.getPersistentDataContainer().has(BoneBlueprint.nameTagKey, PersistentDataType.BYTE);
+    }
+
+    public OrientedBoundingBox getObbHitbox() {
+        if (obbHitbox == null) {
+            if (getSkeletonBlueprint().getHitbox() != null) {
+                return obbHitbox = new OrientedBoundingBox(
+                        getSkeleton().getCurrentLocation(),
+                        getSkeletonBlueprint().getHitbox().getWidthX(),
+                        getSkeletonBlueprint().getHitbox().getHeight(),
+                        getSkeletonBlueprint().getHitbox().getWidthZ());
+            } else {
+                return obbHitbox = new OrientedBoundingBox(getSkeleton().getCurrentLocation(), 1, 2, 1);
+            }
+        } else return obbHitbox;
+    }
+
+    public void tick() {
+        getSkeleton().transform();
+        Location location = getLocation();
+        getObbHitbox().setCenter(new Vector3d(location.getX(), location.getY(), location.getZ()));
+        if (animationManager != null)
+            animationManager.tick();
+        //overriden by extending classes
     }
 
     public Location getSpawnLocation() {
@@ -119,10 +133,6 @@ public class ModeledEntity implements ModeledEntityInterface {
         return animationManager.playAnimation(animationName, blendAnimation);
     }
 
-    public void loadChunk() {
-        spawn();
-    }
-
     public void spawn() {
         spawn(lastSeenLocation);
     }
@@ -133,11 +143,6 @@ public class ModeledEntity implements ModeledEntityInterface {
         if (livingEntity != null) livingEntity.remove();
 //        ModeledEntityEvents.removeLoadedModeledEntity(this);
 //        ModeledEntityEvents.removeUnloadedModeledEntity(this);
-        terminateAnimation();
-    }
-
-    private void terminateAnimation() {
-        if (animationManager != null) animationManager.end();
     }
 
     /**
@@ -150,12 +155,6 @@ public class ModeledEntity implements ModeledEntityInterface {
     public boolean hasAnimation(String animationName) {
         if (animationManager == null) return false;
         return animationManager.hasAnimation(animationName);
-    }
-
-    public void unloadChunk() {
-        lastSeenLocation = getLocation();
-        skeleton.remove();
-        terminateAnimation();
     }
 
     /**
@@ -186,22 +185,12 @@ public class ModeledEntity implements ModeledEntityInterface {
         return skeleton.getNametags();
     }
 
-    /**
-     * This just moves the static entity over by the set amount in the vector.
-     *
-     * @param vector Vector to be added to the location of the static entity
-     */
-    public void move(Vector vector) {
-//        armorStandList.forEach(armorStand -> armorStand.teleport(armorStand.getLocation().add(vector)));
-    }
-
     public Location getLocation() {
-        return spawnLocation;
+        return spawnLocation.clone();
     }
 
-    public int getChunkHash() {
-        if (chunkHash == null) return ChunkHasher.hash(getLocation());
-        return chunkHash;
+    public boolean isChunkLoaded() {
+        return getWorld().isChunkLoaded(getLocation().getBlockX() >> 4, getLocation().getBlockZ() >> 4);
     }
 
     public World getWorld() {
@@ -209,33 +198,12 @@ public class ModeledEntity implements ModeledEntityInterface {
         return null;
     }
 
-    @Override
     public void damage(Player player, double damage) {
         //Overriden by extending classes
     }
 
-    @Override
     public void damage(Player player) {
         //Overriden by extending classes
-    }
-
-    public BoundingBox getHitbox() {
-        //Overriden by extending classes
-        return null;
-    }
-
-    public void visualizeHitbox() {
-        BoundingBox boundingBox = getHitbox();
-        double resolution = 4D;
-        for (int x = 0; x < boundingBox.getWidthX() * resolution; x++)
-            for (int y = 0; y < boundingBox.getHeight() * resolution; y++)
-                for (int z = 0; z < boundingBox.getWidthX() * resolution; z++) {
-                    double newX = x / resolution + boundingBox.getMinX();
-                    double newY = y / resolution + boundingBox.getMinY();
-                    double newZ = z / resolution + boundingBox.getMinZ();
-                    Location location = new Location(getWorld(), newX, newY, newZ);
-                    location.getWorld().spawnParticle(Particle.FLAME, location, 1, 0, 0, 0, 0);
-                }
     }
 
     public void teleport(Location location) {

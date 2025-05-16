@@ -52,7 +52,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         CommandManager manager = new CommandManager(this, "freeminecraftmodels");
         manager.registerCommand(new MountCommand());
         manager.registerCommand(new PropCommand());
-        manager.registerCommand(new OBBDebugCommand());
+        manager.registerCommand(new HitboxDebugCommand());
         manager.registerCommand(new ReloadCommand());
         manager.registerCommand(new SpawnCommand());
         manager.registerCommand(new VersionCommand());

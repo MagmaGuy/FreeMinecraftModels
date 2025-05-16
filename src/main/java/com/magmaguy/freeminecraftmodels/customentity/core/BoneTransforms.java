@@ -145,7 +145,7 @@ public class BoneTransforms {
     }
 
     protected Location getArmorStandTargetLocation() {
-        float[] translatedGlobalMatrix = globalMatrix.getTranslation();
+        double[] translatedGlobalMatrix = globalMatrix.getTranslation();
         Location armorStandLocation = new Location(bone.getSkeleton().getCurrentLocation().getWorld(),
                 translatedGlobalMatrix[0],
                 translatedGlobalMatrix[1],
@@ -157,7 +157,7 @@ public class BoneTransforms {
     }
 
     protected Location getDisplayEntityTargetLocation() {
-        float[] translatedGlobalMatrix = globalMatrix.getTranslation();
+        double[] translatedGlobalMatrix = globalMatrix.getTranslation();
         Location armorStandLocation;
         if (!VersionChecker.serverVersionOlderThan(20, 0)) {
             armorStandLocation = new Location(bone.getSkeleton().getCurrentLocation().getWorld(),
@@ -176,7 +176,7 @@ public class BoneTransforms {
     }
 
     protected EulerAngle getDisplayEntityRotation() {
-        float[] rotation = globalMatrix.getRotation();
+        double[] rotation = globalMatrix.getRotation();
         if (VersionChecker.serverVersionOlderThan(20, 0))
             return new EulerAngle(rotation[0], rotation[1], rotation[2]);
         else {
@@ -185,7 +185,7 @@ public class BoneTransforms {
     }
 
     protected EulerAngle getArmorStandEntityRotation() {
-        float[] rotation = globalMatrix.getRotation();
+        double[] rotation = globalMatrix.getRotation();
         return new EulerAngle(-rotation[0], -rotation[1], rotation[2]);
     }
 
@@ -210,7 +210,7 @@ public class BoneTransforms {
 
     private void sendDisplayEntityUpdatePacket() {
         if (packetDisplayEntity != null) {
-            packetDisplayEntity.sendLocationAndRotationAndScalePacket(getDisplayEntityTargetLocation(), getDisplayEntityRotation(), globalMatrix.getScale()[0] * 2.5f);
+            packetDisplayEntity.sendLocationAndRotationAndScalePacket(getDisplayEntityTargetLocation(), getDisplayEntityRotation(), (float) globalMatrix.getScale()[0] * 2.5f);
         }
     }
 

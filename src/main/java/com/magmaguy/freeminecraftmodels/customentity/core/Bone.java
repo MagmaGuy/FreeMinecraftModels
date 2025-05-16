@@ -28,7 +28,6 @@ public class Bone {
     private final BoneTransforms boneTransforms;
     @Getter
     private Vector3f animationTranslation = new Vector3f();
-    private int counter = 0;
     @Getter
     private Vector3f animationRotation = new Vector3f();
     @Getter
@@ -93,12 +92,6 @@ public class Bone {
     }
 
     public void sendUpdatePacket() {
-        counter++;
-        int reset = 20 * 60 * 2;
-        if (counter > reset) {
-            counter = 0;
-            skeleton.getSkeletonWatchers().reset();
-        }
         boneTransforms.sendUpdatePacket();
     }
 
@@ -132,12 +125,6 @@ public class Bone {
     }
 
     private void sendTeleportPacket() {
-        counter++;
-        int reset = 20 * 60 * 2;
-//        if (counter > reset) {
-//            counter = 0;
-//            skeleton.getSkeletonWatchers().reset();
-//        }
         if (boneTransforms.getPacketArmorStandEntity() != null) {
             boneTransforms.getPacketArmorStandEntity().teleport(boneTransforms.getArmorStandTargetLocation());
         }
