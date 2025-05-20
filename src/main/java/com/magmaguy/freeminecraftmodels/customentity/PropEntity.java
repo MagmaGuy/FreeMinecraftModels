@@ -22,7 +22,7 @@ public class PropEntity extends StaticEntity {
     public static final NamespacedKey propNamespacedKey = new NamespacedKey(MetadataHandler.PLUGIN, "prop");
     public static HashMap<ArmorStand, PropEntity> propEntities = new HashMap<>();
     private ArmorStand armorStand;
-    private PropsConfigFields propsConfigFields;
+    private final PropsConfigFields propsConfigFields;
     private double health = 3;
 
     public PropEntity(String entityID, Location spawnLocation) {
@@ -49,10 +49,6 @@ public class PropEntity extends StaticEntity {
             return;
         }
         this.armorStand = armorStand;
-    }
-
-    public static void onShutdown() {
-        propEntities.clear();
     }
 
     public static void onStartup() {
@@ -119,9 +115,20 @@ public class PropEntity extends StaticEntity {
         if (!armorStand.isValid() || health <= 0) permanentlyRemove();
     }
 
-    public void permanentlyRemove() {
+    @Override
+    public void remove() {
         super.remove();
-        armorStand.remove();
+        propEntities.remove(armorStand);
+    }
+
+    @Override
+    protected void shutdownRemove() {
+        remove();
+    }
+
+    public void permanentlyRemove() {
+        remove();
+        if (armorStand != null) armorStand.remove();
     }
 
     public static class PropEntityEvents implements Listener {

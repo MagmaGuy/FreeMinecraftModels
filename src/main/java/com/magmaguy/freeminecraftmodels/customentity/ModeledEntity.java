@@ -8,6 +8,7 @@ import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
+import lombok.Setter;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.ArmorStand;
@@ -18,10 +19,17 @@ import org.bukkit.persistence.PersistentDataType;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 
 public class ModeledEntity {
-
+    private final int scaleDurationTicks = 20;
+    /**
+     * Whether the entity is currently dying.
+     * This is set to true when the entity is in the process of getting removed with a death animation.
+     */
+    @Getter
+    private boolean isDying = false;
     @Getter
     private static final HashSet<ModeledEntity> loadedModeledEntities = new HashSet<>();
     @Getter
@@ -74,10 +82,11 @@ public class ModeledEntity {
 
         loadedModeledEntities.add(this);
     }
-
-    public static void shutdown() {
-        loadedModeledEntities.clear();
-    }
+    @Getter
+    private boolean isRemoved = false;
+    @Getter
+    @Setter
+    private double scaleModifier = 1.0;
 
     private static boolean isNameTag(ArmorStand armorStand) {
         return armorStand.getPersistentDataContainer().has(BoneBlueprint.nameTagKey, PersistentDataType.BYTE);
@@ -96,14 +105,9 @@ public class ModeledEntity {
             }
         } else return obbHitbox;
     }
-
-    public void tick() {
-        getSkeleton().transform();
-        getObbHitbox().update(getLocation());
-        if (animationManager != null)
-            animationManager.tick();
-        //overriden by extending classes
-    }
+    private boolean isScalingDown = false;
+    private int scaleTicksElapsed = 0;
+    private double scaleStart = 1.0;
 
     public Location getSpawnLocation() {
         return spawnLocation.clone();
@@ -115,8 +119,56 @@ public class ModeledEntity {
 
     public void spawn(Location location) {
         displayInitializer(location);
-//        ModeledEntityOBBExtension.setOBBFromHitboxProperties(this);
-        if (animationManager != null) animationManager.start();
+    }
+    private double scaleEnd = 0.0;
+
+    public void spawn() {
+        spawn(lastSeenLocation);
+    }
+
+    public static void shutdown() {
+        Iterator<ModeledEntity> iterator = loadedModeledEntities.iterator();
+        while (iterator.hasNext()) {
+            ModeledEntity entity = iterator.next();
+            entity.shutdownRemove();
+        }
+        loadedModeledEntities.clear();
+    }
+
+    protected void shutdownRemove() {
+        remove();
+    }
+
+    public void tick() {
+        if (isRemoved) return; // ⬅ Stop ticking if the entity is already removed
+
+        getSkeleton().transform();
+        updateHitbox();
+
+        if (isScalingDown) {
+            scaleTicksElapsed++;
+
+            double t = Math.min(scaleTicksElapsed / (double) scaleDurationTicks, 1.0);
+            scaleModifier = lerp(scaleStart, scaleEnd, t);
+
+            if (scaleTicksElapsed >= scaleDurationTicks) {
+                scaleModifier = 0.0;
+                isScalingDown = false;
+                remove(); // triggers isRemoved = true
+            }
+        }
+
+        if (animationManager != null) {
+            animationManager.tick();
+        }
+    }
+
+    private double lerp(double start, double end, double t) {
+        return start + (end - start) * t;
+    }
+
+    protected void updateHitbox() {
+        getObbHitbox().update(getLocation());
     }
 
     /**
@@ -127,20 +179,37 @@ public class ModeledEntity {
      *                       If set to true, the animation will be mixed with any currently ongoing animations
      * @return Whether the animation successfully started playing.
      */
-    public boolean playAnimation(String animationName, boolean blendAnimation) {
-        return animationManager.playAnimation(animationName, blendAnimation);
+    public boolean playAnimation(String animationName, boolean blendAnimation, boolean loop) {
+        return animationManager.play(animationName, blendAnimation, loop);
     }
 
-    public void spawn() {
-        spawn(lastSeenLocation);
+    public void removeWithDeathAnimation() {
+        isDying = true;
+        if (animationManager != null) {
+            if (!animationManager.play("death", false, false)) {
+                remove();
+            }
+        } else remove();
+    }
+
+    public void removeWithMinimizedAnimation() {
+        if (isScalingDown) return;
+        isDying = true;
+        isScalingDown = true;
+        scaleTicksElapsed = 0;
+        scaleStart = scaleModifier;
+        scaleEnd = 0.0;
     }
 
     public void remove() {
+        if (isRemoved) {
+            return;
+        }
+
         skeleton.remove();
         loadedModeledEntities.remove(this);
         if (livingEntity != null) livingEntity.remove();
-//        ModeledEntityEvents.removeLoadedModeledEntity(this);
-//        ModeledEntityEvents.removeUnloadedModeledEntity(this);
+        isRemoved = true;
     }
 
     /**

@@ -1,175 +1,156 @@
 package com.magmaguy.freeminecraftmodels.animation;
 
-import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
+import com.magmaguy.freeminecraftmodels.dataconverter.AnimationFrame;
 import com.magmaguy.freeminecraftmodels.dataconverter.AnimationsBlueprint;
-import com.magmaguy.freeminecraftmodels.utils.LoopType;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitTask;
 
-import java.util.HashSet;
-import java.util.List;
+import java.util.EnumMap;
+import java.util.Map;
 
 public class AnimationManager {
-    private static List<AnimationManager> loadedAnimations;
-    private static List<AnimationManager> unloadedAnimations;
-    private final Animations animations;
+    private final Map<AnimationStateType, IAnimState> states = new EnumMap<>(AnimationStateType.class);
     private final ModeledEntity modeledEntity;
-    private final HashSet<Animation> states = new HashSet<>();
-    //There are some animation defaults that will activate automatically so long as the animations are adequately named
-    private Animation idleAnimation = null;
-    private Animation attackAnimation = null;
-    private Animation walkAnimation = null;
-    private Animation jumpAnimation = null;
-    private Animation deathAnimation = null;
-    private Animation spawnAnimation = null;
-    //This one is used for preventing default animations other than death from playing for as long as it is true
-    private boolean animationGracePeriod = false;
+    private final Animations animations;
+    private IAnimState current;
+    private IAnimState nextQueued;
+    private AnimationStateType lastCommitted;
 
-    public AnimationManager(ModeledEntity modeledEntity, AnimationsBlueprint animationsBlueprint) {
+    public AnimationManager(ModeledEntity modeledEntity, AnimationsBlueprint bp) {
         this.modeledEntity = modeledEntity;
-        this.animations = new Animations(animationsBlueprint, modeledEntity);
+        this.animations = new Animations(bp, modeledEntity);
 
-        idleAnimation = animations.getAnimations().get("idle");
-        attackAnimation = animations.getAnimations().get("attack");
-        walkAnimation = animations.getAnimations().get("walk");
-        jumpAnimation = animations.getAnimations().get("jump");
-        deathAnimation = animations.getAnimations().get("death");
-        spawnAnimation = animations.getAnimations().get("spawn");
+        // register states
+        if (animations.getAnimations().get("idle") != null)
+            states.put(AnimationStateType.IDLE, new IdleState(modeledEntity, new AnimationStateConfig(animations.getAnimations().get("idle"), true)));
+        if (animations.getAnimations().get("walk") != null)
+            states.put(AnimationStateType.WALK, new WalkState(modeledEntity, new AnimationStateConfig(animations.getAnimations().get("walk"), true)));
+        if (animations.getAnimations().get("attack") != null)
+            states.put(AnimationStateType.ATTACK, new AttackState(new AnimationStateConfig(animations.getAnimations().get("attack"), false)));
+        if (animations.getAnimations().get("death") != null)
+            states.put(AnimationStateType.DEATH, new DeathState(modeledEntity, new AnimationStateConfig(animations.getAnimations().get("death"), false)));
+        if (animations.getAnimations().get("spawn") != null)
+            states.put(AnimationStateType.SPAWN, new SpawnState(new AnimationStateConfig(animations.getAnimations().get("spawn"), false)));
+        lastCommitted = null;
+
+        // start with spawn or idle
+        current = states.get(AnimationStateType.SPAWN) != null
+                ? states.get(AnimationStateType.SPAWN)
+                : states.get(AnimationStateType.IDLE);
+        current.enter();
     }
 
-    private static int getAdjustedAnimationPosition(Animation animation) {
-        int adjustedAnimationPosition;
-        if (animation.getCounter() >= animation.getAnimationBlueprint().getDuration() && animation.getAnimationBlueprint().getLoopType() == LoopType.HOLD)
-            //Case where the animation is technically over but also is set to hold
-            adjustedAnimationPosition = animation.getAnimationBlueprint().getDuration() - 1;
-        else {
-            //Normal case, looping
-            adjustedAnimationPosition = (int) (animation.getCounter() - Math.floor(animation.getCounter() / (double) animation.getAnimationBlueprint().getDuration()) * animation.getAnimationBlueprint().getDuration());
+    private void transitionTo(IAnimState target) {
+        if (target == null || target == current) return;
+        current.exit();
+        if (!(current instanceof CustomAnimationState)) {
+            lastCommitted = current.getType();
         }
-        return adjustedAnimationPosition;
+        current = target;
+        current.enter();
     }
 
-    public void start() {
-        if (spawnAnimation != null) {
-            states.add(spawnAnimation);
-            if (idleAnimation != null)
-                new BukkitRunnable() {
-                    @Override
-                    public void run() {
-                        animationGracePeriod = false;
-                    }
-                }.runTaskLater(MetadataHandler.PLUGIN, spawnAnimation.getAnimationBlueprint().getDuration());
-        } else if (idleAnimation != null) states.add(idleAnimation);
-    }
-
-    public void tick() {
-        updateStates();
-        states.forEach(animation -> playAnimationFrame(animation));
-    }
-
-    private void updateStates() {
-        if (modeledEntity.getLivingEntity() == null) return;
-        if (modeledEntity.getLivingEntity().isDead()) {
-            if (deathAnimation != null) {
-                animationGracePeriod = true;
-                overrideStates(deathAnimation);
-                return;
-            } else
-                modeledEntity.remove();
+    /**
+     * Play either a built-in state (idle, walk, attack, death, spawn)
+     * or a data-driven animation by name.
+     *
+     * @param name           name of the animation/state (case-insensitive)
+     * @param blendAnimation if true, queue it behind the current; if false, interrupt immediately
+     * @param loop           only applies for custom animations
+     * @return true if the animation exists and was scheduled
+     */
+    public boolean play(String name, boolean blendAnimation, boolean loop) {
+        // 1) try built-in
+        AnimationStateType st = null;
+        try {
+            st = AnimationStateType.valueOf(name.toUpperCase());
+        } catch (IllegalArgumentException ignored) {
         }
-        if (animationGracePeriod) return;
-        if (jumpAnimation != null && !modeledEntity.getLivingEntity().isOnGround()) {
-            overrideStates(jumpAnimation);
-            return;
-        }
-        if (walkAnimation != null && modeledEntity.getLivingEntity().getVelocity().length() > .08) {
-            overrideStates(walkAnimation);
-            return;
-        }
-        if (idleAnimation != null) overrideStates(idleAnimation);
-        //Jump
-        //if (!modeledEntity.getEntity().isDead())
-    }
 
-    private void overrideStates(Animation animation) {
-//        if (animation == null) return;
-        if (!states.contains(animation)) {
-            states.clear();
-            animation.resetCounter();
-            states.add(animation);
+        if (st != null && states.containsKey(st)) {
+            IAnimState builtIn = states.get(st);
+            if (blendAnimation) nextQueued = builtIn;
+            else transitionTo(builtIn);
+            return true;
         }
-    }
 
-    private BukkitTask graceResetTask = null;
+        // 2) fallback to custom
+        Animation anim = animations.getAnimations().get(name);
+        if (anim == null) return false;
 
-    public boolean playAnimation(String animationName, boolean blendAnimation) {
-        Animation animation = animations.getAnimations().get(animationName);
-        if (animation == null) return false;
-        if (graceResetTask != null) graceResetTask.cancel();
-        if (!blendAnimation) {
-            states.clear();
-            animationGracePeriod = true;
-            graceResetTask = new BukkitRunnable() {
-                @Override
-                public void run() {
-                    animationGracePeriod = false;
-                }
-            }.runTaskLater(MetadataHandler.PLUGIN, animation.getAnimationBlueprint().getDuration());
-        }
-        animation.resetCounter();
-        states.add(animation);
+        CustomAnimationState custom = new CustomAnimationState(
+                modeledEntity,
+                anim,
+                loop,
+                lastCommitted != null ? lastCommitted : AnimationStateType.IDLE
+        );
+
+        if (blendAnimation) nextQueued = custom;
+        else transitionTo(custom);
+
         return true;
     }
 
-    private void playAnimationFrame(Animation animation) {
-        if (!animation.getAnimationBlueprint().getLoopType().equals(LoopType.LOOP) && animation.getCounter() >= animation.getAnimationBlueprint().getDuration()) {
-            //Case where the animation doesn't loop, and it's over
-            states.remove(animation);
-            if (animation == deathAnimation)
-                modeledEntity.remove();
+
+    public void stop() {
+        current.exit();
+        transitionTo(states.get(AnimationStateType.IDLE));
+    }
+
+    public void tick() {
+        // 1) let the state update its own “finished” logic
+        current.update();
+
+        // 2) render one frame of whatever the current state holds
+        renderCurrentFrame();
+
+        // 3) handle transitions (including blends)
+        if (nextQueued != null) {
+            transitionTo(nextQueued);
+            nextQueued = null;
+        } else {
+            current.nextState().ifPresent(stateType -> {
+                IAnimState next = states.get(stateType);
+                transitionTo(next);
+            });
+        }
+    }
+
+    private void renderCurrentFrame() {
+        Animation anim = current.getAnimation();
+        boolean loop = current.isLoop();
+        int duration = anim.getAnimationBlueprint().getDuration();
+        long counter = anim.getCounter();
+
+        // if non-looping and we’re past the end, just don’t render further
+        if (!loop && counter >= duration) {
             return;
         }
-        int adjustedAnimationPosition = getAdjustedAnimationPosition(animation);
-        //Handle rotations
-        animation.getAnimationFrames().forEach((key, value) -> {
-            if (value == null)
-                key.updateAnimationRotation(0, 0, 0);
-            else
-                key.updateAnimationRotation(
-                        value[adjustedAnimationPosition].xRotation,
-                        value[adjustedAnimationPosition].yRotation,
-                        value[adjustedAnimationPosition].zRotation);
-        });
 
-        //Handle translations
-        animation.getAnimationFrames().forEach((key, value) -> {
-            if (value == null)
-                key.updateAnimationTranslation(0, 0, 0);
-            else
-                key.updateAnimationTranslation(
-                        value[adjustedAnimationPosition].xPosition,
-                        value[adjustedAnimationPosition].yPosition,
-                        value[adjustedAnimationPosition].zPosition);
-        });
+        // compute frame index: either modulo (loop) or clamp to last frame
+        int frame;
+        if (loop) {
+            frame = (int) (counter % duration);
+        } else {
+            frame = (int) Math.min(counter, duration - 1);
+        }
 
-        //Handle scale
-        animation.getAnimationFrames().forEach((key, value) -> {
-            if (value == null)
-                key.updateAnimationScale(1);
-            else {
-                Float scale = value[adjustedAnimationPosition].scale;
-                if (scale == null) scale = 1f;
-                key.updateAnimationScale(scale);
+        // apply rotations/translations/scales in one pass
+        anim.getAnimationFrames().forEach((part, frames) -> {
+            if (frames == null || frames.length <= frame) {
+                // reset to default
+                part.updateAnimationRotation(0, 0, 0);
+                part.updateAnimationTranslation(0, 0, 0);
+                part.updateAnimationScale(1f);
+            } else {
+                AnimationFrame f = frames[frame];
+                part.updateAnimationRotation(f.xRotation, f.yRotation, f.zRotation);
+                part.updateAnimationTranslation(f.xPosition, f.yPosition, f.zPosition);
+                part.updateAnimationScale(f.scale != null ? f.scale : 1f);
             }
         });
 
-        animation.incrementCounter();
-    }
-
-    public void stop() {
-        states.clear();
-        animationGracePeriod = false;
+        // advance the counter for next tick
+        anim.incrementCounter();
     }
 
     public boolean hasAnimation(String animationName) {
