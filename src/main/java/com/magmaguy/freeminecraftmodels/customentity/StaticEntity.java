@@ -10,12 +10,7 @@ import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public class StaticEntity extends ModeledEntity implements ModeledEntityInterface {
-    @Getter
-    private static final List<StaticEntity> staticEntities = new ArrayList<>();
     @Getter
     private final String name = "default";
     @Getter
@@ -25,12 +20,11 @@ public class StaticEntity extends ModeledEntity implements ModeledEntityInterfac
 
     protected StaticEntity(String entityID, Location targetLocation) {
         super(entityID, targetLocation);
-        staticEntities.add(this);
     }
 
-    public static void shutdown() {
-        staticEntities.forEach(StaticEntity::remove);
-        staticEntities.clear();
+    @Override
+    protected void shutdownRemove() {
+        remove();
     }
 
     //safer since it can return null

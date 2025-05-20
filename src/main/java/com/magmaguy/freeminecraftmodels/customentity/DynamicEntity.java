@@ -16,6 +16,9 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.persistence.PersistentDataType;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -57,9 +60,9 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         return null;
     }
 
-    public static void shutdown() {
-        dynamicEntities.forEach(DynamicEntity::remove);
-        dynamicEntities.clear();
+    @Override
+    protected void shutdownRemove() {
+        remove();
     }
 
     //safer since it can return null
@@ -99,20 +102,20 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
 
     @Override
     public void tick() {
-        super.tick();
         syncSkeletonWithEntity();
+        super.tick();
     }
 
     private void syncSkeletonWithEntity() {
-        if (livingEntity == null || !livingEntity.isValid()) {
+        if (isDying()) return;
+
+        if ((livingEntity == null || !livingEntity.isValid())) {
             remove();
             return;
         }
 
         // Update skeleton position and rotation
-        Location entityLocation = livingEntity.getLocation();
-        entityLocation.setYaw(NMSManager.getAdapter().getBodyRotation(livingEntity));
-        getSkeleton().setCurrentLocation(entityLocation);
+        getSkeleton().setCurrentLocation(getBodyLocation());
         getSkeleton().setCurrentHeadPitch(livingEntity.getEyeLocation().getPitch());
         getSkeleton().setCurrentHeadYaw(livingEntity.getEyeLocation().getYaw());
 
@@ -125,6 +128,7 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         super.remove();
         if (livingEntity != null)
             livingEntity.remove();
+        dynamicEntities.remove(this);
     }
 
     private void setHitbox() {
@@ -139,7 +143,7 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         livingEntity.damage(damage, player);
         OBBHitDetection.applyDamage = false;
         getSkeleton().tint();
-        if (!livingEntity.isValid()) remove();
+        if (!livingEntity.isValid()) removeWithDeathAnimation();
     }
 
     @Override
@@ -149,7 +153,7 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         player.attack(livingEntity);
         OBBHitDetection.applyDamage = false;
         getSkeleton().tint();
-        if (!livingEntity.isValid()) remove();
+        if (!livingEntity.isValid()) removeWithDeathAnimation();
     }
 
     @Override
@@ -162,6 +166,52 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     public Location getLocation() {
         if (livingEntity == null) return null;
         return livingEntity.getLocation();
+    }
+
+    /**
+     * Gets the location of the model's body, clamped so its yaw never
+     * lags the head yaw by more than ±45°.
+     * <p>
+     * Note: this is done because the body rotation is handled by the client after the caching of the body rotation one the living entity stops moving around.
+     * This is not a 1:1 recreation of the body rotation, as Minecraft entities have a further behavior that lerps the body rotation to the position they are looking at if they stare at it for about 1 second.
+     * That lerping behavior would be unnecessarily demanding, and the is considered to be close enough for 99.99% of cases.
+     */
+    public Location getBodyLocation() {
+        Location bodyLoc = livingEntity.getLocation().clone();
+
+        // current body yaw (what Minecraft thinks the body is doing)
+        float bodyYaw = NMSManager.getAdapter().getBodyRotation(livingEntity);
+        // actual head yaw
+        float headYaw = livingEntity.getEyeLocation().getYaw();
+
+        // compute signed difference in range –180…+180
+        float delta = wrapDegrees(headYaw - bodyYaw);
+
+        // clamp delta to –45…+45
+        if (delta > 45) delta = 45;
+        if (delta < -45) delta = -45;
+
+        // new body yaw is headYaw minus that clamped delta
+        float newBodyYaw = headYaw - delta;
+
+        bodyLoc.setYaw(newBodyYaw);
+        bodyLoc.setPitch(0); // assume no body pitch
+        return bodyLoc;
+    }
+
+    /**
+     * Wrap an angle in degrees to the range –180…+180.
+     */
+    private float wrapDegrees(float angle) {
+        angle %= 360;
+        if (angle >= 180) angle -= 360;
+        if (angle < -180) angle += 360;
+        return angle;
+    }
+
+    @Override
+    protected void updateHitbox() {
+        getObbHitbox().update(getBodyLocation());
     }
 
     /**
@@ -202,4 +252,12 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         return getObbHitbox().isAABBCollidingWithOBB(player.getBoundingBox(), getObbHitbox());
     }
 
+    public static class ModeledEntityEvents implements Listener {
+        @EventHandler
+        public void onEntityDeath(EntityDeathEvent event) {
+            DynamicEntity dynamicEntity = DynamicEntity.getDynamicEntity(event.getEntity());
+            if (dynamicEntity == null) return;
+            dynamicEntity.removeWithDeathAnimation();
+        }
+    }
 }

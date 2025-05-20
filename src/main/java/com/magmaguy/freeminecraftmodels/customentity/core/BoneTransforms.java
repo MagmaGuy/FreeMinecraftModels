@@ -204,7 +204,9 @@ public class BoneTransforms {
     }
 
     protected float getDisplayEntityScale() {
-        return bone.getAnimationScale() == -1 ? 2.5f : bone.getAnimationScale() * 2.5f;
+        float scale = bone.getAnimationScale() == -1 ? 2.5f : bone.getAnimationScale() * 2.5f;
+        scale *= bone.getSkeleton().getModeledEntity().getScaleModifier();
+        return scale;
     }
 
 

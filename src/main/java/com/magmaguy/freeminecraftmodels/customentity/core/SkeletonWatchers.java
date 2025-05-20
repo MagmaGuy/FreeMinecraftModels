@@ -46,14 +46,14 @@ public class SkeletonWatchers implements Listener {
                 }
             }.runTaskLater(MetadataHandler.PLUGIN, 4);
         }
-        resync();
+        resync(false);
     }
 
     // Clients gets a bit of drift due to some inaccuracies, this resyncs the skeleton
-    private void resync() {
+    public void resync(boolean force) {
         counter++;
         // This randomizes the resync to avoid too many packets being sent at once
-        if (counter > resetTimer && ThreadLocalRandom.current().nextBoolean()) {
+        if (force || counter > resetTimer && ThreadLocalRandom.current().nextBoolean()) {
             counter = 0;
             Set<UUID> tempViewers = Collections.synchronizedSet(new HashSet<>(viewers));
             tempViewers.forEach(viewer -> {
