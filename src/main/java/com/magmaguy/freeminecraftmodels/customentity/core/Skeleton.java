@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.Color;
 import org.bukkit.Location;
+import org.bukkit.Particle;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
@@ -119,9 +120,6 @@ public class Skeleton {
     public void transform() {
         skeletonWatchers.tick();
         if (getSkeletonWatchers().hasObservers()) rootBone.transform();
-        if (dynamicEntity != null) {
-            //todo: update cached bounding box
-        }
     }
 
     public void tint() {
@@ -133,9 +131,19 @@ public class Skeleton {
             public void run() {
                 counter++;
                 if (counter > 10) {
-                    cancel();
-                    boneMap.values().forEach(bone -> bone.setHorseLeatherArmorColor(Color.WHITE));
-                    return;
+                    if (!modeledEntity.isDying()) {
+                        cancel();
+                        boneMap.values().forEach(bone -> bone.setHorseLeatherArmorColor(Color.WHITE));
+                        return;
+                    } else {
+                        if (modeledEntity.isRemoved()) {
+                            cancel();
+                            return;
+                        }
+                        if (counter % 5 == 0) {
+                            boneMap.values().forEach(bone -> bone.spawnParticles(Particle.POOF, .1));
+                        }
+                    }
                 }
                 boneMap.values().forEach(bone -> bone.setHorseLeatherArmorColor(Color.fromRGB(255, (int) (255 / (double) counter), (int) (255 / (double) counter))));
             }

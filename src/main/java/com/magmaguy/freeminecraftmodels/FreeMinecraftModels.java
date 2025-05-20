@@ -44,10 +44,12 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         Bukkit.getPluginManager().registerEvents(new OBBHitDetection(), this);
         Bukkit.getPluginManager().registerEvents(new PropEntity.PropEntityEvents(), this);
         Bukkit.getPluginManager().registerEvents(new EntityTeleportEvent(), this);
+        Bukkit.getPluginManager().registerEvents(new DynamicEntity.ModeledEntityEvents(), this);
         NMSManager.initializeAdapter(this);
         CommandManager manager = new CommandManager(this, "freeminecraftmodels");
         manager.registerCommand(new MountCommand());
         manager.registerCommand(new HitboxDebugCommand());
+        manager.registerCommand(new DeleteAllCommand());
         manager.registerCommand(new ReloadCommand());
         manager.registerCommand(new SpawnCommand());
         manager.registerCommand(new VersionCommand());
@@ -70,11 +72,8 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         // Plugin shutdown logic
         MagmaCore.shutdown();
         FileModelConverter.shutdown();
-        StaticEntity.shutdown();
-        DynamicEntity.shutdown();
         ModeledEntity.shutdown();
         ModeledEntitiesClock.shutdown();
-        PropEntity.onShutdown();
         Bukkit.getServer().getScheduler().cancelTasks(MetadataHandler.PLUGIN);
         HandlerList.unregisterAll(MetadataHandler.PLUGIN);
     }

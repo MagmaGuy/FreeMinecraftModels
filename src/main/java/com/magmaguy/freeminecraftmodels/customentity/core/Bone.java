@@ -6,6 +6,8 @@ import com.magmaguy.freeminecraftmodels.thirdparty.Floodgate;
 import com.magmaguy.magmacore.util.VersionChecker;
 import lombok.Getter;
 import org.bukkit.Color;
+import org.bukkit.Location;
+import org.bukkit.Particle;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Player;
 import org.joml.Vector3f;
@@ -119,6 +121,19 @@ public class Bone {
             boneTransforms.getPacketDisplayEntity().setHorseLeatherArmorColor(color);
     }
 
+    public void spawnParticles(Particle particle, double speed) {
+        Location boneLocation;
+        if (boneTransforms.getPacketDisplayEntity() != null) {
+            boneLocation = boneTransforms.getDisplayEntityTargetLocation();
+            if (boneLocation.getWorld() == null) return;
+            boneLocation.getWorld().spawnParticle(particle, boneLocation, 1, 1, 1, 1, speed);
+        } else if (boneTransforms.getPacketArmorStandEntity() != null) {
+            boneLocation = boneTransforms.getArmorStandTargetLocation();
+            if (boneLocation.getWorld() == null) return;
+            boneLocation.getWorld().spawnParticle(particle, boneLocation, 1, 1, 1, 1, speed);
+        }
+    }
+
     public void teleport() {
         sendTeleportPacket();
         boneChildren.forEach(Bone::teleport);
@@ -131,5 +146,6 @@ public class Bone {
         if (boneTransforms.getPacketDisplayEntity() != null) {
             boneTransforms.getPacketDisplayEntity().teleport(boneTransforms.getDisplayEntityTargetLocation());
         }
+        skeleton.getSkeletonWatchers().resync(true);
     }
 }
