@@ -2,6 +2,8 @@ package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.api.DynamicEntityLeftClickEvent;
+import com.magmaguy.freeminecraftmodels.api.DynamicEntityRightClickEvent;
 import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityInterface;
 import com.magmaguy.freeminecraftmodels.customentity.core.OBBHitDetection;
 import com.magmaguy.freeminecraftmodels.customentity.core.RegisterModelEntity;
@@ -60,11 +62,6 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         return null;
     }
 
-    @Override
-    protected void shutdownRemove() {
-        remove();
-    }
-
     //safer since it can return null
     @Nullable
     public static DynamicEntity create(String entityID, LivingEntity livingEntity) {
@@ -83,6 +80,11 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         return dynamicEntity;
     }
 
+    @Override
+    protected void shutdownRemove() {
+        remove();
+    }
+
     /**
      * This value only gets used if damagesOnContact is set to true and the entity doesn ot have an attack damage attribute
      *
@@ -98,6 +100,7 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         super.spawn();
         syncSkeletonWithEntity();
         setHitbox();
+        getObbHitbox().setAssociatedEntity(this);
     }
 
     @Override
@@ -137,23 +140,27 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     }
 
     @Override
-    public void damage(Player player, double damage) {
-        if (livingEntity == null) return;
+    public void damageByLivingEntity(LivingEntity damagerLivingEntity, double damage) {
+        if (this.livingEntity == null) return;
         OBBHitDetection.applyDamage = true;
-        livingEntity.damage(damage, player);
+        livingEntity.damage(damage, damagerLivingEntity);
         OBBHitDetection.applyDamage = false;
         getSkeleton().tint();
-        if (!livingEntity.isValid()) removeWithDeathAnimation();
+        if (!this.livingEntity.isValid()) removeWithDeathAnimation();
     }
 
     @Override
-    public void damage(Player player) {
-        if (livingEntity == null) return;
+    public void damageByLivingEntity(LivingEntity damagerLivingEntity) {
+        if (damagerLivingEntity == null) return;
         OBBHitDetection.applyDamage = true;
-        player.attack(livingEntity);
+        if (AttributeManager.getAttribute("generic_attack_damage") != null)
+            damagerLivingEntity.attack(livingEntity);
+        else
+            //this should not be happening and hopefully if it does some other plugin will override it
+            livingEntity.damage(2, damagerLivingEntity);
         OBBHitDetection.applyDamage = false;
         getSkeleton().tint();
-        if (!livingEntity.isValid()) removeWithDeathAnimation();
+        if (!damagerLivingEntity.isValid()) removeWithDeathAnimation();
     }
 
     @Override
@@ -250,6 +257,20 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     private boolean isPlayerColliding(Player player) {
         // Check for collision
         return getObbHitbox().isAABBCollidingWithOBB(player.getBoundingBox(), getObbHitbox());
+    }
+
+    @Override
+    public void triggerLeftClickEvent(Player player) {
+        super.triggerLeftClickEvent(player);
+        DynamicEntityLeftClickEvent event = new DynamicEntityLeftClickEvent(player, this);
+        Bukkit.getPluginManager().callEvent(event);
+    }
+
+    @Override
+    public void triggerRightClickEvent(Player player) {
+        super.triggerRightClickEvent(player);
+        DynamicEntityRightClickEvent event = new DynamicEntityRightClickEvent(player, this);
+        Bukkit.getPluginManager().callEvent(event);
     }
 
     public static class ModeledEntityEvents implements Listener {

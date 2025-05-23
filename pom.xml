@@ -86,7 +86,7 @@
         <dependency>
             <groupId>com.magmaguy</groupId>
             <artifactId>EasyMinecraftGoals-dist</artifactId>
-            <version>1.19.3</version>
+            <version>1.19.4-SNAPSHOT</version>
         </dependency>
 
         <dependency>

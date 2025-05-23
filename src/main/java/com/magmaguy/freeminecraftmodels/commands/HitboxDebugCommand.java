@@ -68,7 +68,8 @@ public class HitboxDebugCommand extends AdvancedCommand {
 
         int finalDuration = duration;
         nearbyEntities.forEach(entity -> {
-            OrientedBoundingBox.visualizeOBB(entity, finalDuration);
+            OrientedBoundingBox.visualizeOBB(entity, finalDuration, player);
+            entity.showUnderlyingEntity(player);
         });
 
         Logger.sendMessage(player, ChatColor.GREEN + "Visualizing " + nearbyEntities.size() +
