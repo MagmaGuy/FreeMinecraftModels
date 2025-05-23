@@ -4,6 +4,7 @@ import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityManager;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
+import com.magmaguy.magmacore.util.AttributeManager;
 import lombok.Getter;
 import org.bukkit.Location;
 import org.bukkit.Particle;
@@ -22,15 +23,22 @@ import java.util.Optional;
  * Represents a bounding box that can be rotated in any direction.
  * Unlike an axis-aligned bounding box, this can rotate with the model.
  * Optimized for performance with object reuse and dirty flag system.
+ * Now supports dynamic scaling.
  */
 public class OrientedBoundingBox {
 
     // Center point of the box
     @Getter
     private final Vector3d center = new Vector3d();
-    // Half-lengths of the box along its local axes
+    // Base half-lengths of the box along its local axes (before scaling)
+    @Getter
+    private final Vector3d baseHalfExtents = new Vector3d();
+    // Actual half-lengths after scaling
     @Getter
     private final Vector3d halfExtents = new Vector3d();
+    // Current scale modifier
+    @Getter
+    private double scaleModifier = 1.0;
     // Rotation matrix representing the box's orientation
     @Getter
     private final Matrix3d rotation = new Matrix3d().identity();
@@ -53,11 +61,13 @@ public class OrientedBoundingBox {
     // Cached axis vectors (the 3 principal axes of the OBB)
     private Vector3d[] axes;
     private boolean cornersDirty = true;
+    private boolean scaleDirty = true;
     // Current rotation values for change detection
     private double currentYaw = 0d;
 
     private final double height;
     private Location lastLocation = null;
+    private ModeledEntity associatedEntity = null; // Reference to the entity for scale calculations
 
     /**
      * Creates an oriented bounding box
@@ -70,7 +80,8 @@ public class OrientedBoundingBox {
     public OrientedBoundingBox(Vector3d center, double width, double height, double depth) {
         this.height = height;
         this.center.set(center);
-        this.halfExtents.set(width / 2d, height / 2d, depth / 2d);
+        this.baseHalfExtents.set(width / 2d, height / 2d, depth / 2d);
+        this.halfExtents.set(baseHalfExtents);
 
         // Initialize corner cache
         for (int i = 0; i < 8; i++) {
@@ -81,13 +92,18 @@ public class OrientedBoundingBox {
     }
 
     /**
-     * Perform a ray trace from a player's eye location in the direction they're looking
+     * Creates an oriented bounding box with scale support
      *
-     * @param player The player performing the ray trace
-     * @return The first modeled entity hit by the ray, if any
+     * @param center Center point of the box
+     * @param width  Width of the box (X axis)
+     * @param height Height of the box (Y axis)
+     * @param depth  Depth of the box (Z axis)
+     * @param entity Associated ModeledEntity for scale calculations
      */
-    public static Optional<ModeledEntity> raytraceFromPlayer(Player player) {
-        return raytraceFromPoint(player.getWorld().getName(), player.getEyeLocation(), DefaultConfig.maxInteractionAndAttackDistance);
+    public OrientedBoundingBox(Vector3d center, double width, double height, double depth, ModeledEntity entity) {
+        this(center, width, height, depth);
+        this.associatedEntity = entity;
+        updateScale();
     }
 
     /**
@@ -104,7 +120,32 @@ public class OrientedBoundingBox {
                 depth);
     }
 
-    public static void visualizeOBB(ModeledEntity entity, int durationTicks) {
+    /**
+     * Creates an oriented bounding box from a Bukkit location and dimensions with entity reference
+     */
+    public OrientedBoundingBox(Location location, double width, double height, double depth, ModeledEntity entity) {
+        this(new Vector3d(
+                        location.getX(),
+                        location.getY() + height / 2d,         // ← bump up by half-height
+                        location.getZ()
+                ),
+                width,
+                height,
+                depth,
+                entity);
+    }
+
+    /**
+     * Perform a ray trace from a player's eye location in the direction they're looking
+     *
+     * @param player The player performing the ray trace
+     * @return The first modeled entity hit by the ray, if any
+     */
+    public static Optional<ModeledEntity> raytraceFromPlayer(Player player) {
+        return raytraceFromPoint(player.getWorld().getName(), player.getEyeLocation(), DefaultConfig.maxInteractionAndAttackDistance);
+    }
+
+    public static void visualizeOBB(ModeledEntity entity, int durationTicks, Player player) {
         new BukkitRunnable() {
             private int ticksRemaining = durationTicks;
 
@@ -112,6 +153,7 @@ public class OrientedBoundingBox {
             public void run() {
                 if (ticksRemaining <= 0 || entity.getWorld() == null) {
                     this.cancel();
+                    entity.hideUnderlyingEntity(player);
                     return;
                 }
 
@@ -150,6 +192,53 @@ public class OrientedBoundingBox {
                 ticksRemaining--;
             }
         }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
+    }
+
+    /**
+     * Updates the scale modifier based on the associated entity
+     */
+    private void updateScale() {
+        if (associatedEntity == null) {
+            if (scaleModifier != 1.0) {
+                scaleModifier = 1.0;
+                scaleDirty = true;
+            }
+            return;
+        }
+
+        double newScaleModifier = associatedEntity.getScaleModifier();
+
+        // Check for generic_scale attribute if entity has a living entity
+        if (associatedEntity.getLivingEntity() != null &&
+                associatedEntity.getLivingEntity().getAttribute(AttributeManager.getAttribute("generic_scale")) != null) {
+            newScaleModifier *= associatedEntity.getLivingEntity()
+                    .getAttribute(AttributeManager.getAttribute("generic_scale")).getValue();
+        }
+
+        if (Math.abs(newScaleModifier - scaleModifier) > 0.001) {
+            scaleModifier = newScaleModifier;
+            scaleDirty = true;
+        }
+    }
+
+    /**
+     * Updates the half extents based on current scale
+     */
+    private void updateHalfExtents() {
+        if (scaleDirty) {
+            halfExtents.set(baseHalfExtents).mul(scaleModifier);
+            cornersDirty = true; // Corners need to be recalculated when scale changes
+            scaleDirty = false;
+        }
+    }
+
+    /**
+     * Sets the associated entity for scale calculations
+     */
+    public OrientedBoundingBox setAssociatedEntity(ModeledEntity entity) {
+        this.associatedEntity = entity;
+        updateScale();
+        return this;
     }
 
     /**
@@ -194,19 +283,30 @@ public class OrientedBoundingBox {
     }
 
     /**
-     * Updates both position and rotation from a Location in one efficient call.
+     * Updates both position, rotation, and scale from a Location in one efficient call.
      * This is much more efficient than creating a new OrientedBoundingBox.
      *
      * @param location The location to update from
      * @return this OrientedBoundingBox for method chaining
      */
     public OrientedBoundingBox update(Location location) {
-        if (lastLocation != null && lastLocation.equals(location)) return this;
+        if (lastLocation != null && lastLocation.equals(location)) {
+            // Still check for scale updates even if location hasn't changed
+            updateScale();
+            updateHalfExtents();
+            return this;
+        }
+
         lastLocation = location;
-        // Update position
+
+        // Update scale first
+        updateScale();
+        updateHalfExtents();
+
+        // Update position - account for scale in Y offset
         center.set(
                 location.getX(),
-                location.getY() + halfExtents.y,            // ← keep bottom at floor
+                location.getY() + halfExtents.y,            // ← use scaled half-extents
                 location.getZ()
         );
 
@@ -251,13 +351,13 @@ public class OrientedBoundingBox {
         }
     }
 
-
     /**
      * Gets the 8 corners of the OBB in world space
      *
      * @return Array of corner vectors
      */
     public Vector3d[] getCorners() {
+        updateHalfExtents(); // Ensure scale is applied
         if (cornersDirty) {
             updateCorners();
         }
@@ -268,7 +368,7 @@ public class OrientedBoundingBox {
      * Updates the cached corner positions
      */
     private void updateCorners() {
-        // Calculate basis vectors
+        // Calculate basis vectors using scaled half extents
         rightTemp.set(axes[0]).mul(halfExtents.x);
         upTemp.set(axes[1]).mul(halfExtents.y);
         forwardTemp.set(axes[2]).mul(halfExtents.z);
@@ -295,7 +395,9 @@ public class OrientedBoundingBox {
      * @return The distance to the intersection point, or -1 if no intersection
      */
     public double rayIntersection(Location eyeLocation, double maxDistance) {
-        // Ensure inverse rotation is up to date
+        // Ensure scale and inverse rotation are up to date
+        updateScale();
+        updateHalfExtents();
         updateInverseRotation();
 
         // Set the local origin cache directly from the eye location
@@ -312,7 +414,7 @@ public class OrientedBoundingBox {
         // Transform direction to local space (rotation only, no translation)
         localDirCache.mul(inverseRotation);
 
-        // Standard AABB-ray intersection in local space
+        // Standard AABB-ray intersection in local space using scaled half extents
         double tMin = -Double.MAX_VALUE;
         double tMax = Double.MAX_VALUE;
 
@@ -320,7 +422,7 @@ public class OrientedBoundingBox {
         for (int i = 0; i < 3; i++) {
             double d = localDirCache.get(i);
             double o = tempOrigin.get(i);
-            double e = halfExtents.get(i);
+            double e = halfExtents.get(i); // Use scaled half extents
 
             // Check if ray is parallel to slab
             if (Math.abs(d) < 1e-6) {
@@ -360,6 +462,11 @@ public class OrientedBoundingBox {
     }
 
     public boolean isAABBCollidingWithOBB(BoundingBox aabb, OrientedBoundingBox obb) {
+        // Ensure both OBBs have updated scale
+        updateHalfExtents();
+        obb.updateScale();
+        obb.updateHalfExtents();
+
         // Get AABB center and half-extents
         Vector3f aabbCenter = new Vector3f(
                 (float) ((aabb.getMinX() + aabb.getMaxX()) / 2),
@@ -373,9 +480,9 @@ public class OrientedBoundingBox {
                 (float) ((aabb.getMaxZ() - aabb.getMinZ()) / 2)
         );
 
-        // Get OBB center and half-extents
+        // Get OBB center and scaled half-extents
         Vector3d obbCenter = obb.getCenter();
-        Vector3d obbHalfExtents = obb.getHalfExtents();
+        Vector3d obbHalfExtents = obb.getHalfExtents(); // This will return scaled half extents
 
         // Calculate distance between centers
         double distX = Math.abs(obbCenter.x - aabbCenter.x);
@@ -387,5 +494,25 @@ public class OrientedBoundingBox {
         return distX < (obbHalfExtents.x + aabbHalfExtents.x) &&
                 distY < (obbHalfExtents.y + aabbHalfExtents.y) &&
                 distZ < (obbHalfExtents.z + aabbHalfExtents.z);
+    }
+
+    /**
+     * Tests whether a world‐space point lies inside this OBB.
+     */
+    public boolean containsPoint(Location loc) {
+        // ensure our scale, inverse rotation are up-to-date
+        updateScale();
+        updateHalfExtents();
+        updateInverseRotation();
+
+        // move point into OBB's local space
+        Vector3d local = new Vector3d(loc.getX(), loc.getY(), loc.getZ());
+        local.sub(center);              // translate
+        local.mul(inverseRotation);     // rotate
+
+        // AABB‐style test in local coords using scaled half extents
+        return Math.abs(local.x) <= halfExtents.x &&
+                Math.abs(local.y) <= halfExtents.y &&
+                Math.abs(local.z) <= halfExtents.z;
     }
 }

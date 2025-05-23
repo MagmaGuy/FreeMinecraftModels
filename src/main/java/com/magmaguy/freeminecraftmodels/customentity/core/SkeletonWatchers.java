@@ -49,16 +49,32 @@ public class SkeletonWatchers implements Listener {
         resync(false);
     }
 
+    private volatile long lastResyncTime = 0L;
+
     // Clients gets a bit of drift due to some inaccuracies, this resyncs the skeleton
     public void resync(boolean force) {
+        long now = System.currentTimeMillis();
+
+        // throttle: if not forced and we ran <1s ago, skip entirely
+        if (!force && now - lastResyncTime < 1_000) {
+            return;
+        }
+
         counter++;
-        // This randomizes the resync to avoid too many packets being sent at once
-        if (force || counter > resetTimer && ThreadLocalRandom.current().nextBoolean()) {
+        // your existing random / timer logic
+        if (force || (counter > resetTimer && ThreadLocalRandom.current().nextBoolean())) {
+            // update timestamp and reset counter
+            lastResyncTime = now;
             counter = 0;
+
+            // do the actual hide/display
             Set<UUID> tempViewers = Collections.synchronizedSet(new HashSet<>(viewers));
             tempViewers.forEach(viewer -> {
                 hideFrom(viewer);
-                displayTo(Bukkit.getPlayer(viewer));
+                Player p = Bukkit.getPlayer(viewer);
+                if (p != null) {
+                    displayTo(p);
+                }
             });
         }
     }

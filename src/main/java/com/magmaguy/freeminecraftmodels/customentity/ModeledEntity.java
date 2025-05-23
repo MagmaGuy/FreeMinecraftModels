@@ -1,6 +1,9 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
+import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.animation.AnimationManager;
+import com.magmaguy.freeminecraftmodels.api.ModeledEntityLeftClickEvent;
+import com.magmaguy.freeminecraftmodels.api.ModeledEntityRightClickEvent;
 import com.magmaguy.freeminecraftmodels.customentity.core.OrientedBoundingBox;
 import com.magmaguy.freeminecraftmodels.customentity.core.Skeleton;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
@@ -9,29 +12,22 @@ import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import lombok.Setter;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
-import org.bukkit.entity.ArmorStand;
-import org.bukkit.entity.LivingEntity;
-import org.bukkit.entity.Player;
-import org.bukkit.entity.TextDisplay;
+import org.bukkit.enchantments.Enchantment;
+import org.bukkit.entity.*;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 
 public class ModeledEntity {
-    private final int scaleDurationTicks = 20;
-    /**
-     * Whether the entity is currently dying.
-     * This is set to true when the entity is in the process of getting removed with a death animation.
-     */
-    @Getter
-    private boolean isDying = false;
     @Getter
     private static final HashSet<ModeledEntity> loadedModeledEntities = new HashSet<>();
+    private final int scaleDurationTicks = 20;
     @Getter
     private final String entityID;
     @Getter
@@ -43,6 +39,12 @@ public class ModeledEntity {
     private final Location lastSeenLocation;
     @Getter
     protected LivingEntity livingEntity = null;
+    /**
+     * Whether the entity is currently dying.
+     * This is set to true when the entity is in the process of getting removed with a death animation.
+     */
+    @Getter
+    private boolean isDying = false;
     @Getter
     private SkeletonBlueprint skeletonBlueprint = null;
     @Getter
@@ -50,7 +52,15 @@ public class ModeledEntity {
     private AnimationManager animationManager = null;
     @Getter
     private OrientedBoundingBox obbHitbox = null;
-
+    @Getter
+    private boolean isRemoved = false;
+    @Getter
+    @Setter
+    private double scaleModifier = 1.0;
+    private boolean isScalingDown = false;
+    private int scaleTicksElapsed = 0;
+    private double scaleStart = 1.0;
+    private double scaleEnd = 0.0;
     public ModeledEntity(String entityID, Location spawnLocation) {
         this.entityID = entityID;
         this.spawnLocation = spawnLocation;
@@ -82,14 +92,22 @@ public class ModeledEntity {
 
         loadedModeledEntities.add(this);
     }
-    @Getter
-    private boolean isRemoved = false;
-    @Getter
-    @Setter
-    private double scaleModifier = 1.0;
 
     private static boolean isNameTag(ArmorStand armorStand) {
         return armorStand.getPersistentDataContainer().has(BoneBlueprint.nameTagKey, PersistentDataType.BYTE);
+    }
+
+    public static void shutdown() {
+        // Create a copy of the collection to avoid ConcurrentModificationException
+        HashSet<ModeledEntity> entitiesToRemove = new HashSet<>(loadedModeledEntities);
+
+        // Iterate over the copy
+        for (ModeledEntity entity : entitiesToRemove) {
+            entity.shutdownRemove();
+        }
+
+        // Clear the original collection
+        loadedModeledEntities.clear();
     }
 
     public OrientedBoundingBox getObbHitbox() {
@@ -97,17 +115,16 @@ public class ModeledEntity {
             if (getSkeletonBlueprint().getHitbox() != null) {
                 return obbHitbox = new OrientedBoundingBox(
                         getSkeleton().getCurrentLocation(),
-                        getSkeletonBlueprint().getHitbox().getWidthX(),
+                        //For some reason the width is the Z axis, not the X axis
+                        getSkeletonBlueprint().getHitbox().getWidthZ(),
                         getSkeletonBlueprint().getHitbox().getHeight(),
-                        getSkeletonBlueprint().getHitbox().getWidthZ());
+                        //For some reason the width is the X axis, not the Z axis
+                        getSkeletonBlueprint().getHitbox().getWidthX());
             } else {
                 return obbHitbox = new OrientedBoundingBox(getSkeleton().getCurrentLocation(), 1, 2, 1);
             }
         } else return obbHitbox;
     }
-    private boolean isScalingDown = false;
-    private int scaleTicksElapsed = 0;
-    private double scaleStart = 1.0;
 
     public Location getSpawnLocation() {
         return spawnLocation.clone();
@@ -120,19 +137,9 @@ public class ModeledEntity {
     public void spawn(Location location) {
         displayInitializer(location);
     }
-    private double scaleEnd = 0.0;
 
     public void spawn() {
         spawn(lastSeenLocation);
-    }
-
-    public static void shutdown() {
-        Iterator<ModeledEntity> iterator = loadedModeledEntities.iterator();
-        while (iterator.hasNext()) {
-            ModeledEntity entity = iterator.next();
-            entity.shutdownRemove();
-        }
-        loadedModeledEntities.clear();
     }
 
     protected void shutdownRemove() {
@@ -265,15 +272,73 @@ public class ModeledEntity {
         return null;
     }
 
-    public void damage(Player player, double damage) {
+    public void damageByLivingEntity(LivingEntity player, double damage) {
         //Overriden by extending classes
     }
 
-    public void damage(Player player) {
+    public void damageByLivingEntity(LivingEntity livingEntity) {
         //Overriden by extending classes
+    }
+
+    public void damageByEntity(Entity entity, double damage) {
+        if (entity instanceof LivingEntity livingEntity) damageByLivingEntity(livingEntity);
+    }
+
+    public boolean damageByProjectile(Projectile projectile) {
+        double damage = 0;
+
+        if (projectile.getShooter() != null && projectile.getShooter().equals(livingEntity)) return false;
+
+        // 1) If it’s an arrow, use its damage field and velocity
+        if (projectile instanceof Arrow arrow) {
+            // base: speed * damage‐multiplier
+            double speed = arrow.getVelocity().length();           // blocks/tick
+            damage = Math.ceil(speed * arrow.getDamage());         // round up
+
+            // optional: add Power‐enchantment bonus from the bow that shot it
+            if (arrow.getShooter() instanceof LivingEntity shooter) {
+                ItemStack bow = arrow.getWeapon(); // or track last bow in metadata
+                if (bow != null && bow.containsEnchantment(Enchantment.POWER)) {
+                    int level = bow.getEnchantmentLevel(Enchantment.POWER);
+                    // Power adds 25% per level, rounded up half‐heart increments
+                    double bonus = Math.ceil(0.25 * (level + 1) * damage);
+                    damage += bonus;
+                }
+            }
+        }
+
+        // 2) Dispatch to your normal damage handlers
+        if (projectile.getShooter() instanceof LivingEntity damager) {
+            damageByLivingEntity(damager, damage);
+        } else {
+            damageByEntity((Entity) projectile.getShooter(), damage);
+        }
+        return true;
+    }
+
+    public void showUnderlyingEntity(Player player) {
+        if (livingEntity == null) return;
+        player.showEntity(MetadataHandler.PLUGIN, livingEntity);
+        livingEntity.setGlowing(true);
+    }
+
+    public void hideUnderlyingEntity(Player player) {
+        if (livingEntity == null) return;
+        player.hideEntity(MetadataHandler.PLUGIN, livingEntity);
+        livingEntity.setGlowing(false);
     }
 
     public void teleport(Location location) {
         skeleton.teleport(location);
+    }
+
+    public void triggerLeftClickEvent(Player player) {
+        ModeledEntityLeftClickEvent event = new ModeledEntityLeftClickEvent(player, this);
+        Bukkit.getPluginManager().callEvent(event);
+    }
+
+    public void triggerRightClickEvent(Player player) {
+        ModeledEntityRightClickEvent event = new ModeledEntityRightClickEvent(player, this);
+        Bukkit.getPluginManager().callEvent(event);
     }
 }

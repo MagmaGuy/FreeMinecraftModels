@@ -280,6 +280,26 @@ public class CustomModelFMM implements CustomModelInterface {
 Dynamic models are built on top of a living entity, which can be provided either when using the create method as in the
 example above, or when running the spawn method on a Dynamic entity.
 
+### Click events
+
+FreeMinecraftModels provides custom events for when a player left of right-clicks a modeled entity.
+
+Those are events are:
+
+- `ModeledEntityLeftClickEvent`
+- `ModeledEntityRightClickEvent`
+- `PropLeftClickEvent`
+- `PropRightClickEvent`
+- `StaticEntityLeftClickEvent`
+- `StaticEntityRightClickEvent`
+- `DynamicEntityLeftClickEvent`
+- `DynamicEntityRightClickEvent`
+
+They are all `Cancellable` and can be cancelled. Additionally, they all have a `Player` as their first parameter, and
+expose the entity that was clicked.
+
+Note that cancelling the events will not do anything as far as FreeMinecraftModels is concerned, as FMM does not handle
+the actual interaction with the model at this time.
 
 # Contributing to the FreeMinecraftModels (FMM) project as a developer
 
