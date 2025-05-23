@@ -1,10 +1,14 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
+import com.magmaguy.freeminecraftmodels.api.StaticEntityLeftClickEvent;
+import com.magmaguy.freeminecraftmodels.api.StaticEntityRightClickEvent;
 import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityInterface;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import lombok.Getter;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
@@ -14,7 +18,7 @@ public class StaticEntity extends ModeledEntity implements ModeledEntityInterfac
     @Getter
     private final String name = "default";
     @Getter
-    private final double health = -1;
+    private double health = 3;
     @Getter
     private BoundingBox hitbox = null;
 
@@ -52,16 +56,17 @@ public class StaticEntity extends ModeledEntity implements ModeledEntityInterfac
     }
 
     @Override
-    public void damage(Player player, double damage) {
+    public void damageByLivingEntity(LivingEntity livingEntity, double damage) {
         //If the health is -1, then the entity is not meant to be damageable.
-        if (health == -1) return;
+        health -= 1;
+        if (health <= 0) remove();
         else remove();
     }
 
     @Override
-    public void damage(Player player) {
-        //If the health is -1, then the entity is not meant to be damageable.
-        if (health == -1) return;
+    public void damageByLivingEntity(LivingEntity livingEntity) {
+        health -= 1;
+        if (health <= 0) remove();
         else remove();
     }
 
@@ -75,11 +80,19 @@ public class StaticEntity extends ModeledEntity implements ModeledEntityInterfac
     @Override
     public void tick() {
         super.tick();
-        syncSkeletonWithEntity();
     }
 
-    private void syncSkeletonWithEntity() {
-        //todo: maybe implement this in the future
-//        if (damagesOnContact) checkPlayerCollisions();
+    @Override
+    public void triggerLeftClickEvent(Player player) {
+        super.triggerLeftClickEvent(player);
+        StaticEntityLeftClickEvent event = new StaticEntityLeftClickEvent(player, this);
+        Bukkit.getPluginManager().callEvent(event);
+    }
+
+    @Override
+    public void triggerRightClickEvent(Player player) {
+        super.triggerRightClickEvent(player);
+        StaticEntityRightClickEvent event = new StaticEntityRightClickEvent(player, this);
+        Bukkit.getPluginManager().callEvent(event);
     }
 }

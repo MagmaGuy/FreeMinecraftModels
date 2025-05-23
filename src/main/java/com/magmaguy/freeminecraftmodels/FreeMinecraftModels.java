@@ -60,6 +60,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         ModeledEntitiesClock.start();
 
         PropEntity.onStartup();
+        OBBHitDetection.startProjectileDetection();
     }
 
     @Override
@@ -74,6 +75,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         FileModelConverter.shutdown();
         ModeledEntity.shutdown();
         ModeledEntitiesClock.shutdown();
+        OBBHitDetection.shutdown();
         Bukkit.getServer().getScheduler().cancelTasks(MetadataHandler.PLUGIN);
         HandlerList.unregisterAll(MetadataHandler.PLUGIN);
     }

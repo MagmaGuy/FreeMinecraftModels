@@ -5,6 +5,7 @@ import com.magmaguy.easyminecraftgoals.internal.PacketModelEntity;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.utils.TransformationMatrix;
+import com.magmaguy.magmacore.util.AttributeManager;
 import com.magmaguy.magmacore.util.VersionChecker;
 import lombok.Getter;
 import org.bukkit.Location;
@@ -37,10 +38,16 @@ public class BoneTransforms {
         if (parent != null) {
             TransformationMatrix.multiplyMatrices(parent.getBoneTransforms().globalMatrix, localMatrix, globalMatrix);
             if (bone.getBoneBlueprint().isHead()) {
+                // Store the inherited scale before resetting
+                double[] inheritedScale = globalMatrix.getScale(); // or however you access scale in your matrix
+
                 globalMatrix.resetRotation();
                 float yaw = -bone.getSkeleton().getCurrentHeadYaw() + 180;
                 globalMatrix.rotateY((float) Math.toRadians(yaw));
                 globalMatrix.rotateX(-(float) Math.toRadians(bone.getSkeleton().getCurrentHeadPitch()));
+
+                // Reapply the inherited scale
+                globalMatrix.scale(inheritedScale[0], inheritedScale[1], inheritedScale[2]);
             }
         } else {
             globalMatrix = localMatrix;
@@ -120,9 +127,9 @@ public class BoneTransforms {
         packetDisplayEntity = NMSManager.getAdapter().createPacketDisplayEntity(getDisplayEntityTargetLocation());
         if (VersionChecker.serverVersionOlderThan(21, 4))
             packetDisplayEntity.initializeModel(getDisplayEntityTargetLocation(), Integer.parseInt(bone.getBoneBlueprint().getModelID()));
-        else
+        else {
             packetDisplayEntity.initializeModel(getDisplayEntityTargetLocation(), bone.getBoneBlueprint().getModelID());
-//        packetDisplayEntity.setScale(2.5f);
+        }
         packetDisplayEntity.sendLocationAndRotationPacket(getDisplayEntityTargetLocation(), getDisplayEntityRotation());
     }
 
@@ -205,7 +212,13 @@ public class BoneTransforms {
 
     protected float getDisplayEntityScale() {
         float scale = bone.getAnimationScale() == -1 ? 2.5f : bone.getAnimationScale() * 2.5f;
-        scale *= bone.getSkeleton().getModeledEntity().getScaleModifier();
+        //Only the root bone/head should be scaling up globally like this, otherwise the scale will be inherited by each bone and then become progressively larger or smaller
+        if (bone.getParent() == null) {
+            double scaleModifier = bone.getSkeleton().getModeledEntity().getScaleModifier();
+            if (bone.getSkeleton().getModeledEntity().getLivingEntity() != null && bone.getSkeleton().getModeledEntity().getLivingEntity().getAttribute(AttributeManager.getAttribute("generic_scale")) != null)
+                scaleModifier *= bone.getSkeleton().getModeledEntity().getLivingEntity().getAttribute(AttributeManager.getAttribute("generic_scale")).getValue();
+            scale *= (float) scaleModifier;
+        }
         return scale;
     }
 

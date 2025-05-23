@@ -32,6 +32,7 @@ public class PropsConfigFields extends CustomConfigFields {
     }
 
     public void spawnPropEntity(Location location) {
-        PropEntity.spawnPropEntity(filename.replace(".yml", ""), Objects.requireNonNull(location));
+        // Pass 'this' as the configuration to the PropEntity
+        PropEntity.spawnPropEntity(filename.replace(".yml", ""), Objects.requireNonNull(location), this);
     }
 }

@@ -1,14 +1,13 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.api.PropEntityLeftClickEvent;
+import com.magmaguy.freeminecraftmodels.api.PropEntityRightClickEvent;
 import com.magmaguy.freeminecraftmodels.config.props.PropsConfig;
 import com.magmaguy.freeminecraftmodels.config.props.PropsConfigFields;
 import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.*;
-import org.bukkit.entity.ArmorStand;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.EntityType;
-import org.bukkit.entity.Player;
+import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
@@ -22,7 +21,7 @@ public class PropEntity extends StaticEntity {
     public static final NamespacedKey propNamespacedKey = new NamespacedKey(MetadataHandler.PLUGIN, "prop");
     public static HashMap<ArmorStand, PropEntity> propEntities = new HashMap<>();
     private ArmorStand armorStand;
-    private final PropsConfigFields propsConfigFields;
+    private PropsConfigFields propsConfigFields;
     private double health = 3;
 
     public PropEntity(String entityID, Location spawnLocation) {
@@ -65,6 +64,13 @@ public class PropEntity extends StaticEntity {
         }
     }
 
+    public static PropEntity spawnPropEntity(String entityID, Location location, PropsConfigFields config) {
+        PropEntity propEntity = new PropEntity(entityID, location);
+        propEntity.propsConfigFields = config;
+        propEntity.spawn();
+        return propEntity;
+    }
+
     public static void spawnPropEntity(String entityID, Location spawnLocation) {
         PropEntity propEntity = new PropEntity(entityID, spawnLocation);
         propEntity.spawn();
@@ -84,32 +90,26 @@ public class PropEntity extends StaticEntity {
     }
 
     @Override
-    public void damage(Player player) {
-        if (propsConfigFields.isOnlyRemovableByOPs() && !player.isOp()) return;
+    public void damageByLivingEntity(LivingEntity livingEntity) {
+        if (propsConfigFields.isOnlyRemovableByOPs() && !livingEntity.isOp()) return;
         if (armorStand == null) {
             permanentlyRemove();
             Logger.warn("Failed to damage PropEntity: ArmorStand is null!");
             return;
         }
-//        OBBHitDetection.applyDamage = true;
-//        player.attack(armorStand);
-//        OBBHitDetection.applyDamage = false;
         health -= 1;
         getSkeleton().tint();
         if (!armorStand.isValid() || health <= 0) permanentlyRemove();
     }
 
     @Override
-    public void damage(Player player, double damage) {
-        if (propsConfigFields.isOnlyRemovableByOPs() && !player.isOp()) return;
+    public void damageByLivingEntity(LivingEntity livingEntity, double damage) {
+        if (propsConfigFields.isOnlyRemovableByOPs() && !livingEntity.isOp()) return;
         if (armorStand == null) {
             permanentlyRemove();
             Logger.warn("Failed to damage PropEntity: ArmorStand is null!");
             return;
         }
-//        OBBHitDetection.applyDamage = true;
-//        armorStand.damage(damage, player);
-//        OBBHitDetection.applyDamage = false;
         health -= 1;
         getSkeleton().tint();
         if (!armorStand.isValid() || health <= 0) permanentlyRemove();
@@ -129,6 +129,20 @@ public class PropEntity extends StaticEntity {
     public void permanentlyRemove() {
         remove();
         if (armorStand != null) armorStand.remove();
+    }
+
+    @Override
+    public void triggerLeftClickEvent(Player player) {
+        super.triggerLeftClickEvent(player);
+        PropEntityLeftClickEvent event = new PropEntityLeftClickEvent(player, this);
+        Bukkit.getPluginManager().callEvent(event);
+    }
+
+    @Override
+    public void triggerRightClickEvent(Player player) {
+        super.triggerRightClickEvent(player);
+        PropEntityRightClickEvent event = new PropEntityRightClickEvent(player, this);
+        Bukkit.getPluginManager().callEvent(event);
     }
 
     public static class PropEntityEvents implements Listener {

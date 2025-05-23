@@ -1,6 +1,5 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
-import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
@@ -11,7 +10,6 @@ import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.entity.ArmorStand;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
 import javax.annotation.Nullable;
@@ -114,40 +112,51 @@ public class Skeleton {
         return boneMap.values();
     }
 
+    private boolean tinting = false;
+    private int tintCounter = 0;
+
     /**
      * This updates animations. The plugin runs this automatically, don't use it unless you know what you're doing!
      */
     public void transform() {
         skeletonWatchers.tick();
-        if (getSkeletonWatchers().hasObservers()) rootBone.transform();
+
+        // handle tint animation
+        if (tinting) {
+            tintCounter++;
+
+            if (tintCounter <= 10) {
+                // ramp from red back toward white
+                int gAndB = (int) (255 / (double) tintCounter);
+                Color tint = Color.fromRGB(255, gAndB, gAndB);
+                boneMap.values().forEach(b -> b.setHorseLeatherArmorColor(tint));
+            } else {
+                // after frame 10, either keep poofing (if dying) or finish
+                if (!modeledEntity.isDying()) {
+                    // done
+                    tinting = false;
+                    boneMap.values().forEach(b -> b.setHorseLeatherArmorColor(Color.WHITE));
+                } else if (modeledEntity.isRemoved()) {
+                    // entity gone, cancel
+                    tinting = false;
+                } else {
+                    // still dying: emit poofs every 5 ticks
+                    if (tintCounter % 5 == 0) {
+                        boneMap.values().forEach(b -> b.spawnParticles(Particle.POOF, .1));
+                    }
+                }
+            }
+        }
+
+        if (getSkeletonWatchers().hasObservers()) {
+            rootBone.transform();
+        }
     }
 
     public void tint() {
-        if (damageTintTask != null) damageTintTask.cancel();
-        damageTintTask = new BukkitRunnable() {
-            int counter = 0;
-
-            @Override
-            public void run() {
-                counter++;
-                if (counter > 10) {
-                    if (!modeledEntity.isDying()) {
-                        cancel();
-                        boneMap.values().forEach(bone -> bone.setHorseLeatherArmorColor(Color.WHITE));
-                        return;
-                    } else {
-                        if (modeledEntity.isRemoved()) {
-                            cancel();
-                            return;
-                        }
-                        if (counter % 5 == 0) {
-                            boneMap.values().forEach(bone -> bone.spawnParticles(Particle.POOF, .1));
-                        }
-                    }
-                }
-                boneMap.values().forEach(bone -> bone.setHorseLeatherArmorColor(Color.fromRGB(255, (int) (255 / (double) counter), (int) (255 / (double) counter))));
-            }
-        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
+        // start (or restart) the tint animation
+        tinting = true;
+        tintCounter = 0;
     }
 
     public void teleport(Location location) {
