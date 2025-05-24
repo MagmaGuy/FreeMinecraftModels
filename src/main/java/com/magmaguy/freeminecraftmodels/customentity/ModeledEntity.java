@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.animation.AnimationManager;
+import com.magmaguy.freeminecraftmodels.api.ModeledEntityHitboxContactEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityLeftClickEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityRightClickEvent;
 import com.magmaguy.freeminecraftmodels.customentity.core.OrientedBoundingBox;
@@ -23,6 +24,7 @@ import org.bukkit.persistence.PersistentDataType;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class ModeledEntity {
     @Getter
@@ -61,6 +63,13 @@ public class ModeledEntity {
     private int scaleTicksElapsed = 0;
     private double scaleStart = 1.0;
     private double scaleEnd = 0.0;
+
+    protected int tickCounter = 0;
+    // Collision detection properties
+    @Getter
+    @Setter
+    private boolean collisionDetectionEnabled = false;
+
     public ModeledEntity(String entityID, Location spawnLocation) {
         this.entityID = entityID;
         this.spawnLocation = spawnLocation;
@@ -168,6 +177,12 @@ public class ModeledEntity {
         if (animationManager != null) {
             animationManager.tick();
         }
+
+        // Perform collision detection every 2 ticks if enabled
+        if (collisionDetectionEnabled && tickCounter % 2 == 0) {
+            checkPlayerCollisions();
+        }
+        tickCounter++;
     }
 
     private double lerp(double start, double end, double t) {
@@ -176,6 +191,57 @@ public class ModeledEntity {
 
     protected void updateHitbox() {
         getObbHitbox().update(getLocation());
+    }
+
+    /**
+     * Checks for collisions with nearby players and fires appropriate events
+     */
+    protected void checkPlayerCollisions() {
+        if (getWorld() == null) {
+            return;
+        }
+
+        // Check for nearby players (within 10 blocks)
+        List<Player> nearbyPlayers = getWorld().getPlayers().stream()
+                .filter(player -> player.getLocation().distanceSquared(getLocation()) < Math.pow(10, 2))
+                .collect(Collectors.toList());
+
+        // For each nearby player, check collision
+        for (Player player : nearbyPlayers) {
+            if (isPlayerColliding(player)) {
+                // Fire the appropriate hitbox contact event
+                triggerHitboxContactEvent(player);
+
+                // Call the collision handler (to be overridden by subclasses)
+                handlePlayerCollision(player);
+            }
+        }
+    }
+
+    /**
+     * Checks if a player is colliding with this entity's OBB hitbox
+     */
+    protected boolean isPlayerColliding(Player player) {
+        return getObbHitbox().isAABBCollidingWithOBB(player.getBoundingBox(), getObbHitbox());
+    }
+
+    /**
+     * Override this method in subclasses to handle player collisions
+     *
+     * @param player The player that is colliding with this entity
+     */
+    protected void handlePlayerCollision(Player player) {
+        // Default implementation does nothing
+        // Subclasses like DynamicEntity will override this to apply damage
+    }
+
+    /**
+     * Triggers the appropriate hitbox contact event based on entity type
+     * This method should be overridden by subclasses to fire their specific event types
+     */
+    protected void triggerHitboxContactEvent(Player player) {
+        ModeledEntityHitboxContactEvent event = new ModeledEntityHitboxContactEvent(player, this);
+        Bukkit.getPluginManager().callEvent(event);
     }
 
     /**
@@ -289,7 +355,7 @@ public class ModeledEntity {
 
         if (projectile.getShooter() != null && projectile.getShooter().equals(livingEntity)) return false;
 
-        // 1) If it’s an arrow, use its damage field and velocity
+        // 1) If it's an arrow, use its damage field and velocity
         if (projectile instanceof Arrow arrow) {
             // base: speed * damage‐multiplier
             double speed = arrow.getVelocity().length();           // blocks/tick
