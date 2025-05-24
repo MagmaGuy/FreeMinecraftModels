@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
+import com.magmaguy.freeminecraftmodels.thirdparty.BedrockChecker;
 import org.bukkit.Bukkit;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
@@ -216,11 +217,17 @@ public class SkeletonWatchers implements Listener {
     }
 
     private void displayTo(Player player) {
+        boolean isBedrock = BedrockChecker.isBedrock(player);
+        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getLivingEntity() != null)
+            player.showEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getLivingEntity());
         viewers.add(player.getUniqueId());
         skeleton.getBones().forEach(bone -> bone.displayTo(player));
     }
 
     private void hideFrom(UUID uuid) {
+        boolean isBedrock = BedrockChecker.isBedrock(Bukkit.getPlayer(uuid));
+        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getLivingEntity() != null)
+            Bukkit.getPlayer(uuid).hideEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getLivingEntity());
         viewers.remove(uuid);
         skeleton.getBones().forEach(bone -> bone.hideFrom(uuid));
     }
