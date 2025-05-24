@@ -1,5 +1,5 @@
 name: FreeMinecraftModels
-version: '2.1.0'
+version: '2.1.1-SNAPSHOT'
 main: com.magmaguy.freeminecraftmodels.FreeMinecraftModels
 api-version: 1.18
 prefix: FreeMinecraftModels

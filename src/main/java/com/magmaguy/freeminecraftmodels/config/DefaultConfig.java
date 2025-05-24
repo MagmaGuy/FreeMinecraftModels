@@ -10,6 +10,7 @@ public class DefaultConfig extends ConfigurationFile {
     public static boolean useDisplayEntitiesWhenPossible;
     public static int maxModelViewDistance;
     public static int maxInteractionAndAttackDistance;
+    public static boolean sendCustomModelsToBedrockClients;
 
     public DefaultConfig() {
         super("config.yml");
@@ -31,5 +32,10 @@ public class DefaultConfig extends ConfigurationFile {
                 List.of("Sets the maximum distance in blocks that a modeled entity can be interacted with or attacked from.",
                         "The default value is 3, which is similar to vanilla defaults."),
                 fileConfiguration, "maxInteractionAndAttackDistance", 3);
+        sendCustomModelsToBedrockClients = ConfigurationEngine.setBoolean(
+                List.of("Sets whether custom models should be sent to bedrock clients.",
+                        "If you can't convert the resource pack, you will not be able to send disguises to the players",
+                        "If false, players will not see the custom models, but for dynamic models (bosses and such) they will see the minecraft creature the are based on."),
+                fileConfiguration, "doNotSendCustomModelsToBedrockClients", false);
     }
 }
