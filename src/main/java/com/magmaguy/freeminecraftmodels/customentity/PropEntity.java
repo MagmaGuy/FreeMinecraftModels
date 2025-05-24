@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.api.PropEntityHitboxContactEvent;
 import com.magmaguy.freeminecraftmodels.api.PropEntityLeftClickEvent;
 import com.magmaguy.freeminecraftmodels.api.PropEntityRightClickEvent;
 import com.magmaguy.freeminecraftmodels.config.props.PropsConfig;
@@ -142,6 +143,12 @@ public class PropEntity extends StaticEntity {
     public void triggerRightClickEvent(Player player) {
         super.triggerRightClickEvent(player);
         PropEntityRightClickEvent event = new PropEntityRightClickEvent(player, this);
+        Bukkit.getPluginManager().callEvent(event);
+    }
+
+    @Override
+    protected void triggerHitboxContactEvent(Player player) {
+        PropEntityHitboxContactEvent event = new PropEntityHitboxContactEvent(player, this);
         Bukkit.getPluginManager().callEvent(event);
     }
 

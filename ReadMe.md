@@ -282,18 +282,23 @@ example above, or when running the spawn method on a Dynamic entity.
 
 ### Click events
 
-FreeMinecraftModels provides custom events for when a player left of right-clicks a modeled entity.
+FreeMinecraftModels provides custom events for when a player left of right-clicks a modeled entity, or enters its
+hitbox.
 
 Those are events are:
 
 - `ModeledEntityLeftClickEvent`
 - `ModeledEntityRightClickEvent`
+- `ModeledEntityHitboxContactEvent` (entity must be set to tick collision checks if not dynamic)
 - `PropLeftClickEvent`
 - `PropRightClickEvent`
+- `PropEntityHitboxContactEvent` (entity must be set to tick collision checks)
 - `StaticEntityLeftClickEvent`
 - `StaticEntityRightClickEvent`
+- `StaticEntityHitboxContactEvent` (entity must be set to tick collision checks)
 - `DynamicEntityLeftClickEvent`
 - `DynamicEntityRightClickEvent`
+- `DynamicEntityHitboxContactEvent`
 
 They are all `Cancellable` and can be cancelled. Additionally, they all have a `Player` as their first parameter, and
 expose the entity that was clicked.

@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
+import com.magmaguy.freeminecraftmodels.api.StaticEntityHitboxContactEvent;
 import com.magmaguy.freeminecraftmodels.api.StaticEntityLeftClickEvent;
 import com.magmaguy.freeminecraftmodels.api.StaticEntityRightClickEvent;
 import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityInterface;
@@ -93,6 +94,12 @@ public class StaticEntity extends ModeledEntity implements ModeledEntityInterfac
     public void triggerRightClickEvent(Player player) {
         super.triggerRightClickEvent(player);
         StaticEntityRightClickEvent event = new StaticEntityRightClickEvent(player, this);
+        Bukkit.getPluginManager().callEvent(event);
+    }
+
+    @Override
+    protected void triggerHitboxContactEvent(Player player) {
+        StaticEntityHitboxContactEvent event = new StaticEntityHitboxContactEvent(player, this);
         Bukkit.getPluginManager().callEvent(event);
     }
 }

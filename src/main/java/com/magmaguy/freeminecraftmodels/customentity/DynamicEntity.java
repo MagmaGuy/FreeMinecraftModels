@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.api.DynamicEntityHitboxContactEvent;
 import com.magmaguy.freeminecraftmodels.api.DynamicEntityLeftClickEvent;
 import com.magmaguy.freeminecraftmodels.api.DynamicEntityRightClickEvent;
 import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityInterface;
@@ -26,7 +27,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class DynamicEntity extends ModeledEntity implements ModeledEntityInterface {
     @Getter
@@ -34,8 +34,8 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     private static final NamespacedKey namespacedKey = new NamespacedKey(MetadataHandler.PLUGIN, "DynamicEntity");
     @Getter
     private final String name = "default";
-    boolean oneTimeDamageWarning = false;
     int counter = 0;
+    boolean oneTimeDamageWarning = false;
     // Contact damage detection is integrated into the entity's internal clock
     // Contact damage properties
     @Getter
@@ -46,6 +46,7 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
 
     public DynamicEntity(String entityID, Location targetLocation) {
         super(entityID, targetLocation);
+        setCollisionDetectionEnabled(true);
         dynamicEntities.add(this);
         super.getSkeleton().setDynamicEntity(this);
     }
@@ -122,7 +123,6 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         getSkeleton().setCurrentHeadPitch(livingEntity.getEyeLocation().getPitch());
         getSkeleton().setCurrentHeadYaw(livingEntity.getEyeLocation().getYaw());
 
-        if (damagesOnContact && counter % 2 == 0) checkPlayerCollisions();
         counter++;
     }
 
@@ -221,44 +221,6 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         getObbHitbox().update(getBodyLocation());
     }
 
-    /**
-     * Checks for collisions with nearby players and applies damage
-     */
-    private void checkPlayerCollisions() {
-        if (livingEntity == null || !livingEntity.isValid()) {
-            return;
-        }
-
-        // Check for nearby players (within 5 blocks)
-        List<Player> nearbyPlayers = livingEntity.getWorld().getPlayers().stream()
-                .filter(player -> player.getLocation().distanceSquared(livingEntity.getLocation()) < Math.pow(10, 2))
-                .collect(Collectors.toList());
-
-        // For each nearby player, check collision and apply damage if colliding
-        for (Player player : nearbyPlayers) {
-            if (isPlayerColliding(player)) {
-                if (livingEntity.getAttribute(AttributeManager.getAttribute("generic_attack_damage")) != null)
-                    livingEntity.attack(player);
-                else {
-                    //This is not ideal, the underlying entity should have a damage attribute
-                    player.damage(customDamage, livingEntity);
-                    if (!oneTimeDamageWarning) {
-                        Logger.info("Damaged player " + player.getName() + " for " + customDamage + " damage using custom damage value!");
-                        oneTimeDamageWarning = true;
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Checks if a player is colliding with this entity
-     */
-    private boolean isPlayerColliding(Player player) {
-        // Check for collision
-        return getObbHitbox().isAABBCollidingWithOBB(player.getBoundingBox(), getObbHitbox());
-    }
-
     @Override
     public void triggerLeftClickEvent(Player player) {
         super.triggerLeftClickEvent(player);
@@ -270,6 +232,26 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     public void triggerRightClickEvent(Player player) {
         super.triggerRightClickEvent(player);
         DynamicEntityRightClickEvent event = new DynamicEntityRightClickEvent(player, this);
+        Bukkit.getPluginManager().callEvent(event);
+    }
+
+    @Override
+    protected void handlePlayerCollision(Player player) {
+        if (livingEntity.getAttribute(AttributeManager.getAttribute("generic_attack_damage")) != null)
+            livingEntity.attack(player);
+        else {
+            //This is not ideal, the underlying entity should have a damage attribute
+            player.damage(customDamage, livingEntity);
+            if (!oneTimeDamageWarning) {
+                Logger.info("Damaged player " + player.getName() + " for " + customDamage + " damage using custom damage value!");
+                oneTimeDamageWarning = true;
+            }
+        }
+    }
+
+    @Override
+    protected void triggerHitboxContactEvent(Player player) {
+        DynamicEntityHitboxContactEvent event = new DynamicEntityHitboxContactEvent(player, this);
         Bukkit.getPluginManager().callEvent(event);
     }
 

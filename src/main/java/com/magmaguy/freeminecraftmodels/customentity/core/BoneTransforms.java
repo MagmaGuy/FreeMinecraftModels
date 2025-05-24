@@ -197,8 +197,10 @@ public class BoneTransforms {
     }
 
     public void sendUpdatePacket() {
-        sendArmorStandUpdatePacket();
-        sendDisplayEntityUpdatePacket();
+        if (packetArmorStandEntity != null && packetArmorStandEntity.hasViewers())
+            sendArmorStandUpdatePacket();
+        if (packetDisplayEntity != null && packetDisplayEntity.hasViewers())
+            sendDisplayEntityUpdatePacket();
     }
 
     private void sendArmorStandUpdatePacket() {
