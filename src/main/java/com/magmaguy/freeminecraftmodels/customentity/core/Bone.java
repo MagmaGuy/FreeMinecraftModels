@@ -2,7 +2,7 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
-import com.magmaguy.freeminecraftmodels.thirdparty.Floodgate;
+import com.magmaguy.freeminecraftmodels.thirdparty.BedrockChecker;
 import com.magmaguy.magmacore.util.VersionChecker;
 import lombok.Getter;
 import org.bukkit.Color;
@@ -98,9 +98,11 @@ public class Bone {
     }
 
     public void displayTo(Player player) {
+        boolean isBedrock = BedrockChecker.isBedrock(player);
+        if (isBedrock && DefaultConfig.sendCustomModelsToBedrockClients) return;
         if (boneTransforms.getPacketArmorStandEntity() != null &&
                 (!DefaultConfig.useDisplayEntitiesWhenPossible ||
-                        Floodgate.isBedrock(player) ||
+                        isBedrock ||
                         VersionChecker.serverVersionOlderThan(19, 4)))
             boneTransforms.getPacketArmorStandEntity().displayTo(player.getUniqueId());
         else if (boneTransforms.getPacketDisplayEntity() != null)
