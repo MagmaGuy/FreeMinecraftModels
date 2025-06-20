@@ -8,6 +8,7 @@ public class Geyser {
 
     public static boolean isBedrock(Player player) {
         GeyserConnection geyserConnection = GeyserApi.api().connectionByUuid(player.getUniqueId());
+//        Logger.debug("Checking geyser: " + (geyserConnection != null));
         return geyserConnection != null;
     }
 }
