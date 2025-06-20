@@ -36,6 +36,6 @@ public class DefaultConfig extends ConfigurationFile {
                 List.of("Sets whether custom models should be sent to bedrock clients.",
                         "If you can't convert the resource pack, you will not be able to send disguises to the players",
                         "If false, players will not see the custom models, but for dynamic models (bosses and such) they will see the minecraft creature the are based on."),
-                fileConfiguration, "doNotSendCustomModelsToBedrockClients", false);
+                fileConfiguration, "sendCustomModelsToBedrockClients", false);
     }
 }

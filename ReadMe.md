@@ -157,6 +157,7 @@ Maven:
 <groupId>com.magmaguy</groupId>
 <artifactId>FreeMinecraftModels</artifactId>
 <version>LATEST.VERSION.HERE</version>
+<scope>provided</scope>
 </dependency>
 ```
 
