@@ -80,6 +80,8 @@ public class SkeletonWatchers implements Listener {
         }
     }
 
+    private static final int MIN_VIEW_DISTANCE = 10;
+
     private void updateWatcherList() {
         if (skeleton.getCurrentLocation() == null) return;
 
@@ -87,7 +89,7 @@ public class SkeletonWatchers implements Listener {
         newPlayers.clear();
         toRemove.clear();
 
-        double sightCheckDistanceMin = Math.pow(20, 2);
+        double sightCheckDistanceMin = Math.pow(MIN_VIEW_DISTANCE, 2);
         double maxViewDistanceSquared = Math.pow(DefaultConfig.maxModelViewDistance, 2);
 
         for (Player player : skeleton.getCurrentLocation().getWorld().getPlayers()) {
