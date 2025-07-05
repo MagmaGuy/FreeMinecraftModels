@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.PacketModelEntity;
+import com.magmaguy.easyminecraftgoals.internal.PacketTextEntity;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.utils.TransformationMatrix;
@@ -9,6 +10,7 @@ import com.magmaguy.magmacore.util.AttributeManager;
 import com.magmaguy.magmacore.util.VersionChecker;
 import lombok.Getter;
 import org.bukkit.Location;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.util.EulerAngle;
 import org.bukkit.util.Vector;
 import org.joml.Vector3f;
@@ -23,10 +25,22 @@ public class BoneTransforms {
     private PacketModelEntity packetArmorStandEntity = null;
     @Getter
     private PacketModelEntity packetDisplayEntity = null;
+    @Getter
+    private PacketTextEntity packetTextDisplayArmorStandEntity = null;
 
     public BoneTransforms(Bone bone, Bone parent) {
         this.bone = bone;
         this.parent = parent;
+    }
+
+    public void setTextDisplayText(String text) {
+        if (packetTextDisplayArmorStandEntity == null) return;
+        packetTextDisplayArmorStandEntity.setText(text);
+    }
+
+    public void setTextDisplayVisible(boolean visible) {
+        if (packetTextDisplayArmorStandEntity == null) return;
+        packetTextDisplayArmorStandEntity.setTextVisible(visible);
     }
 
     public void transform() {
@@ -117,31 +131,44 @@ public class BoneTransforms {
     public void generateDisplay() {
         transform();
         if (bone.getBoneBlueprint().isDisplayModel()) {
+            if (bone.getBoneBlueprint().isNameTag()) {
+                initializeTextDisplayBone();
+                return;
+            }
             initializeDisplayEntityBone();
             initializeArmorStandBone();
         }
     }
 
+    private void initializeTextDisplayBone() {
+        Location textDisplayLocation = getArmorStandTargetLocation();
+        packetTextDisplayArmorStandEntity = NMSManager.getAdapter().createPacketTextArmorStandEntity(textDisplayLocation);
+        packetTextDisplayArmorStandEntity.initializeText(textDisplayLocation);
+        packetTextDisplayArmorStandEntity.sendLocationAndRotationPacket(textDisplayLocation, new EulerAngle(0,0,0));
+    }
+
     private void initializeDisplayEntityBone() {
         if (!DefaultConfig.useDisplayEntitiesWhenPossible) return;
-        packetDisplayEntity = NMSManager.getAdapter().createPacketDisplayEntity(getDisplayEntityTargetLocation());
+        Location displayEntityLocation = getDisplayEntityTargetLocation();
+        packetDisplayEntity = NMSManager.getAdapter().createPacketDisplayEntity(displayEntityLocation);
         if (VersionChecker.serverVersionOlderThan(21, 4))
-            packetDisplayEntity.initializeModel(getDisplayEntityTargetLocation(), Integer.parseInt(bone.getBoneBlueprint().getModelID()));
+            packetDisplayEntity.initializeModel(displayEntityLocation, Integer.parseInt(bone.getBoneBlueprint().getModelID()));
         else {
-            packetDisplayEntity.initializeModel(getDisplayEntityTargetLocation(), bone.getBoneBlueprint().getModelID());
+            packetDisplayEntity.initializeModel(displayEntityLocation, bone.getBoneBlueprint().getModelID());
         }
-        packetDisplayEntity.sendLocationAndRotationPacket(getDisplayEntityTargetLocation(), getDisplayEntityRotation());
+        packetDisplayEntity.sendLocationAndRotationPacket(displayEntityLocation, getDisplayEntityRotation());
     }
 
     private void initializeArmorStandBone() {
         //todo: add way to disable armor stands later via config
-        packetArmorStandEntity = NMSManager.getAdapter().createPacketArmorStandEntity(getArmorStandTargetLocation());
+        Location armorStandLocation = getArmorStandTargetLocation();
+        packetArmorStandEntity = NMSManager.getAdapter().createPacketArmorStandEntity(armorStandLocation);
         if (VersionChecker.serverVersionOlderThan(21, 4))
-            packetArmorStandEntity.initializeModel(getArmorStandTargetLocation(), Integer.parseInt(bone.getBoneBlueprint().getModelID()));
+            packetArmorStandEntity.initializeModel(armorStandLocation, Integer.parseInt(bone.getBoneBlueprint().getModelID()));
         else
-            packetArmorStandEntity.initializeModel(getArmorStandTargetLocation(), bone.getBoneBlueprint().getModelID());
+            packetArmorStandEntity.initializeModel(armorStandLocation, bone.getBoneBlueprint().getModelID());
 
-        packetArmorStandEntity.sendLocationAndRotationPacket(getArmorStandTargetLocation(), getArmorStandEntityRotation());
+        packetArmorStandEntity.sendLocationAndRotationPacket(armorStandLocation, getArmorStandEntityRotation());
     }
 
     private void rotateByEntityYaw() {
@@ -201,6 +228,16 @@ public class BoneTransforms {
             sendArmorStandUpdatePacket();
         if (packetDisplayEntity != null && packetDisplayEntity.hasViewers())
             sendDisplayEntityUpdatePacket();
+        if (packetTextDisplayArmorStandEntity != null && packetTextDisplayArmorStandEntity.hasViewers()) {
+            sendTextDisplayUpdatePacket();
+        }
+    }
+
+    private void sendTextDisplayUpdatePacket() {
+        packetTextDisplayArmorStandEntity.sendLocationAndRotationAndScalePacket(
+                getArmorStandTargetLocation(),
+                new EulerAngle(0, 0, 0),
+                1f);
     }
 
     private void sendArmorStandUpdatePacket() {
@@ -217,8 +254,8 @@ public class BoneTransforms {
         //Only the root bone/head should be scaling up globally like this, otherwise the scale will be inherited by each bone and then become progressively larger or smaller
         if (bone.getParent() == null) {
             double scaleModifier = bone.getSkeleton().getModeledEntity().getScaleModifier();
-            if (bone.getSkeleton().getModeledEntity().getLivingEntity() != null && bone.getSkeleton().getModeledEntity().getLivingEntity().getAttribute(AttributeManager.getAttribute("generic_scale")) != null)
-                scaleModifier *= bone.getSkeleton().getModeledEntity().getLivingEntity().getAttribute(AttributeManager.getAttribute("generic_scale")).getValue();
+            if (bone.getSkeleton().getModeledEntity().getUnderlyingEntity() != null && bone.getSkeleton().getModeledEntity() instanceof LivingEntity livingEntity && livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")) != null)
+                scaleModifier *= livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")).getValue();
             scale *= (float) scaleModifier;
         }
         return scale;

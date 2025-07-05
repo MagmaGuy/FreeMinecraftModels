@@ -8,7 +8,6 @@ public class BedrockChecker {
     }
 
     public static boolean isBedrock(Player player) {
-//        Logger.debug("Checking if player is bedrock: " + player.getName() + " floodgate is loaded: " + Bukkit.getPluginManager().isPluginEnabled("floodgate"));
         if (Bukkit.getPluginManager().isPluginEnabled("floodgate"))
             return Floodgate.isBedrock(player);
         else if (Bukkit.getPluginManager().isPluginEnabled("Geyser-Spigot"))

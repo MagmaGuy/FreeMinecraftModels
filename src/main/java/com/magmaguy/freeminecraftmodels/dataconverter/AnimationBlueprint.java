@@ -1,7 +1,9 @@
 package com.magmaguy.freeminecraftmodels.dataconverter;
 
+import com.magmaguy.freeminecraftmodels.utils.InterpolationType;
 import com.magmaguy.freeminecraftmodels.utils.LoopType;
 import com.magmaguy.magmacore.util.Logger;
+import com.magmaguy.magmacore.util.MathToolkit;
 import lombok.Getter;
 
 import java.util.*;
@@ -43,10 +45,6 @@ public class AnimationBlueprint {
             Logger.warn("Failed to interpolate animations for model " + modelName + "! Animation name: " + animationName);
             e.printStackTrace();
         }
-    }
-
-    public static float lerp(float start, float end, float t) {
-        return (1 - t) * start + t * end;
     }
 
     private void initializeGlobalValues(Map<String, Object> animationData) {
@@ -101,6 +99,30 @@ public class AnimationBlueprint {
         this.animationFrames.put(boneBlueprint, animationFramesArray);
     }
 
+    /**
+     * Helper method to call the appropriate interpolation based on type
+     */
+    private float interpolateWithType(InterpolationType type, float start, float end, float t) {
+        switch (type) {
+            case LINEAR -> {
+                return MathToolkit.lerp(start, end, t);
+            }
+            case CATMULLROM -> {
+                return MathToolkit.smoothLerp(start, end, t);
+            }
+            case BEZIER -> {
+                // You can adjust these control points or make them configurable
+                return MathToolkit.bezierLerp(start, end, t, 0.42f, 0.58f); // ease-in-out preset
+            }
+            case STEP -> {
+                return MathToolkit.stepLerp(start, end, t);
+            }
+            default -> {
+                return MathToolkit.lerp(start, end, t); // fallback to linear
+            }
+        }
+    }
+
     private void interpolateRotations(AnimationFrame[] animationFramesArray, List<Keyframe> rotationKeyframes) {
         Keyframe firstFrame = null;
         Keyframe previousFrame = null;
@@ -116,11 +138,17 @@ public class AnimationBlueprint {
             //It is possible for frames to go beyond the animation's duration, so we need to clamp that
             if (previousFrame.getTimeInTicks() >= duration) return;
             int durationBetweenKeyframes = Math.min(animationFrame.getTimeInTicks(), duration) - previousFrame.getTimeInTicks();
+
+            // Use the interpolation type from the current keyframe
+            InterpolationType interpType = animationFrame.getInterpolationType();
+
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                animationFramesArray[currentFrame].xRotation = lerp(previousFrame.getDataX(), animationFrame.getDataX(), j / (float) durationBetweenKeyframes);
-                animationFramesArray[currentFrame].yRotation = lerp(previousFrame.getDataY(), animationFrame.getDataY(), j / (float) durationBetweenKeyframes);
-                animationFramesArray[currentFrame].zRotation = lerp(previousFrame.getDataZ(), animationFrame.getDataZ(), j / (float) durationBetweenKeyframes);
+                float t = j / (float) durationBetweenKeyframes;
+
+                animationFramesArray[currentFrame].xRotation = interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t);
+                animationFramesArray[currentFrame].yRotation = interpolateWithType(interpType, previousFrame.getDataY(), animationFrame.getDataY(), t);
+                animationFramesArray[currentFrame].zRotation = interpolateWithType(interpType, previousFrame.getDataZ(), animationFrame.getDataZ(), t);
             }
             previousFrame = animationFrame;
             if (animationFrame.getTimeInTicks() > lastFrame.getTimeInTicks()) lastFrame = animationFrame;
@@ -159,11 +187,17 @@ public class AnimationBlueprint {
                 continue;
             }
             int durationBetweenKeyframes = animationFrame.getTimeInTicks() - previousFrame.getTimeInTicks();
+
+            // Use the interpolation type from the current keyframe
+            InterpolationType interpType = animationFrame.getInterpolationType();
+
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                animationFramesArray[currentFrame].xPosition = lerp(previousFrame.getDataX(), animationFrame.getDataX(), j / (float) durationBetweenKeyframes) / 16f;
-                animationFramesArray[currentFrame].yPosition = lerp(previousFrame.getDataY(), animationFrame.getDataY(), j / (float) durationBetweenKeyframes) / 16f;
-                animationFramesArray[currentFrame].zPosition = lerp(previousFrame.getDataZ(), animationFrame.getDataZ(), j / (float) durationBetweenKeyframes) / 16f;
+                float t = j / (float) durationBetweenKeyframes;
+
+                animationFramesArray[currentFrame].xPosition = interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t) / 16f;
+                animationFramesArray[currentFrame].yPosition = interpolateWithType(interpType, previousFrame.getDataY(), animationFrame.getDataY(), t) / 16f;
+                animationFramesArray[currentFrame].zPosition = interpolateWithType(interpType, previousFrame.getDataZ(), animationFrame.getDataZ(), t) / 16f;
             }
             previousFrame = animationFrame;
             if (animationFrame.getTimeInTicks() > lastFrame.getTimeInTicks()) lastFrame = animationFrame;
@@ -189,7 +223,6 @@ public class AnimationBlueprint {
         }
     }
 
-    //todo: Scale currently does nothing, will change soon
     private void interpolateScales(AnimationFrame[] animationFramesArray, List<Keyframe> scaleKeyframes) {
         Keyframe previousFrame = null;
         for (int i = 0; i < scaleKeyframes.size(); i++) {
@@ -199,9 +232,15 @@ public class AnimationBlueprint {
                 continue;
             }
             int durationBetweenKeyframes = animationFrame.getTimeInTicks() - previousFrame.getTimeInTicks();
+
+            // Use the interpolation type from the current keyframe
+            InterpolationType interpType = animationFrame.getInterpolationType();
+
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                animationFramesArray[currentFrame].scale = lerp(previousFrame.getDataX(), animationFrame.getDataX(), j / (float) durationBetweenKeyframes); //note: probably needs a multiplier here depending on implementation
+                float t = j / (float) durationBetweenKeyframes;
+
+                animationFramesArray[currentFrame].scale = interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t);
             }
             previousFrame = animationFrame;
         }
