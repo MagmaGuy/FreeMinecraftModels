@@ -22,7 +22,7 @@ public class ModeledEntitiesClock {
     }
 
     public static void shutdown() {
-        clock.cancel();
+        if (clock != null) clock.cancel();
     }
 
     public static void tick() {

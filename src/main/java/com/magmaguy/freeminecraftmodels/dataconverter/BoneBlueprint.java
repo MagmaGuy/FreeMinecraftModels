@@ -54,6 +54,14 @@ public class BoneBlueprint {
     private Vector3f blueprintOriginalBoneRotation = new Vector3f();
     @Getter
     private boolean isHead = false;
+    /**
+     * This is a bit of a cursed solution, but there's not that many ways around it.
+     * The purpose of this bone is to create a parallel bone for meta bones without interfering with the structural bones.
+     * Specifically, right now, the meta bone is used for nametags which benefit from having some special properties which would break structural bones.
+     */
+    @Getter
+    private BoneBlueprint metaBone = null;
+
 
     @Getter
     private File file;
@@ -91,7 +99,9 @@ public class BoneBlueprint {
         this.boneName = "freeminecraftmodels:" + modelName + "/" + StringToResourcePackFilename.convert(originalBoneName);
         this.originalModelName = modelName;
         this.parent = parent;
-        if (originalBoneName.startsWith("tag_")) nameTag = true;
+        if (originalBoneName.startsWith("tag_")) {
+            metaBone = new BoneBlueprint(boneJSON, modelName, parent, skeletonBlueprint);
+        }
         //Some bones should not be displayed because they just hold metadata
         if (originalBoneName.startsWith("b_") || originalBoneName.equalsIgnoreCase("hitbox"))
             isDisplayModel = false;
@@ -108,12 +118,26 @@ public class BoneBlueprint {
         generateAndWriteCubes(filename, textureReferences, modelName);
     }
 
+    public BoneBlueprint(Map<String, Object> boneJSON, String modelName, BoneBlueprint parent, SkeletonBlueprint skeletonBlueprint) {
+        this.originalBoneName = "fmm_nametag_bone_" + boneJSON.get("name");
+        this.boneName = "freeminecraftmodels:" + modelName + "/" + StringToResourcePackFilename.convert(originalBoneName);
+        this.originalModelName = modelName;
+        this.parent = parent;
+        nameTag = true;
+
+        //Add bone to the map
+        skeletonBlueprint.getBoneMap().put(originalBoneName, this);
+
+        //Simple center of the bone
+        processBoneValues(boneJSON);
+    }
+
     public Vector3f getBlueprintOriginalBoneRotation() {
         return new Vector3f(blueprintOriginalBoneRotation);
     }
 
     public boolean isDisplayModel() {
-        return isDisplayModel && modelID != null;
+        return isDisplayModel && (modelID != null || nameTag);
     }
 
     public Vector3f getModelCenter() {
@@ -180,8 +204,15 @@ public class BoneBlueprint {
 
     private void processBoneValues(Map<String, Object> boneJSON) {
         setOrigin(boneJSON);
-//        if (cubeBlueprintChildren.isEmpty()) return;
         setBoneRotation(boneJSON);
+        if (isNameTag()) {
+            List<Double> origins = (List<Double>) boneJSON.get("origin");
+            blueprintModelCenter = new Vector3f(
+                    origins.get(0).floatValue(),
+                    origins.get(1).floatValue() + 18,
+                    origins.get(2).floatValue())
+                    .mul(1 / 16f).mul(32 / 5f);
+        }
     }
 
     private void processChildren(Map<String, Object> boneJSON, String modelName, double projectResolution, HashMap<String, Object> values, Map<String, Map<String, Object>> textureReferences, SkeletonBlueprint skeletonBlueprint) {
@@ -197,7 +228,10 @@ public class BoneBlueprint {
                 else Logger.warn("Model " + modelName + " has an invalid configuration for its cubes!");
             } else {
                 //Case for object being a boneBlueprint
-                boneBlueprintChildren.add(new BoneBlueprint(projectResolution, (Map<String, Object>) object, values, textureReferences, modelName, this, skeletonBlueprint));
+                BoneBlueprint boneBlueprint = new BoneBlueprint(projectResolution, (Map<String, Object>) object, values, textureReferences, modelName, this, skeletonBlueprint);
+                boneBlueprintChildren.add(boneBlueprint);
+                if (boneBlueprint.getMetaBone() != null)
+                    boneBlueprintChildren.add(boneBlueprint.getMetaBone());
             }
         }
     }

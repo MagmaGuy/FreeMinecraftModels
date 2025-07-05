@@ -8,6 +8,7 @@ import com.magmaguy.freeminecraftmodels.config.OutputFolder;
 import com.magmaguy.freeminecraftmodels.config.props.PropsConfig;
 import com.magmaguy.freeminecraftmodels.customentity.*;
 import com.magmaguy.freeminecraftmodels.customentity.core.OBBHitDetection;
+import com.magmaguy.freeminecraftmodels.customentity.core.components.InteractionComponent;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.listeners.EntityTeleportEvent;
 import com.magmaguy.magmacore.MagmaCore;
@@ -45,6 +46,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         Bukkit.getPluginManager().registerEvents(new PropEntity.PropEntityEvents(), this);
         Bukkit.getPluginManager().registerEvents(new EntityTeleportEvent(), this);
         Bukkit.getPluginManager().registerEvents(new DynamicEntity.ModeledEntityEvents(), this);
+        Bukkit.getPluginManager().registerEvents(new InteractionComponent.InteractionComponentEvents(), this);
         NMSManager.initializeAdapter(this);
         CommandManager manager = new CommandManager(this, "freeminecraftmodels");
         manager.registerCommand(new MountCommand());
@@ -54,6 +56,8 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         manager.registerCommand(new SpawnCommand());
         manager.registerCommand(new VersionCommand());
         manager.registerCommand(new FreeMinecraftModelsCommand());
+        manager.registerCommand(new DisguiseCommand());
+        manager.registerCommand(new UndisguiseCommand());
         new PropsConfig();
         Bukkit.getPluginManager().registerEvents(this, this);
         OutputFolder.zipResourcePack();

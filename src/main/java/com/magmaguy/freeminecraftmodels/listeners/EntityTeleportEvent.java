@@ -11,7 +11,7 @@ public class EntityTeleportEvent implements Listener {
     public void onEntityTeleport(org.bukkit.event.entity.EntityTeleportEvent event) {
         if (event.getEntity() instanceof LivingEntity livingEntity && DynamicEntity.isDynamicEntity(livingEntity)) {
             DynamicEntity dynamicEntity = DynamicEntity.getDynamicEntity(livingEntity);
-            dynamicEntity.teleport(event.getTo());
+            dynamicEntity.teleport(event.getTo(), false);
         }
     }
 }

@@ -38,7 +38,8 @@ It can:
 
 ### How do you add an existing model?
 
-To import a model, just drag the .bbmodel to the imports folder and do `/fmm reload`. This will generate a .fmmodel file in the `models` folder and add the model to the resource pack in the `outputs` folder.
+To import a model, just drag the .bbmodel to the imports folder and do `/fmm reload`. This will generate a .fmmodel file
+in the `models` folder and add the model to the resource pack in the `outputs` folder.
 
 ***You will need to use that resource pack to view the model correctly!*** It is a normal resource pack, so all you need
 to do is put it in your resource pack folder. Minecraft servers have a way to host resource packs. I recommend using my
@@ -53,15 +54,17 @@ as [EliteMobs](https://www.spigotmc.org/resources/elitemobs.40090/) where the mo
 concrete, in this case boss fights.
 
 There are three types of models: static, dynamic and props.
+
 - Props are persistent and can be placed in the world in such a way that will persist even if the server is restarted,
-and it is possible to distribute maps with props to other servers
+  and it is possible to distribute maps with props to other servers
 - Dynamic models are for models that need an underlying living entity to function, ideally used by custom boss plugins
-or pets plugins
+  or pets plugins
 - Static models are for non-persistent models that should not move around, so basically temporary decorations or effects
 
 #### Viewing static models in-game
 
-To view static models in-game, use the command `/fmm spawn static <id>` where the id is the file name of the model, in lowercase and without the file extension.
+To view static models in-game, use the command `/fmm spawn static <id>` where the id is the file name of the model, in
+lowercase and without the file extension.
 
 #### Viewing dynamic models in-game
 
@@ -89,7 +92,10 @@ Cubes are the same here as they are in Blockbench, they are the cubes that make 
 
 - Cubes can go up to 112x112x112 "pixels" (Blockbench units) or 7x7x7 in-game blocks (normal Minecraft
   restrictions bypassed using display sizes, soon to be further bypassed for 1.19.4+ thanks to display entities)
-- Legal rotations for cubes are 0, 22.5, -22.5, 45 and -45. No other rotation works.
+- Minecraft rotations for cubes are 0, 22.5, -22.5, 45 and -45.
+- As of FMM 2.3.0, it is also possible to do any multiple of 22.5 for rotations, which will automatically be converted
+  by the plugin, though not recommended. Especially for +90 and -90, or rotations around those values, there will be
+  problems with flipped textures that may or may not be fixed in the future.
 - Cubes only rotate in one axis, meaning that a rotation of [22.5, 0, 0] is fine, a rotation of [22.5, 0, 45] will not
   fully work and only rotate on one axis.
 
@@ -128,7 +134,9 @@ The following virtual bones have been implemented in FreeMinecraftModels:
 
 #### **Safer, easier, uneditable file distribution**
 
-One thing that FMM tries to tackle is users repurposing models they have obtained to edit them in ways the model creator did not want them to edit, specifically in order to reskin or otherwise slightly alter a model and potentially try to resell as an original creation.
+One thing that FMM tries to tackle is users repurposing models they have obtained to edit them in ways the model creator
+did not want them to edit, specifically to reskin or otherwise slightly alter a model and potentially try to
+resell as an original creation.
 
 To that end, FMM uses the `.fmmodel` file format which aims to strip `.bbmodel` files down to the point where they can
 be used by the plugin but can not be edited in Blockbench.
@@ -227,7 +235,7 @@ import org.bukkit.entity.LivingEntity;
 
 public class CustomModelFMM implements CustomModelInterface {
     @Getter
-    private DynamicEntity dynamicEntity;
+    private final DynamicEntity dynamicEntity;
 
     public CustomModelFMM(LivingEntity livingEntity, String modelName, String nametagName) {
         dynamicEntity = DynamicEntity.create(modelName, livingEntity);
@@ -338,14 +346,20 @@ To save you some time, here is a quick breakdown of the logic flow of FMM:
 
 ## Tricks used in this plugin:
 
-The tricks used here are fairly well-established and standardized, but will be listed nonetheless because they can be counter-intuitive.
+The tricks used here are fairly well-established and standardized, but will be listed nonetheless because they can be
+counter-intuitive.
 
-Please note that these tricks are all completely invisible to users and model makers; restrictions and workarounds are only listed to help you understand how FMM bypasses various Minecraft limitations.
+Please note that these tricks are all completely invisible to users and model makers; restrictions and workarounds are
+only listed to help you understand how FMM bypasses various Minecraft limitations.
 
-- All models are scaled up 4x and then the size and pivot point is readjusted in code in order to extend the theoretical maximum size of the model
-- Because resource pack models can only have models go from -16 to +32 in size, models are shifted in the background. This is completely invisible to players.
-- Leather horse armor is used to create models with a hue that can be influenced through code (i.e. for damage indications). The horse armor must be set to white to display the correct colors!
-- Blockbench uses a specific system of IDs for the textures, but actually reads the textures sequentially from config. IDs are assigned here based on their position in the list of textures, following how Blockbench does it.
+- All models are scaled up 4x and then the size and pivot point is readjusted in code in order to extend the theoretical
+  maximum size of the model
+- Because resource pack models can only have models go from -16 to +32 in size, models are shifted in the background.
+  This is completely invisible to players.
+- Leather horse armor is used to create models with a hue that can be influenced through code (i.e. for damage
+  indications). The horse armor must be set to white to display the correct colors!
+- Blockbench uses a specific system of IDs for the textures, but actually reads the textures sequentially from config.
+  IDs are assigned here based on their position in the list of textures, following how Blockbench does it.
 - Each bone is a different entity due to Minecraft limitations
 - Leather horse armor is on the head slot of the armor stand
 - Both armor stands and display entities are used for the default static items; bedrock clients get the armor stands,
@@ -353,9 +367,11 @@ Please note that these tricks are all completely invisible to users and model ma
 
 # Contributing to the FreeMinecraftModels (FMM) project in general
 
-FMM is actually crowdfunded by the lovely people over at https://www.patreon.com/magmaguy ! All contributions help more than you'd imagine ;)
+FMM is actually crowdfunded by the lovely people over at https://www.patreon.com/magmaguy ! All contributions help more
+than you'd imagine ;)
 
 # Currently planned features:
+
 - Bedrock client RSP generation
 - RSP management with geyser integration
 - tag_projectile as meta bones from which projectiles can be shot (can have more than one per model)

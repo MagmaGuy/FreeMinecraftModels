@@ -36,7 +36,7 @@ public class AnimationManager {
         current = states.get(AnimationStateType.SPAWN) != null
                 ? states.get(AnimationStateType.SPAWN)
                 : states.get(AnimationStateType.IDLE);
-        current.enter();
+        if (current != null) current.enter();
     }
 
     private void transitionTo(IAnimState target) {
@@ -97,6 +97,8 @@ public class AnimationManager {
     }
 
     public void tick() {
+        if (current == null) return; //todo: this is probably not the best solution as it would block playing animations if there's no idle probably
+
         // 1) let the state update its own “finished” logic
         current.update();
 
@@ -120,6 +122,8 @@ public class AnimationManager {
         boolean loop = current.isLoop();
         int duration = anim.getAnimationBlueprint().getDuration();
         long counter = anim.getCounter();
+
+        if (duration == 0) return; //todo: this is just a temp solution, I have to look into the ability to switch
 
         // if non-looping and we’re past the end, just don’t render further
         if (!loop && counter >= duration) {

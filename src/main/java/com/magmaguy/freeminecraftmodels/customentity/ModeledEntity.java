@@ -1,46 +1,42 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
-import com.magmaguy.freeminecraftmodels.animation.AnimationManager;
-import com.magmaguy.freeminecraftmodels.api.ModeledEntityHitboxContactEvent;
-import com.magmaguy.freeminecraftmodels.api.ModeledEntityLeftClickEvent;
-import com.magmaguy.freeminecraftmodels.api.ModeledEntityRightClickEvent;
-import com.magmaguy.freeminecraftmodels.customentity.core.OrientedBoundingBox;
+import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
+import com.magmaguy.freeminecraftmodels.customentity.core.RegisterModelEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.Skeleton;
+import com.magmaguy.freeminecraftmodels.customentity.core.components.AnimationComponent;
+import com.magmaguy.freeminecraftmodels.customentity.core.components.DamageableComponent;
+import com.magmaguy.freeminecraftmodels.customentity.core.components.HitboxComponent;
+import com.magmaguy.freeminecraftmodels.customentity.core.components.InteractionComponent;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import lombok.Setter;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
-import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.*;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.UUID;
 
 public class ModeledEntity {
     @Getter
     private static final HashSet<ModeledEntity> loadedModeledEntities = new HashSet<>();
-    private final int scaleDurationTicks = 20;
     @Getter
     private final String entityID;
     @Getter
     private final String name = "default";
-    private final Location spawnLocation;
+    private Location spawnLocation = null;
     @Getter
     private final List<TextDisplay> nametags = new ArrayList<>();
     @Getter
     private final Location lastSeenLocation;
-    @Getter
-    protected LivingEntity livingEntity = null;
+    protected int tickCounter = 0;
     /**
      * Whether the entity is currently dying.
      * This is set to true when the entity is in the process of getting removed with a death animation.
@@ -51,24 +47,26 @@ public class ModeledEntity {
     private SkeletonBlueprint skeletonBlueprint = null;
     @Getter
     private Skeleton skeleton;
-    private AnimationManager animationManager = null;
-    @Getter
-    private OrientedBoundingBox obbHitbox = null;
     @Getter
     private boolean isRemoved = false;
     @Getter
     @Setter
     private double scaleModifier = 1.0;
-    private boolean isScalingDown = false;
-    private int scaleTicksElapsed = 0;
-    private double scaleStart = 1.0;
-    private double scaleEnd = 0.0;
-
-    protected int tickCounter = 0;
     // Collision detection properties
+
     @Getter
-    @Setter
-    private boolean collisionDetectionEnabled = false;
+    protected Entity underlyingEntity = null;
+    @Getter
+    private String displayName = null;
+
+    @Getter
+    private final InteractionComponent interactionComponent = new InteractionComponent(this);
+    @Getter
+    private final HitboxComponent hitboxComponent = new HitboxComponent(this);
+    @Getter
+    private final DamageableComponent damageableComponent = new DamageableComponent(this);
+    @Getter
+    private final AnimationComponent animationComponent = new AnimationComponent(this);
 
     public ModeledEntity(String entityID, Location spawnLocation) {
         this.entityID = entityID;
@@ -89,17 +87,16 @@ public class ModeledEntity {
 
         skeleton = new Skeleton(skeletonBlueprint, this);
 
-        if (fileModelConverter.getAnimationsBlueprint() != null) {
-            try {
-                animationManager = new AnimationManager(this, fileModelConverter.getAnimationsBlueprint());
-            } catch (Exception e) {
-                Logger.warn("Failed to initialize AnimationManager for entityID: " + entityID + ". Error: " + e.getMessage());
-            }
-        } else {
-            Logger.warn("No AnimationsBlueprint found for entityID: " + entityID + ". AnimationManager not initialized.");
-        }
+        animationComponent.initializeAnimationManager(fileModelConverter);
 
         loadedModeledEntities.add(this);
+    }
+
+    public void setUnderlyingEntity(Entity underlyingEntity) {
+        this.underlyingEntity = underlyingEntity;
+        if (!(underlyingEntity instanceof PlayerDisguiseEntity))
+            RegisterModelEntity.registerModelEntity(underlyingEntity, getSkeletonBlueprint().getModelName());
+        hitboxComponent.setCustomHitboxOnUnderlyingEntity();
     }
 
     private static boolean isNameTag(ArmorStand armorStand) {
@@ -119,32 +116,41 @@ public class ModeledEntity {
         loadedModeledEntities.clear();
     }
 
-    public OrientedBoundingBox getObbHitbox() {
-        if (obbHitbox == null) {
-            if (getSkeletonBlueprint().getHitbox() != null) {
-                return obbHitbox = new OrientedBoundingBox(
-                        getSkeleton().getCurrentLocation(),
-                        //For some reason the width is the Z axis, not the X axis
-                        getSkeletonBlueprint().getHitbox().getWidthZ(),
-                        getSkeletonBlueprint().getHitbox().getHeight(),
-                        //For some reason the width is the X axis, not the Z axis
-                        getSkeletonBlueprint().getHitbox().getWidthX());
-            } else {
-                return obbHitbox = new OrientedBoundingBox(getSkeleton().getCurrentLocation(), 1, 2, 1);
-            }
-        } else return obbHitbox;
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+        getSkeleton().getNametags().forEach(nametag -> nametag.getBoneTransforms().setTextDisplayText(displayName));
+    }
+
+    public void setDisplayNameVisible(boolean visible) {
+        getSkeleton().getNametags().forEach(nametag -> nametag.getBoneTransforms().setTextDisplayVisible(visible));
+    }
+
+    /**
+     * Gets the set of UUIDs of all viewers (players who can see the entity)
+     *
+     * @return
+     */
+    public HashSet<UUID> getViewers() {
+        return skeleton.getSkeletonWatchers().getViewers();
     }
 
     public Location getSpawnLocation() {
         return spawnLocation.clone();
     }
 
-    protected void displayInitializer(Location targetLocation) {
-        skeleton.generateDisplays(targetLocation);
+    protected void displayInitializer() {
+        skeleton.generateDisplays();
+    }
+
+    public void spawn(Entity entity) {
+        setUnderlyingEntity(entity);
+        this.spawnLocation = entity.getLocation();
+        displayInitializer();
     }
 
     public void spawn(Location location) {
-        displayInitializer(location);
+        this.spawnLocation = location;
+        displayInitializer();
     }
 
     public void spawn() {
@@ -156,94 +162,197 @@ public class ModeledEntity {
     }
 
     public void tick() {
-        if (isRemoved) return; // ⬅ Stop ticking if the entity is already removed
-
-        getSkeleton().transform();
-        updateHitbox();
-
-        if (isScalingDown) {
-            scaleTicksElapsed++;
-
-            double t = Math.min(scaleTicksElapsed / (double) scaleDurationTicks, 1.0);
-            scaleModifier = lerp(scaleStart, scaleEnd, t);
-
-            if (scaleTicksElapsed >= scaleDurationTicks) {
-                scaleModifier = 0.0;
-                isScalingDown = false;
-                remove(); // triggers isRemoved = true
-            }
-        }
-
-        if (animationManager != null) {
-            animationManager.tick();
-        }
-
-        // Perform collision detection every 2 ticks if enabled
-        if (collisionDetectionEnabled && tickCounter % 2 == 0) {
-            checkPlayerCollisions();
-        }
+        //cehck if the entity exists, basically
+        if (isRemoved || getLocation() == null) return;
+        getSkeleton().tick();
+        hitboxComponent.tick(tickCounter);
+        animationComponent.tick();
         tickCounter++;
     }
 
-    private double lerp(double start, double end, double t) {
-        return start + (end - start) * t;
+    public void removeWithDeathAnimation() {
+        isDying = true;
+        if (!animationComponent.playDeathAnimation()) {
+            remove();
+        } else remove();
     }
 
-    protected void updateHitbox() {
-        getObbHitbox().update(getLocation());
+    public void removeWithMinimizedAnimation() {
+        if (animationComponent.isScalingDown()) return;
+        isDying = true;
+        animationComponent.removeWithMinimizedAnimation();
     }
 
-    /**
-     * Checks for collisions with nearby players and fires appropriate events
-     */
-    protected void checkPlayerCollisions() {
-        if (getWorld() == null) {
+    public void remove() {
+        if (isRemoved) {
             return;
         }
 
-        // Check for nearby players (within 10 blocks)
-        List<Player> nearbyPlayers = getWorld().getPlayers().stream()
-                .filter(player -> player.getLocation().distanceSquared(getLocation()) < Math.pow(10, 2))
-                .collect(Collectors.toList());
-
-        // For each nearby player, check collision
-        for (Player player : nearbyPlayers) {
-            if (isPlayerColliding(player)) {
-                // Fire the appropriate hitbox contact event
-                triggerHitboxContactEvent(player);
-
-                // Call the collision handler (to be overridden by subclasses)
-                handlePlayerCollision(player);
-            }
-        }
+        // Clear callbacks when removing
+        interactionComponent.clearCallbacks();
+        skeleton.remove();
+        loadedModeledEntities.remove(this);
+        if (underlyingEntity != null &&
+                (!(this instanceof PropEntity) ||
+                        this instanceof PropEntity propEntity && !propEntity.isPersistent()))
+                underlyingEntity.remove();
+        isRemoved = true;
     }
 
     /**
-     * Checks if a player is colliding with this entity's OBB hitbox
-     */
-    protected boolean isPlayerColliding(Player player) {
-        return getObbHitbox().isAABBCollidingWithOBB(player.getBoundingBox(), getObbHitbox());
-    }
-
-    /**
-     * Override this method in subclasses to handle player collisions
+     * Returns the name tag locations. Useful if you want to add more text above or below them.
      *
-     * @param player The player that is colliding with this entity
+     * @return
      */
-    protected void handlePlayerCollision(Player player) {
-        // Default implementation does nothing
-        // Subclasses like DynamicEntity will override this to apply damage
+    public List<Bone> getNametagBones() {
+        return skeleton.getNametags();
+    }
+
+    public World getWorld() {
+        if (underlyingEntity == null && spawnLocation == null) return null;
+        if (underlyingEntity != null) return underlyingEntity.getWorld();
+        return spawnLocation.getWorld();
+    }
+
+    public Location getLocation() {
+        if (underlyingEntity != null) return underlyingEntity.getLocation();
+        if (spawnLocation != null) return spawnLocation.clone();
+        return null;
+    }
+
+    public boolean isChunkLoaded() {
+        return getWorld().isChunkLoaded(getLocation().getBlockX() >> 4, getLocation().getBlockZ() >> 4);
+    }
+
+    public void showUnderlyingEntity(Player player) {
+        if (underlyingEntity == null || !underlyingEntity.isValid()) return;
+        player.showEntity(MetadataHandler.PLUGIN, underlyingEntity);
+        underlyingEntity.setGlowing(true);
+    }
+
+    public void hideUnderlyingEntity(Player player) {
+        if (underlyingEntity == null || !underlyingEntity.isValid()) return;
+        player.hideEntity(MetadataHandler.PLUGIN, underlyingEntity);
+        underlyingEntity.setGlowing(false);
     }
 
     /**
-     * Triggers the appropriate hitbox contact event based on entity type
-     * This method should be overridden by subclasses to fire their specific event types
+     * Teleports the entity represented by this {@code ModeledEntity} to the specified location.
+     * Optionally teleports the underlying entity if one is associated with this {@code ModeledEntity}.
+     * If another plugin has already teleported the underlying entity, do not teleport the underlying entity.
+     * If another plugin did not manage the underlying entity, teleport it.
+     * This primarily pushes teleport packets to clients.
+     *
+     * @param location the target {@link Location} to which the entity should be teleported
+     * @param teleportUnderlyingEntity a boolean indicating whether the underlying entity, if present,
+     *                                 should also be teleported to the specified location
      */
-    protected void triggerHitboxContactEvent(Player player) {
-        ModeledEntityHitboxContactEvent event = new ModeledEntityHitboxContactEvent(player, this);
-        Bukkit.getPluginManager().callEvent(event);
+    public void teleport(Location location, boolean teleportUnderlyingEntity) {
+        if (teleportUnderlyingEntity && underlyingEntity != null) {
+            underlyingEntity.teleport(location);
+        }
+        skeleton.teleport();
     }
 
+
+    //DamageableComponent
+    /**
+     * Inflicts damage on the entity based on the specified amount.
+     * This method delegates the damage operation to the {@code damageableComponent}
+     * associated with the current entity.
+     *
+     * @param amount the amount*/
+    public void damage(double amount){
+        damageableComponent.damage(amount);
+    }
+
+    /**
+     * Inflicts damage on this entity by a specified amount and logs the source of the damage.
+     * Delegates the damage application and handling to the associated damageable component.
+     *
+     * @param damager the entity causing the damage
+     * @param amount the*/
+    public void damage(Entity damager, double amount){
+        damageableComponent.damage(damager, amount);
+    }
+
+    /**
+     * Applies damage to this entity as inflicted by the specified damager.
+     * Delegates the damage logic to the {@code damageableComponent} associated with this entity.
+     */
+    public void damage(Entity damager){
+        damageableComponent.damage(damager);
+    }
+
+    /**
+     * Applies damage to the current entity based on the attributes of the provided projectile.
+     *
+     * This method evaluates the projectile's properties, such as speed, damage, and any potential
+     * enchantments, to*/
+    public boolean damage(Projectile projectile){
+        return damageableComponent.damage(projectile);
+    }
+
+    /**
+     * Performs an attack on the specified living entity target.
+     * This method delegates the attack logic to the `damageableComponent` associated with the current entity.
+     * Use this method to simulate attacks against other living entities in the game.
+     *
+     * @param target the {@link LivingEntity} that the current entity is attacking
+     */
+    public void attack(LivingEntity target) {
+        damageableComponent.attack(target);
+    }
+
+    /**
+     * Attacks the specified target entity with a specified amount of damage.
+     * This method delegates to the damageable component of the entity to apply the damage to the target.
+     *
+     * @param target The target entity to be attacked.
+     * @param damage The amount of damage to deal to the target.
+     */
+    public void attack(LivingEntity target, double damage) {
+        damageableComponent.attack(target, damage);
+    }
+
+    /**
+     * Sets a callback to be invoked when the entity is left-clicked by a player.
+     *
+     * @param callback the {@link ModeledEntityLeftClickCallback} to execute when a left-click interaction occurs
+     * @return the current {@code ModeledEntity} instance, allowing for method chaining
+     */
+    //InteractionComponent
+    public ModeledEntity setLeftClickCallback(ModeledEntityLeftClickCallback callback) {
+        interactionComponent.setLeftClickCallback(callback);
+        return this;
+    }
+
+    /**
+     * Sets a callback that is triggered when the entity is right-clicked by a player.
+     *
+     * @param callback the {@link ModeledEntityRightClickCallback} to execute when the entity is right-clicked
+     * @return the current {@link ModeledEntity} instance, allowing for method chaining
+     */
+    public ModeledEntity setRightClickCallback(ModeledEntityRightClickCallback callback) {
+        interactionComponent.setRightClickCallback(callback);
+        return this;
+    }
+
+    /**
+     * Sets the callback to be triggered when a player contacts the hitbox of this entity.
+     * This allows for the execution of custom behavior when a hitbox interaction event occurs.
+     *
+     * @param callback the callback function to handle hitbox contact events. The callback should
+     *                 implement {@link ModeledEntityHitboxContactCallback}, which provides the player
+     *                 involved in the contact and the current entity.
+     * @return the current instance of {@code ModeledEntity} for method chaining.
+     */
+    public ModeledEntity setHitboxContactCallback(ModeledEntityHitboxContactCallback callback) {
+        interactionComponent.setHitboxContactCallback(callback);
+        return this;
+    }
+
+    //AnimationComponent
     /**
      * Plays an animation as set by the string name.
      *
@@ -253,158 +362,31 @@ public class ModeledEntity {
      * @return Whether the animation successfully started playing.
      */
     public boolean playAnimation(String animationName, boolean blendAnimation, boolean loop) {
-        return animationManager.play(animationName, blendAnimation, loop);
-    }
-
-    public void removeWithDeathAnimation() {
-        isDying = true;
-        if (animationManager != null) {
-            if (!animationManager.play("death", false, false)) {
-                remove();
-            }
-        } else remove();
-    }
-
-    public void removeWithMinimizedAnimation() {
-        if (isScalingDown) return;
-        isDying = true;
-        isScalingDown = true;
-        scaleTicksElapsed = 0;
-        scaleStart = scaleModifier;
-        scaleEnd = 0.0;
-    }
-
-    public void remove() {
-        if (isRemoved) {
-            return;
-        }
-
-        skeleton.remove();
-        loadedModeledEntities.remove(this);
-        if (livingEntity != null) livingEntity.remove();
-        isRemoved = true;
+        return animationComponent.playAnimation(animationName, blendAnimation, loop);
     }
 
     /**
-     * Stops all currently playing animations
+     * Stops all currently running animations.
+     *
+     * This method invokes the stopCurrentAnimations operation
+     * on the animationComponent, ensuring that any ongoing animations
+     * tied to the current state are terminated immediately.
+     *
+     * It is typically used when there is a need to halt animations
+     * due to state changes or to free up resources.
      */
     public void stopCurrentAnimations() {
-        if (animationManager != null) animationManager.stop();
+        animationComponent.stopCurrentAnimations();
     }
 
+    /**
+     * Checks if the specified animation exists in the animation component.
+     *
+     * @param animationName the name of the animation to check
+     * @return true if the animation exists, false otherwise
+     */
     public boolean hasAnimation(String animationName) {
-        if (animationManager == null) return false;
-        return animationManager.hasAnimation(animationName);
+        return animationComponent.hasAnimation(animationName);
     }
 
-    /**
-     * Sets the custom name that is visible in-game on the entity
-     *
-     * @param name Name to set
-     */
-    public void setName(String name) {
-        skeleton.setName(name);
-    }
-
-    /**
-     * Default is false
-     *
-     * @param visible Sets whether the name is visible
-     */
-    public void setNameVisible(boolean visible) {
-        skeleton.setNameVisible(visible);
-    }
-
-    /**
-     * Returns the name tag locations. Useful if you want to add more text above or below them.
-     * Not currently guaranteed to be the exact location.
-     *
-     * @return
-     */
-    public List<ArmorStand> getNametagArmorstands() {
-        return skeleton.getNametags();
-    }
-
-    public Location getLocation() {
-        return spawnLocation.clone();
-    }
-
-    public boolean isChunkLoaded() {
-        return getWorld().isChunkLoaded(getLocation().getBlockX() >> 4, getLocation().getBlockZ() >> 4);
-    }
-
-    public World getWorld() {
-        //Overriden by extending classes
-        return null;
-    }
-
-    public void damageByLivingEntity(LivingEntity player, double damage) {
-        //Overriden by extending classes
-    }
-
-    public void damageByLivingEntity(LivingEntity livingEntity) {
-        //Overriden by extending classes
-    }
-
-    public void damageByEntity(Entity entity, double damage) {
-        if (entity instanceof LivingEntity livingEntity) damageByLivingEntity(livingEntity);
-    }
-
-    public boolean damageByProjectile(Projectile projectile) {
-        double damage = 0;
-
-        if (projectile.getShooter() != null && projectile.getShooter().equals(livingEntity)) return false;
-
-        // 1) If it's an arrow, use its damage field and velocity
-        if (projectile instanceof Arrow arrow) {
-            // base: speed * damage‐multiplier
-            double speed = arrow.getVelocity().length();           // blocks/tick
-            damage = Math.ceil(speed * arrow.getDamage());         // round up
-
-            // optional: add Power‐enchantment bonus from the bow that shot it
-            if (arrow.getShooter() instanceof LivingEntity shooter) {
-                ItemStack bow = arrow.getWeapon(); // or track last bow in metadata
-                if (bow != null && bow.containsEnchantment(Enchantment.POWER)) {
-                    int level = bow.getEnchantmentLevel(Enchantment.POWER);
-                    // Power adds 25% per level, rounded up half‐heart increments
-                    double bonus = Math.ceil(0.25 * (level + 1) * damage);
-                    damage += bonus;
-                }
-            }
-        }
-
-        // 2) Dispatch to your normal damage handlers
-        if (projectile.getShooter() instanceof LivingEntity damager) {
-            damageByLivingEntity(damager, damage);
-        } else {
-            damageByEntity((Entity) projectile.getShooter(), damage);
-        }
-        return true;
-    }
-
-    public void showUnderlyingEntity(Player player) {
-        if (livingEntity == null) return;
-        player.showEntity(MetadataHandler.PLUGIN, livingEntity);
-        livingEntity.setGlowing(true);
-    }
-
-    public void hideUnderlyingEntity(Player player) {
-        if (livingEntity == null) return;
-        player.hideEntity(MetadataHandler.PLUGIN, livingEntity);
-        livingEntity.setGlowing(false);
-    }
-
-    public void teleport(Location location) {
-        skeleton.teleport(location);
-    }
-
-    public void triggerLeftClickEvent(Player player) {
-        ModeledEntityLeftClickEvent event = new ModeledEntityLeftClickEvent(player, this);
-        Bukkit.getPluginManager().callEvent(event);
-    }
-
-    public void triggerRightClickEvent(Player player) {
-        ModeledEntityRightClickEvent event = new ModeledEntityRightClickEvent(player, this);
-        Bukkit.getPluginManager().callEvent(event);
-    }
 }

@@ -22,9 +22,9 @@ public class WalkState implements IAnimState {
     @Override
     public void update() {
         requestedNext = null;
-        if (!entity.getLivingEntity().isOnGround()) {
+        if (!entity.getUnderlyingEntity().isOnGround()) {
             requestedNext = AnimationStateType.JUMP;
-        } else if (entity.getLivingEntity().getVelocity().length() <= .08) {
+        } else if (entity.getUnderlyingEntity().getVelocity().length() <= .08) {
             requestedNext = AnimationStateType.IDLE;
         }
     }

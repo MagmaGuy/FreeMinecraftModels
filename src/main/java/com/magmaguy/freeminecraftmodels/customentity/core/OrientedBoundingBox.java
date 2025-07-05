@@ -4,10 +4,13 @@ import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityManager;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
+import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.magmacore.util.AttributeManager;
 import lombok.Getter;
 import org.bukkit.Location;
 import org.bukkit.Particle;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.BoundingBox;
@@ -36,9 +39,6 @@ public class OrientedBoundingBox {
     // Actual half-lengths after scaling
     @Getter
     private final Vector3d halfExtents = new Vector3d();
-    // Current scale modifier
-    @Getter
-    private double scaleModifier = 1.0;
     // Rotation matrix representing the box's orientation
     @Getter
     private final Matrix3d rotation = new Matrix3d().identity();
@@ -57,6 +57,10 @@ public class OrientedBoundingBox {
     // Reusable vectors for ray intersection
     private final Vector3d localOriginCache = new Vector3d();
     private final Vector3d localDirCache = new Vector3d();
+    private final double height;
+    // Current scale modifier
+    @Getter
+    private double scaleModifier = 1.0;
     private boolean inverseRotationDirty = true;
     // Cached axis vectors (the 3 principal axes of the OBB)
     private Vector3d[] axes;
@@ -64,8 +68,6 @@ public class OrientedBoundingBox {
     private boolean scaleDirty = true;
     // Current rotation values for change detection
     private double currentYaw = 0d;
-
-    private final double height;
     private Location lastLocation = null;
     private ModeledEntity associatedEntity = null; // Reference to the entity for scale calculations
 
@@ -142,7 +144,7 @@ public class OrientedBoundingBox {
      * @return The first modeled entity hit by the ray, if any
      */
     public static Optional<ModeledEntity> raytraceFromPlayer(Player player) {
-        return raytraceFromPoint(player.getWorld().getName(), player.getEyeLocation(), DefaultConfig.maxInteractionAndAttackDistance);
+        return raytraceFromPoint(player.getWorld().getName(), player.getEyeLocation(), Math.max(DefaultConfig.maxInteractionAndAttackDistanceForLivingEntities, DefaultConfig.maxInteractionAndAttackDistanceForProps));
     }
 
     public static void visualizeOBB(ModeledEntity entity, int durationTicks, Player player) {
@@ -158,7 +160,7 @@ public class OrientedBoundingBox {
                 }
 
                 // Get a fresh OBB every time
-                OrientedBoundingBox obb = entity.getObbHitbox();
+                OrientedBoundingBox obb = entity.getHitboxComponent().getObbHitbox();
 
                 // Get the corners of the OBB
                 Vector3d[] corners = obb.getCorners();
@@ -195,6 +197,51 @@ public class OrientedBoundingBox {
     }
 
     /**
+     * Perform a ray trace from a specific point in a specific direction
+     *
+     * @return The first modeled entity hit by the ray, if any
+     */
+    public static Optional<ModeledEntity> raytraceFromPoint(
+            String worldName, Location location, float maxDistance) {
+
+        // Get all modeled entities
+        HashSet<ModeledEntity> entities = ModeledEntityManager.getAllEntities();
+
+        // Filter entities to only include those in the same world
+        entities.removeIf(entity -> entity.getWorld() == null ||
+                !entity.getWorld().getName().equals(worldName));
+
+        if (entities.isEmpty()) {
+            return Optional.empty();
+        }
+
+        // Variables to track the closest hit
+        ModeledEntity closestEntity = null;
+        double closestDistance = maxDistance;
+
+        // Check each entity for intersection
+        for (ModeledEntity entity : entities) {
+            // Get a fresh OBB for the entity every time
+            OrientedBoundingBox obb = entity.getHitboxComponent().getObbHitbox();
+
+            // Check for ray intersection
+            double distance = obb.rayIntersection(location, maxDistance);
+
+            // If there's an intersection and it's closer than any previous hit
+            if (distance > 0 && distance < closestDistance) {
+                if (entity instanceof PropEntity && distance > DefaultConfig.maxInteractionAndAttackDistanceForProps)
+                    continue;
+                else if (!(entity instanceof PropEntity) && distance > DefaultConfig.maxInteractionAndAttackDistanceForLivingEntities)
+                    continue;
+                closestEntity = entity;
+                closestDistance = distance;
+            }
+        }
+
+        return Optional.ofNullable(closestEntity);
+    }
+
+    /**
      * Updates the scale modifier based on the associated entity
      */
     private void updateScale() {
@@ -208,11 +255,14 @@ public class OrientedBoundingBox {
 
         double newScaleModifier = associatedEntity.getScaleModifier();
 
+        Attribute scaleAttribute = AttributeManager.getAttribute("generic_scale");
+
         // Check for generic_scale attribute if entity has a living entity
-        if (associatedEntity.getLivingEntity() != null &&
-                associatedEntity.getLivingEntity().getAttribute(AttributeManager.getAttribute("generic_scale")) != null) {
-            newScaleModifier *= associatedEntity.getLivingEntity()
-                    .getAttribute(AttributeManager.getAttribute("generic_scale")).getValue();
+        if (associatedEntity.getUnderlyingEntity() != null &&
+                associatedEntity.getUnderlyingEntity() instanceof LivingEntity livingEntity &&
+                scaleAttribute != null &&
+                livingEntity.getAttribute(scaleAttribute) != null) {
+            newScaleModifier *= livingEntity.getAttribute(scaleAttribute).getValue();
         }
 
         if (Math.abs(newScaleModifier - scaleModifier) > 0.001) {
@@ -239,47 +289,6 @@ public class OrientedBoundingBox {
         this.associatedEntity = entity;
         updateScale();
         return this;
-    }
-
-    /**
-     * Perform a ray trace from a specific point in a specific direction
-     *
-     * @return The first modeled entity hit by the ray, if any
-     */
-    public static Optional<ModeledEntity> raytraceFromPoint(
-            String worldName, Location location, float maxDistance) {
-
-        // Get all modeled entities
-        HashSet<ModeledEntity> entities = ModeledEntityManager.getAllEntities();
-
-        // Filter entities to only include those in the same world
-        entities.removeIf(entity -> entity.getWorld() == null ||
-                !entity.getWorld().getName().equals(worldName));
-
-        if (entities.isEmpty()) {
-            return Optional.empty();
-        }
-
-        // Variables to track the closest hit
-        ModeledEntity closestEntity = null;
-        double closestDistance = maxDistance;
-
-        // Check each entity for intersection
-        for (ModeledEntity entity : entities) {
-            // Get a fresh OBB for the entity every time
-            OrientedBoundingBox obb = entity.getObbHitbox();
-
-            // Check for ray intersection
-            double distance = obb.rayIntersection(location, maxDistance);
-
-            // If there's an intersection and it's closer than any previous hit
-            if (distance > 0 && distance < closestDistance) {
-                closestEntity = entity;
-                closestDistance = distance;
-            }
-        }
-
-        return Optional.ofNullable(closestEntity);
     }
 
     /**

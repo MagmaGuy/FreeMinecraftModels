@@ -3,6 +3,8 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityManager;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -13,13 +15,12 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.ProjectileLaunchEvent;
 import org.bukkit.event.player.PlayerAnimationEvent;
 import org.bukkit.event.player.PlayerAnimationType;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Optional;
+import java.util.*;
 
 /**
  * Handles hit detection for modeled entities using Oriented Bounding Boxes.
@@ -35,9 +36,7 @@ public class OBBHitDetection implements Listener {
     @EventHandler(priority = EventPriority.LOWEST)
     public void EntityDamageByEntityEvent(EntityDamageByEntityEvent event) {
         if (!RegisterModelEntity.isModelEntity(event.getEntity()) &&
-                !RegisterModelEntity.isModelArmorStand(event.getEntity()) ||
-                !RegisterModelEntity.isModelEntity(event.getDamager()) &&
-                        !RegisterModelEntity.isModelArmorStand(event.getDamager())) return;
+                !RegisterModelEntity.isModelEntity(event.getDamager())) return;
         if (applyDamage) {
             applyDamage = false;
             return;
@@ -71,6 +70,8 @@ public class OBBHitDetection implements Listener {
         projectileDetectionTask = new BukkitRunnable() {
             @Override
             public void run() {
+                processPendingAttacks();
+
                 Iterator<Projectile> iter = activeProjectiles.iterator();
                 while (iter.hasNext()) {
                     Projectile proj = iter.next();
@@ -89,10 +90,10 @@ public class OBBHitDetection implements Listener {
                         }
 
                         // update the OBB to the entity's current position/orientation
-                        OrientedBoundingBox obb = entity.getObbHitbox().update(entity.getLocation());
+                        OrientedBoundingBox obb = entity.getHitboxComponent().getObbHitbox().update(entity.getLocation());
                         if (obb.containsPoint(proj.getLocation())) {
                             // hit! deal damage and stop scanning this projectile
-                            if (!entity.damageByProjectile(proj)) break;
+                            if (!entity.damage(proj)) break;
 
                             // remove it from our set so we don't double‐hit
                             iter.remove();
@@ -107,12 +108,13 @@ public class OBBHitDetection implements Listener {
 
     public static void shutdown() {
         activeProjectiles.clear();
-        projectileDetectionTask.cancel();
+        if (projectileDetectionTask != null) projectileDetectionTask.cancel();
     }
 
-    /**
-     * Handles player arm swing animations to detect attacks
-     */
+    // Add these fields to your class
+    private static final Map<UUID, Integer> swingDelay = new HashMap<>();
+    private static final Map<UUID, Integer> timeout = new HashMap<>();
+
     @EventHandler(priority = EventPriority.HIGHEST)
     public void playerAnimation(PlayerAnimationEvent event) {
         // Only process arm swings (attacks)
@@ -120,18 +122,18 @@ public class OBBHitDetection implements Listener {
             return;
         }
 
-        // Check for hit entity
-        Optional<ModeledEntity> hitEntity = OrientedBoundingBox.raytraceFromPlayer(event.getPlayer());
+        UUID playerId = event.getPlayer().getUniqueId();
 
-        // If no entity was hit, allow normal processing
-        if (hitEntity.isEmpty()) {
-            return;
-        }
+        // Set swing delay - we'll check in 2 ticks if this was actually a left click
+        swingDelay.put(playerId, 2);
+    }
 
-        // Process the hit
-        event.setCancelled(true);
-        hitEntity.get().triggerLeftClickEvent(event.getPlayer());
-        hitEntity.get().damageByLivingEntity(event.getPlayer());
+    @EventHandler
+    public void onPlayerInteractEntity(PlayerInteractEntityEvent event) {
+        UUID playerId = event.getPlayer().getUniqueId();
+
+        // Set timeout to indicate a right-click occurred
+        timeout.put(playerId, 4);
     }
 
     @EventHandler
@@ -141,6 +143,11 @@ public class OBBHitDetection implements Listener {
                 event.getAction() != Action.RIGHT_CLICK_BLOCK) {
             return;
         }
+
+        UUID playerId = event.getPlayer().getUniqueId();
+
+        // Set timeout to indicate a right-click occurred
+        timeout.put(playerId, 4);
 
         // Check for hit entity using raytrace
         Optional<ModeledEntity> hitEntity = OrientedBoundingBox.raytraceFromPlayer(event.getPlayer());
@@ -154,7 +161,57 @@ public class OBBHitDetection implements Listener {
         event.setCancelled(true);
 
         // Trigger the right-click event on the modeled entity
-        hitEntity.get().triggerRightClickEvent(event.getPlayer());
+        hitEntity.get().getInteractionComponent().callRightClickEvent(event.getPlayer());
+    }
+
+    // Add this method to be called every tick (you'll need a scheduler)
+    public static void processPendingAttacks() {
+        Iterator<Map.Entry<UUID, Integer>> swingIter = swingDelay.entrySet().iterator();
+        while (swingIter.hasNext()) {
+            Map.Entry<UUID, Integer> entry = swingIter.next();
+            UUID playerId = entry.getKey();
+            int delay = entry.getValue() - 1;
+
+            if (delay <= 0) {
+                // Check if timeout is 0 (no right-click occurred)
+                if (timeout.getOrDefault(playerId, 0) == 0) {
+                    // This was a genuine left click - execute the attack
+                    Player player = Bukkit.getPlayer(playerId);
+                    if (player != null) {
+                        executeLeftClickAttack(player);
+                    }
+                }
+                swingIter.remove();
+            } else {
+                entry.setValue(delay);
+            }
+        }
+
+        // Decrement timeouts
+        Iterator<Map.Entry<UUID, Integer>> timeoutIter = timeout.entrySet().iterator();
+        while (timeoutIter.hasNext()) {
+            Map.Entry<UUID, Integer> entry = timeoutIter.next();
+            int time = entry.getValue() - 1;
+            if (time <= 0) {
+                timeoutIter.remove();
+            } else {
+                entry.setValue(time);
+            }
+        }
+    }
+
+    private static void executeLeftClickAttack(Player player) {
+        // Check for hit entity
+        Optional<ModeledEntity> hitEntity = OrientedBoundingBox.raytraceFromPlayer(player);
+
+        // If no entity was hit, allow normal processing
+        if (hitEntity.isEmpty()) {
+            return;
+        }
+
+        // Process the hit
+        hitEntity.get().getInteractionComponent().callLeftClickEvent(player);
+        hitEntity.get().damage(player);
     }
 
     @EventHandler

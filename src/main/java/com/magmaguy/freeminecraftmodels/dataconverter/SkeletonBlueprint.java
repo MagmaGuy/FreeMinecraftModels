@@ -14,7 +14,7 @@ public class SkeletonBlueprint {
     @Getter
     private final List<BoneBlueprint> mainModel = new ArrayList<>();
     @Getter
-    private String modelName;
+    private String modelName = "Default Name";
     @Getter
     private HitboxBlueprint hitbox;
 
@@ -36,7 +36,10 @@ public class SkeletonBlueprint {
             if (((String) bone.get("name")).equalsIgnoreCase("hitbox"))
                 hitbox = new HitboxBlueprint(bone, values, modelName, null);
             else {
-                rootChildren.add(new BoneBlueprint(projectResolution, bone, values, textureReferences, modelName, rootBone, this));
+                BoneBlueprint boneBlueprint = new BoneBlueprint(projectResolution, bone, values, textureReferences, modelName, rootBone, this);
+                rootChildren.add(boneBlueprint);
+                if (boneBlueprint.getMetaBone() != null)
+                    rootChildren.add(boneBlueprint.getMetaBone());
             }
         }
 

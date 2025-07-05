@@ -1,6 +1,5 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
-import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
@@ -9,8 +8,6 @@ import lombok.Setter;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
-import org.bukkit.entity.ArmorStand;
-import org.bukkit.scheduler.BukkitTask;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -30,18 +27,16 @@ public class Skeleton {
     @Getter
     private final SkeletonWatchers skeletonWatchers;
     private final List<Bone> nametags = new ArrayList<>();
-    @Setter
-    private Location currentLocation = null;
     @Getter
     @Setter
     private float currentHeadPitch = 0;
     @Getter
     @Setter
     private float currentHeadYaw = 0;
-    private BukkitTask damageTintTask = null;
-    @Getter
-    @Setter
-    private DynamicEntity dynamicEntity = null;
+//    private BukkitTask damageTintTask = null;
+//    @Getter
+//    @Setter
+//    private DynamicEntity dynamicEntity = null; //todo: this wasn't in use?
     @Getter
     @Setter
     private ModeledEntity modeledEntity = null;
@@ -63,12 +58,10 @@ public class Skeleton {
 
     @Nullable
     public Location getCurrentLocation() {
-        if (currentLocation == null) return null;
-        return currentLocation.clone();
+       return modeledEntity.getLocation();
     }
 
-    public void generateDisplays(Location location) {
-        currentLocation = location;
+    public void generateDisplays() {
         rootBone.generateDisplay();
         boneMap.values().forEach(bone -> {
             if (bone.getBoneBlueprint().isNameTag()) nametags.add(bone);
@@ -79,27 +72,12 @@ public class Skeleton {
         boneMap.values().forEach(Bone::remove);
     }
 
-    /**
-     * Used to set the name over nameable bones
-     *
-     * @param name The name to set over the bone
-     */
-    public void setName(String name) {
-        boneMap.values().forEach(bone -> bone.setName(name));
-    }
-
-    /**
-     * Used to make names over nameable bones visible
-     *
-     * @param visible Whether the name should be visible
-     */
-    public void setNameVisible(boolean visible) {
-        boneMap.values().forEach(bone -> bone.setNameVisible(visible));
-    }
-
-    public List<ArmorStand> getNametags() {
-        List<ArmorStand> nametags = new ArrayList<>();
-        boneMap.values().forEach(bone -> bone.getNametags(nametags));
+    public List<Bone> getNametags() {
+        List<Bone> nametags = new ArrayList<>();
+        for (Bone value : boneMap.values()) {
+            if (value.getBoneBlueprint().isNameTag())
+                nametags.add(value);
+        }
         return nametags;
     }
 
@@ -118,7 +96,7 @@ public class Skeleton {
     /**
      * This updates animations. The plugin runs this automatically, don't use it unless you know what you're doing!
      */
-    public void transform() {
+    public void tick() {
         skeletonWatchers.tick();
 
         // handle tint animation
@@ -159,8 +137,7 @@ public class Skeleton {
         tintCounter = 0;
     }
 
-    public void teleport(Location location) {
-        currentLocation = location;
+    public void teleport() {
         rootBone.teleport();
     }
 }
