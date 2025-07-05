@@ -3,11 +3,14 @@ package com.magmaguy.freeminecraftmodels.api;
 import com.magmaguy.freeminecraftmodels.commands.ReloadCommand;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
+import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import org.bukkit.Bukkit;
+import org.bukkit.entity.ArmorStand;
 
+import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
+import java.util.UUID;
 
 public class ModeledEntityManager {
     private ModeledEntityManager() {
@@ -37,8 +40,12 @@ public class ModeledEntityManager {
      *
      * @return The list of currently instanced dynamic entities
      */
-    public static List<DynamicEntity> getDynamicEntities() {
+    public static HashMap<UUID, DynamicEntity> getDynamicEntities() {
         return DynamicEntity.getDynamicEntities();
+    }
+
+    public static HashMap<ArmorStand, PropEntity> propEntities(){
+        return PropEntity.getPropEntities();
     }
 
     /**

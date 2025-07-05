@@ -2,13 +2,13 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
+import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.freeminecraftmodels.thirdparty.BedrockChecker;
 import org.bukkit.Bukkit;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 import org.joml.Vector3d;
 
@@ -19,6 +19,10 @@ import java.util.concurrent.ThreadLocalRandom;
 public class SkeletonWatchers implements Listener {
     private final Skeleton skeleton;
     private final Set<UUID> viewers = new CopyOnWriteArraySet<>();
+
+    public HashSet<UUID> getViewers() {
+        return new HashSet<>(viewers);
+    }
 
     // Reused collections to avoid constant reallocation
     private final List<UUID> newPlayers = new ArrayList<>();
@@ -36,16 +40,14 @@ public class SkeletonWatchers implements Listener {
         return !viewers.isEmpty();
     }
 
+    private int watcherUpdateCounter = 0;
+    private static final int UPDATE_INTERVAL = 4;
+
     public void tick() {
-        if (updateWatchers) {
+        watcherUpdateCounter++;
+        if (watcherUpdateCounter >= UPDATE_INTERVAL) {
             updateWatcherList();
-            updateWatchers = false;
-            new BukkitRunnable() {
-                @Override
-                public void run() {
-                    updateWatchers = true;
-                }
-            }.runTaskLater(MetadataHandler.PLUGIN, 4);
+            watcherUpdateCounter = 0;
         }
         resync(false);
     }
@@ -124,7 +126,7 @@ public class SkeletonWatchers implements Listener {
         if (skeleton.getModeledEntity() == null) return true;
 
         // Get the entity's hitbox
-        OrientedBoundingBox hitbox = skeleton.getModeledEntity().getObbHitbox();
+        OrientedBoundingBox hitbox = skeleton.getModeledEntity().getHitboxComponent().getObbHitbox();
         if (hitbox == null) return true;
 
         // First try the center point (most efficient check)
@@ -220,18 +222,24 @@ public class SkeletonWatchers implements Listener {
 
     private void displayTo(Player player) {
         boolean isBedrock = BedrockChecker.isBedrock(player);
-        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getLivingEntity() != null)
-            player.showEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getLivingEntity());
+        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getUnderlyingEntity() != null)
+            player.showEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getUnderlyingEntity());
         viewers.add(player.getUniqueId());
         skeleton.getBones().forEach(bone -> bone.displayTo(player));
+        if (skeleton.getModeledEntity() instanceof PropEntity propEntity)
+            propEntity.showFakePropBlocksToPlayer(player);
     }
 
     private void hideFrom(UUID uuid) {
         boolean isBedrock = BedrockChecker.isBedrock(Bukkit.getPlayer(uuid));
-        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getLivingEntity() != null)
-            Bukkit.getPlayer(uuid).hideEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getLivingEntity());
+        Player player = Bukkit.getPlayer(uuid);
+        if (player == null || !player.isValid()) return;
+        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getUnderlyingEntity() != null)
+            player.hideEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getUnderlyingEntity());
         viewers.remove(uuid);
         skeleton.getBones().forEach(bone -> bone.hideFrom(uuid));
+        if (skeleton.getModeledEntity() instanceof PropEntity propEntity)
+            propEntity.showRealBlocksToPlayer(player);
     }
 
     public void sendPackets(Bone bone) {

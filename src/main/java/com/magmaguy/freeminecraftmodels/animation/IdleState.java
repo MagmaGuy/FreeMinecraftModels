@@ -22,7 +22,7 @@ public class IdleState implements IAnimState {
     @Override
     public void update() {
         requestedNext = null;
-        if (entity.getLivingEntity() != null && entity.getLivingEntity().getVelocity().length() > .08) {
+        if (entity.getUnderlyingEntity() != null && entity.getUnderlyingEntity().getVelocity().length() > .08) {
             requestedNext = AnimationStateType.WALK;
         }
     }

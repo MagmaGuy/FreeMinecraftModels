@@ -3,12 +3,12 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.thirdparty.BedrockChecker;
+import com.magmaguy.magmacore.util.Logger;
 import com.magmaguy.magmacore.util.VersionChecker;
 import lombok.Getter;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
-import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Player;
 import org.joml.Vector3f;
 
@@ -68,19 +68,13 @@ public class Bone {
         boneChildren.forEach(Bone::generateDisplay);
     }
 
-    public void setName(String name) {
-        boneChildren.forEach(child -> child.setName(name));
-    }
-
     public void setNameVisible(boolean visible) {
         boneChildren.forEach(child -> child.setNameVisible(visible));
     }
 
-    public void getNametags(List<ArmorStand> nametags) {
-        boneChildren.forEach(child -> child.getNametags(nametags));
-    }
-
     public void remove() {
+        if (boneTransforms.getPacketTextDisplayArmorStandEntity() != null)
+            boneTransforms.getPacketTextDisplayArmorStandEntity().remove();
         if (boneTransforms.getPacketArmorStandEntity() != null) boneTransforms.getPacketArmorStandEntity().remove();
         if (boneTransforms.getPacketDisplayEntity() != null) boneTransforms.getPacketDisplayEntity().remove();
         boneChildren.forEach(Bone::remove);
@@ -97,10 +91,21 @@ public class Bone {
         boneTransforms.sendUpdatePacket();
     }
 
+    boolean warned = false;
+
     public void displayTo(Player player) {
         boolean isBedrock = BedrockChecker.isBedrock(player);
         if (isBedrock && DefaultConfig.sendCustomModelsToBedrockClients) return;
-        if (boneTransforms.getPacketArmorStandEntity() != null &&
+        if (boneBlueprint.isNameTag()) {
+            if (boneTransforms.getPacketTextDisplayArmorStandEntity() == null) {
+                if (!warned) {
+                    Logger.warn("nametag bone did not spawn name tag");
+                    warned = true;
+                }
+                return;
+            }
+            boneTransforms.getPacketTextDisplayArmorStandEntity().displayTo(player.getUniqueId());
+        } else if (boneTransforms.getPacketArmorStandEntity() != null &&
                 (!DefaultConfig.useDisplayEntitiesWhenPossible ||
                         isBedrock ||
                         VersionChecker.serverVersionOlderThan(19, 4)))
@@ -110,6 +115,8 @@ public class Bone {
     }
 
     public void hideFrom(UUID playerUUID) {
+        if (boneTransforms.getPacketTextDisplayArmorStandEntity() != null)
+            boneTransforms.getPacketTextDisplayArmorStandEntity().hideFrom(playerUUID);
         if (boneTransforms.getPacketArmorStandEntity() != null)
             boneTransforms.getPacketArmorStandEntity().hideFrom(playerUUID);
         if (boneTransforms.getPacketDisplayEntity() != null)

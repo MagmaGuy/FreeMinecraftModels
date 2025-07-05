@@ -9,7 +9,8 @@ public class DefaultConfig extends ConfigurationFile {
 
     public static boolean useDisplayEntitiesWhenPossible;
     public static int maxModelViewDistance;
-    public static int maxInteractionAndAttackDistance;
+    public static int maxInteractionAndAttackDistanceForLivingEntities;
+    public static int maxInteractionAndAttackDistanceForProps;
     public static boolean sendCustomModelsToBedrockClients;
 
     public DefaultConfig() {
@@ -28,10 +29,14 @@ public class DefaultConfig extends ConfigurationFile {
                         "This is to prevent the server and clients from lagging when a modeled entity is far away.",
                         "The default value is 60, which is similar to vanilla defaults."),
                 fileConfiguration, "maxModelViewDistance", 60);
-        maxInteractionAndAttackDistance = ConfigurationEngine.setInt(
-                List.of("Sets the maximum distance in blocks that a modeled entity can be interacted with or attacked from.",
-                        "The default value is 3, which is similar to vanilla defaults."),
+        maxInteractionAndAttackDistanceForLivingEntities = ConfigurationEngine.setInt(
+                List.of("Sets the maximum distance in blocks that a static or dynamic entity can be interacted with or attacked from.",
+                        "The default value is 6, which is similar to vanilla defaults."),
                 fileConfiguration, "maxInteractionAndAttackDistance", 3);
+        maxInteractionAndAttackDistanceForProps = ConfigurationEngine.setInt(
+                List.of("Sets the maximum distance in blocks that a prop entity can be interacted with or attacked from.",
+                        "The default value is 3, which is similar to vanilla defaults."),
+                fileConfiguration, "maxInteractionAndAttackDistanceForProps", 6);
         sendCustomModelsToBedrockClients = ConfigurationEngine.setBoolean(
                 List.of("Sets whether custom models should be sent to bedrock clients.",
                         "If you can't convert the resource pack, you will not be able to send disguises to the players",
