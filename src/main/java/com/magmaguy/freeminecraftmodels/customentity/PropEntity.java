@@ -6,6 +6,7 @@ import com.magmaguy.freeminecraftmodels.config.props.PropsConfig;
 import com.magmaguy.freeminecraftmodels.config.props.PropsConfigFields;
 import com.magmaguy.freeminecraftmodels.customentity.core.components.PropBlockComponent;
 import com.magmaguy.magmacore.util.ChunkLocationChecker;
+import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import org.bukkit.*;
 import org.bukkit.entity.ArmorStand;
@@ -22,17 +23,18 @@ import org.bukkit.persistence.PersistentDataType;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.UUID;
 
 public class PropEntity extends StaticEntity {
     public static final NamespacedKey propNamespacedKey = new NamespacedKey(MetadataHandler.PLUGIN, "prop");
     @Getter
-    public static HashMap<ArmorStand, PropEntity> propEntities = new HashMap<>();
+    public static HashMap<UUID, PropEntity> propEntities = new HashMap<>();
     private final String entityID;
+    @Getter
+    private final PropBlockComponent propBlockComponent = new PropBlockComponent(this);
     private PropsConfigFields propsConfigFields;
     @Getter
     private boolean persistent = true;
-    @Getter
-    private final PropBlockComponent propBlockComponent = new PropBlockComponent(this);
     private String chunkHash;
 
     public PropEntity(String entityID, Location spawnLocation) {
@@ -48,6 +50,9 @@ public class PropEntity extends StaticEntity {
         this.entityID = entityID;
         propsConfigFields = PropsConfig.getPropsConfigs().get(entityID + ".yml");
         propBlockComponent.showFakePropBlocksToAllPlayers();
+        spawn(armorStand);
+        chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
+        propEntities.put(armorStand.getUniqueId(), this);
     }
 
     public static void onStartup() {
@@ -78,6 +83,11 @@ public class PropEntity extends StaticEntity {
     }
 
     public static PropEntity respawnPropEntityFromArmorStand(String entityID, ArmorStand armorStand) {
+        Logger.debug("checking if prop entity " + entityID + " already exists at " + armorStand.getLocation() + "...");
+        if (propEntities.containsKey(armorStand.getUniqueId())) {
+            return propEntities.get(armorStand.getUniqueId());
+        }
+        Logger.debug("prop entity " + entityID + " does not exist at " + armorStand.getLocation() + ", creating new prop entity...");
         PropEntity propEntity = new PropEntity(entityID, armorStand);
         return propEntity;
     }
@@ -104,6 +114,7 @@ public class PropEntity extends StaticEntity {
             entity.getPersistentDataContainer().set(propNamespacedKey, PersistentDataType.STRING, entityID);
         }));
         chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
+        propEntities.put(underlyingEntity.getUniqueId(), this);
     }
 
     public void setCustomDataString(NamespacedKey customNamespacedKey, String data) {
@@ -118,16 +129,18 @@ public class PropEntity extends StaticEntity {
     public void remove() {
         super.remove();
         showRealBlocksToAllPlayers();
-        propEntities.remove((ArmorStand) underlyingEntity);
+        propEntities.remove(underlyingEntity.getUniqueId());
         if (!persistent) underlyingEntity.remove();
+        if (isDying() && underlyingEntity != null) underlyingEntity.remove();
     }
 
-    public void permanentlyRemove(){
+    public void permanentlyRemove() {
         remove();
         if (underlyingEntity != null) underlyingEntity.remove();
     }
 
     //PropBlockComponent
+
     /**
      * Sets the prop blocks for this entity. Prop blocks are the fake blocks that are shown to players when they are near the entity.
      * These blocks are not actually placed in the world.
@@ -191,6 +204,7 @@ public class PropEntity extends StaticEntity {
             }
         }
 
+        //todo: well this isn't going to scale well
         @EventHandler
         private void onChunkUnloadEvent(ChunkUnloadEvent event) {
             String chunkHash = ChunkLocationChecker.chunkToString(event.getChunk());

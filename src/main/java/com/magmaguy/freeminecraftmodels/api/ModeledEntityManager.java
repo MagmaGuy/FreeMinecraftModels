@@ -6,7 +6,6 @@ import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import org.bukkit.Bukkit;
-import org.bukkit.entity.ArmorStand;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -44,7 +43,7 @@ public class ModeledEntityManager {
         return DynamicEntity.getDynamicEntities();
     }
 
-    public static HashMap<ArmorStand, PropEntity> propEntities(){
+    public static HashMap<UUID, PropEntity> propEntities() {
         return PropEntity.getPropEntities();
     }
 
