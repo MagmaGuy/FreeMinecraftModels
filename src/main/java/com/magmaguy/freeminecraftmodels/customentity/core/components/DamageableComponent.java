@@ -7,10 +7,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.enchantments.Enchantment;
-import org.bukkit.entity.Arrow;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.LivingEntity;
-import org.bukkit.entity.Projectile;
+import org.bukkit.entity.*;
 import org.bukkit.inventory.ItemStack;
 
 /**
@@ -45,8 +42,9 @@ public class DamageableComponent {
     private void handleNonLivingEntityDamage(double amount) {
         if (!internallyImmortal) {
             internalHealth -= amount;
-            if (internalHealth <= 0)
+            if (internalHealth <= 0) {
                 modeledEntity.removeWithDeathAnimation();
+            }
         }
         modeledEntity.getSkeleton().tint();
     }
@@ -72,7 +70,9 @@ public class DamageableComponent {
     }
 
     public void damage(Entity damager) {
-        if (modeledEntity.getUnderlyingEntity() instanceof LivingEntity livingEntity && damager instanceof LivingEntity damagerLivingEntity) {
+        if (modeledEntity.getUnderlyingEntity() instanceof LivingEntity livingEntity &&
+                !livingEntity.getType().equals(EntityType.ARMOR_STAND) &&
+                damager instanceof LivingEntity damagerLivingEntity) {
             damagerLivingEntity.attack(livingEntity);
         } else {
             handleNonLivingEntityDamage(1);
