@@ -91,12 +91,18 @@ public class DamageableComponent {
         double speed = arrow.getVelocity().length();
         damage = Math.ceil(speed * arrow.getDamage());
 
+        boolean piercing = false;
+
         if (arrow.getShooter() instanceof LivingEntity shooter) {
             ItemStack bow = arrow.getWeapon();
             if (bow != null && bow.containsEnchantment(Enchantment.POWER)) {
                 int level = bow.getEnchantmentLevel(Enchantment.POWER);
                 double bonus = Math.ceil(0.25 * (level + 1) * damage);
                 damage += bonus;
+            }
+
+            if (bow != null && bow.containsEnchantment(Enchantment.PIERCING)) {
+                piercing = true;
             }
         }
 
@@ -106,6 +112,11 @@ public class DamageableComponent {
             damage((Entity) projectile.getShooter(), damage);
         }
         modeledEntity.getSkeleton().tint();
+
+        if (!piercing) {
+            arrow.remove();
+        }
+
         return true;
     }
 

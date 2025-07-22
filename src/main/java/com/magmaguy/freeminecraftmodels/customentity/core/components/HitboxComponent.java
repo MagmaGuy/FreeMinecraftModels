@@ -1,10 +1,12 @@
 package com.magmaguy.freeminecraftmodels.customentity.core.components;
 
 import com.magmaguy.easyminecraftgoals.NMSManager;
+import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.OrientedBoundingBox;
 import lombok.Getter;
 import org.bukkit.entity.Player;
+import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -38,13 +40,23 @@ public class HitboxComponent {
         } else return obbHitbox;
     }
 
+    /**
+     * Async!
+     *
+     * @param tickCounter
+     */
     public void tick(int tickCounter) {
         if (modeledEntity.getSkeletonBlueprint().getHitbox() == null) return;
-        getObbHitbox().update(modeledEntity.getLocation());
-        if (modeledEntity.getInteractionComponent().getHitboxContactCallback() == null) return;
-        if (tickCounter % 2 == 0) {
-            checkPlayerCollisions();
-        }
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                getObbHitbox().update(modeledEntity.getLocation());
+                if (modeledEntity.getInteractionComponent().getHitboxContactCallback() == null) return;
+                if (tickCounter % 2 == 0) {
+                    checkPlayerCollisions();
+                }
+            }
+        }.runTaskAsynchronously(MetadataHandler.PLUGIN);
     }
 
     /**
@@ -71,7 +83,7 @@ public class HitboxComponent {
      * Checks if a player is colliding with this entity's OBB hitbox
      */
     protected boolean isPlayerColliding(Player player) {
-        return getObbHitbox().isAABBCollidingWithOBB(player.getBoundingBox(), getObbHitbox());
+        return getObbHitbox().isAABBCollidingWithOBB(player.getBoundingBox());
     }
 
     public void setCustomHitboxOnUnderlyingEntity() {
