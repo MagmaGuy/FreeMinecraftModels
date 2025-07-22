@@ -20,6 +20,7 @@ distribute, modify for any purposes without restrictions or the need for attribu
 
 It can:
 
+- Run almost entirely in async
 - Import .bbmodel or fmmodel (FFM's custom format) models
 - Generate resource packs with models that exceed normal Minecraft resource pack model limits (up to 112x112x112 units
   or 7x7x7 in-game blocks, functionally unlimited when using multiple bones)
@@ -35,6 +36,8 @@ It can:
       plugins or pets plugins
     - Static models are for non-persistent models that should not move around, so basically temporary decorations or
       effects
+- Create per-model custom callback behavior for left clicks, right clicks, projectile hit and entering the entity's
+  hitbox
 
 ### How do you add an existing model?
 
@@ -289,16 +292,81 @@ public class CustomModelFMM implements CustomModelInterface {
 Dynamic models are built on top of a living entity, which can be provided either when using the create method as in the
 example above, or when running the spawn method on a Dynamic entity.
 
-### Click events
+### Custom callbacks
+
+//todo: this section could probably use some more detail
+
+It is possible to hook into the following behaviors to add custom callbacks:
+
+- Left-click
+- Right-click
+- Model hit by projectile
+- Player entered model's hitbox
+
+All entity types have the following methods:
+
+```java
+    /**
+ * Sets a callback to be invoked when the entity is left-clicked by a player.
+ *
+ * @param callback the {@link ModeledEntityLeftClickCallback} to execute when a left-click interaction occurs
+ * @return the current {@code ModeledEntity} instance, allowing for method chaining
+ */
+//InteractionComponent
+public ModeledEntity setLeftClickCallback(ModeledEntityLeftClickCallback callback);
+
+/**
+ * Sets a callback that is triggered when the entity is right-clicked by a player.
+ *
+ * @param callback the {@link ModeledEntityRightClickCallback} to execute when the entity is right-clicked
+ * @return the current {@link ModeledEntity} instance, allowing for method chaining
+ */
+public ModeledEntity setRightClickCallback(ModeledEntityRightClickCallback callback);
+
+/**
+ * Sets the callback to be triggered when a player contacts the hitbox of this entity.
+ * This allows for the execution of custom behavior when a hitbox interaction event occurs.
+ *
+ * @param callback the callback function to handle hitbox contact events. The callback should
+ *                 implement {@link ModeledEntityHitboxContactCallback}, which provides the player
+ *                 involved in the contact and the current entity.
+ * @return the current instance of {@code ModeledEntity} for method chaining.
+ */
+public ModeledEntity setHitboxContactCallback(ModeledEntityHitboxContactCallback callback);
+
+public ModeledEntity setModeledEntityHitByProjectileCallback(ModeledEntityHitByProjectileCallback callback);
+```
+
+The following is a sample implementation of a simple callback:
+
+```java
+    private void initializePropEntity() {
+    setLeftClickCallback((player, entity) -> entity.damage(player));
+}
+```
+
+Note that different model types will have different default callbacks, and thus different default behavior.
+
+Since entities may only have a single callback, setting your own will also override the default behavior.
+
+Finally, any and all callbacks can be null to signify no behavior should run for certain types of interactions.
+
+You can read implementation details about these callbacks in the InteractionComponent method.
+
+### Click events - Consider using callbacks instead!
 
 FreeMinecraftModels provides custom events for when a player left of right-clicks a modeled entity, or enters its
 hitbox.
+
+While you can listen to these events to hook additional behavior into them, consider instead using callbacks. They are
+much more convenient!
 
 Those are events are:
 
 - `ModeledEntityLeftClickEvent`
 - `ModeledEntityRightClickEvent`
 - `ModeledEntityHitboxContactEvent` (entity must be set to tick collision checks if not dynamic)
+- 'ModeledEntityHitByProjectileEvent'
 - `PropLeftClickEvent`
 - `PropRightClickEvent`
 - `PropEntityHitboxContactEvent` (entity must be set to tick collision checks)

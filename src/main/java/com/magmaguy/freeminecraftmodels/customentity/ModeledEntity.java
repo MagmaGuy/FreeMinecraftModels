@@ -1,19 +1,18 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
+import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
 import com.magmaguy.freeminecraftmodels.customentity.core.RegisterModelEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.Skeleton;
-import com.magmaguy.freeminecraftmodels.customentity.core.components.AnimationComponent;
-import com.magmaguy.freeminecraftmodels.customentity.core.components.DamageableComponent;
-import com.magmaguy.freeminecraftmodels.customentity.core.components.HitboxComponent;
-import com.magmaguy.freeminecraftmodels.customentity.core.components.InteractionComponent;
+import com.magmaguy.freeminecraftmodels.customentity.core.components.*;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import lombok.Setter;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.*;
@@ -31,12 +30,23 @@ public class ModeledEntity {
     private final String entityID;
     @Getter
     private final String name = "default";
-    private Location spawnLocation = null;
     @Getter
     private final List<TextDisplay> nametags = new ArrayList<>();
     @Getter
     private final Location lastSeenLocation;
+    @Getter
+    private final InteractionComponent interactionComponent = new InteractionComponent(this);
+    @Getter
+    private final HitboxComponent hitboxComponent = new HitboxComponent(this);
+    @Getter
+    private final DamageableComponent damageableComponent = new DamageableComponent(this);
+    @Getter
+    private final AnimationComponent animationComponent = new AnimationComponent(this);
     protected int tickCounter = 0;
+    @Getter
+    protected Entity underlyingEntity = null;
+    private Location spawnLocation = null;
+    // Collision detection properties
     /**
      * Whether the entity is currently dying.
      * This is set to true when the entity is in the process of getting removed with a death animation.
@@ -52,21 +62,8 @@ public class ModeledEntity {
     @Getter
     @Setter
     private double scaleModifier = 1.0;
-    // Collision detection properties
-
-    @Getter
-    protected Entity underlyingEntity = null;
     @Getter
     private String displayName = null;
-
-    @Getter
-    private final InteractionComponent interactionComponent = new InteractionComponent(this);
-    @Getter
-    private final HitboxComponent hitboxComponent = new HitboxComponent(this);
-    @Getter
-    private final DamageableComponent damageableComponent = new DamageableComponent(this);
-    @Getter
-    private final AnimationComponent animationComponent = new AnimationComponent(this);
 
     public ModeledEntity(String entityID, Location spawnLocation) {
         this.entityID = entityID;
@@ -92,13 +89,6 @@ public class ModeledEntity {
         loadedModeledEntities.add(this);
     }
 
-    public void setUnderlyingEntity(Entity underlyingEntity) {
-        this.underlyingEntity = underlyingEntity;
-        if (!(underlyingEntity instanceof PlayerDisguiseEntity))
-            RegisterModelEntity.registerModelEntity(underlyingEntity, getSkeletonBlueprint().getModelName());
-        hitboxComponent.setCustomHitboxOnUnderlyingEntity();
-    }
-
     private static boolean isNameTag(ArmorStand armorStand) {
         return armorStand.getPersistentDataContainer().has(BoneBlueprint.nameTagKey, PersistentDataType.BYTE);
     }
@@ -114,6 +104,13 @@ public class ModeledEntity {
 
         // Clear the original collection
         loadedModeledEntities.clear();
+    }
+
+    public void setUnderlyingEntity(Entity underlyingEntity) {
+        this.underlyingEntity = underlyingEntity;
+        if (!(underlyingEntity instanceof PlayerDisguiseEntity))
+            RegisterModelEntity.registerModelEntity(underlyingEntity, getSkeletonBlueprint().getModelName());
+        hitboxComponent.setCustomHitboxOnUnderlyingEntity();
     }
 
     public void setDisplayName(String displayName) {
@@ -161,10 +158,10 @@ public class ModeledEntity {
         remove();
     }
 
-    public void tick() {
-        //cehck if the entity exists, basically
+    public void tick(AbstractPacketBundle abstractPacketBundle) {
+        //check if the entity exists, basically
         if (isRemoved || getLocation() == null) return;
-        getSkeleton().tick();
+        getSkeleton().tick(abstractPacketBundle);
         hitboxComponent.tick(tickCounter);
         animationComponent.tick();
         tickCounter++;
@@ -172,9 +169,7 @@ public class ModeledEntity {
 
     public void removeWithDeathAnimation() {
         isDying = true;
-        if (!animationComponent.playDeathAnimation()) {
-            remove();
-        } else remove();
+        if (!animationComponent.playDeathAnimation()) remove();
     }
 
     public void removeWithMinimizedAnimation() {
@@ -194,8 +189,11 @@ public class ModeledEntity {
         loadedModeledEntities.remove(this);
         if (underlyingEntity != null &&
                 (!(this instanceof PropEntity) ||
-                        this instanceof PropEntity propEntity && !propEntity.isPersistent()))
+                        this instanceof PropEntity propEntity && !propEntity.isPersistent())) {
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
                 underlyingEntity.remove();
+            });
+        }
         isRemoved = true;
     }
 
@@ -243,7 +241,7 @@ public class ModeledEntity {
      * If another plugin did not manage the underlying entity, teleport it.
      * This primarily pushes teleport packets to clients.
      *
-     * @param location the target {@link Location} to which the entity should be teleported
+     * @param location                 the target {@link Location} to which the entity should be teleported
      * @param teleportUnderlyingEntity a boolean indicating whether the underlying entity, if present,
      *                                 should also be teleported to the specified location
      */
@@ -256,13 +254,15 @@ public class ModeledEntity {
 
 
     //DamageableComponent
+
     /**
      * Inflicts damage on the entity based on the specified amount.
      * This method delegates the damage operation to the {@code damageableComponent}
      * associated with the current entity.
      *
-     * @param amount the amount*/
-    public void damage(double amount){
+     * @param amount the amount
+     */
+    public void damage(double amount) {
         damageableComponent.damage(amount);
     }
 
@@ -271,8 +271,9 @@ public class ModeledEntity {
      * Delegates the damage application and handling to the associated damageable component.
      *
      * @param damager the entity causing the damage
-     * @param amount the*/
-    public void damage(Entity damager, double amount){
+     * @param amount  the
+     */
+    public void damage(Entity damager, double amount) {
         damageableComponent.damage(damager, amount);
     }
 
@@ -280,16 +281,17 @@ public class ModeledEntity {
      * Applies damage to this entity as inflicted by the specified damager.
      * Delegates the damage logic to the {@code damageableComponent} associated with this entity.
      */
-    public void damage(Entity damager){
-        damageableComponent.damage(damager);
+    public void damage(Entity entityGettingDamaged) {
+        damageableComponent.damage(entityGettingDamaged);
     }
 
     /**
      * Applies damage to the current entity based on the attributes of the provided projectile.
-     *
+     * <p>
      * This method evaluates the projectile's properties, such as speed, damage, and any potential
-     * enchantments, to*/
-    public boolean damage(Projectile projectile){
+     * enchantments, to
+     */
+    public boolean damage(Projectile projectile) {
         return damageableComponent.damage(projectile);
     }
 
@@ -352,7 +354,13 @@ public class ModeledEntity {
         return this;
     }
 
+    public ModeledEntity setModeledEntityHitByProjectileCallback(ModeledEntityHitByProjectileCallback callback) {
+        interactionComponent.setProjectileHitCallback(callback);
+        return this;
+    }
+
     //AnimationComponent
+
     /**
      * Plays an animation as set by the string name.
      *
@@ -367,11 +375,11 @@ public class ModeledEntity {
 
     /**
      * Stops all currently running animations.
-     *
+     * <p>
      * This method invokes the stopCurrentAnimations operation
      * on the animationComponent, ensuring that any ongoing animations
      * tied to the current state are terminated immediately.
-     *
+     * <p>
      * It is typically used when there is a need to halt animations
      * due to state changes or to free up resources.
      */

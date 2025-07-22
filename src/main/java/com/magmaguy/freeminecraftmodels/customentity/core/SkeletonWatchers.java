@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
+import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
@@ -34,7 +35,6 @@ public class SkeletonWatchers implements Listener {
         this.skeleton = skeleton;
         tick();
     }
-    private boolean updateWatchers = true;
 
     public boolean hasObservers() {
         return !viewers.isEmpty();
@@ -242,8 +242,8 @@ public class SkeletonWatchers implements Listener {
             propEntity.showRealBlocksToPlayer(player);
     }
 
-    public void sendPackets(Bone bone) {
-        if (viewers.isEmpty()) return;
-        bone.sendUpdatePacket();
+    public void sendPackets(Bone bone, AbstractPacketBundle abstractPacketBundle) {
+        if (!hasObservers()) return;
+        bone.sendUpdatePacket(abstractPacketBundle);
     }
 }

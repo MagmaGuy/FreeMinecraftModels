@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.easyminecraftgoals.NMSManager;
+import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.easyminecraftgoals.internal.PacketModelEntity;
 import com.magmaguy.easyminecraftgoals.internal.PacketTextEntity;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
@@ -81,7 +82,8 @@ public class BoneTransforms {
     }
 
     private void scaleAnimation() {
-        localMatrix.scale(getDisplayEntityScale() / 2.5f, getDisplayEntityScale() / 2.5f, getDisplayEntityScale() / 2.5f);
+        double currentScale = getDisplayEntityScale() / 2.5f;
+        localMatrix.scale(currentScale, currentScale, currentScale);
     }
 
     //Shift to model center
@@ -144,7 +146,7 @@ public class BoneTransforms {
         Location textDisplayLocation = getArmorStandTargetLocation();
         packetTextDisplayArmorStandEntity = NMSManager.getAdapter().createPacketTextArmorStandEntity(textDisplayLocation);
         packetTextDisplayArmorStandEntity.initializeText(textDisplayLocation);
-        packetTextDisplayArmorStandEntity.sendLocationAndRotationPacket(textDisplayLocation, new EulerAngle(0,0,0));
+        packetTextDisplayArmorStandEntity.sendLocationAndRotationPacket(textDisplayLocation, new EulerAngle(0, 0, 0));
     }
 
     private void initializeDisplayEntityBone() {
@@ -223,29 +225,42 @@ public class BoneTransforms {
         return new EulerAngle(-rotation[0], -rotation[1], rotation[2]);
     }
 
-    public void sendUpdatePacket() {
-        if (packetArmorStandEntity != null && packetArmorStandEntity.hasViewers())
-            sendArmorStandUpdatePacket();
-        if (packetDisplayEntity != null && packetDisplayEntity.hasViewers())
-            sendDisplayEntityUpdatePacket();
+    public void sendUpdatePacket(AbstractPacketBundle packetBundle) {
+        if (packetArmorStandEntity != null && packetArmorStandEntity.hasViewers()) {
+            if (packetBundle == null) packetBundle = packetArmorStandEntity.createPacketBundle();
+            sendArmorStandUpdatePacket(packetBundle);
+        }
+        if (packetDisplayEntity != null && packetDisplayEntity.hasViewers()) {
+            if (packetBundle == null) packetBundle = packetDisplayEntity.createPacketBundle();
+            sendDisplayEntityUpdatePacket(packetBundle);
+        }
         if (packetTextDisplayArmorStandEntity != null && packetTextDisplayArmorStandEntity.hasViewers()) {
-            sendTextDisplayUpdatePacket();
+            if (packetBundle == null) packetBundle = packetTextDisplayArmorStandEntity.createPacketBundle();
+            sendTextDisplayUpdatePacket(packetBundle);
         }
     }
 
-    private void sendTextDisplayUpdatePacket() {
-        packetTextDisplayArmorStandEntity.sendLocationAndRotationAndScalePacket(
+    private void sendTextDisplayUpdatePacket(AbstractPacketBundle packetBundle) {
+        packetTextDisplayArmorStandEntity.generateLocationAndRotationAndScalePackets(
+                packetBundle,
                 getArmorStandTargetLocation(),
                 new EulerAngle(0, 0, 0),
                 1f);
     }
 
-    private void sendArmorStandUpdatePacket() {
+    private void sendArmorStandUpdatePacket(AbstractPacketBundle packetBundle) {
         if (packetArmorStandEntity != null) {
-            packetArmorStandEntity.sendLocationAndRotationAndScalePacket(
+            packetArmorStandEntity.generateLocationAndRotationAndScalePackets(
+                    packetBundle,
                     getArmorStandTargetLocation(),
                     getArmorStandEntityRotation(),
                     1f);
+        }
+    }
+
+    private void sendDisplayEntityUpdatePacket(AbstractPacketBundle packetBundle) {
+        if (packetDisplayEntity != null) {
+            packetDisplayEntity.generateLocationAndRotationAndScalePackets(packetBundle, getDisplayEntityTargetLocation(), getDisplayEntityRotation(), (float) globalMatrix.getScale()[0] * 2.5f);
         }
     }
 
@@ -259,13 +274,6 @@ public class BoneTransforms {
             scale *= (float) scaleModifier;
         }
         return scale;
-    }
-
-
-    private void sendDisplayEntityUpdatePacket() {
-        if (packetDisplayEntity != null) {
-            packetDisplayEntity.sendLocationAndRotationAndScalePacket(getDisplayEntityTargetLocation(), getDisplayEntityRotation(), (float) globalMatrix.getScale()[0] * 2.5f);
-        }
     }
 
 }

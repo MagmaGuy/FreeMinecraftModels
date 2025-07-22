@@ -6,7 +6,6 @@ import com.magmaguy.freeminecraftmodels.config.props.PropsConfig;
 import com.magmaguy.freeminecraftmodels.config.props.PropsConfigFields;
 import com.magmaguy.freeminecraftmodels.customentity.core.components.PropBlockComponent;
 import com.magmaguy.magmacore.util.ChunkLocationChecker;
-import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import org.bukkit.*;
 import org.bukkit.entity.ArmorStand;
@@ -21,9 +20,7 @@ import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.persistence.PersistentDataType;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 public class PropEntity extends StaticEntity {
     public static final NamespacedKey propNamespacedKey = new NamespacedKey(MetadataHandler.PLUGIN, "prop");
@@ -40,19 +37,24 @@ public class PropEntity extends StaticEntity {
     public PropEntity(String entityID, Location spawnLocation) {
         super(entityID, spawnLocation);
         this.entityID = entityID;
-        getDamageableComponent().setInternalHealth(3);
-        setLeftClickCallback((player, entity) -> entity.damage(player));
         propsConfigFields = PropsConfig.getPropsConfigs().get(entityID + ".yml");
+        initializePropEntity();
     }
 
     public PropEntity(String entityID, ArmorStand armorStand) {
         super(entityID, armorStand.getLocation());
         this.entityID = entityID;
         propsConfigFields = PropsConfig.getPropsConfigs().get(entityID + ".yml");
-        propBlockComponent.showFakePropBlocksToAllPlayers();
+        initializePropEntity();
         spawn(armorStand);
-        chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
         propEntities.put(armorStand.getUniqueId(), this);
+        chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
+    }
+
+    private void initializePropEntity() {
+        getDamageableComponent().setInternalHealth(3);
+        setLeftClickCallback((player, entity) -> entity.damage(player));
+        propBlockComponent.showFakePropBlocksToAllPlayers();
     }
 
     public static void onStartup() {
@@ -83,11 +85,9 @@ public class PropEntity extends StaticEntity {
     }
 
     public static PropEntity respawnPropEntityFromArmorStand(String entityID, ArmorStand armorStand) {
-        Logger.debug("checking if prop entity " + entityID + " already exists at " + armorStand.getLocation() + "...");
         if (propEntities.containsKey(armorStand.getUniqueId())) {
             return propEntities.get(armorStand.getUniqueId());
         }
-        Logger.debug("prop entity " + entityID + " does not exist at " + armorStand.getLocation() + ", creating new prop entity...");
         PropEntity propEntity = new PropEntity(entityID, armorStand);
         return propEntity;
     }
@@ -208,7 +208,8 @@ public class PropEntity extends StaticEntity {
         @EventHandler
         private void onChunkUnloadEvent(ChunkUnloadEvent event) {
             String chunkHash = ChunkLocationChecker.chunkToString(event.getChunk());
-            for (PropEntity value : propEntities.values()) {
+            Collection<PropEntity> propEntitiesClone = new ArrayList<>(PropEntity.propEntities.values());
+            for (PropEntity value : propEntitiesClone) {
                 if (value.chunkHash.equals(chunkHash)) {
                     value.remove();
                 }

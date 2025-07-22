@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
+import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.thirdparty.BedrockChecker;
@@ -57,10 +58,10 @@ public class Bone {
     }
 
     //Note that several optimizations might be possible here, but that syncing with a base entity is necessary.
-    public void transform() {
+    public void transform(AbstractPacketBundle abstractPacketBundle) {
         boneTransforms.transform();
-        boneChildren.forEach(Bone::transform);
-        skeleton.getSkeletonWatchers().sendPackets(this);
+        boneChildren.forEach(childBone -> childBone.transform(abstractPacketBundle));
+        skeleton.getSkeletonWatchers().sendPackets(this, abstractPacketBundle);
     }
 
     public void generateDisplay() {
@@ -87,8 +88,8 @@ public class Bone {
         });
     }
 
-    public void sendUpdatePacket() {
-        boneTransforms.sendUpdatePacket();
+    public void sendUpdatePacket(AbstractPacketBundle abstractPacketBundle) {
+        boneTransforms.sendUpdatePacket(abstractPacketBundle);
     }
 
     boolean warned = false;

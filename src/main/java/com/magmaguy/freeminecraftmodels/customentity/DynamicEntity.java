@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.easyminecraftgoals.NMSManager;
+import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityInterface;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
@@ -35,6 +36,7 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     public DynamicEntity(String entityID, Location targetLocation) {
         super(entityID, targetLocation);
         setLeftClickCallback((player, entity) -> entity.damage(player));
+        setModeledEntityHitByProjectileCallback((projectile, entity) -> entity.damage(projectile));
         setHitboxContactCallback((player, modeledEntity) -> {
             if (!damagesOnContact) return;
             if (underlyingEntity instanceof LivingEntity livingEntity && !livingEntity.hasAI() ||
@@ -77,10 +79,10 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     }
 
     @Override
-    public void tick() {
+    public void tick(AbstractPacketBundle abstractPacketBundle) {
         //todo: investigate if this is still necessary since everything now updates anyway, at least for animations
         syncSkeletonWithEntity();
-        super.tick();
+        super.tick(abstractPacketBundle);
     }
 
     private void syncSkeletonWithEntity() {

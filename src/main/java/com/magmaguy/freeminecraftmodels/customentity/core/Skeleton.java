@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
+import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
@@ -96,7 +97,7 @@ public class Skeleton {
     /**
      * This updates animations. The plugin runs this automatically, don't use it unless you know what you're doing!
      */
-    public void tick() {
+    public void tick(AbstractPacketBundle abstractPacketBundle) {
         skeletonWatchers.tick();
 
         // handle tint animation
@@ -127,7 +128,7 @@ public class Skeleton {
         }
 
         if (getSkeletonWatchers().hasObservers()) {
-            rootBone.transform();
+            rootBone.transform(abstractPacketBundle);
         }
     }
 
