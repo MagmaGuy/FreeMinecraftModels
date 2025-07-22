@@ -1,5 +1,7 @@
 package com.magmaguy.freeminecraftmodels.customentity.core.components;
 
+import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.api.ModeledEntityHitByProjectileEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityHitboxContactEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityLeftClickEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityRightClickEvent;
@@ -11,8 +13,10 @@ import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.scheduler.BukkitRunnable;
 
 /**
  * This class handles left click, right click, and hitbox contact events for the entity.
@@ -28,6 +32,9 @@ public class InteractionComponent {
     @Setter
     @Getter
     private ModeledEntityHitboxContactCallback hitboxContactCallback;
+    @Setter
+    @Getter
+    private ModeledEntityHitByProjectileCallback projectileHitCallback;
 
     public InteractionComponent(ModeledEntity modeledEntity) {
         this.modeledEntity = modeledEntity;
@@ -48,8 +55,29 @@ public class InteractionComponent {
      * This method should be overridden by subclasses to fire their specific event types
      */
     protected void callHitboxContactEvent(Player player) {
-        ModeledEntityHitboxContactEvent event = new ModeledEntityHitboxContactEvent(player, modeledEntity);
-        Bukkit.getPluginManager().callEvent(event);
+        //Pass back to synchronous
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                ModeledEntityHitboxContactEvent event = new ModeledEntityHitboxContactEvent(player, modeledEntity);
+                Bukkit.getPluginManager().callEvent(event);
+            }
+        }.runTask(MetadataHandler.PLUGIN);
+    }
+
+    /**
+     * Triggers the appropriate hitbox contact event based on entity type
+     * This method should be overridden by subclasses to fire their specific event types
+     */
+    public void callModeledEntityHitByProjectileEvent(Projectile projectile) {
+        //Pass back to synchronous
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                ModeledEntityHitByProjectileEvent event = new ModeledEntityHitByProjectileEvent(projectile, modeledEntity);
+                Bukkit.getPluginManager().callEvent(event);
+            }
+        }.runTask(MetadataHandler.PLUGIN);
     }
 
     public void handleLeftClickEvent(Player player) {
@@ -65,7 +93,11 @@ public class InteractionComponent {
     public void handleHitboxContactEvent(Player player) {
         if (hitboxContactCallback == null) return;
         hitboxContactCallback.onHitboxContact(player, modeledEntity);
+    }
 
+    public void handleModeledEntityHitByProjectileEvent(Projectile projectile) {
+        if (projectileHitCallback == null) return;
+        projectileHitCallback.onHitByProjectile(projectile, modeledEntity);
     }
 
     // Clear all callbacks
@@ -92,6 +124,12 @@ public class InteractionComponent {
         public void onHitboxContact(ModeledEntityHitboxContactEvent event) {
             if (event.isCancelled()) return;
             event.getEntity().getInteractionComponent().handleHitboxContactEvent(event.getPlayer());
+        }
+
+        @EventHandler
+        public void onProjectileHit(ModeledEntityHitByProjectileEvent event) {
+            if (event.isCancelled()) return;
+            event.getEntity().getInteractionComponent().handleModeledEntityHitByProjectileEvent(event.getProjectile());
         }
     }
 }

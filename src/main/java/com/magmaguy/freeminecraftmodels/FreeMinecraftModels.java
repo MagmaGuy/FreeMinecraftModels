@@ -34,7 +34,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         Bukkit.getLogger().info("Version " + this.getDescription().getVersion());
         MetadataHandler.PLUGIN = this;
         MagmaCore.onEnable();
-        MagmaCore.checkVersionUpdate("111660");
+        MagmaCore.checkVersionUpdate("111660", "https://www.spigotmc.org/resources/free-minecraft-models.111660/");
         //Initialize plugin configuration files
         new DefaultConfig();
         MagmaCore.initializeImporter();
@@ -54,6 +54,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         manager.registerCommand(new DeleteAllCommand());
         manager.registerCommand(new ReloadCommand());
         manager.registerCommand(new SpawnCommand());
+        manager.registerCommand(new StatsCommand());
         manager.registerCommand(new VersionCommand());
         manager.registerCommand(new FreeMinecraftModelsCommand());
         manager.registerCommand(new DisguiseCommand());

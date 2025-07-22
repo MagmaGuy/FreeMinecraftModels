@@ -21,7 +21,9 @@ public class ModeledEntityManager {
      * @return Returns all ModeledEntities currently instanced by the plugin
      */
     public static HashSet<ModeledEntity> getAllEntities() {
-        return (HashSet<ModeledEntity>) ModeledEntity.getLoadedModeledEntities().clone();
+        synchronized (ModeledEntity.getLoadedModeledEntities()) {
+            return new HashSet<>(ModeledEntity.getLoadedModeledEntities());
+        }
     }
 
     /**

@@ -351,16 +351,6 @@ public class OrientedBoundingBox {
     }
 
     /**
-     * Updates the inverse rotation matrix if needed
-     */
-    private void updateInverseRotation() {
-        if (inverseRotationDirty) {
-            inverseRotation.set(rotation).transpose();
-            inverseRotationDirty = false;
-        }
-    }
-
-    /**
      * Gets the 8 corners of the OBB in world space
      *
      * @return Array of corner vectors
@@ -404,11 +394,6 @@ public class OrientedBoundingBox {
      * @return The distance to the intersection point, or -1 if no intersection
      */
     public double rayIntersection(Location eyeLocation, double maxDistance) {
-        // Ensure scale and inverse rotation are up to date
-        updateScale();
-        updateHalfExtents();
-        updateInverseRotation();
-
         // Set the local origin cache directly from the eye location
         localOriginCache.set(eyeLocation.getX(), eyeLocation.getY(), eyeLocation.getZ());
 
@@ -470,12 +455,7 @@ public class OrientedBoundingBox {
         return tMin > 0 ? tMin : tMax;
     }
 
-    public boolean isAABBCollidingWithOBB(BoundingBox aabb, OrientedBoundingBox obb) {
-        // Ensure both OBBs have updated scale
-        updateHalfExtents();
-        obb.updateScale();
-        obb.updateHalfExtents();
-
+    public boolean isAABBCollidingWithOBB(BoundingBox aabb) {
         // Get AABB center and half-extents
         Vector3f aabbCenter = new Vector3f(
                 (float) ((aabb.getMinX() + aabb.getMaxX()) / 2),
@@ -490,8 +470,8 @@ public class OrientedBoundingBox {
         );
 
         // Get OBB center and scaled half-extents
-        Vector3d obbCenter = obb.getCenter();
-        Vector3d obbHalfExtents = obb.getHalfExtents(); // This will return scaled half extents
+        Vector3d obbCenter = getCenter();
+        Vector3d obbHalfExtents = getHalfExtents(); // This will return scaled half extents
 
         // Calculate distance between centers
         double distX = Math.abs(obbCenter.x - aabbCenter.x);
@@ -509,10 +489,7 @@ public class OrientedBoundingBox {
      * Tests whether a world‐space point lies inside this OBB.
      */
     public boolean containsPoint(Location loc) {
-        // ensure our scale, inverse rotation are up-to-date
-        updateScale();
-        updateHalfExtents();
-        updateInverseRotation();
+        //ticking should ensure that no updates are necessary
 
         // move point into OBB's local space
         Vector3d local = new Vector3d(loc.getX(), loc.getY(), loc.getZ());
