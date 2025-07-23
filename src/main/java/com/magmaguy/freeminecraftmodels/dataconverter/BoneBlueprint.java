@@ -86,7 +86,6 @@ public class BoneBlueprint {
     /**
      * This is for the actual values
      *
-     * @param projectResolution
      * @param boneJSON
      * @param values
      * @param textureReferences
@@ -94,7 +93,7 @@ public class BoneBlueprint {
      * @param parent
      * @param skeletonBlueprint
      */
-    public BoneBlueprint(double projectResolution, Map<String, Object> boneJSON, HashMap<String, Object> values, Map<String, Map<String, Object>> textureReferences, String modelName, BoneBlueprint parent, SkeletonBlueprint skeletonBlueprint) {
+    public BoneBlueprint(List<ParsedTexture> parsedTextures, Map<String, Object> boneJSON, HashMap<String, Object> values, Map<String, Map<String, Object>> textureReferences, String modelName, BoneBlueprint parent, SkeletonBlueprint skeletonBlueprint) {
         this.originalBoneName = (String) boneJSON.get("name");
         this.boneName = "freeminecraftmodels:" + modelName + "/" + StringToResourcePackFilename.convert(originalBoneName);
         this.originalModelName = modelName;
@@ -111,7 +110,7 @@ public class BoneBlueprint {
         skeletonBlueprint.getBoneMap().put(originalBoneName, this);
 
         //Initialize child data
-        processChildren(boneJSON, modelName, projectResolution, values, textureReferences, skeletonBlueprint);
+        processChildren(parsedTextures, boneJSON, modelName, values, textureReferences, skeletonBlueprint);
         adjustCubes();
         processBoneValues(boneJSON);
         String filename = StringToResourcePackFilename.convert(originalBoneName);
@@ -215,7 +214,7 @@ public class BoneBlueprint {
         }
     }
 
-    private void processChildren(Map<String, Object> boneJSON, String modelName, double projectResolution, HashMap<String, Object> values, Map<String, Map<String, Object>> textureReferences, SkeletonBlueprint skeletonBlueprint) {
+    private void processChildren(List<ParsedTexture> parsedTextures, Map<String, Object> boneJSON, String modelName, HashMap<String, Object> values, Map<String, Map<String, Object>> textureReferences, SkeletonBlueprint skeletonBlueprint) {
         //Bones can contain two types of children: bones and cubes
         //Bones exist solely for containing cubes
         //Cubes store the relevant visual data
@@ -223,12 +222,12 @@ public class BoneBlueprint {
         for (Object object : childrenValues) {
             if (object instanceof String) {
                 //Case for object being a cube
-                CubeBlueprint cubeBlueprint = new CubeBlueprint(projectResolution, (Map<String, Object>) values.get(object), modelName);
+                CubeBlueprint cubeBlueprint = new CubeBlueprint(parsedTextures, (Map<String, Object>) values.get(object), modelName);
                 if (cubeBlueprint.isValidatedData()) cubeBlueprintChildren.add(cubeBlueprint);
                 else Logger.warn("Model " + modelName + " has an invalid configuration for its cubes!");
             } else {
                 //Case for object being a boneBlueprint
-                BoneBlueprint boneBlueprint = new BoneBlueprint(projectResolution, (Map<String, Object>) object, values, textureReferences, modelName, this, skeletonBlueprint);
+                BoneBlueprint boneBlueprint = new BoneBlueprint(parsedTextures, (Map<String, Object>) object, values, textureReferences, modelName, this, skeletonBlueprint);
                 boneBlueprintChildren.add(boneBlueprint);
                 if (boneBlueprint.getMetaBone() != null)
                     boneBlueprintChildren.add(boneBlueprint.getMetaBone());

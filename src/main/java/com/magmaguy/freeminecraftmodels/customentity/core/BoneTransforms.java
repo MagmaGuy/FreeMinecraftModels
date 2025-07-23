@@ -54,7 +54,7 @@ public class BoneTransforms {
             TransformationMatrix.multiplyMatrices(parent.getBoneTransforms().globalMatrix, localMatrix, globalMatrix);
             if (bone.getBoneBlueprint().isHead()) {
                 // Store the inherited scale before resetting
-                double[] inheritedScale = globalMatrix.getScale(); // or however you access scale in your matrix
+                double[] inheritedScale = globalMatrix.getScale();
 
                 globalMatrix.resetRotation();
                 float yaw = -bone.getSkeleton().getCurrentHeadYaw() + 180;

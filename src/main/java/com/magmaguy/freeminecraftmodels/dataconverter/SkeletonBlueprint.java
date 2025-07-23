@@ -18,7 +18,7 @@ public class SkeletonBlueprint {
     @Getter
     private HitboxBlueprint hitbox;
 
-    public SkeletonBlueprint(double projectResolution,
+    public SkeletonBlueprint(List<ParsedTexture> parsedTextures,
                              List outlinerJSON,
                              HashMap<String, Object> values,
                              Map<String, Map<String, Object>> textureReferences,
@@ -36,7 +36,7 @@ public class SkeletonBlueprint {
             if (((String) bone.get("name")).equalsIgnoreCase("hitbox"))
                 hitbox = new HitboxBlueprint(bone, values, modelName, null);
             else {
-                BoneBlueprint boneBlueprint = new BoneBlueprint(projectResolution, bone, values, textureReferences, modelName, rootBone, this);
+                BoneBlueprint boneBlueprint = new BoneBlueprint(parsedTextures, bone, values, textureReferences, modelName, rootBone, this);
                 rootChildren.add(boneBlueprint);
                 if (boneBlueprint.getMetaBone() != null)
                     rootChildren.add(boneBlueprint.getMetaBone());

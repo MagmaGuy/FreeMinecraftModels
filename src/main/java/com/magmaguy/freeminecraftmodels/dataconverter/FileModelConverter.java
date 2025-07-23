@@ -1,17 +1,11 @@
 package com.magmaguy.freeminecraftmodels.dataconverter;
 
 import com.google.gson.Gson;
-import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.utils.StringToResourcePackFilename;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
-import org.apache.commons.io.FileUtils;
 import org.bukkit.Bukkit;
-import org.yaml.snakeyaml.external.biz.base64Coder.Base64Coder;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.Reader;
 import java.nio.file.Files;
@@ -25,12 +19,8 @@ public class FileModelConverter {
 
     @Getter
     private static final HashMap<String, FileModelConverter> convertedFileModels = new HashMap<>();
-    @Getter
-    private static final HashMap<String, Integer> imageSize = new HashMap<>();
     private final HashMap<String, Object> values = new HashMap<>();
     private final HashMap<String, Object> outliner = new HashMap<>();
-    //Store the texture with the identifier and the name of the texture file
-    private final HashMap<Integer, String> textures = new HashMap<>();
     private String modelName;
     @Getter
     private SkeletonBlueprint skeletonBlueprint;
@@ -68,13 +58,6 @@ public class FileModelConverter {
         // convert JSON file to map
         Map<?, ?> map = gson.fromJson(reader, Map.class);
 
-        /* Just for debugging, this is very spammy
-        // print map entries
-        for (Map.Entry<?, ?> entry : map.entrySet()) {
-            System.out.println(entry.getKey() + "=" + entry.getValue());
-        }
-         */
-
         // close reader
         try {
             reader.close();
@@ -83,32 +66,7 @@ public class FileModelConverter {
             return;
         }
 
-        double projectResolution = (double) ((Map<?, ?>) map.get("resolution")).get("height");
-
-        //This parses the textures, extracts them to the correct directory and stores their values for the bone texture references
-        List<Map<?, ?>> texturesValues = (ArrayList<Map<?, ?>>) map.get("textures");
-        for (int i = 0; i < texturesValues.size(); i++) {
-            Map<?, ?> element = texturesValues.get(i);
-            String imageName = StringToResourcePackFilename.convert((String) element.get("name"));
-            if (!imageName.contains(".png")) {
-                if (!imageName.contains(".")) imageName += ".png";
-                else imageName.split("\\.")[0] += ".png";
-            }
-            String base64Image = (String) element.get("source");
-            //So while there is an ID in blockbench it is not what it uses internally, what it uses internally is the ordered list of textures. Don't ask why.
-            Integer id = i;
-            textures.put(id, imageName.replace(".png", ""));
-            base64Image = base64Image.split(",")[base64Image.split(",").length - 1];
-            if (!imageSize.containsKey(modelName + "/" + imageName)) try {
-                ByteArrayInputStream inputStream = new ByteArrayInputStream(Base64Coder.decodeLines(base64Image));
-                File imageFile = new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar + "output" + File.separatorChar + "FreeMinecraftModels" + File.separatorChar + "assets" + File.separatorChar + "freeminecraftmodels" + File.separatorChar + "textures" + File.separatorChar + "entity" + File.separatorChar + modelName + File.separatorChar + imageName);
-                FileUtils.writeByteArrayToFile(imageFile, inputStream.readAllBytes());
-                BufferedImage bufferedImage = ImageIO.read(imageFile);
-                imageSize.put(modelName + "/" + imageName, bufferedImage.getWidth());
-            } catch (Exception ex) {
-                Logger.warn("Failed to convert image " + imageName + " to its corresponding image file!");
-            }
-        }
+        List<ParsedTexture> parsedTextures = parseTextures(map);
 
         //This parses the blocks
         List<Map> elementValues = (ArrayList<Map>) map.get("elements");
@@ -119,18 +77,17 @@ public class FileModelConverter {
         //This creates the bones and skeleton
         List outlinerValues = (ArrayList) map.get("outliner");
         for (int i = 0; i < outlinerValues.size(); i++) {
-            if (!(outlinerValues.get(i) instanceof Map)) {
+            if (!(outlinerValues.get(i) instanceof Map<?, ?> element)) {
                 //Bukkit.getLogger().warning("WTF format for model name " + modelName + ": " + outlinerValues.get(i));
                 //I don't really know why Blockbench does this
                 continue;
             } else {
-                Map<?, ?> element = (Map<?, ?>) outlinerValues.get(i);
                 outliner.put((String) element.get("uuid"), element);
             }
         }
 
         ID = modelName;
-        skeletonBlueprint = new SkeletonBlueprint(projectResolution, outlinerValues, values, generateFileTextures(), modelName, null);//todo: pass path
+        skeletonBlueprint = new SkeletonBlueprint(parsedTextures, outlinerValues, values, generateFileTextures(parsedTextures), modelName, null);//todo: pass path
 
         List animationList = (ArrayList) map.get("animations");
         if (animationList != null)
@@ -140,14 +97,25 @@ public class FileModelConverter {
 
     public static void shutdown() {
         convertedFileModels.clear();
-        imageSize.clear();
     }
 
-    private Map<String, Map<String, Object>> generateFileTextures() {
+    private List<ParsedTexture> parseTextures(Map<?, ?> map) {
+        List<ParsedTexture> parsedTextures = new ArrayList<>();
+        //This parses the textures, extracts them to the correct directory and stores their values for the bone texture references
+        List<Map<?, ?>> texturesValues = (ArrayList<Map<?, ?>>) map.get("textures");
+        for (int i = 0; i < texturesValues.size(); i++) {
+            ParsedTexture parsedTexture = new ParsedTexture(texturesValues.get(i), modelName, i);
+            if (parsedTexture.isValid()) parsedTextures.add(new ParsedTexture(texturesValues.get(i), modelName, i));
+        }
+        return parsedTextures;
+    }
+
+    private Map<String, Map<String, Object>> generateFileTextures(List<ParsedTexture> parsedTextures) {
         Map<String, Map<String, Object>> texturesMap = new HashMap<>();
         Map<String, Object> textureContents = new HashMap<>();
-        for (Integer key : textures.keySet())
-            textureContents.put("" + key, "freeminecraftmodels:entity/" + modelName + "/" + textures.get(key));
+        for (ParsedTexture parsedTexture : parsedTextures) {
+            textureContents.put("" + parsedTexture.getId(), "freeminecraftmodels:entity/" + modelName + "/" + parsedTexture.getFilename().replace(".png", ""));
+        }
         texturesMap.put("textures", textureContents);
         return texturesMap;
     }
