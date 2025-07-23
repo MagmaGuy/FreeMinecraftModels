@@ -34,6 +34,15 @@ public class Keyframe {
         dataZ = tryParseFloat(dataPoints.get("z"), modelName, animationName);
     }
 
+    public Keyframe(TransformationType transformationType, int timeInTicks, InterpolationType interpolationType, float dataX, float dataY, float dataZ) {
+        this.transformationType = transformationType;
+        this.timeInTicks = timeInTicks;
+        this.interpolationType = interpolationType;
+        this.dataX = dataX;
+        this.dataY = dataY;
+        this.dataZ = dataZ;
+    }
+
     private float tryParseFloat(Object rawObject, String modelName, String animationName) {
         if (!(rawObject instanceof String rawValue)) return ((Double) rawObject).floatValue();
         rawValue = rawValue.replaceAll("\\n", "");

@@ -68,7 +68,43 @@ public class AnimationBlueprint {
             keyframes.add(new Keyframe(keyframeData, modelName, animationName));
         }
         keyframes.sort(Comparator.comparingInt(Keyframe::getTimeInTicks));
+
+        // Add boundary keyframes if needed and there are at least 2 keyframes for interpolation
+        if (keyframes.size() >= 2) {
+            addBoundaryKeyframes(keyframes);
+        }
+
         boneKeyframes.put(boneBlueprint, keyframes);
+    }
+
+    /**
+     * Adds keyframes at tick 0 and the last tick if they don't exist.
+     * This ensures smooth interpolation at the boundaries.
+     */
+    private void addBoundaryKeyframes(List<Keyframe> keyframes) {
+        // Check if we need a keyframe at tick 0
+        if (keyframes.get(0).getTimeInTicks() > 0) {
+            // Clone the first keyframe but set its time to 0
+            Keyframe firstKeyframe = keyframes.get(0);
+            Keyframe startKeyframe = cloneKeyframeAtTime(firstKeyframe, 0);
+            keyframes.add(0, startKeyframe);
+        }
+
+        // Check if we need a keyframe at the last tick
+        Keyframe lastKeyframe = keyframes.get(keyframes.size() - 1);
+        if (lastKeyframe.getTimeInTicks() < duration - 1) {
+            // Clone the last keyframe but set its time to duration - 1
+            Keyframe endKeyframe = cloneKeyframeAtTime(lastKeyframe, duration - 1);
+            keyframes.add(endKeyframe);
+        }
+    }
+
+    /**
+     * Creates a copy of a keyframe at a specific time.
+     * This assumes your Keyframe class has appropriate constructors or setters.
+     */
+    private Keyframe cloneKeyframeAtTime(Keyframe original, int newTime) {
+        return new Keyframe(original.getTransformationType(), original.getTimeInTicks(), original.getInterpolationType(), original.getDataX(), original.getDataY(), original.getDataZ());
     }
 
     private void interpolateKeyframes() {
