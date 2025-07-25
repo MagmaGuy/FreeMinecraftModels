@@ -94,7 +94,13 @@ public class DamageableComponent {
         boolean piercing = false;
 
         if (arrow.getShooter() instanceof LivingEntity shooter) {
-            ItemStack bow = arrow.getWeapon();
+            ItemStack bow = null;
+            try {
+                bow = arrow.getWeapon();
+            } catch (Exception e) {
+                // getWeapon() failed, bow remains null
+            }
+
             if (bow != null && bow.containsEnchantment(Enchantment.POWER)) {
                 int level = bow.getEnchantmentLevel(Enchantment.POWER);
                 double bonus = Math.ceil(0.25 * (level + 1) * damage);
