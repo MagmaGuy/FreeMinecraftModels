@@ -46,7 +46,13 @@ public class PropEntity extends StaticEntity {
         this.entityID = entityID;
         propsConfigFields = PropsConfig.getPropsConfigs().get(entityID + ".yml");
         initializePropEntity();
-        spawn(armorStand);
+
+        setUnderlyingEntity(armorStand);
+        super.spawnLocation = armorStand.getLocation();
+        displayInitializer();
+        chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
+        propEntities.put(underlyingEntity.getUniqueId(), this);
+
         propEntities.put(armorStand.getUniqueId(), this);
         chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
     }
@@ -105,6 +111,7 @@ public class PropEntity extends StaticEntity {
         underlyingEntity.setPersistent(persistent);
     }
 
+    @Override
     public void spawn() {
         super.spawn(getSpawnLocation().getWorld().spawn(getSpawnLocation(), EntityType.ARMOR_STAND.getEntityClass(), entity -> {
             entity.setVisibleByDefault(false);

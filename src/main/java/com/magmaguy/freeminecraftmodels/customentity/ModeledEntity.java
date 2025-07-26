@@ -45,7 +45,7 @@ public class ModeledEntity {
     protected int tickCounter = 0;
     @Getter
     protected Entity underlyingEntity = null;
-    private Location spawnLocation = null;
+    protected Location spawnLocation = null;
     // Collision detection properties
     /**
      * Whether the entity is currently dying.
