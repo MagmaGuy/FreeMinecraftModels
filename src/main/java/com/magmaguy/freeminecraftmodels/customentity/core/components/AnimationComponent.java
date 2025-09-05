@@ -100,7 +100,8 @@ public class AnimationComponent {
                 Logger.warn("Failed to initialize AnimationManager for entityID: " + modeledEntity.getEntityID() + ". Error: " + e.getMessage());
             }
         } else {
-            Logger.warn("No AnimationsBlueprint found for entityID: " + modeledEntity.getEntityID() + ". AnimationManager not initialized.");
+            //It's not unusual for an entity to not have animations
+//            Logger.warn("No AnimationsBlueprint found for entityID: " + modeledEntity.getEntityID() + ". AnimationManager not initialized.");
         }
     }
 

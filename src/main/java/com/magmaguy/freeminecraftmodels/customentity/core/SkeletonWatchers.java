@@ -93,6 +93,7 @@ public class SkeletonWatchers implements Listener {
 
         double sightCheckDistanceMin = Math.pow(MIN_VIEW_DISTANCE, 2);
         double maxViewDistanceSquared = Math.pow(DefaultConfig.maxModelViewDistance, 2);
+//        double maxViewDistanceSquared = Math.pow(5, 2);
 
         for (Player player : skeleton.getCurrentLocation().getWorld().getPlayers()) {
             double distance = player.getLocation().distanceSquared(skeleton.getCurrentLocation());
