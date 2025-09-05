@@ -5,6 +5,7 @@ import com.magmaguy.freeminecraftmodels.config.props.PropBlocks;
 import com.magmaguy.freeminecraftmodels.config.props.PropsConfig;
 import com.magmaguy.freeminecraftmodels.config.props.PropsConfigFields;
 import com.magmaguy.freeminecraftmodels.customentity.core.components.PropBlockComponent;
+import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.magmacore.util.ChunkLocationChecker;
 import lombok.Getter;
 import org.bukkit.*;
@@ -19,6 +20,7 @@ import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.*;
 
@@ -57,12 +59,6 @@ public class PropEntity extends StaticEntity {
         chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
     }
 
-    private void initializePropEntity() {
-        getDamageableComponent().setInternalHealth(3);
-        setLeftClickCallback((player, entity) -> entity.damage(player));
-        propBlockComponent.showFakePropBlocksToAllPlayers();
-    }
-
     public static void onStartup() {
         for (World world : Bukkit.getWorlds()) {
             for (Chunk loadedChunk : world.getLoadedChunks()) {
@@ -91,6 +87,8 @@ public class PropEntity extends StaticEntity {
     }
 
     public static PropEntity respawnPropEntityFromArmorStand(String entityID, ArmorStand armorStand) {
+        FileModelConverter fileModelConverter = FileModelConverter.getConvertedFileModels().get(entityID);
+        if (fileModelConverter == null) return null;
         if (propEntities.containsKey(armorStand.getUniqueId())) {
             return propEntities.get(armorStand.getUniqueId());
         }
@@ -104,6 +102,12 @@ public class PropEntity extends StaticEntity {
 
     public static String getPropEntityID(ArmorStand armorStand) {
         return armorStand.getPersistentDataContainer().get(propNamespacedKey, PersistentDataType.STRING);
+    }
+
+    private void initializePropEntity() {
+        getDamageableComponent().setInternalHealth(3);
+        setLeftClickCallback((player, entity) -> entity.damage(player));
+        propBlockComponent.showFakePropBlocksToAllPlayers();
     }
 
     public void setPersistent(boolean persistent) {
@@ -138,12 +142,25 @@ public class PropEntity extends StaticEntity {
         showRealBlocksToAllPlayers();
         propEntities.remove(underlyingEntity.getUniqueId());
         if (!persistent) underlyingEntity.remove();
-        if (isDying() && underlyingEntity != null) underlyingEntity.remove();
+        if (isDying() && underlyingEntity != null) {
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    underlyingEntity.remove();
+                }
+            }.runTask(MetadataHandler.PLUGIN);
+        }
     }
 
     public void permanentlyRemove() {
         remove();
-        if (underlyingEntity != null) underlyingEntity.remove();
+        if (underlyingEntity != null)
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    underlyingEntity.remove();
+                }
+            }.runTask(MetadataHandler.PLUGIN);
     }
 
     //PropBlockComponent
