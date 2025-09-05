@@ -9,6 +9,7 @@ import com.magmaguy.freeminecraftmodels.customentity.core.components.*;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
+import com.magmaguy.magmacore.util.AttributeManager;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import lombok.Setter;
@@ -165,6 +166,8 @@ public class ModeledEntity {
         hitboxComponent.tick(tickCounter);
         animationComponent.tick();
         tickCounter++;
+        if (underlyingEntity != null && underlyingEntity instanceof LivingEntity livingEntity && livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")) != null)
+            scaleModifier = livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")).getValue();
     }
 
     public void removeWithDeathAnimation() {

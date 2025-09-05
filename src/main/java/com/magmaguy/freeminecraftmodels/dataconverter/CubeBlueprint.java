@@ -84,7 +84,10 @@ public class CubeBlueprint {
         int textureValue = (int) Math.round(textureDouble);
         map.put("texture", "#" + textureValue);
         map.put("tintindex", 0);
-        map.put("rotation", 0);
+        if (map.get("rotation") == null)
+            map.put("rotation", 0);
+        else
+            map.put("rotation", ((Double) map.get("rotation")).floatValue());
         ArrayList<Double> originalUV = (ArrayList<Double>) map.get("uv");
         //For some reason Minecraft really wants images to be 16x16 so here we scale the UV to fit that
         double uvMultiplier = (double) 16 / parsedTextures.get(textureValue).getTextureWidth();

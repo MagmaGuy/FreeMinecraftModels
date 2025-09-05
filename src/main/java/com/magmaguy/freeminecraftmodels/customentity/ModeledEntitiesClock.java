@@ -20,7 +20,9 @@ public class ModeledEntitiesClock {
             public void run() {
                 tick();
             }
-        }.runTaskTimerAsynchronously(MetadataHandler.PLUGIN, 0, 1);
+//        }.runTaskTimerAsynchronously(MetadataHandler.PLUGIN, 0, 1);
+        }.runTaskTimer(MetadataHandler.PLUGIN, 0, 1);
+
     }
 
     public static void shutdown() {
