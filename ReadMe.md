@@ -46,7 +46,7 @@ in the `models` folder and add the model to the resource pack in the `outputs` f
 
 ***You will need to use that resource pack to view the model correctly!*** It is a normal resource pack, so all you need
 to do is put it in your resource pack folder. Minecraft servers have a way to host resource packs. I recommend using my
-plugin, [ResourcePackManager](https://www.spigotmc.org/resources/resource-pack-manager.118574/), which automatically
+plugin, [ResourcePackManager](https://nightbreak.io/plugin/resourcepackmanager/), which automatically
 grabs the files and hosts them remotely for you, even merging them with the files of other plugins.
 
 ### How do you view the model in-game?
