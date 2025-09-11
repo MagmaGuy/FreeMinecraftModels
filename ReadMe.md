@@ -53,7 +53,7 @@ grabs the files and hosts them remotely for you, even merging them with the file
 
 It is important to note that while FreeMinecraftModels can be used as a standalone plugin for viewing props (basically
 custom models that you can place in the world), the plugin is usually at its best when paired with a plugin such
-as [EliteMobs](https://www.spigotmc.org/resources/elitemobs.40090/) where the models are actively used for something
+as [EliteMobs](https://nightbreak.io/plugin/elitemobs/) where the models are actively used for something
 concrete, in this case boss fights.
 
 There are three types of models: static, dynamic and props.
