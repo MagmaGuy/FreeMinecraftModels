@@ -10,6 +10,7 @@ import com.magmaguy.freeminecraftmodels.customentity.*;
 import com.magmaguy.freeminecraftmodels.customentity.core.OBBHitDetection;
 import com.magmaguy.freeminecraftmodels.customentity.core.components.InteractionComponent;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.freeminecraftmodels.listeners.ArmorStandListener;
 import com.magmaguy.freeminecraftmodels.listeners.EntityTeleportEvent;
 import com.magmaguy.freeminecraftmodels.listeners.ModelItemListener;
 import com.magmaguy.magmacore.MagmaCore;
@@ -46,6 +47,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         Bukkit.getPluginManager().registerEvents(new OBBHitDetection(), this);
         Bukkit.getPluginManager().registerEvents(new PropEntity.PropEntityEvents(), this);
         Bukkit.getPluginManager().registerEvents(new EntityTeleportEvent(), this);
+        Bukkit.getPluginManager().registerEvents(new ArmorStandListener(), this);
         Bukkit.getPluginManager().registerEvents(new DynamicEntity.ModeledEntityEvents(), this);
         Bukkit.getPluginManager().registerEvents(new InteractionComponent.InteractionComponentEvents(), this);
         Bukkit.getPluginManager().registerEvents(new ModelItemListener(), this);

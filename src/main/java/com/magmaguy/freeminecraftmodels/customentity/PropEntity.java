@@ -6,6 +6,7 @@ import com.magmaguy.freeminecraftmodels.config.props.PropsConfig;
 import com.magmaguy.freeminecraftmodels.config.props.PropsConfigFields;
 import com.magmaguy.freeminecraftmodels.customentity.core.components.PropBlockComponent;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.freeminecraftmodels.listeners.ArmorStandListener;
 import com.magmaguy.magmacore.util.ChunkLocationChecker;
 import lombok.Getter;
 import org.bukkit.*;
@@ -117,6 +118,7 @@ public class PropEntity extends StaticEntity {
 
     @Override
     public void spawn() {
+        ArmorStandListener.bypass = true;
         super.spawn(getSpawnLocation().getWorld().spawn(getSpawnLocation(), EntityType.ARMOR_STAND.getEntityClass(), entity -> {
             entity.setVisibleByDefault(false);
             entity.setGravity(false);
@@ -126,6 +128,7 @@ public class PropEntity extends StaticEntity {
         }));
         chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
         propEntities.put(underlyingEntity.getUniqueId(), this);
+        ArmorStandListener.bypass = false;
     }
 
     public void setCustomDataString(NamespacedKey customNamespacedKey, String data) {

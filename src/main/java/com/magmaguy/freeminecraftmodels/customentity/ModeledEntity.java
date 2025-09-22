@@ -19,14 +19,12 @@ import org.bukkit.World;
 import org.bukkit.entity.*;
 import org.bukkit.persistence.PersistentDataType;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ModeledEntity {
     @Getter
-    private static final HashSet<ModeledEntity> loadedModeledEntities = new HashSet<>();
+    private static final Set<ModeledEntity> loadedModeledEntities = ConcurrentHashMap.newKeySet();
     @Getter
     private final String entityID;
     @Getter
