@@ -20,10 +20,8 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Optional;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
@@ -34,7 +32,7 @@ public class OBBHitDetection implements Listener {
 
     public static boolean applyDamage = false;
 
-    private static HashSet<Projectile> activeProjectiles = new HashSet<>();
+    private static Set<Projectile> activeProjectiles = ConcurrentHashMap.newKeySet();
     private static BukkitTask projectileDetectionTask = null;
 
     @EventHandler(priority = EventPriority.LOWEST)
