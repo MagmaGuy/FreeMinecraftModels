@@ -9,9 +9,14 @@ import org.bukkit.Bukkit;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ModeledEntityManager {
+    // Thread-safe storage for all modeled entities
+    private static final Set<ModeledEntity> loadedModeledEntities = ConcurrentHashMap.newKeySet();
+
     private ModeledEntityManager() {
     }
 
@@ -21,9 +26,7 @@ public class ModeledEntityManager {
      * @return Returns all ModeledEntities currently instanced by the plugin
      */
     public static HashSet<ModeledEntity> getAllEntities() {
-        synchronized (ModeledEntity.getLoadedModeledEntities()) {
-            return new HashSet<>(ModeledEntity.getLoadedModeledEntities());
-        }
+        return new HashSet<>(ModeledEntity.getLoadedModeledEntities());
     }
 
     /**
