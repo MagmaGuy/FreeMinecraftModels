@@ -26,6 +26,8 @@ public class ModeledEntity {
     @Getter
     private static final Set<ModeledEntity> loadedModeledEntities = ConcurrentHashMap.newKeySet();
     @Getter
+    private static final HashMap<Entity, ModeledEntity> loadedModeledEntitiesWithUnderlyingEntities = new HashMap<>();
+    @Getter
     private final String entityID;
     @Getter
     private final String name = "default";
@@ -103,10 +105,12 @@ public class ModeledEntity {
 
         // Clear the original collection
         loadedModeledEntities.clear();
+        loadedModeledEntitiesWithUnderlyingEntities.clear();
     }
 
     public void setUnderlyingEntity(Entity underlyingEntity) {
         this.underlyingEntity = underlyingEntity;
+        loadedModeledEntitiesWithUnderlyingEntities.put(underlyingEntity, this);
         if (!(underlyingEntity instanceof PlayerDisguiseEntity))
             RegisterModelEntity.registerModelEntity(underlyingEntity, getSkeletonBlueprint().getModelName());
         hitboxComponent.setCustomHitboxOnUnderlyingEntity();
@@ -191,6 +195,7 @@ public class ModeledEntity {
         if (underlyingEntity != null &&
                 (!(this instanceof PropEntity) ||
                         this instanceof PropEntity propEntity && !propEntity.isPersistent())) {
+            loadedModeledEntitiesWithUnderlyingEntities.remove(underlyingEntity);
             Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
                 underlyingEntity.remove();
             });
