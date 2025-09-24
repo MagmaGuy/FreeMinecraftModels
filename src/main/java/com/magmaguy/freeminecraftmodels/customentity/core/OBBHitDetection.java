@@ -3,7 +3,9 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityManager;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
+import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import lombok.Getter;
+import org.bukkit.damage.DamageType;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
@@ -37,8 +39,11 @@ public class OBBHitDetection implements Listener {
 
     @EventHandler(priority = EventPriority.LOWEST)
     public void EntityDamageByEntityEvent(EntityDamageByEntityEvent event) {
-        if (!RegisterModelEntity.isModelEntity(event.getEntity()) &&
-                !RegisterModelEntity.isModelEntity(event.getDamager())) return;
+        if (
+                !RegisterModelEntity.isModelEntity(event.getEntity())
+                        || (event.getDamageSource().getDamageType().equals(DamageType.MOB_ATTACK)
+                                &&!RegisterModelEntity.isModelEntity(event.getDamager()))
+        ) return;
         if (applyDamage) {
             applyDamage = false;
             return;
@@ -94,6 +99,8 @@ public class OBBHitDetection implements Listener {
                             continue;
                         }
 
+                        if (proj.getShooter() != null && entity.getUnderlyingEntity() != null && proj.getShooter().equals(entity.getUnderlyingEntity())) continue;
+
                         // update the OBB to the entity's current position/orientation
                         if (entity.getHitboxComponent().getObbHitbox().isAABBCollidingWithOBB(proj.getBoundingBox())) {
                             entity.getInteractionComponent().callModeledEntityHitByProjectileEvent(proj);
@@ -111,7 +118,7 @@ public class OBBHitDetection implements Listener {
                     }
                 }
             }
-        }.runTaskTimerAsynchronously(MetadataHandler.PLUGIN, 0L, 1L);
+        }.runTaskTimer(MetadataHandler.PLUGIN, 0L, 1L); // todo: somehow can't be async due to getting the entity that fired the projectile. Odd.
     }
 
     public static void shutdown() {
