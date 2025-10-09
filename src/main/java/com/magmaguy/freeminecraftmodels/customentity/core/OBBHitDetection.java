@@ -3,7 +3,6 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityManager;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
-import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import lombok.Getter;
 import org.bukkit.damage.DamageType;
 import org.bukkit.entity.Player;
@@ -15,8 +14,6 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.ProjectileLaunchEvent;
-import org.bukkit.event.player.PlayerAnimationEvent;
-import org.bukkit.event.player.PlayerAnimationType;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -172,13 +169,18 @@ public class OBBHitDetection implements Listener {
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
-    public void playerAnimation(PlayerAnimationEvent event) {
-        // Only process arm swings (attacks)
-        if (!event.getAnimationType().equals(PlayerAnimationType.ARM_SWING)) {
-            return;
+    public void onPlayerInteract(PlayerInteractEvent event) {
+        Action action = event.getAction();
+
+        // Handle left clicks
+        if (action == Action.LEFT_CLICK_AIR || action == Action.LEFT_CLICK_BLOCK) {
+            attackCooldowns.put(event.getPlayer(), event.getPlayer().getAttackCooldown());
+            executeLeftClickAttack(event.getPlayer());
         }
-        attackCooldowns.put(event.getPlayer(), event.getPlayer().getAttackCooldown());
-        executeLeftClickAttack(event.getPlayer());
+        // Handle right clicks
+        else if (action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK) {
+            executeRightClickInteraction(event.getPlayer());
+        }
     }
 
     @EventHandler
