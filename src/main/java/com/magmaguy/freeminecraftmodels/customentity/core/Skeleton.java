@@ -34,10 +34,6 @@ public class Skeleton {
     @Getter
     @Setter
     private float currentHeadYaw = 0;
-//    private BukkitTask damageTintTask = null;
-//    @Getter
-//    @Setter
-//    private DynamicEntity dynamicEntity = null; //todo: this wasn't in use?
     @Getter
     @Setter
     private ModeledEntity modeledEntity = null;
@@ -136,9 +132,5 @@ public class Skeleton {
         // start (or restart) the tint animation
         tinting = true;
         tintCounter = 0;
-    }
-
-    public void teleport() {
-        rootBone.teleport();
     }
 }

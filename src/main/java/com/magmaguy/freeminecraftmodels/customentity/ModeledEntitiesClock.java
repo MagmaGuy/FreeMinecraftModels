@@ -6,8 +6,6 @@ import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
-import java.util.ArrayList;
-
 public class ModeledEntitiesClock {
     private static BukkitTask clock = null;
 
@@ -29,7 +27,7 @@ public class ModeledEntitiesClock {
 
     public static void tick() {
         AbstractPacketBundle abstractPacketBundle = NMSManager.getAdapter().createPacketBundle();
-        new ArrayList<>(ModeledEntity.getLoadedModeledEntities()).forEach(modeledEntity -> modeledEntity.tick(abstractPacketBundle));
+        ModeledEntity.getLoadedModeledEntities().forEach(modeledEntity -> modeledEntity.tick(abstractPacketBundle));
         abstractPacketBundle.send();
     }
 }

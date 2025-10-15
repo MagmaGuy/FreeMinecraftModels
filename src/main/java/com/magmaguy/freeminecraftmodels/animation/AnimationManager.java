@@ -41,8 +41,8 @@ public class AnimationManager {
 
     private void transitionTo(IAnimState target) {
         if (target == null || target == current) return;
-        current.exit();
-        if (!(current instanceof CustomAnimationState)) {
+        if (current != null) current.exit();
+        if (current != null && !(current instanceof CustomAnimationState)) {
             lastCommitted = current.getType();
         }
         current = target;
