@@ -87,13 +87,12 @@ public class SkeletonWatchers implements Listener {
     private void updateWatcherList() {
         if (skeleton.getCurrentLocation() == null) return;
 
-        // Clear reused collections instead of creating new ones
-        newPlayers.clear();
-        toRemove.clear();
+        // Create local collections instead of reusing instance variables
+        List<UUID> newPlayers = new ArrayList<>();
+        List<UUID> toRemove = new ArrayList<>();
 
         double sightCheckDistanceMin = Math.pow(MIN_VIEW_DISTANCE, 2);
         double maxViewDistanceSquared = Math.pow(DefaultConfig.maxModelViewDistance, 2);
-//        double maxViewDistanceSquared = Math.pow(5, 2);
 
         for (Player player : skeleton.getCurrentLocation().getWorld().getPlayers()) {
             double distance = player.getLocation().distanceSquared(skeleton.getCurrentLocation());
@@ -105,7 +104,9 @@ public class SkeletonWatchers implements Listener {
             }
         }
 
-        for (UUID viewer : viewers) {
+        // Create a snapshot of viewers to iterate safely
+        Set<UUID> viewerSnapshot = new HashSet<>(viewers);
+        for (UUID viewer : viewerSnapshot) {
             if (!newPlayers.contains(viewer)) {
                 toRemove.add(viewer);
             }

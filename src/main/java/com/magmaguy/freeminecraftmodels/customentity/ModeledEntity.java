@@ -47,6 +47,7 @@ public class ModeledEntity {
     @Getter
     protected Entity underlyingEntity = null;
     protected Location spawnLocation = null;
+    protected Location currentLocation = null;
     // Collision detection properties
     /**
      * Whether the entity is currently dying.
@@ -70,6 +71,7 @@ public class ModeledEntity {
         this.entityID = entityID;
         this.spawnLocation = spawnLocation;
         this.lastSeenLocation = spawnLocation;
+        this.currentLocation = spawnLocation;
 
         FileModelConverter fileModelConverter = FileModelConverter.getConvertedFileModels().get(entityID);
         if (fileModelConverter == null) {
@@ -145,11 +147,13 @@ public class ModeledEntity {
     public void spawn(Entity entity) {
         setUnderlyingEntity(entity);
         this.spawnLocation = entity.getLocation();
+        this.currentLocation = entity.getLocation();
         displayInitializer();
     }
 
     public void spawn(Location location) {
         this.spawnLocation = location;
+        this.currentLocation = location;
         displayInitializer();
     }
 
@@ -220,7 +224,7 @@ public class ModeledEntity {
 
     public Location getLocation() {
         if (underlyingEntity != null) return underlyingEntity.getLocation();
-        if (spawnLocation != null) return spawnLocation.clone();
+        if (currentLocation != null) return currentLocation.clone();
         return null;
     }
 
@@ -254,8 +258,9 @@ public class ModeledEntity {
     public void teleport(Location location, boolean teleportUnderlyingEntity) {
         if (teleportUnderlyingEntity && underlyingEntity != null) {
             underlyingEntity.teleport(location);
+        } else {
+            currentLocation = location;
         }
-        skeleton.teleport();
     }
 
 

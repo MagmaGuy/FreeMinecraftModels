@@ -144,18 +144,18 @@ public class Bone {
         }
     }
 
-    public void teleport() {
-        sendTeleportPacket();
-        boneChildren.forEach(Bone::teleport);
-    }
+//    public void teleport() {
+////        sendTeleportPacket();
+//        boneChildren.forEach(Bone::teleport);
+//    }
 
-    private void sendTeleportPacket() {
-        if (boneTransforms.getPacketArmorStandEntity() != null) {
-            boneTransforms.getPacketArmorStandEntity().teleport(boneTransforms.getArmorStandTargetLocation());
-        }
-        if (boneTransforms.getPacketDisplayEntity() != null) {
-            boneTransforms.getPacketDisplayEntity().teleport(boneTransforms.getDisplayEntityTargetLocation());
-        }
-        skeleton.getSkeletonWatchers().resync(true);
-    }
+//    private void sendTeleportPacket() {
+//        if (boneTransforms.getPacketArmorStandEntity() != null) {
+//            boneTransforms.getPacketArmorStandEntity().teleport(boneTransforms.getArmorStandTargetLocation());
+//        }
+//        if (boneTransforms.getPacketDisplayEntity() != null) {
+//            boneTransforms.getPacketDisplayEntity().teleport(boneTransforms.getDisplayEntityTargetLocation());
+//        }
+//        skeleton.getSkeletonWatchers().resync(true);
+//    }
 }
