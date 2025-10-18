@@ -29,7 +29,7 @@ public class CubeBlueprint {
 
     public CubeBlueprint(List<ParsedTexture> parsedTextures, Map<String, Object> cubeJSON, String modelName) {
         this.cubeJSON = cubeJSON;
-        //Sanitize data from ModelEngine which is not used by Minecraft resource packs
+
         cubeJSON.remove("rescale");
         cubeJSON.remove("locked");
         cubeJSON.remove("type");
@@ -40,6 +40,8 @@ public class CubeBlueprint {
         cubeJSON.remove("box_uv");
         cubeJSON.remove("render_order");
         cubeJSON.remove("allow_mirror_modeling");
+        cubeJSON.remove("light_emission");
+
         //process face textures
         processFace(parsedTextures, (Map<String, Object>) cubeJSON.get("faces"), "north", modelName);
         processFace(parsedTextures, (Map<String, Object>) cubeJSON.get("faces"), "east", modelName);

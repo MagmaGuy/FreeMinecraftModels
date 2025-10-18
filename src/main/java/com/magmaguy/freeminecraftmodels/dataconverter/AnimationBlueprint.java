@@ -13,6 +13,7 @@ public class AnimationBlueprint {
     private final HashMap<BoneBlueprint, List<Keyframe>> boneKeyframes = new HashMap<>();
     @Getter
     private final HashMap<BoneBlueprint, AnimationFrame[]> animationFrames = new HashMap<>();
+    private final int blockBenchVersion;
     @Getter
     private LoopType loopType;
     @Getter
@@ -21,7 +22,8 @@ public class AnimationBlueprint {
     @Getter
     private int duration;
 
-    public AnimationBlueprint(Object data, String modelName, SkeletonBlueprint skeletonBlueprint) {
+    public AnimationBlueprint(Object data, String modelName, SkeletonBlueprint skeletonBlueprint, int blockBenchVersion) {
+        this.blockBenchVersion = blockBenchVersion;
         Map<String, Object> animationData;
         try {
             animationData = (Map<String, Object>) data;
@@ -182,9 +184,15 @@ public class AnimationBlueprint {
                 int currentFrame = j + previousFrame.getTimeInTicks();
                 float t = j / (float) durationBetweenKeyframes;
 
-                animationFramesArray[currentFrame].xRotation = interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t);
-                animationFramesArray[currentFrame].yRotation = interpolateWithType(interpType, previousFrame.getDataY(), animationFrame.getDataY(), t);
-                animationFramesArray[currentFrame].zRotation = interpolateWithType(interpType, previousFrame.getDataZ(), animationFrame.getDataZ(), t);
+                if (blockBenchVersion < 5) {
+                    animationFramesArray[currentFrame].xRotation = interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t);
+                    animationFramesArray[currentFrame].yRotation = interpolateWithType(interpType, previousFrame.getDataY(), animationFrame.getDataY(), t);
+                    animationFramesArray[currentFrame].zRotation = interpolateWithType(interpType, previousFrame.getDataZ(), animationFrame.getDataZ(), t);
+                } else {
+                    animationFramesArray[currentFrame].xRotation = -interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t);
+                    animationFramesArray[currentFrame].yRotation = -interpolateWithType(interpType, previousFrame.getDataY(), animationFrame.getDataY(), t);
+                    animationFramesArray[currentFrame].zRotation = interpolateWithType(interpType, previousFrame.getDataZ(), animationFrame.getDataZ(), t);
+                }
             }
             previousFrame = animationFrame;
             if (animationFrame.getTimeInTicks() > lastFrame.getTimeInTicks()) lastFrame = animationFrame;
@@ -194,18 +202,30 @@ public class AnimationBlueprint {
             int durationBetweenKeyframes = duration - lastFrame.getTimeInTicks();
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                animationFramesArray[currentFrame].xRotation = lastFrame.getDataX();
-                animationFramesArray[currentFrame].yRotation = lastFrame.getDataY();
-                animationFramesArray[currentFrame].zRotation = lastFrame.getDataZ();
+                if (blockBenchVersion < 5) {
+                    animationFramesArray[currentFrame].xRotation = lastFrame.getDataX();
+                    animationFramesArray[currentFrame].yRotation = lastFrame.getDataY();
+                    animationFramesArray[currentFrame].zRotation = lastFrame.getDataZ();
+                } else {
+                    animationFramesArray[currentFrame].xRotation = -lastFrame.getDataX();
+                    animationFramesArray[currentFrame].yRotation = -lastFrame.getDataY();
+                    animationFramesArray[currentFrame].zRotation = lastFrame.getDataZ();
+                }
             }
         }
         if (firstFrame != null && firstFrame.getTimeInTicks() > 0) {
             int durationBetweenKeyframes = firstFrame.getTimeInTicks();
             durationBetweenKeyframes = Math.min(durationBetweenKeyframes, duration - 1);
             for (int j = 0; j < durationBetweenKeyframes; j++) {
-                animationFramesArray[j].xRotation = firstFrame.getDataX();
-                animationFramesArray[j].yRotation = firstFrame.getDataY();
-                animationFramesArray[j].zRotation = firstFrame.getDataZ();
+                if (blockBenchVersion < 5) {
+                    animationFramesArray[j].xRotation = firstFrame.getDataX();
+                    animationFramesArray[j].yRotation = firstFrame.getDataY();
+                    animationFramesArray[j].zRotation = firstFrame.getDataZ();
+                } else {
+                    animationFramesArray[j].xRotation = -firstFrame.getDataX();
+                    animationFramesArray[j].yRotation = -firstFrame.getDataY();
+                    animationFramesArray[j].zRotation = firstFrame.getDataZ();
+                }
             }
         }
     }
@@ -230,10 +250,15 @@ public class AnimationBlueprint {
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
                 float t = j / (float) durationBetweenKeyframes;
-
-                animationFramesArray[currentFrame].xPosition = interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t) / 16f;
-                animationFramesArray[currentFrame].yPosition = interpolateWithType(interpType, previousFrame.getDataY(), animationFrame.getDataY(), t) / 16f;
-                animationFramesArray[currentFrame].zPosition = interpolateWithType(interpType, previousFrame.getDataZ(), animationFrame.getDataZ(), t) / 16f;
+                if (blockBenchVersion < 5) {
+                    animationFramesArray[currentFrame].xPosition = interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t) / 16f;
+                    animationFramesArray[currentFrame].yPosition = interpolateWithType(interpType, previousFrame.getDataY(), animationFrame.getDataY(), t) / 16f;
+                    animationFramesArray[currentFrame].zPosition = interpolateWithType(interpType, previousFrame.getDataZ(), animationFrame.getDataZ(), t) / 16f;
+                } else {
+                    animationFramesArray[currentFrame].xPosition = -interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t) / 16f;
+                    animationFramesArray[currentFrame].yPosition = interpolateWithType(interpType, previousFrame.getDataY(), animationFrame.getDataY(), t) / 16f;
+                    animationFramesArray[currentFrame].zPosition = interpolateWithType(interpType, previousFrame.getDataZ(), animationFrame.getDataZ(), t) / 16f;
+                }
             }
             previousFrame = animationFrame;
             if (animationFrame.getTimeInTicks() > lastFrame.getTimeInTicks()) lastFrame = animationFrame;
@@ -243,18 +268,31 @@ public class AnimationBlueprint {
             int durationBetweenKeyframes = duration - lastFrame.getTimeInTicks();
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
+                if (blockBenchVersion < 5) {
                 animationFramesArray[currentFrame].xPosition = lastFrame.getDataX() / 16f;
                 animationFramesArray[currentFrame].yPosition = lastFrame.getDataY() / 16f;
                 animationFramesArray[currentFrame].zPosition = lastFrame.getDataZ() / 16f;
+                } else {
+                    animationFramesArray[currentFrame].xPosition = -lastFrame.getDataX() / 16f;
+                    animationFramesArray[currentFrame].yPosition = lastFrame.getDataY() / 16f;
+                    animationFramesArray[currentFrame].zPosition = lastFrame.getDataZ() / 16f;
+                }
             }
         }
         if (firstFrame != null && firstFrame.getTimeInTicks() > 0) {
             int durationBetweenKeyframes = firstFrame.getTimeInTicks();
             durationBetweenKeyframes = Math.min(durationBetweenKeyframes, duration - 1);
             for (int j = 0; j < durationBetweenKeyframes; j++) {
+                if (blockBenchVersion < 5) {
+
                 animationFramesArray[j].xPosition = firstFrame.getDataX() / 16f;
                 animationFramesArray[j].yPosition = firstFrame.getDataY() / 16f;
-                animationFramesArray[j].zPosition = firstFrame.getDataZ() / 16f;
+                    animationFramesArray[j].zPosition = firstFrame.getDataZ() / 16f;
+                } else {
+                    animationFramesArray[j].xPosition = -firstFrame.getDataX() / 16f;
+                    animationFramesArray[j].yPosition = firstFrame.getDataY() / 16f;
+                    animationFramesArray[j].zPosition = firstFrame.getDataZ() / 16f;
+                }
             }
         }
     }
