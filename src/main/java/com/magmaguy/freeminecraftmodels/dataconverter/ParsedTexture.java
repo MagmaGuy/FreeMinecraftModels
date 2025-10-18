@@ -42,17 +42,33 @@ public class ParsedTexture {
             File imageFile = generateImageFile(textureObject, modelName);
 
             if (textureObject.get("height") != null) {
+                // Explicit metadata provided (from bbmodel)
                 this.height = (double) textureObject.get("height");
                 this.width = (double) textureObject.get("width");
                 this.uvHeight = (double) textureObject.get("uv_height");
                 this.uvWidth = (double) textureObject.get("uv_width");
                 this.frameTime = (double) textureObject.get("frame_time");
             } else {
+                // No explicit metadata - read from image and detect animation
                 BufferedImage bufferedImage = ImageIO.read(imageFile);
                 this.height = bufferedImage.getHeight();
                 this.width = bufferedImage.getWidth();
-                this.uvHeight = bufferedImage.getHeight();
-                this.uvWidth = bufferedImage.getWidth();
+
+                // Detect animated textures
+                // Minecraft animated textures have frames stacked vertically
+                // If height is evenly divisible by width and > width, it's likely animated
+                if (this.height > this.width && this.height % this.width == 0) {
+                    // This is an animated texture - each frame is square (width x width)
+                    this.uvHeight = this.width;
+                    this.uvWidth = this.width;
+                    // Frame time defaults to 1 (1 tick per frame)
+                    this.frameTime = 1.0;
+                    Logger.info("Detected animated texture: " + filename + " (" + (this.height / this.width) + " frames)");
+                } else {
+                    // Static texture
+                    this.uvHeight = bufferedImage.getHeight();
+                    this.uvWidth = bufferedImage.getWidth();
+                }
             }
 
         } catch (Exception e) {
@@ -102,6 +118,7 @@ public class ParsedTexture {
                     .create()
                     .toJson(animationMeta);
             FileUtils.writeStringToFile(mcMetaFile, json, java.nio.charset.StandardCharsets.UTF_8);
+            Logger.info("Created .mcmeta file for animated texture: " + filename);
         } catch (IOException e) {
             Logger.warn("Failed to write .mcmeta file " + mcMetaFile.getAbsolutePath() + "!");
             throw new RuntimeException(e);
@@ -124,7 +141,7 @@ public class ParsedTexture {
     }
 
     /**
-     * Returns the uvWidth because width is hte raw file width, and whne using animated textures we use the uv width
+     * Returns the uvWidth because width is the raw file width, and when using animated textures we use the uv width
      * for Minecraft and let it know that it has animation frames.
      *
      * @return The width to be used for resource pack generation
