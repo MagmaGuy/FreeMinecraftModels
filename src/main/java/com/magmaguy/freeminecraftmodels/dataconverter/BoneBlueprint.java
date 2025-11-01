@@ -139,9 +139,11 @@ public class BoneBlueprint {
         return isDisplayModel && (modelID != null || nameTag);
     }
 
+    //move to real space
     public Vector3f getModelCenter() {
-        //this multiplication moves it to real space
-        return new Vector3f(blueprintModelCenter).mul(5 / 32f);
+        float rpToBlocks = 1f / 16f;
+        float unscale = 1f / BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER;
+        return new Vector3f(blueprintModelCenter).mul(rpToBlocks * unscale);
     }
 
     public Vector3f getBlueprintModelPivot() {

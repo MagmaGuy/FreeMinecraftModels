@@ -26,9 +26,11 @@ public class CubeBlueprint {
     //Fun bug, if a single face does not have a texture but the rest of the cube does it breaks Minecraft.
     //Null means uninitialized. False means initialized with no texture. True means initialized with a texture.
     private Boolean textureDataExists = null;
+    private String modelName;
 
     public CubeBlueprint(List<ParsedTexture> parsedTextures, Map<String, Object> cubeJSON, String modelName) {
         this.cubeJSON = cubeJSON;
+        this.modelName = modelName;
 
         cubeJSON.remove("rescale");
         cubeJSON.remove("locked");
@@ -41,8 +43,9 @@ public class CubeBlueprint {
         cubeJSON.remove("render_order");
         cubeJSON.remove("allow_mirror_modeling");
         cubeJSON.remove("light_emission");
+        // NOTE: don't remove "inflate" here; we will read & bake it in, then remove it.
 
-        //process face textures
+        // process face textures ...
         processFace(parsedTextures, (Map<String, Object>) cubeJSON.get("faces"), "north", modelName);
         processFace(parsedTextures, (Map<String, Object>) cubeJSON.get("faces"), "east", modelName);
         processFace(parsedTextures, (Map<String, Object>) cubeJSON.get("faces"), "south", modelName);
@@ -50,23 +53,94 @@ public class CubeBlueprint {
         processFace(parsedTextures, (Map<String, Object>) cubeJSON.get("faces"), "up", modelName);
         processFace(parsedTextures, (Map<String, Object>) cubeJSON.get("faces"), "down", modelName);
 
-        //The model is scaled up 4x to reach the maximum theoretical size for large models, thus needs to be scaled correctly here
-        //Note that how much it is scaled relies on the scaling of the head slot, it's somewhat arbitrary and just
-        //works out that this is the right amount to get the right final size.
         ArrayList<Double> fromList = (ArrayList<Double>) cubeJSON.get("from");
-        if (fromList == null) return;
+        if (fromList == null) {
+            Logger.warn("Model " + modelName + " has a cube with no from position. This is not allowed. The model will appear with the debug black and purple cube texture until fixed.");
+            return;
+        }
         from = new Vector3f(
                 Round.fourDecimalPlaces(fromList.get(0).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER),
                 Round.fourDecimalPlaces(fromList.get(1).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER),
                 Round.fourDecimalPlaces(fromList.get(2).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER));
+
         ArrayList<Double> toList = (ArrayList<Double>) cubeJSON.get("to");
-        if (toList == null) return;
+        from = new Vector3f(
+                fromList.get(0).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER,
+                fromList.get(1).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER,
+                fromList.get(2).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER);
         to = new Vector3f(
-                Round.fourDecimalPlaces(toList.get(0).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER),
-                Round.fourDecimalPlaces(toList.get(1).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER),
-                Round.fourDecimalPlaces(toList.get(2).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER));
+                toList.get(0).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER,
+                toList.get(1).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER,
+                toList.get(2).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER);
+
+        // 🔹 NEW: bake in inflate (if present)
+        applyInflate();
+
         validatedData = true;
     }
+
+    /**
+     * Applies Blockbench-style "inflate": expands/contracts the cube equally on all sides.
+     * Positive values grow the cube; negative values shrink it. The value is in model units,
+     * so we scale it by the same head multiplier used for coordinates.
+     */
+    private void applyInflate() {
+        Object inflateObj = cubeJSON.get("inflate");
+        if (inflateObj == null) return;
+
+        double inflateRaw = ((Number) inflateObj).doubleValue();
+        if (Math.abs(inflateRaw) < 1e-9) { // effectively zero
+            cubeJSON.remove("inflate");
+            return;
+        }
+
+        // Scale inflate by the same multiplier as from/to
+        float inflate = Round.fourDecimalPlaces((float) (inflateRaw * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER));
+
+        // Expand/contract uniformly on all axes
+        Vector3f newFrom = new Vector3f(from).sub(inflate, inflate, inflate);
+        Vector3f newTo = new Vector3f(to).add(inflate, inflate, inflate);
+
+        // Guard against inversion if negative inflate over-shrinks the box
+        if (newFrom.x > newTo.x || newFrom.y > newTo.y || newFrom.z > newTo.z) {
+            Logger.warn("Inflate on model " + modelName + " is too negative and would invert the cube. "
+                    + "Clamping to maintain valid geometry.");
+            // Clamp each axis independently
+            float eps = 0.0001f;
+            if (newFrom.x > newTo.x) {
+                float mid = (from.x + to.x) * 0.5f;
+                newFrom.x = mid - eps;
+                newTo.x = mid + eps;
+            }
+            if (newFrom.y > newTo.y) {
+                float mid = (from.y + to.y) * 0.5f;
+                newFrom.y = mid - eps;
+                newTo.y = mid + eps;
+            }
+            if (newFrom.z > newTo.z) {
+                float mid = (from.z + to.z) * 0.5f;
+                newFrom.z = mid - eps;
+                newTo.z = mid + eps;
+            }
+        }
+
+        from.set(newFrom);
+        to.set(newTo);
+
+        // Reflect into JSON immediately
+        cubeJSON.put("from", List.of(
+                Round.fourDecimalPlaces(from.get(0)),
+                Round.fourDecimalPlaces(from.get(1)),
+                Round.fourDecimalPlaces(from.get(2))));
+        cubeJSON.put("to", List.of(
+                Round.fourDecimalPlaces(to.get(0)),
+                Round.fourDecimalPlaces(to.get(1)),
+                Round.fourDecimalPlaces(to.get(2))));
+
+        // We've baked it into geometry; drop the key so downstream doesn't try to use it.
+        cubeJSON.remove("inflate");
+    }
+
 
     private void processFace(List<ParsedTexture> parsedTextures, Map<String, Object> map, String faceName, String modelName) {
         setTextureData(parsedTextures, (Map<String, Object>) map.get(faceName), modelName);
@@ -111,7 +185,7 @@ public class CubeBlueprint {
         if (cubeJSON.get("origin") == null) return;
         Map<String, Object> newRotationData = new HashMap<>();
 
-        double scaleFactor = 0.4;
+        double scaleFactor = BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER;
 
         //Adjust the origin
         double xOrigin, yOrigin, zOrigin;
@@ -194,7 +268,7 @@ public class CubeBlueprint {
 
         // If no valid decomposition found, just use the angle as-is
         // (this shouldn't happen for valid 22.5 degree increments)
-        Logger.warn("Could not decompose rotation angle " + angle + " into base + allowed remainder");
+        Logger.warn("Could not decompose rotation angle " + angle + " into base + allowed remainder for model name " + modelName);
         result.baseRotation = 0;
         result.remainder = angle;
         return result;

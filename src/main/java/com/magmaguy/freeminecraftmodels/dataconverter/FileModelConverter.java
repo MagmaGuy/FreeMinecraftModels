@@ -29,7 +29,8 @@ public class FileModelConverter {
     @Getter
     private String ID;
     private int blockBenchVersion = 4;
-
+    @Getter
+    private Map<String, Object> meta;
     /**
      * In this instance, the file is the raw bbmodel file which is actually in a JSON format
      *
@@ -67,9 +68,12 @@ public class FileModelConverter {
             return;
         }
 
+        if (map.containsKey("meta")) {
+            this.meta = (Map<String, Object>) map.get("meta");
+        }
+
         // Detect version from meta field
         blockBenchVersion = detectVersion(map);
-        Logger.info("Detected bbmodel format version: " + blockBenchVersion);
 
         List<ParsedTexture> parsedTextures = parseTextures(map);
 
@@ -107,33 +111,40 @@ public class FileModelConverter {
     private int detectVersion(Map<?, ?> map) {
         try {
             Map<?, ?> meta = (Map<?, ?>) map.get("meta");
-            if (meta == null) return 4; // Default to v4
+            if (meta == null) {
+                Logger.warn("Missing 'meta' field in model: " + modelName + ". Defaulting to version 4.");
+                return 4;
+            }
 
-            String formatVersion = (String) meta.get("format_version");
-            if (formatVersion == null) return 4;
+            Object versionObj = meta.get("format_version");
+            if (versionObj == null) {
+                Logger.warn("Missing 'format_version' in meta for model: " + modelName + ". Defaulting to version 4.");
+                return 4;
+            }
 
-            // Parse major version (e.g., "5.0" -> 5, "4.10" -> 4)
-            String majorVersionStr = formatVersion.split("\\.")[0];
-            return Integer.parseInt(majorVersionStr);
+            String versionStr = versionObj.toString();
+            String[] parts = versionStr.split("\\.");
+            return Integer.parseInt(parts[0]);
+
         } catch (Exception e) {
-            Logger.warn("Failed to detect bbmodel version, defaulting to v4");
+            Logger.warn("Failed to parse format_version for model: " + modelName + ". Error: " + e.getMessage() + ". Defaulting to version 4.");
             return 4;
         }
     }
 
     /**
-     * For v4: Merge groups array with outliner
-     * For v5: This shouldn't be called, but returns outliner as-is for safety
+     * For v4: just return the old all in one outliner
+     * For v5: Merge groups array with outliner
      */
     private List mergeGroupsAndOutliner(Map<?, ?> map) {
         List outlinerValues = (ArrayList) map.get("outliner");
 
         if (blockBenchVersion < 5) {
-            // v5 doesn't need merging
+            // v4 doesn't need merging
             return outlinerValues;
         }
 
-        // v4: groups are separate
+        // v5: groups are separate
         List groupsList = (ArrayList) map.get("groups");
         if (groupsList == null) {
             return outlinerValues;
