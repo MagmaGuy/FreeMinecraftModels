@@ -65,6 +65,7 @@ public class AnimationBlueprint {
             Logger.warn("Failed to get bone " + boneName + " from model " + modelName + "!");
             return;
         }
+        if (animationData.get("keyframes") != null) {
         List<Keyframe> keyframes = new ArrayList<>();
         for (Object keyframeData : (List) animationData.get("keyframes")) {
             keyframes.add(new Keyframe(keyframeData, modelName, animationName));
@@ -76,7 +77,8 @@ public class AnimationBlueprint {
             addBoundaryKeyframes(keyframes);
         }
 
-        boneKeyframes.put(boneBlueprint, keyframes);
+            boneKeyframes.put(boneBlueprint, keyframes);
+        }
     }
 
     /**

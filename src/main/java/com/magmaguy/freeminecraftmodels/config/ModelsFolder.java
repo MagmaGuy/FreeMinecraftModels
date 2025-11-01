@@ -113,6 +113,7 @@ public class ModelsFolder {
                     HashMap<String, Object> modelJson = new HashMap<>();
 
                     HashMap<String, Object> modelContentsJson = new HashMap<>();
+                    modelContentsJson.put("tints", List.of(Map.of("type", "minecraft:custom_model_data", "index", 0, "default", 0xFFFFFF)));
                     modelContentsJson.put("type", "minecraft:model");
                     modelContentsJson.put("model", "freeminecraftmodels:" + boneBlueprint.getBoneName().split(":")[1]);
 
