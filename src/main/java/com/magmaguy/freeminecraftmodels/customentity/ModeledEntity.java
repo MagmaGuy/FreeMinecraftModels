@@ -234,14 +234,34 @@ public class ModeledEntity {
 
     public void showUnderlyingEntity(Player player) {
         if (underlyingEntity == null || !underlyingEntity.isValid()) return;
-        player.showEntity(MetadataHandler.PLUGIN, underlyingEntity);
-        underlyingEntity.setGlowing(true);
+        // Must run on main thread
+        if (Bukkit.isPrimaryThread()) {
+            player.showEntity(MetadataHandler.PLUGIN, underlyingEntity);
+            underlyingEntity.setGlowing(true);
+        } else {
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+                if (underlyingEntity != null && underlyingEntity.isValid() && player.isOnline()) {
+                    player.showEntity(MetadataHandler.PLUGIN, underlyingEntity);
+                    underlyingEntity.setGlowing(true);
+                }
+            });
+        }
     }
 
     public void hideUnderlyingEntity(Player player) {
         if (underlyingEntity == null || !underlyingEntity.isValid()) return;
-        player.hideEntity(MetadataHandler.PLUGIN, underlyingEntity);
-        underlyingEntity.setGlowing(false);
+        // Must run on main thread
+        if (Bukkit.isPrimaryThread()) {
+            player.hideEntity(MetadataHandler.PLUGIN, underlyingEntity);
+            underlyingEntity.setGlowing(false);
+        } else {
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+                if (underlyingEntity != null && underlyingEntity.isValid() && player.isOnline()) {
+                    player.hideEntity(MetadataHandler.PLUGIN, underlyingEntity);
+                    underlyingEntity.setGlowing(false);
+                }
+            });
+        }
     }
 
     /**

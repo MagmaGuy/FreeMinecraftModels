@@ -62,11 +62,22 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         DynamicEntity dynamicEntity = new DynamicEntity(entityID, livingEntity.getLocation());
         dynamicEntity.spawn(livingEntity);
         livingEntity.setVisibleByDefault(false);
-        Bukkit.getOnlinePlayers().forEach(player -> {
-            if (player.getLocation().getWorld().equals(dynamicEntity.getLocation().getWorld())) {
-                player.hideEntity(MetadataHandler.PLUGIN, livingEntity);
-            }
-        });
+        // Must run on main thread
+        if (Bukkit.isPrimaryThread()) {
+            Bukkit.getOnlinePlayers().forEach(player -> {
+                if (player.getLocation().getWorld().equals(dynamicEntity.getLocation().getWorld())) {
+                    player.hideEntity(MetadataHandler.PLUGIN, livingEntity);
+                }
+            });
+        } else {
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+                Bukkit.getOnlinePlayers().forEach(player -> {
+                    if (player.getLocation().getWorld().equals(dynamicEntity.getLocation().getWorld())) {
+                        player.hideEntity(MetadataHandler.PLUGIN, livingEntity);
+                    }
+                });
+            });
+        }
 
         livingEntity.getPersistentDataContainer().set(namespacedKey, PersistentDataType.BYTE, (byte) 0);
         return dynamicEntity;

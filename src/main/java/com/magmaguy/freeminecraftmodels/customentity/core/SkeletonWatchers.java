@@ -224,8 +224,14 @@ public class SkeletonWatchers implements Listener {
 
     private void displayTo(Player player) {
         boolean isBedrock = BedrockChecker.isBedrock(player);
-        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getUnderlyingEntity() != null)
-            player.showEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getUnderlyingEntity());
+        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getUnderlyingEntity() != null) {
+            // Must run on main thread
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+                if (player.isOnline() && player.isValid()) {
+                    player.showEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getUnderlyingEntity());
+                }
+            });
+        }
         viewers.add(player.getUniqueId());
         skeleton.getBones().forEach(bone -> bone.displayTo(player));
         if (skeleton.getModeledEntity() instanceof PropEntity propEntity)
@@ -233,11 +239,18 @@ public class SkeletonWatchers implements Listener {
     }
 
     private void hideFrom(UUID uuid) {
-        boolean isBedrock = BedrockChecker.isBedrock(Bukkit.getPlayer(uuid));
         Player player = Bukkit.getPlayer(uuid);
         if (player == null || !player.isValid()) return;
-        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getUnderlyingEntity() != null)
-            player.hideEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getUnderlyingEntity());
+        
+        boolean isBedrock = BedrockChecker.isBedrock(player);
+        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getUnderlyingEntity() != null) {
+            // Must run on main thread
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+                if (player.isOnline() && player.isValid()) {
+                    player.hideEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getUnderlyingEntity());
+                }
+            });
+        }
         viewers.remove(uuid);
         skeleton.getBones().forEach(bone -> bone.hideFrom(uuid));
         if (skeleton.getModeledEntity() instanceof PropEntity propEntity)

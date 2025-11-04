@@ -22,11 +22,22 @@ public class PlayerDisguiseEntity extends DynamicEntity {
         PlayerDisguiseEntity dynamicEntity = new PlayerDisguiseEntity(entityID, targetPlayer.getLocation());
         dynamicEntity.spawn(targetPlayer);
         targetPlayer.setVisibleByDefault(false);
-        Bukkit.getOnlinePlayers().forEach(player -> {
-            if (player.getLocation().getWorld().equals(dynamicEntity.getLocation().getWorld())) {
-                player.hideEntity(MetadataHandler.PLUGIN, targetPlayer);
-            }
-        });
+        // Must run on main thread
+        if (Bukkit.isPrimaryThread()) {
+            Bukkit.getOnlinePlayers().forEach(player -> {
+                if (player.getLocation().getWorld().equals(dynamicEntity.getLocation().getWorld())) {
+                    player.hideEntity(MetadataHandler.PLUGIN, targetPlayer);
+                }
+            });
+        } else {
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+                Bukkit.getOnlinePlayers().forEach(player -> {
+                    if (player.getLocation().getWorld().equals(dynamicEntity.getLocation().getWorld())) {
+                        player.hideEntity(MetadataHandler.PLUGIN, targetPlayer);
+                    }
+                });
+            });
+        }
         targetPlayer.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, Integer.MAX_VALUE, 1));
         return dynamicEntity;
     }
