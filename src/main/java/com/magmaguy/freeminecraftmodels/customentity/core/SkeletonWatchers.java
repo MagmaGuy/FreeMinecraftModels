@@ -224,8 +224,11 @@ public class SkeletonWatchers implements Listener {
 
     private void displayTo(Player player) {
         boolean isBedrock = BedrockChecker.isBedrock(player);
-        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getUnderlyingEntity() != null)
-            player.showEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getUnderlyingEntity());
+        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getUnderlyingEntity() != null) {
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () ->
+                    player.showEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getUnderlyingEntity())
+            );
+        }
         viewers.add(player.getUniqueId());
         skeleton.getBones().forEach(bone -> bone.displayTo(player));
         if (skeleton.getModeledEntity() instanceof PropEntity propEntity)
@@ -236,8 +239,11 @@ public class SkeletonWatchers implements Listener {
         boolean isBedrock = BedrockChecker.isBedrock(Bukkit.getPlayer(uuid));
         Player player = Bukkit.getPlayer(uuid);
         if (player == null || !player.isValid()) return;
-        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getUnderlyingEntity() != null)
-            player.hideEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getUnderlyingEntity());
+        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getUnderlyingEntity() != null) {
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () ->
+                    player.hideEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getUnderlyingEntity())
+            );
+        }
         viewers.remove(uuid);
         skeleton.getBones().forEach(bone -> bone.hideFrom(uuid));
         if (skeleton.getModeledEntity() instanceof PropEntity propEntity)

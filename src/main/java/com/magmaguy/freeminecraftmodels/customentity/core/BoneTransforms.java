@@ -82,8 +82,8 @@ public class BoneTransforms {
     }
 
     private void scaleAnimation() {
-        double currentScale = getDisplayEntityScale() / 2.5f;
-        localMatrix.scale(currentScale, currentScale, currentScale);
+        Vector3f currentScale = getDisplayEntityScale();
+        localMatrix.scale(currentScale.x / 2.5f, currentScale.y / 2.5f, currentScale.z / 2.5f);
     }
 
     //Shift to model center
@@ -260,20 +260,32 @@ public class BoneTransforms {
 
     private void sendDisplayEntityUpdatePacket(AbstractPacketBundle packetBundle) {
         if (packetDisplayEntity != null) {
-            packetDisplayEntity.generateLocationAndRotationAndScalePackets(packetBundle, getDisplayEntityTargetLocation(), getDisplayEntityRotation(), (float) globalMatrix.getScale()[0] * 2.5f);
+            double[] scale = globalMatrix.getScale();
+            packetDisplayEntity.generateLocationAndRotationAndScalePackets(
+                    packetBundle,
+                    getDisplayEntityTargetLocation(),
+                    getDisplayEntityRotation(),
+                    (float) scale[0] * 2.5f,
+                    (float) scale[1] * 2.5f,
+                    (float) scale[2] * 2.5f);
         }
     }
 
-    protected float getDisplayEntityScale() {
-        float scale = bone.getAnimationScale() == -1 ? 2.5f : bone.getAnimationScale() * 2.5f;
+    protected Vector3f getDisplayEntityScale() {
+        Vector3f animScale = bone.getAnimationScale();
+        float scaleX = animScale.x == -1 ? 2.5f : animScale.x * 2.5f;
+        float scaleY = animScale.y == -1 ? 2.5f : animScale.y * 2.5f;
+        float scaleZ = animScale.z == -1 ? 2.5f : animScale.z * 2.5f;
         //Only the root bone/head should be scaling up globally like this, otherwise the scale will be inherited by each bone and then become progressively larger or smaller
         if (bone.getParent() == null) {
             double scaleModifier = bone.getSkeleton().getModeledEntity().getScaleModifier();
             if (bone.getSkeleton().getModeledEntity().getUnderlyingEntity() != null && bone.getSkeleton().getModeledEntity() instanceof LivingEntity livingEntity && livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")) != null)
                 scaleModifier *= livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")).getValue();
-            scale *= (float) scaleModifier;
+            scaleX *= (float) scaleModifier;
+            scaleY *= (float) scaleModifier;
+            scaleZ *= (float) scaleModifier;
         }
-        return scale;
+        return new Vector3f(scaleX, scaleY, scaleZ);
     }
 
 }

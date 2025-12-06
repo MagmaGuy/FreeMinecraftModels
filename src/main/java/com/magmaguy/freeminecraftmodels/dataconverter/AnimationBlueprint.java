@@ -316,7 +316,9 @@ public class AnimationBlueprint {
                 int currentFrame = j + previousFrame.getTimeInTicks();
                 float t = j / (float) durationBetweenKeyframes;
 
-                animationFramesArray[currentFrame].scale = interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t);
+                animationFramesArray[currentFrame].scaleX = interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t);
+                animationFramesArray[currentFrame].scaleY = interpolateWithType(interpType, previousFrame.getDataY(), animationFrame.getDataY(), t);
+                animationFramesArray[currentFrame].scaleZ = interpolateWithType(interpType, previousFrame.getDataZ(), animationFrame.getDataZ(), t);
             }
             previousFrame = animationFrame;
         }
