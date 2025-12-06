@@ -29,12 +29,13 @@ public class Bone {
     private final Skeleton skeleton;
     @Getter
     private final BoneTransforms boneTransforms;
+    boolean warned = false;
     @Getter
     private Vector3f animationTranslation = new Vector3f();
     @Getter
     private Vector3f animationRotation = new Vector3f();
     @Getter
-    private float animationScale = -1;
+    private Vector3f animationScale = new Vector3f(-1, -1, -1);
 
     public Bone(BoneBlueprint boneBlueprint, Bone parent, Skeleton skeleton) {
         this.boneBlueprint = boneBlueprint;
@@ -53,8 +54,8 @@ public class Bone {
         animationRotation = new Vector3f((float) Math.toRadians(x), (float) Math.toRadians(y), (float) Math.toRadians(z));
     }
 
-    public void updateAnimationScale(float animationScale) {
-        this.animationScale = animationScale;
+    public void updateAnimationScale(float scaleX, float scaleY, float scaleZ) {
+        this.animationScale = new Vector3f(scaleX, scaleY, scaleZ);
     }
 
     //Note that several optimizations might be possible here, but that syncing with a base entity is necessary.
@@ -91,8 +92,6 @@ public class Bone {
     public void sendUpdatePacket(AbstractPacketBundle abstractPacketBundle) {
         boneTransforms.sendUpdatePacket(abstractPacketBundle);
     }
-
-    boolean warned = false;
 
     public void displayTo(Player player) {
         boolean isBedrock = BedrockChecker.isBedrock(player);
@@ -144,18 +143,15 @@ public class Bone {
         }
     }
 
-//    public void teleport() {
-////        sendTeleportPacket();
-//        boneChildren.forEach(Bone::teleport);
-//    }
+    public Location getBoneLocation() {
+        if (boneTransforms.getPacketDisplayEntity() != null) {
+            return boneTransforms.getDisplayEntityTargetLocation();
+        } else if (boneTransforms.getPacketArmorStandEntity() != null) {
+            return boneTransforms.getArmorStandTargetLocation();
+        } else {
+            // Fallback for meta bones without packet entities
+            return boneTransforms.getDisplayEntityTargetLocation();
+        }
+    }
 
-//    private void sendTeleportPacket() {
-//        if (boneTransforms.getPacketArmorStandEntity() != null) {
-//            boneTransforms.getPacketArmorStandEntity().teleport(boneTransforms.getArmorStandTargetLocation());
-//        }
-//        if (boneTransforms.getPacketDisplayEntity() != null) {
-//            boneTransforms.getPacketDisplayEntity().teleport(boneTransforms.getDisplayEntityTargetLocation());
-//        }
-//        skeleton.getSkeletonWatchers().resync(true);
-//    }
 }

@@ -144,12 +144,15 @@ public class AnimationManager {
                 // reset to default
                 part.updateAnimationRotation(0, 0, 0);
                 part.updateAnimationTranslation(0, 0, 0);
-                part.updateAnimationScale(1f);
+                part.updateAnimationScale(1f, 1f, 1f);
             } else {
                 AnimationFrame f = frames[frame];
                 part.updateAnimationRotation(f.xRotation, f.yRotation, f.zRotation);
                 part.updateAnimationTranslation(f.xPosition, f.yPosition, f.zPosition);
-                part.updateAnimationScale(f.scale != null ? f.scale : 1f);
+                part.updateAnimationScale(
+                        f.scaleX != null ? f.scaleX : 1f,
+                        f.scaleY != null ? f.scaleY : 1f,
+                        f.scaleZ != null ? f.scaleZ : 1f);
             }
         });
 

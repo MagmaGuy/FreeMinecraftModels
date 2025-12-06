@@ -10,9 +10,7 @@ import lombok.Setter;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.LivingEntity;
-import org.bukkit.entity.Mob;
+import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDeathEvent;
@@ -32,6 +30,7 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     @Getter
     @Setter
     private boolean damagesOnContact = true;
+    private boolean isEvokerAttacking = false;
 
     public DynamicEntity(String entityID, Location targetLocation) {
         super(entityID, targetLocation);
@@ -82,7 +81,33 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     public void tick(AbstractPacketBundle abstractPacketBundle) {
         //todo: investigate if this is still necessary since everything now updates anyway, at least for animations
         syncSkeletonWithEntity();
+        evokerWatchdog();
         super.tick(abstractPacketBundle);
+    }
+
+    private void evokerWatchdog() {
+        if (!(underlyingEntity instanceof Evoker evoker)) return;
+        if (!hasAnimation("attack")) return;
+
+        Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+            if (!evoker.isValid()) return;
+
+            boolean fangsNearby = evoker.getLocation().getWorld()
+                    .getNearbyEntities(evoker.getLocation(), 2, 2, 2)
+                    .stream()
+                    .anyMatch(entity -> entity instanceof EvokerFangs);
+
+            if (fangsNearby) {
+                if (!isEvokerAttacking) {
+                    playAnimation("attack", false, false);
+                    isEvokerAttacking = true;
+                }
+                // If already attacking, skip playing the animation
+            } else {
+                // No fangs nearby, reset for next attack
+                isEvokerAttacking = false;
+            }
+        });
     }
 
     private void syncSkeletonWithEntity() {
