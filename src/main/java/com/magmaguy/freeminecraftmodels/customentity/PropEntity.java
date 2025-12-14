@@ -74,6 +74,10 @@ public class PropEntity extends StaticEntity {
         }
     }
 
+    public static void shutdown() {
+        propEntities.clear();
+    }
+
     public static PropEntity spawnPropEntity(String entityID, Location location, PropsConfigFields config) {
         PropEntity propEntity = new PropEntity(entityID, location);
         propEntity.propsConfigFields = config;

@@ -44,7 +44,8 @@ public class HitboxComponent {
      * @param tickCounter
      */
     public void tick(int tickCounter) {
-        if (modeledEntity.getSkeletonBlueprint().getHitbox() == null) return;
+        // Always update the OBB hitbox position, even if no blueprint hitbox is configured
+        // (getObbHitbox() creates a default 1x2x1 hitbox when blueprint hitbox is null)
         getObbHitbox().update(modeledEntity.getLocation());
         if (modeledEntity.getInteractionComponent().getHitboxContactCallback() == null) return;
         if (tickCounter % 2 == 0) {

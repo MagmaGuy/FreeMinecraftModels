@@ -13,6 +13,7 @@ import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.listeners.ArmorStandListener;
 import com.magmaguy.freeminecraftmodels.listeners.EntityTeleportEvent;
 import com.magmaguy.freeminecraftmodels.listeners.ModelItemListener;
+import com.magmaguy.freeminecraftmodels.utils.ConfigurationLocation;
 import com.magmaguy.magmacore.MagmaCore;
 import com.magmaguy.magmacore.command.CommandManager;
 import org.bstats.bukkit.Metrics;
@@ -87,6 +88,10 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         ModeledEntity.shutdown();
         ModeledEntitiesClock.shutdown();
         OBBHitDetection.shutdown();
+        PropEntity.shutdown();
+        DynamicEntity.shutdown();
+        PropsConfig.shutdown();
+        ConfigurationLocation.shutdown();
         Bukkit.getServer().getScheduler().cancelTasks(MetadataHandler.PLUGIN);
         HandlerList.unregisterAll(MetadataHandler.PLUGIN);
     }
