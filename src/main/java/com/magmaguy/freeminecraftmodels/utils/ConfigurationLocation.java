@@ -92,4 +92,7 @@ public class ConfigurationLocation {
         return slicedString[0];
     }
 
+    public static void shutdown() {
+        notLoadedWorldNames.clear();
+    }
 }

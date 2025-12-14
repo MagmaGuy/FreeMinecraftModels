@@ -137,6 +137,10 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         dynamicEntities.remove(underlyingEntity.getUniqueId());
     }
 
+    public static void shutdown() {
+        dynamicEntities.clear();
+    }
+
     /**
      * Gets the location of the model's body, clamped so its yaw never
      * lags the head yaw by more than ±45°.
