@@ -31,6 +31,8 @@ public class FileModelConverter {
     private int blockBenchVersion = 4;
     @Getter
     private Map<String, Object> meta;
+    private double resolutionWidth = 16;
+    private double resolutionHeight = 16;
     /**
      * In this instance, the file is the raw bbmodel file which is actually in a JSON format
      *
@@ -72,6 +74,17 @@ public class FileModelConverter {
             this.meta = (Map<String, Object>) map.get("meta");
         }
 
+        // Read resolution property (defines UV coordinate space)
+        if (map.containsKey("resolution")) {
+            Map<String, Object> resolution = (Map<String, Object>) map.get("resolution");
+            if (resolution.get("width") != null) {
+                resolutionWidth = ((Number) resolution.get("width")).doubleValue();
+            }
+            if (resolution.get("height") != null) {
+                resolutionHeight = ((Number) resolution.get("height")).doubleValue();
+            }
+        }
+
         // Detect version from meta field
         blockBenchVersion = detectVersion(map);
 
@@ -97,7 +110,7 @@ public class FileModelConverter {
         }
 
         ID = modelName;
-        skeletonBlueprint = new SkeletonBlueprint(parsedTextures, outlinerValues, values, generateFileTextures(parsedTextures), modelName, null);
+        skeletonBlueprint = new SkeletonBlueprint(parsedTextures, outlinerValues, values, generateFileTextures(parsedTextures), modelName, null, resolutionWidth, resolutionHeight);
 
         List animationList = (ArrayList) map.get("animations");
         if (animationList != null)

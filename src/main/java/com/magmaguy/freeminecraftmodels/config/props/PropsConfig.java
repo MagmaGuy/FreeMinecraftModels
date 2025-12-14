@@ -61,4 +61,9 @@ public class PropsConfig extends CustomConfig {
         //Store for use by the plugin
         addCustomConfigFields(file.getName(), customConfigFields);
     }
+
+    public static void shutdown() {
+        propsConfigs.clear();
+        INSTANCE = null;
+    }
 }

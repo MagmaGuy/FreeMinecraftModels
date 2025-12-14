@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.dataconverter;
 
 import com.magmaguy.magmacore.util.Logger;
 import com.magmaguy.magmacore.util.Round;
+import com.magmaguy.magmacore.util.VersionChecker;
 import lombok.Getter;
 import lombok.Setter;
 import org.joml.Vector3f;
@@ -27,10 +28,14 @@ public class CubeBlueprint {
     //Null means uninitialized. False means initialized with no texture. True means initialized with a texture.
     private Boolean textureDataExists = null;
     private String modelName;
+    private double resolutionWidth;
+    private double resolutionHeight;
 
-    public CubeBlueprint(List<ParsedTexture> parsedTextures, Map<String, Object> cubeJSON, String modelName) {
+    public CubeBlueprint(List<ParsedTexture> parsedTextures, Map<String, Object> cubeJSON, String modelName, double resolutionWidth, double resolutionHeight) {
         this.cubeJSON = cubeJSON;
         this.modelName = modelName;
+        this.resolutionWidth = resolutionWidth;
+        this.resolutionHeight = resolutionHeight;
 
         cubeJSON.remove("rescale");
         cubeJSON.remove("locked");
@@ -165,13 +170,15 @@ public class CubeBlueprint {
         else
             map.put("rotation", ((Double) map.get("rotation")).floatValue());
         ArrayList<Double> originalUV = (ArrayList<Double>) map.get("uv");
-        //For some reason Minecraft really wants images to be 16x16 so here we scale the UV to fit that
-        double uvMultiplier = (double) 16 / parsedTextures.get(textureValue).getTextureWidth();
+        // UV coordinates in bbmodel are in the space defined by resolution, not actual texture size
+        // Minecraft expects UVs in 16x16 space, so we scale from resolution space to 16x16
+        double uvWidthMultiplier = 16.0 / resolutionWidth;
+        double uvHeightMultiplier = 16.0 / resolutionHeight;
         map.put("uv", List.of(
-                Round.fourDecimalPlaces(originalUV.get(0) * uvMultiplier),
-                Round.fourDecimalPlaces(originalUV.get(1) * uvMultiplier),
-                Round.fourDecimalPlaces(originalUV.get(2) * uvMultiplier),
-                Round.fourDecimalPlaces(originalUV.get(3) * uvMultiplier)));
+                Round.fourDecimalPlaces(originalUV.get(0) * uvWidthMultiplier),
+                Round.fourDecimalPlaces(originalUV.get(1) * uvHeightMultiplier),
+                Round.fourDecimalPlaces(originalUV.get(2) * uvWidthMultiplier),
+                Round.fourDecimalPlaces(originalUV.get(3) * uvHeightMultiplier)));
     }
 
     public void shiftPosition() {
@@ -232,11 +239,6 @@ public class CubeBlueprint {
         cubeJSON.remove("origin");
     }
 
-    private static class RotationDecomposition {
-        double baseRotation;  // 0, 90, -90, 180, or -180
-        double remainder;     // -45, -22.5, 0, 22.5, or 45
-    }
-
     private RotationDecomposition decomposeRotation(double angle) {
         RotationDecomposition result = new RotationDecomposition();
 
@@ -244,7 +246,10 @@ public class CubeBlueprint {
         while (angle > 180) angle -= 360;
         while (angle < -180) angle += 360;
 
-        // Define allowed Minecraft rotations
+        // MC 1.21.6+ supports arbitrary rotations from -45 to 45 degrees
+        boolean supportsArbitraryRotations = !VersionChecker.serverVersionOlderThan(21, 6);
+
+        // Define allowed Minecraft rotations (discrete values for older versions)
         double[] allowedRotations = {-45, -22.5, 0, 22.5, 45};
 
         // Try each base rotation and see if remainder is allowed
@@ -256,12 +261,21 @@ public class CubeBlueprint {
             while (remainder > 180) remainder -= 360;
             while (remainder < -180) remainder += 360;
 
-            // Check if remainder is an allowed rotation (with small tolerance)
-            for (double allowed : allowedRotations) {
-                if (Math.abs(remainder - allowed) < 0.01) {
+            if (supportsArbitraryRotations) {
+                // MC 1.21.6+: Accept any remainder within ±45 degrees
+                if (remainder >= -45 && remainder <= 45) {
                     result.baseRotation = base;
-                    result.remainder = allowed;
+                    result.remainder = remainder;
                     return result;
+                }
+            } else {
+                // Older versions: Check if remainder is an allowed rotation (with small tolerance)
+                for (double allowed : allowedRotations) {
+                    if (Math.abs(remainder - allowed) < 0.01) {
+                        result.baseRotation = base;
+                        result.remainder = allowed;
+                        return result;
+                    }
                 }
             }
         }
@@ -272,6 +286,11 @@ public class CubeBlueprint {
         result.baseRotation = 0;
         result.remainder = angle;
         return result;
+    }
+
+    private static class RotationDecomposition {
+        double baseRotation;  // 0, 90, -90, 180, or -180
+        double remainder;     // -45 to 45 (arbitrary on MC 1.21.6+, discrete 22.5° increments on older versions)
     }
 
     /**

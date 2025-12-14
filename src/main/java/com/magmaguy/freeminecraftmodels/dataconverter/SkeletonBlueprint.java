@@ -23,7 +23,9 @@ public class SkeletonBlueprint {
                              HashMap<String, Object> values,
                              Map<String, Map<String, Object>> textureReferences,
                              String modelName,
-                             String pathName) {
+                             String pathName,
+                             double resolutionWidth,
+                             double resolutionHeight) {
         this.modelName = modelName;
 
         //Create a root bone for everything
@@ -36,7 +38,7 @@ public class SkeletonBlueprint {
             if (((String) bone.get("name")).equalsIgnoreCase("hitbox"))
                 hitbox = new HitboxBlueprint(bone, values, modelName, null);
             else {
-                BoneBlueprint boneBlueprint = new BoneBlueprint(parsedTextures, bone, values, textureReferences, modelName, rootBone, this);
+                BoneBlueprint boneBlueprint = new BoneBlueprint(parsedTextures, bone, values, textureReferences, modelName, rootBone, this, resolutionWidth, resolutionHeight);
                 rootChildren.add(boneBlueprint);
                 if (boneBlueprint.getMetaBone() != null)
                     rootChildren.add(boneBlueprint.getMetaBone());

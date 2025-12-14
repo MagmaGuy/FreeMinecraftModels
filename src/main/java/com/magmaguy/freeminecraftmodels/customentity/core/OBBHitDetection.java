@@ -122,7 +122,11 @@ public class OBBHitDetection implements Listener {
         activeProjectiles.clear();
         leftClickCooldownPlayers.clear();
         rightClickCooldownPlayers.clear();
-        if (projectileDetectionTask != null) projectileDetectionTask.cancel();
+        attackCooldowns.clear();
+        if (projectileDetectionTask != null) {
+            projectileDetectionTask.cancel();
+            projectileDetectionTask = null;
+        }
     }
 
     private static void executeLeftClickAttack(Player player) {
