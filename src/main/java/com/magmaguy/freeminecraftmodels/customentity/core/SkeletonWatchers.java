@@ -223,6 +223,7 @@ public class SkeletonWatchers implements Listener {
     }
 
     private void displayTo(Player player) {
+        if (player == null || !player.isValid()) return;
         boolean isBedrock = BedrockChecker.isBedrock(player);
         if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getUnderlyingEntity() != null) {
             Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () ->
