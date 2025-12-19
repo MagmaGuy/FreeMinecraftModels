@@ -50,6 +50,9 @@ public class OBBHitDetection implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void blockBreakEvent(BlockBreakEvent event) {
+        // Ensure player and block are in the same world before calculating distance
+        if (!event.getPlayer().getWorld().equals(event.getBlock().getWorld())) return;
+
         // Get the block location and calculate distance to player
         double blockDistance = event.getPlayer().getEyeLocation().distance(
                 event.getBlock().getLocation().add(0.5, 0.5, 0.5)); // Center of block
@@ -62,6 +65,11 @@ public class OBBHitDetection implements Listener {
 
         // Get the hit entity and calculate its distance
         ModeledEntity hitEntity = hitEntityOpt.get();
+
+        // Ensure hit entity is in the same world before calculating distance
+        if (hitEntity.getLocation() == null || !event.getPlayer().getWorld().equals(hitEntity.getLocation().getWorld()))
+            return;
+
         double entityDistance = event.getPlayer().getEyeLocation().distance(hitEntity.getLocation());
 
         // Only cancel if the entity is closer than or at the same distance as the block
