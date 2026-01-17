@@ -110,7 +110,9 @@ public class BoneTransforms {
     }
 
     private void rotateAnimation() {
-        Vector test = new Vector(bone.getAnimationRotation().get(0), -bone.getAnimationRotation().get(1), -bone.getAnimationRotation().get(2));
+        // Use IK rotation if available, otherwise use animation rotation
+        org.joml.Vector3f effectiveRotation = bone.getEffectiveRotation();
+        Vector test = new Vector(effectiveRotation.get(0), -effectiveRotation.get(1), -effectiveRotation.get(2));
         test.rotateAroundY(Math.PI);
         localMatrix.rotateAnimation(
                 (float) test.getX(),
