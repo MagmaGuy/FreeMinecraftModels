@@ -90,10 +90,27 @@ public class FileModelConverter {
 
         List<ParsedTexture> parsedTextures = parseTextures(map);
 
-        //This parses the blocks/elements
+        //This parses the blocks/elements, separating them by type
+        HashMap<String, Map<String, Object>> locators = new HashMap<>();
+        HashMap<String, Map<String, Object>> nullObjects = new HashMap<>();
+
         List<Map> elementValues = (ArrayList<Map>) map.get("elements");
-        for (Map element : elementValues) {
-            values.put((String) element.get("uuid"), element);
+        if (elementValues != null) {
+            for (Map element : elementValues) {
+                String uuid = (String) element.get("uuid");
+                String type = (String) element.get("type");
+
+                if ("locator".equals(type)) {
+                    // Locator element - used as IK anchor point
+                    locators.put(uuid, element);
+                } else if ("null_object".equals(type)) {
+                    // Null object - IK controller
+                    nullObjects.put(uuid, element);
+                } else {
+                    // Default: cube element
+                    values.put(uuid, element);
+                }
+            }
         }
 
         //This creates the bones and skeleton
@@ -110,7 +127,7 @@ public class FileModelConverter {
         }
 
         ID = modelName;
-        skeletonBlueprint = new SkeletonBlueprint(parsedTextures, outlinerValues, values, generateFileTextures(parsedTextures), modelName, null, resolutionWidth, resolutionHeight);
+        skeletonBlueprint = new SkeletonBlueprint(parsedTextures, outlinerValues, values, locators, nullObjects, generateFileTextures(parsedTextures), modelName, null, resolutionWidth, resolutionHeight);
 
         List animationList = (ArrayList) map.get("animations");
         if (animationList != null)

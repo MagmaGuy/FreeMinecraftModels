@@ -1,8 +1,10 @@
 package com.magmaguy.freeminecraftmodels.animation;
 
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
+import com.magmaguy.freeminecraftmodels.customentity.core.IKChain;
 import com.magmaguy.freeminecraftmodels.dataconverter.AnimationFrame;
 import com.magmaguy.freeminecraftmodels.dataconverter.AnimationsBlueprint;
+import com.magmaguy.freeminecraftmodels.dataconverter.IKAnimationFrame;
 
 import java.util.EnumMap;
 import java.util.Map;
@@ -155,6 +157,23 @@ public class AnimationManager {
                         f.scaleZ != null ? f.scaleZ : 1f);
             }
         });
+
+        // Apply IK animations: set goal offsets and solve chains
+        if (anim.hasIKAnimations()) {
+            anim.getIkAnimationFrames().forEach((chain, ikFrames) -> {
+                if (ikFrames == null || ikFrames.length <= frame) {
+                    // No IK data for this frame, clear IK rotations
+                    chain.clearIKRotations();
+                } else {
+                    IKAnimationFrame ikFrame = ikFrames[frame];
+
+                    // Set the IK goal offset from the animation
+                    chain.setGoalOffset(ikFrame.goalX, ikFrame.goalY, ikFrame.goalZ);
+                    // Solve the IK chain
+                    chain.solve();
+                }
+            });
+        }
 
         // advance the counter for next tick
         anim.incrementCounter();

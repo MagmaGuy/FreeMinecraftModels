@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
+import com.magmaguy.freeminecraftmodels.dataconverter.IKChainBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import lombok.Getter;
 import lombok.Setter;
@@ -28,6 +29,12 @@ public class Skeleton {
     @Getter
     private final SkeletonWatchers skeletonWatchers;
     private final List<Bone> nametags = new ArrayList<>();
+    // IK chains for inverse kinematics animation
+    @Getter
+    private final List<IKChain> ikChains = new ArrayList<>();
+    // Map of controller names to IK chains for quick lookup
+    @Getter
+    private final HashMap<String, IKChain> ikChainMap = new HashMap<>();
     @Getter
     @Setter
     private float currentHeadPitch = 0;
@@ -51,6 +58,14 @@ public class Skeleton {
             }
         });
         skeletonWatchers = new SkeletonWatchers(this);
+
+        // Create IK chain instances from blueprints
+        for (IKChainBlueprint chainBlueprint : skeletonBlueprint.getIkChains()) {
+            IKChain chain = new IKChain(chainBlueprint, this);
+            ikChains.add(chain);
+            String controllerName = chain.getControllerName();
+            ikChainMap.put(controllerName, chain);
+        }
     }
 
     @Nullable
@@ -132,5 +147,44 @@ public class Skeleton {
         // start (or restart) the tint animation
         tinting = true;
         tintCounter = 0;
+    }
+
+    /**
+     * Gets an IK chain by its controller (null object) name.
+     *
+     * @param controllerName The name of the null object controlling the chain
+     * @return The IK chain, or null if not found
+     */
+    public IKChain getIKChain(String controllerName) {
+        return ikChainMap.get(controllerName);
+    }
+
+    /**
+     * Solves all IK chains in this skeleton.
+     * Should be called after IK goal offsets have been set from animation.
+     */
+    public void solveAllIKChains() {
+        for (IKChain chain : ikChains) {
+            chain.solve();
+        }
+    }
+
+    /**
+     * Clears IK rotations from all chains.
+     * Call this when IK animation ends to return to normal animation.
+     */
+    public void clearAllIKRotations() {
+        for (IKChain chain : ikChains) {
+            chain.clearIKRotations();
+        }
+    }
+
+    /**
+     * Checks if this skeleton has any IK chains.
+     *
+     * @return true if the skeleton has IK chains
+     */
+    public boolean hasIKChains() {
+        return !ikChains.isEmpty();
     }
 }

@@ -36,6 +36,9 @@ public class Bone {
     private Vector3f animationRotation = new Vector3f();
     @Getter
     private Vector3f animationScale = new Vector3f(-1, -1, -1);
+    // IK rotation override - when set, this takes priority over animation rotation
+    @Getter
+    private Vector3f ikRotation = null;
 
     public Bone(BoneBlueprint boneBlueprint, Bone parent, Skeleton skeleton) {
         this.boneBlueprint = boneBlueprint;
@@ -56,6 +59,42 @@ public class Bone {
 
     public void updateAnimationScale(float scaleX, float scaleY, float scaleZ) {
         this.animationScale = new Vector3f(scaleX, scaleY, scaleZ);
+    }
+
+    /**
+     * Sets the IK rotation for this bone.
+     * When set, this rotation takes priority over animation rotation.
+     *
+     * @param rotation The IK-solved rotation in radians
+     */
+    public void setIKRotation(Vector3f rotation) {
+        this.ikRotation = new Vector3f(rotation);
+    }
+
+    /**
+     * Clears the IK rotation, allowing animation rotation to be used.
+     */
+    public void clearIKRotation() {
+        this.ikRotation = null;
+    }
+
+    /**
+     * Checks if this bone currently has IK rotation applied.
+     *
+     * @return true if IK rotation is active
+     */
+    public boolean hasIKRotation() {
+        return ikRotation != null;
+    }
+
+    /**
+     * Gets the effective rotation for this bone.
+     * Returns IK rotation if set, otherwise returns animation rotation.
+     *
+     * @return The effective rotation in radians
+     */
+    public Vector3f getEffectiveRotation() {
+        return ikRotation != null ? ikRotation : animationRotation;
     }
 
     //Note that several optimizations might be possible here, but that syncing with a base entity is necessary.
