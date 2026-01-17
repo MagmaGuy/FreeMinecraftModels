@@ -36,6 +36,8 @@ public class BoneBlueprint {
     @Getter
     private final String originalBoneName;
     @Getter
+    private final String uuid;
+    @Getter
     @Setter
     private List<BoneBlueprint> boneBlueprintChildren = new ArrayList<>();
     @Getter
@@ -77,6 +79,7 @@ public class BoneBlueprint {
         this.boneName = "freeminecraftmodels:" + modelName + "/" + StringToResourcePackFilename.convert(originalBoneName);
         this.originalModelName = modelName;
         this.parent = parent;
+        this.uuid = null; // Auto-generated root bone has no UUID
         //Add bone to the map
         skeletonBlueprint.getBoneMap().put(originalBoneName, this);
         blueprintModelPivot = new Vector3f();
@@ -86,20 +89,27 @@ public class BoneBlueprint {
     /**
      * This is for the actual values
      *
-     * @param boneJSON
-     * @param values
-     * @param textureReferences
-     * @param modelName
-     * @param parent
-     * @param skeletonBlueprint
-     * @param resolutionWidth
-     * @param resolutionHeight
+     * @param parsedTextures    List of parsed textures
+     * @param boneJSON          The bone data from the bbmodel file
+     * @param values            Map of cube UUIDs to cube data
+     * @param locators          Map of locator UUIDs to locator data
+     * @param nullObjects       Map of null object UUIDs to null object data
+     * @param textureReferences Texture references for resource pack
+     * @param modelName         Name of the model
+     * @param parent            Parent bone
+     * @param skeletonBlueprint The skeleton blueprint
+     * @param resolutionWidth   Texture resolution width
+     * @param resolutionHeight  Texture resolution height
      */
-    public BoneBlueprint(List<ParsedTexture> parsedTextures, Map<String, Object> boneJSON, HashMap<String, Object> values, Map<String, Map<String, Object>> textureReferences, String modelName, BoneBlueprint parent, SkeletonBlueprint skeletonBlueprint, double resolutionWidth, double resolutionHeight) {
+    public BoneBlueprint(List<ParsedTexture> parsedTextures, Map<String, Object> boneJSON, HashMap<String, Object> values,
+                         HashMap<String, Map<String, Object>> locators, HashMap<String, Map<String, Object>> nullObjects,
+                         Map<String, Map<String, Object>> textureReferences, String modelName, BoneBlueprint parent,
+                         SkeletonBlueprint skeletonBlueprint, double resolutionWidth, double resolutionHeight) {
         this.originalBoneName = (String) boneJSON.get("name");
         this.boneName = "freeminecraftmodels:" + modelName + "/" + StringToResourcePackFilename.convert(originalBoneName);
         this.originalModelName = modelName;
         this.parent = parent;
+        this.uuid = (String) boneJSON.get("uuid");
         if (originalBoneName.startsWith("tag_")) {
             metaBone = new BoneBlueprint(boneJSON, modelName, parent, skeletonBlueprint);
         }
@@ -110,9 +120,13 @@ public class BoneBlueprint {
 
         //Add bone to the map
         skeletonBlueprint.getBoneMap().put(originalBoneName, this);
+        //Also add by UUID for IK chain lookup
+        if (uuid != null) {
+            skeletonBlueprint.getBoneByUuidMap().put(uuid, this);
+        }
 
         //Initialize child data
-        processChildren(parsedTextures, boneJSON, modelName, values, textureReferences, skeletonBlueprint, resolutionWidth, resolutionHeight);
+        processChildren(parsedTextures, boneJSON, modelName, values, locators, nullObjects, textureReferences, skeletonBlueprint, resolutionWidth, resolutionHeight);
         adjustCubes();
         processBoneValues(boneJSON);
         String filename = StringToResourcePackFilename.convert(originalBoneName);
@@ -124,6 +138,7 @@ public class BoneBlueprint {
         this.boneName = "freeminecraftmodels:" + modelName + "/" + StringToResourcePackFilename.convert(originalBoneName);
         this.originalModelName = modelName;
         this.parent = parent;
+        this.uuid = null; // Auto-generated nametag bone has no UUID
         nameTag = true;
 
         //Add bone to the map
@@ -218,20 +233,52 @@ public class BoneBlueprint {
         }
     }
 
-    private void processChildren(List<ParsedTexture> parsedTextures, Map<String, Object> boneJSON, String modelName, HashMap<String, Object> values, Map<String, Map<String, Object>> textureReferences, SkeletonBlueprint skeletonBlueprint, double resolutionWidth, double resolutionHeight) {
-        //Bones can contain two types of children: bones and cubes
+    private void processChildren(List<ParsedTexture> parsedTextures, Map<String, Object> boneJSON, String modelName,
+                                  HashMap<String, Object> values, HashMap<String, Map<String, Object>> locators,
+                                  HashMap<String, Map<String, Object>> nullObjects, Map<String, Map<String, Object>> textureReferences,
+                                  SkeletonBlueprint skeletonBlueprint, double resolutionWidth, double resolutionHeight) {
+        //Bones can contain children: bones, cubes, locators, and null objects
         //Bones exist solely for containing cubes
         //Cubes store the relevant visual data
+        //Locators are anchor points for IK
+        //Null objects are IK controllers
         ArrayList<?> childrenValues = (ArrayList<?>) boneJSON.get("children");
+        if (childrenValues == null) return;
+
         for (Object object : childrenValues) {
             if (object instanceof String) {
-                //Case for object being a cube
-                CubeBlueprint cubeBlueprint = new CubeBlueprint(parsedTextures, (Map<String, Object>) values.get(object), modelName, resolutionWidth, resolutionHeight);
+                String childUUID = (String) object;
+
+                // Check if it's a locator
+                if (locators.containsKey(childUUID)) {
+                    Map<String, Object> locatorData = locators.get(childUUID);
+                    LocatorBlueprint locatorBlueprint = new LocatorBlueprint(locatorData);
+                    locatorBlueprint.setParentBone(this);
+                    skeletonBlueprint.getLocatorMap().put(childUUID, locatorBlueprint);
+                    continue;
+                }
+
+                // Check if it's a null object
+                if (nullObjects.containsKey(childUUID)) {
+                    Map<String, Object> nullObjectData = nullObjects.get(childUUID);
+                    NullObjectBlueprint nullObjectBlueprint = new NullObjectBlueprint(nullObjectData);
+                    nullObjectBlueprint.setParentBone(this);
+                    skeletonBlueprint.getNullObjectMap().put(childUUID, nullObjectBlueprint);
+                    continue;
+                }
+
+                // Otherwise it's a cube
+                Map<String, Object> cubeData = (Map<String, Object>) values.get(childUUID);
+                if (cubeData == null) {
+                    // Unknown element type, skip
+                    continue;
+                }
+                CubeBlueprint cubeBlueprint = new CubeBlueprint(parsedTextures, cubeData, modelName, resolutionWidth, resolutionHeight);
                 if (cubeBlueprint.isValidatedData()) cubeBlueprintChildren.add(cubeBlueprint);
                 else Logger.warn("Model " + modelName + " has an invalid configuration for its cubes!");
             } else {
                 //Case for object being a boneBlueprint
-                BoneBlueprint boneBlueprint = new BoneBlueprint(parsedTextures, (Map<String, Object>) object, values, textureReferences, modelName, this, skeletonBlueprint, resolutionWidth, resolutionHeight);
+                BoneBlueprint boneBlueprint = new BoneBlueprint(parsedTextures, (Map<String, Object>) object, values, locators, nullObjects, textureReferences, modelName, this, skeletonBlueprint, resolutionWidth, resolutionHeight);
                 boneBlueprintChildren.add(boneBlueprint);
                 if (boneBlueprint.getMetaBone() != null)
                     boneBlueprintChildren.add(boneBlueprint.getMetaBone());
