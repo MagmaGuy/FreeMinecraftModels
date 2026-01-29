@@ -144,7 +144,8 @@ public class OrientedBoundingBox {
      * @return The first modeled entity hit by the ray, if any
      */
     public static Optional<ModeledEntity> raytraceFromPlayer(Player player) {
-        return raytraceFromPoint(player.getWorld().getName(), player.getEyeLocation(), Math.max(DefaultConfig.maxInteractionAndAttackDistanceForLivingEntities, DefaultConfig.maxInteractionAndAttackDistanceForProps));
+        float maxDist = Math.max(DefaultConfig.maxInteractionAndAttackDistanceForLivingEntities, DefaultConfig.maxInteractionAndAttackDistanceForProps);
+        return raytraceFromPoint(player.getWorld().getName(), player.getEyeLocation(), maxDist);
     }
 
     public static void visualizeOBB(ModeledEntity entity, int durationTicks, Player player) {
@@ -229,10 +230,11 @@ public class OrientedBoundingBox {
 
             // If there's an intersection and it's closer than any previous hit
             if (distance > 0 && distance < closestDistance) {
-                if (entity instanceof PropEntity && distance > DefaultConfig.maxInteractionAndAttackDistanceForProps)
+                if (entity instanceof PropEntity && distance > DefaultConfig.maxInteractionAndAttackDistanceForProps) {
                     continue;
-                else if (!(entity instanceof PropEntity) && distance > DefaultConfig.maxInteractionAndAttackDistanceForLivingEntities)
+                } else if (!(entity instanceof PropEntity) && distance > DefaultConfig.maxInteractionAndAttackDistanceForLivingEntities) {
                     continue;
+                }
                 closestEntity = entity;
                 closestDistance = distance;
             }

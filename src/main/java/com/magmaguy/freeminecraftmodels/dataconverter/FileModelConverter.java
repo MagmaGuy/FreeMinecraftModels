@@ -10,10 +10,8 @@ import java.io.File;
 import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+
 
 public class FileModelConverter {
 
@@ -246,8 +244,38 @@ public class FileModelConverter {
     private List<ParsedTexture> parseTextures(Map<?, ?> map) {
         List<ParsedTexture> parsedTextures = new ArrayList<>();
         List<Map<?, ?>> texturesValues = (ArrayList<Map<?, ?>>) map.get("textures");
+        Set<String> usedNames = new HashSet<>();
+
         for (int i = 0; i < texturesValues.size(); i++) {
-            ParsedTexture parsedTexture = new ParsedTexture(texturesValues.get(i), modelName, i);
+            Map<?, ?> textureData = texturesValues.get(i);
+            String originalName = (String) textureData.get("name");
+
+            // Make filename unique if there's a collision
+            if (originalName != null && usedNames.contains(originalName.toLowerCase())) {
+                String baseName = originalName;
+                // Remove extension if present
+                if (baseName.contains(".")) {
+                    baseName = baseName.substring(0, baseName.lastIndexOf("."));
+                }
+                String extension = originalName.contains(".") ? originalName.substring(originalName.lastIndexOf(".")) : "";
+
+                int suffix = 1;
+                String newName = baseName + suffix + extension;
+                while (usedNames.contains(newName.toLowerCase())) {
+                    suffix++;
+                    newName = baseName + suffix + extension;
+                }
+
+                // Update the texture data with the unique name
+                ((Map<String, Object>) textureData).put("name", newName);
+                originalName = newName;
+            }
+
+            if (originalName != null) {
+                usedNames.add(originalName.toLowerCase());
+            }
+
+            ParsedTexture parsedTexture = new ParsedTexture(textureData, modelName, i);
             if (parsedTexture.isValid()) parsedTextures.add(parsedTexture);
         }
         return parsedTextures;

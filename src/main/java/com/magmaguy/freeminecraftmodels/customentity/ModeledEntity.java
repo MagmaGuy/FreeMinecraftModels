@@ -48,6 +48,8 @@ public class ModeledEntity {
     protected Entity underlyingEntity = null;
     protected Location spawnLocation = null;
     protected Location currentLocation = null;
+    // Cached location specifically for bone transforms - when set, bone transforms use this instead of getLocation()
+    protected Location cachedBoneTransformLocation = null;
     // Collision detection properties
     /**
      * Whether the entity is currently dying.
@@ -142,6 +144,8 @@ public class ModeledEntity {
 
     protected void displayInitializer() {
         skeleton.generateDisplays();
+        // Create packet interaction entity for click detection
+        hitboxComponent.createPacketInteractionEntity();
     }
 
     public void spawn(Entity entity) {
@@ -194,6 +198,8 @@ public class ModeledEntity {
 
         // Clear callbacks when removing
         interactionComponent.clearCallbacks();
+        // Remove the packet interaction entity
+        hitboxComponent.removePacketInteractionEntity();
         skeleton.remove();
         loadedModeledEntities.remove(this);
         if (underlyingEntity != null &&
@@ -226,6 +232,24 @@ public class ModeledEntity {
         if (underlyingEntity != null) return underlyingEntity.getLocation();
         if (currentLocation != null) return currentLocation.clone();
         return null;
+    }
+
+    /**
+     * Gets the location to use for bone transforms. If a cached location is set,
+     * returns that; otherwise returns getLocation().
+     * This allows freezing the bone transform position independently of the entity's actual position.
+     */
+    public Location getBoneTransformLocation() {
+        if (cachedBoneTransformLocation != null) return cachedBoneTransformLocation.clone();
+        return getLocation();
+    }
+
+    /**
+     * Sets the cached bone transform location. When set, bone transforms will use this
+     * location instead of getLocation(). Set to null to resume using getLocation().
+     */
+    public void setCachedBoneTransformLocation(Location location) {
+        this.cachedBoneTransformLocation = location != null ? location.clone() : null;
     }
 
     public boolean isChunkLoaded() {
