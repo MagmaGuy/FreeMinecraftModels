@@ -144,7 +144,9 @@ public class OBBHitDetection implements Listener {
 
     private static void executeRightClickInteraction(Player player) {
         executePlayerInteraction(player, rightClickCooldownPlayers,
-                hitEntity -> hitEntity.getInteractionComponent().callRightClickEvent(player));
+                hitEntity -> {
+                    hitEntity.getInteractionComponent().callRightClickEvent(player);
+                });
     }
 
     /**
@@ -157,7 +159,9 @@ public class OBBHitDetection implements Listener {
     private static void executePlayerInteraction(Player player, HashSet<Player> cooldownSet,
                                                  Consumer<ModeledEntity> interactionCallback) {
         // Check cooldown
-        if (cooldownSet.contains(player)) return;
+        if (cooldownSet.contains(player)) {
+            return;
+        }
 
         // Add to cooldown
         cooldownSet.add(player);

@@ -70,7 +70,7 @@ public class Skeleton {
 
     @Nullable
     public Location getCurrentLocation() {
-       return modeledEntity.getLocation();
+        return modeledEntity.getBoneTransformLocation();
     }
 
     public void generateDisplays() {
