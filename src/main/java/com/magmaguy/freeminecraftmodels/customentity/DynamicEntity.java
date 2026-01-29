@@ -30,6 +30,13 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     @Getter
     @Setter
     private boolean damagesOnContact = true;
+    /**
+     * Whether the model's position and rotation should be synced with the underlying entity.
+     * When true (default), the model follows the entity's location and head rotation.
+     * When false, the model stays at its current position and can be moved independently via teleport().
+     */
+    @Getter
+    private boolean syncMovement = true;
     private boolean isEvokerAttacking = false;
 
     public DynamicEntity(String entityID, Location targetLocation) {
@@ -118,6 +125,9 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
             return;
         }
 
+        // Skip all syncing if movement sync is disabled
+        if (!syncMovement) return;
+
         // Update skeleton position and rotation
         if (underlyingEntity instanceof LivingEntity livingEntity) {
             getSkeleton().setCurrentHeadPitch(livingEntity.getEyeLocation().getPitch());
@@ -127,8 +137,30 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
 
     @Override
     public Location getLocation() {
+        if (!syncMovement) return currentLocation != null ? currentLocation.clone() : null;
         if (underlyingEntity != null) return getBodyLocation();
         else return super.getLocation();
+    }
+
+    /**
+     * Sets whether the model's position and rotation should be synced with the underlying entity.
+     * When set to false, captures the entity's current position so the model stays where it is.
+     *
+     * @param syncMovement true to sync with entity, false to freeze at current position
+     */
+    public void setSyncMovement(boolean syncMovement) {
+        // When disabling sync, capture the current position for bone transforms
+        if (!syncMovement && this.syncMovement && underlyingEntity != null) {
+            Location frozenLocation = getBodyLocation();
+            currentLocation = frozenLocation;
+            // Set the cached bone transform location so skeleton uses this frozen position
+            setCachedBoneTransformLocation(frozenLocation);
+        }
+        // When re-enabling sync, clear the cached bone transform location
+        if (syncMovement && !this.syncMovement) {
+            setCachedBoneTransformLocation(null);
+        }
+        this.syncMovement = syncMovement;
     }
 
     @Override

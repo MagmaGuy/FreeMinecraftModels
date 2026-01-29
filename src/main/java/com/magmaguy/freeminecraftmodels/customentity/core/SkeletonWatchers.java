@@ -234,19 +234,27 @@ public class SkeletonWatchers implements Listener {
         skeleton.getBones().forEach(bone -> bone.displayTo(player));
         if (skeleton.getModeledEntity() instanceof PropEntity propEntity)
             propEntity.showFakePropBlocksToPlayer(player);
+        // Show the packet interaction entity for click detection
+        skeleton.getModeledEntity().getHitboxComponent().showPacketInteractionEntityTo(player);
     }
 
     private void hideFrom(UUID uuid) {
-        boolean isBedrock = BedrockChecker.isBedrock(Bukkit.getPlayer(uuid));
+        // Always clean up viewer state, even if player is offline
+        viewers.remove(uuid);
+        skeleton.getBones().forEach(bone -> bone.hideFrom(uuid));
+        // Hide the packet interaction entity (uses UUID, works even if player is offline)
+        skeleton.getModeledEntity().getHitboxComponent().hidePacketInteractionEntityFrom(uuid);
+
+        // Player-specific cleanup only if player is online
         Player player = Bukkit.getPlayer(uuid);
         if (player == null || !player.isValid()) return;
+
+        boolean isBedrock = BedrockChecker.isBedrock(player);
         if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getUnderlyingEntity() != null) {
             Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () ->
                     player.hideEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getUnderlyingEntity())
             );
         }
-        viewers.remove(uuid);
-        skeleton.getBones().forEach(bone -> bone.hideFrom(uuid));
         if (skeleton.getModeledEntity() instanceof PropEntity propEntity)
             propEntity.showRealBlocksToPlayer(player);
     }

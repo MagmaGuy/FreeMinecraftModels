@@ -170,10 +170,18 @@ public class CubeBlueprint {
         else
             map.put("rotation", ((Double) map.get("rotation")).floatValue());
         ArrayList<Double> originalUV = (ArrayList<Double>) map.get("uv");
-        // UV coordinates in bbmodel are in the space defined by resolution, not actual texture size
-        // Minecraft expects UVs in 16x16 space, so we scale from resolution space to 16x16
-        double uvWidthMultiplier = 16.0 / resolutionWidth;
-        double uvHeightMultiplier = 16.0 / resolutionHeight;
+        // UV coordinates in bbmodel are in the space defined by each texture's resolution
+        // Minecraft expects UVs in 16x16 space, so we scale from texture resolution space to 16x16
+        // Each texture can have a different resolution, so we use the specific texture's dimensions
+        double textureWidth = resolutionWidth;
+        double textureHeight = resolutionHeight;
+        if (textureValue >= 0 && textureValue < parsedTextures.size()) {
+            ParsedTexture texture = parsedTextures.get(textureValue);
+            textureWidth = texture.getTextureWidth();
+            textureHeight = texture.getTextureHeight();
+        }
+        double uvWidthMultiplier = 16.0 / textureWidth;
+        double uvHeightMultiplier = 16.0 / textureHeight;
         map.put("uv", List.of(
                 Round.fourDecimalPlaces(originalUV.get(0) * uvWidthMultiplier),
                 Round.fourDecimalPlaces(originalUV.get(1) * uvHeightMultiplier),

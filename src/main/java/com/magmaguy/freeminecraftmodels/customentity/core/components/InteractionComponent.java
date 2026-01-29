@@ -86,7 +86,9 @@ public class InteractionComponent {
     }
 
     public void handleRightClickEvent(Player player) {
-        if (rightClickCallback == null) return;
+        if (rightClickCallback == null) {
+            return;
+        }
         rightClickCallback.onRightClick(player, modeledEntity);
     }
 
@@ -116,7 +118,9 @@ public class InteractionComponent {
 
         @EventHandler
         public void onRightClick(ModeledEntityRightClickEvent event) {
-            if (event.isCancelled()) return;
+            if (event.isCancelled()) {
+                return;
+            }
             event.getEntity().getInteractionComponent().handleRightClickEvent(event.getPlayer());
         }
 
