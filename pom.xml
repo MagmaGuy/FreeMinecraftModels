@@ -5,7 +5,7 @@
 
     <groupId>com.magmaguy</groupId>
     <artifactId>FreeMinecraftModels</artifactId>
-    <version>2.3.17</version>
+    <version>2.3.18</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
@@ -93,7 +93,7 @@
         <dependency>
             <groupId>com.magmaguy</groupId>
             <artifactId>EasyMinecraftGoals-dist</artifactId>
-            <version>1.19.23</version>
+            <version>1.19.25</version>
         </dependency>
 
         <dependency>
@@ -106,7 +106,7 @@
         <dependency>
             <groupId>com.magmaguy</groupId>
             <artifactId>MagmaCore</artifactId>
-            <version>1.20-SNAPSHOT</version>
+            <version>1.25-SNAPSHOT</version>
             <scope>compile</scope>
         </dependency>
 
