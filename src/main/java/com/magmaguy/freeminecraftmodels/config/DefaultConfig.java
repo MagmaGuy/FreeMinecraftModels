@@ -12,13 +12,28 @@ public class DefaultConfig extends ConfigurationFile {
     public static int maxInteractionAndAttackDistanceForLivingEntities;
     public static int maxInteractionAndAttackDistanceForProps;
     public static boolean sendCustomModelsToBedrockClients;
+    private static DefaultConfig instance;
+    public static boolean setupDone;
 
     public DefaultConfig() {
         super("config.yml");
+        instance = this;
+    }
+
+    public static boolean isSetupDone() {
+        return setupDone;
+    }
+
+    public static void toggleSetupDone(boolean value) {
+        setupDone = value;
+        ConfigurationEngine.writeValue(setupDone, instance.file, instance.getFileConfiguration(), "setupDone");
     }
 
     @Override
     public void initializeValues() {
+        setupDone = ConfigurationEngine.setBoolean(
+                List.of("Tracks whether the first-time setup guidance has been completed."),
+                fileConfiguration, "setupDone", false);
         useDisplayEntitiesWhenPossible = ConfigurationEngine.setBoolean(
                 List.of("Sets whether display entities will be used over armor stands.",
                         "It is not always possible to use display entities as they do not exist for bedrock, nor do they exist for servers older than 1.19.4.",
