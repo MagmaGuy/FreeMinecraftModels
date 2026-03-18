@@ -7,6 +7,7 @@ import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.magmacore.util.AttributeManager;
 import lombok.Getter;
+import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.attribute.Attribute;
@@ -14,6 +15,7 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.BoundingBox;
+import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 import org.joml.Matrix3d;
 import org.joml.Vector3d;
@@ -220,6 +222,12 @@ public class OrientedBoundingBox {
         ModeledEntity closestEntity = null;
         double closestDistance = maxDistance;
 
+        // Check for solid blocks along the player's look direction to determine max unobstructed distance
+        Vector direction = location.getDirection();
+        RayTraceResult blockHit = location.getWorld().rayTraceBlocks(
+                location, direction, maxDistance, FluidCollisionMode.NEVER, true);
+        double blockDistance = blockHit != null ? blockHit.getHitPosition().distance(location.toVector()) : maxDistance;
+
         // Check each entity for intersection
         for (ModeledEntity entity : entities) {
             // Get a fresh OBB for the entity every time
@@ -233,6 +241,10 @@ public class OrientedBoundingBox {
                 if (entity instanceof PropEntity && distance > DefaultConfig.maxInteractionAndAttackDistanceForProps) {
                     continue;
                 } else if (!(entity instanceof PropEntity) && distance > DefaultConfig.maxInteractionAndAttackDistanceForLivingEntities) {
+                    continue;
+                }
+                // Skip if there's a solid block between the player and the entity
+                if (distance > blockDistance) {
                     continue;
                 }
                 closestEntity = entity;

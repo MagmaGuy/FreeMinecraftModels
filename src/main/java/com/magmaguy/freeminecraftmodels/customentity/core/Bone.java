@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
+import com.magmaguy.freeminecraftmodels.packets.PacketEntityDisplayHelper;
 import com.magmaguy.freeminecraftmodels.thirdparty.BedrockChecker;
 import com.magmaguy.magmacore.util.Logger;
 import com.magmaguy.magmacore.util.VersionChecker;
@@ -133,6 +134,7 @@ public class Bone {
     }
 
     public void displayTo(Player player) {
+        if (player == null || !player.isValid() || !player.isOnline()) return;
         boolean isBedrock = BedrockChecker.isBedrock(player);
         if (isBedrock && DefaultConfig.sendCustomModelsToBedrockClients) return;
         if (boneBlueprint.isNameTag()) {
@@ -143,14 +145,14 @@ public class Bone {
                 }
                 return;
             }
-            boneTransforms.getPacketTextDisplayArmorStandEntity().displayTo(player.getUniqueId());
+            PacketEntityDisplayHelper.displayToPlayer(boneTransforms.getPacketTextDisplayArmorStandEntity(), player);
         } else if (boneTransforms.getPacketArmorStandEntity() != null &&
                 (!DefaultConfig.useDisplayEntitiesWhenPossible ||
                         isBedrock ||
                         VersionChecker.serverVersionOlderThan(19, 4)))
-            boneTransforms.getPacketArmorStandEntity().displayTo(player.getUniqueId());
+            PacketEntityDisplayHelper.displayToPlayer(boneTransforms.getPacketArmorStandEntity(), player);
         else if (boneTransforms.getPacketDisplayEntity() != null)
-            boneTransforms.getPacketDisplayEntity().displayTo(player.getUniqueId());
+            PacketEntityDisplayHelper.displayToPlayer(boneTransforms.getPacketDisplayEntity(), player);
     }
 
     public void hideFrom(UUID playerUUID) {

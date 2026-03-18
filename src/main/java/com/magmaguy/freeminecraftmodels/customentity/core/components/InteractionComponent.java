@@ -41,11 +41,13 @@ public class InteractionComponent {
     }
 
     public void callLeftClickEvent(Player player) {
+        if (modeledEntity.isDying()) return;
         ModeledEntityLeftClickEvent event = new ModeledEntityLeftClickEvent(player, modeledEntity);
         Bukkit.getPluginManager().callEvent(event);
     }
 
     public void callRightClickEvent(Player player) {
+        if (modeledEntity.isDying()) return;
         ModeledEntityRightClickEvent event = new ModeledEntityRightClickEvent(player, modeledEntity);
         Bukkit.getPluginManager().callEvent(event);
     }
@@ -55,6 +57,7 @@ public class InteractionComponent {
      * This method should be overridden by subclasses to fire their specific event types
      */
     protected void callHitboxContactEvent(Player player) {
+        if (modeledEntity.isDying()) return;
         //Pass back to synchronous
         new BukkitRunnable() {
             @Override
@@ -70,6 +73,7 @@ public class InteractionComponent {
      * This method should be overridden by subclasses to fire their specific event types
      */
     public void callModeledEntityHitByProjectileEvent(Projectile projectile) {
+        if (modeledEntity.isDying()) return;
         //Pass back to synchronous
         new BukkitRunnable() {
             @Override

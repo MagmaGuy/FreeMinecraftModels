@@ -8,8 +8,10 @@ import com.magmaguy.freeminecraftmodels.thirdparty.BedrockChecker;
 import org.bukkit.Bukkit;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
 import org.joml.Vector3d;
 
@@ -20,6 +22,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public class SkeletonWatchers implements Listener {
     private final Skeleton skeleton;
     private final Set<UUID> viewers = new CopyOnWriteArraySet<>();
+    private boolean wasInvisible = false;
 
     public HashSet<UUID> getViewers() {
         return new HashSet<>(viewers);
@@ -40,6 +43,14 @@ public class SkeletonWatchers implements Listener {
         return !viewers.isEmpty();
     }
 
+    private boolean isUnderlyingEntityInvisible() {
+        if (skeleton.getModeledEntity() == null) return false;
+        if (skeleton.getModeledEntity().getUnderlyingEntity() instanceof LivingEntity livingEntity
+                && livingEntity.isValid())
+            return livingEntity.hasPotionEffect(PotionEffectType.INVISIBILITY);
+        return false;
+    }
+
     private int watcherUpdateCounter = 0;
     private static final int UPDATE_INTERVAL = 4;
 
@@ -48,6 +59,21 @@ public class SkeletonWatchers implements Listener {
         if (watcherUpdateCounter >= UPDATE_INTERVAL) {
             updateWatcherList();
             watcherUpdateCounter = 0;
+        }
+        boolean isInvisible = isUnderlyingEntityInvisible();
+        if (isInvisible != wasInvisible) {
+            wasInvisible = isInvisible;
+            if (isInvisible) {
+                // Entity became invisible - hide bones from all viewers but keep them tracked
+                viewers.forEach(uuid -> skeleton.getBones().forEach(bone -> bone.hideFrom(uuid)));
+            } else {
+                // Entity became visible again - show bones to all viewers
+                viewers.forEach(uuid -> {
+                    Player player = Bukkit.getPlayer(uuid);
+                    if (player != null && player.isValid())
+                        skeleton.getBones().forEach(bone -> bone.displayTo(player));
+                });
+            }
         }
         resync(false);
     }
@@ -70,7 +96,7 @@ public class SkeletonWatchers implements Listener {
             lastResyncTime = now;
             counter = 0;
 
-            // do the actual hide/display
+            // do the actual hide/display (displayTo already respects invisibility)
             Set<UUID> tempViewers = Collections.synchronizedSet(new HashSet<>(viewers));
             tempViewers.forEach(viewer -> {
                 hideFrom(viewer);
@@ -231,10 +257,12 @@ public class SkeletonWatchers implements Listener {
             );
         }
         viewers.add(player.getUniqueId());
-        skeleton.getBones().forEach(bone -> bone.displayTo(player));
+        // Only show bones if the underlying entity is not invisible
+        if (!isUnderlyingEntityInvisible())
+            skeleton.getBones().forEach(bone -> bone.displayTo(player));
         if (skeleton.getModeledEntity() instanceof PropEntity propEntity)
             propEntity.showFakePropBlocksToPlayer(player);
-        // Show the packet interaction entity for click detection
+        // Show the packet interaction entity for click detection (always, even when invisible)
         skeleton.getModeledEntity().getHitboxComponent().showPacketInteractionEntityTo(player);
     }
 
@@ -261,6 +289,8 @@ public class SkeletonWatchers implements Listener {
 
     public void sendPackets(Bone bone, AbstractPacketBundle abstractPacketBundle) {
         if (!hasObservers()) return;
+        // Skip bone update packets when entity is invisible - bones are hidden
+        if (wasInvisible) return;
         bone.sendUpdatePacket(abstractPacketBundle);
     }
 }

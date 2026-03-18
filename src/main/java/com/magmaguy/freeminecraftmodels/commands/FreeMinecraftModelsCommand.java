@@ -13,10 +13,10 @@ public class FreeMinecraftModelsCommand extends AdvancedCommand {
     public FreeMinecraftModelsCommand() {
         super(List.of());
         addArgument("action", new ListStringCommandArgument(
-                List.of("visualize"),
+                List.of("visualize", "setup", "initialize", "downloadall", "updatecontent"),
                 "<action>"));
         setPermission("freeminecraftmodels.*");
-        setDescription("Just shares some basic info about FreeMinecraftModels.");
+        setDescription("Shares basic info about FreeMinecraftModels and points to the setup flow.");
         setUsage("/fmm");
         setSenderType(SenderType.PLAYER);
     }
@@ -24,9 +24,9 @@ public class FreeMinecraftModelsCommand extends AdvancedCommand {
     @Override
     public void execute(CommandData commandData) {
         Logger.sendMessage(commandData.getCommandSender(), "FreeMinecraftModels is a plugin that allows you to use Minecraft models in your world.");
-        Logger.sendMessage(commandData.getCommandSender(), "It is primarily used as a library by other plugins, and does not require using commands.");
-        Logger.sendMessage(commandData.getCommandSender(), "FreeMinecraftModels best used alongside ResourcePackManager, another plugin made by MagmaGuy, which can automatically manage your resource packs.");
-        Logger.sendMessage(commandData.getCommandSender(), "If you want to try this plugin out, you can try EliteMobs which uses it to give custom models to some bosses.");
+        Logger.sendMessage(commandData.getCommandSender(), "Use &2/fmm setup &fto browse Nightbreak-managed model packs.");
+        Logger.sendMessage(commandData.getCommandSender(), "Use &2/fmm initialize &ffor the first-time setup flow, or &2/fmm downloadall &fto install all available content.");
+        Logger.sendMessage(commandData.getCommandSender(), "FreeMinecraftModels works especially well alongside ResourcePackManager, which can distribute the generated pack automatically.");
     }
 
 }

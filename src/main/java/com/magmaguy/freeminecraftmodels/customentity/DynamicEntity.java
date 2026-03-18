@@ -138,8 +138,9 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     @Override
     public Location getLocation() {
         if (!syncMovement) return currentLocation != null ? currentLocation.clone() : null;
-        if (underlyingEntity != null) return getBodyLocation();
-        else return super.getLocation();
+        if (underlyingEntity != null && underlyingEntity.isValid()) return getBodyLocation();
+        if (currentLocation != null) return currentLocation.clone();
+        return null;
     }
 
     /**
