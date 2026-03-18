@@ -13,7 +13,6 @@ import com.magmaguy.freeminecraftmodels.customentity.*;
 import com.magmaguy.freeminecraftmodels.customentity.core.OBBHitDetection;
 import com.magmaguy.freeminecraftmodels.customentity.core.components.InteractionComponent;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
-import com.magmaguy.freeminecraftmodels.events.ResourcePackGenerationEvent;
 import com.magmaguy.freeminecraftmodels.listeners.ArmorStandListener;
 import com.magmaguy.freeminecraftmodels.listeners.EntityTeleportEvent;
 import com.magmaguy.freeminecraftmodels.listeners.ModelItemListener;
@@ -90,9 +89,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
                     @Override
                     public void onInitializationSuccess() {
                         Bukkit.getLogger().info("[FreeMinecraftModels] Fully initialized!");
-                        if (Bukkit.getPluginManager().isPluginEnabled("ResourcePackManager")) {
-                            Bukkit.getPluginManager().callEvent(new ResourcePackGenerationEvent());
-                        }
+                        notifyResourcePackManager();
                     }
 
                     @Override
@@ -195,6 +192,9 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
     }
 
     public void reloadImportedContent(CommandSender sender) {
+        ModeledEntity.shutdown();
+        PropEntity.shutdown();
+        DynamicEntity.shutdown();
         FileModelConverter.shutdown();
         FMMPackage.shutdown();
         PropsConfig.shutdown();
@@ -210,9 +210,8 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
                 OutputFolder.zipResourcePack();
 
                 Bukkit.getScheduler().runTask(this, () -> {
-                    if (Bukkit.getPluginManager().isPluginEnabled("ResourcePackManager")) {
-                        Bukkit.getPluginManager().callEvent(new ResourcePackGenerationEvent());
-                    }
+                    PropEntity.onStartup();
+                    notifyResourcePackManager();
                     if (sender != null) {
                         com.magmaguy.magmacore.util.Logger.sendMessage(sender, "Reloaded!");
                     }
@@ -226,6 +225,15 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
                 });
             }
         });
+    }
+
+    private static void notifyResourcePackManager() {
+        if (!Bukkit.getPluginManager().isPluginEnabled("ResourcePackManager")) return;
+        try {
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "resourcepackmanager reload");
+        } catch (Exception e) {
+            Bukkit.getLogger().warning("[FreeMinecraftModels] Failed to notify ResourcePackManager to reload: " + e.getMessage());
+        }
     }
 
     @EventHandler(priority = EventPriority.LOWEST)

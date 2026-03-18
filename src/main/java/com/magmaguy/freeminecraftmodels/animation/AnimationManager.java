@@ -61,6 +61,8 @@ public class AnimationManager {
      * @return true if the animation exists and was scheduled
      */
     public boolean play(String name, boolean blendAnimation, boolean loop) {
+        if (current instanceof CustomAnimationState && isAttackAnimationRequest(name)) return true;
+
         // 1) try built-in
         AnimationStateType st = null;
         try {
@@ -90,6 +92,12 @@ public class AnimationManager {
         else transitionTo(custom);
 
         return true;
+    }
+
+    private boolean isAttackAnimationRequest(String name) {
+        return "attack".equalsIgnoreCase(name) ||
+                "attack_melee".equalsIgnoreCase(name) ||
+                "attack_ranged".equalsIgnoreCase(name);
     }
 
 

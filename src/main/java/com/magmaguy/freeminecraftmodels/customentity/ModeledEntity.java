@@ -176,12 +176,14 @@ public class ModeledEntity {
         hitboxComponent.tick(tickCounter);
         animationComponent.tick();
         tickCounter++;
-        if (underlyingEntity != null && underlyingEntity instanceof LivingEntity livingEntity && livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")) != null)
+        if (underlyingEntity != null && underlyingEntity.isValid() && underlyingEntity instanceof LivingEntity livingEntity && livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")) != null)
             scaleModifier = livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")).getValue();
     }
 
     public void removeWithDeathAnimation() {
         isDying = true;
+        // Cache the current location so animations can continue after the underlying entity is removed
+        if (underlyingEntity != null) currentLocation = underlyingEntity.getLocation();
         if (!animationComponent.playDeathAnimation()) remove();
     }
 
@@ -224,8 +226,10 @@ public class ModeledEntity {
 
     public World getWorld() {
         if (underlyingEntity == null && spawnLocation == null) return null;
-        if (underlyingEntity != null) return underlyingEntity.getWorld();
-        return spawnLocation.getWorld();
+        if (underlyingEntity != null && underlyingEntity.isValid()) return underlyingEntity.getWorld();
+        if (spawnLocation != null) return spawnLocation.getWorld();
+        if (currentLocation != null) return currentLocation.getWorld();
+        return null;
     }
 
     public Location getLocation() {

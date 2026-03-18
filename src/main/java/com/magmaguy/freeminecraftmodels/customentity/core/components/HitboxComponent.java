@@ -4,7 +4,9 @@ import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.PacketInteractionEntity;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.OrientedBoundingBox;
+import com.magmaguy.freeminecraftmodels.packets.PacketEntityDisplayHelper;
 import lombok.Getter;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
@@ -66,6 +68,7 @@ public class HitboxComponent {
      */
     public void checkPlayerCollisions() {
         if (modeledEntity.getHitboxComponent().getObbHitbox() == null) return;
+        if (modeledEntity.getWorld() == null) return;
 
         // Check for nearby players (within 10 blocks)
         List<Player> nearbyPlayers = modeledEntity.getWorld().getPlayers().stream()
@@ -140,7 +143,8 @@ public class HitboxComponent {
 
             // Show to all current viewers
             for (UUID viewerUUID : modeledEntity.getViewers()) {
-                packetInteractionEntity.displayTo(viewerUUID);
+                Player viewer = Bukkit.getPlayer(viewerUUID);
+                PacketEntityDisplayHelper.displayToPlayer(packetInteractionEntity, viewer);
             }
         } catch (UnsupportedOperationException e) {
             // This version doesn't support packet interaction entities
@@ -165,7 +169,7 @@ public class HitboxComponent {
      */
     public void showPacketInteractionEntityTo(Player player) {
         if (packetInteractionEntity == null) return;
-        packetInteractionEntity.displayTo(player.getUniqueId());
+        PacketEntityDisplayHelper.displayToPlayer(packetInteractionEntity, player);
     }
 
     /**

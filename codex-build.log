@@ -1,0 +1,81 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ------------------< com.magmaguy:FreeMinecraftModels >------------------
+[INFO] Building FreeMinecraftModels 2.3.18
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] Artifact org.projectlombok:lombok:pom:1.18.42 is present in the local repository, but cached from a remote repository ID that is unavailable in current build context, verifying that is downloadable from [spigot-repo (https://hub.spigotmc.org/nexus/content/repositories/snapshots/, default, releases+snapshots), opencollab-snapshot (https://repo.opencollab.dev/main/, default, releases+snapshots), magmaguy-repo-releases (https://repo.magmaguy.com/releases, default, releases+snapshots), magmaguy-repo-snapshots (https://repo.magmaguy.com/snapshots, default, releases+snapshots), central (https://repo.maven.apache.org/maven2, default, releases)]
+[INFO] Artifact org.projectlombok:lombok:pom:1.18.42 is present in the local repository, but cached from a remote repository ID that is unavailable in current build context, verifying that is downloadable from [spigot-repo (https://hub.spigotmc.org/nexus/content/repositories/snapshots/, default, releases+snapshots), opencollab-snapshot (https://repo.opencollab.dev/main/, default, releases+snapshots), magmaguy-repo-releases (https://repo.magmaguy.com/releases, default, releases+snapshots), magmaguy-repo-snapshots (https://repo.magmaguy.com/snapshots, default, releases+snapshots), central (https://repo.maven.apache.org/maven2, default, releases)]
+Downloading from opencollab-snapshot: https://repo.opencollab.dev/main/org/projectlombok/lombok/1.18.42/lombok-1.18.42.pom
+Downloading from central: https://repo.maven.apache.org/maven2/org/projectlombok/lombok/1.18.42/lombok-1.18.42.pom
+Downloaded from central: https://repo.maven.apache.org/maven2/org/projectlombok/lombok/1.18.42/lombok-1.18.42.pom (0 B at 0 B/s)
+[INFO] Artifact org.projectlombok:lombok:jar:1.18.42 is present in the local repository, but cached from a remote repository ID that is unavailable in current build context, verifying that is downloadable from [spigot-repo (https://hub.spigotmc.org/nexus/content/repositories/snapshots/, default, releases+snapshots), opencollab-snapshot (https://repo.opencollab.dev/main/, default, releases+snapshots), magmaguy-repo-releases (https://repo.magmaguy.com/releases, default, releases+snapshots), magmaguy-repo-snapshots (https://repo.magmaguy.com/snapshots, default, releases+snapshots), central (https://repo.maven.apache.org/maven2, default, releases)]
+[INFO] Artifact org.projectlombok:lombok:jar:1.18.42 is present in the local repository, but cached from a remote repository ID that is unavailable in current build context, verifying that is downloadable from [spigot-repo (https://hub.spigotmc.org/nexus/content/repositories/snapshots/, default, releases+snapshots), opencollab-snapshot (https://repo.opencollab.dev/main/, default, releases+snapshots), magmaguy-repo-releases (https://repo.magmaguy.com/releases, default, releases+snapshots), magmaguy-repo-snapshots (https://repo.magmaguy.com/snapshots, default, releases+snapshots), central (https://repo.maven.apache.org/maven2, default, releases)]
+Downloading from opencollab-snapshot: https://repo.opencollab.dev/main/org/projectlombok/lombok/1.18.42/lombok-1.18.42.jar
+Downloading from central: https://repo.maven.apache.org/maven2/org/projectlombok/lombok/1.18.42/lombok-1.18.42.jar
+Downloaded from central: https://repo.maven.apache.org/maven2/org/projectlombok/lombok/1.18.42/lombok-1.18.42.jar (0 B at 0 B/s)
+[INFO] 
+[INFO] --- clean:3.2.0:clean (default-clean) @ FreeMinecraftModels ---
+[INFO] Deleting C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\target
+[INFO] 
+[INFO] --- resources:3.4.0:resources (default-resources) @ FreeMinecraftModels ---
+[INFO] Copying 4 resources from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.13.0:compile (default-compile) @ FreeMinecraftModels ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 118 source files with javac [debug target 21] to target\classes
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by lombok.permit.Permit
+WARNING: Please consider reporting this to the maintainers of class lombok.permit.Permit
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[WARNING] location of system modules is not set in conjunction with -source 21
+  not setting the location of system modules may lead to class files that cannot run on JDK 21
+    --release 21 is recommended instead of -source 21 -target 21 because it sets the location of system modules automatically
+[WARNING] /C:/Users/tiago/Documents/MineCraftProjects/FreeMinecraftModels/src/main/java/com/magmaguy/freeminecraftmodels/dataconverter/HitboxBlueprint.java:[14,5] Not generating getModelOffset(): A method with that name already exists
+[WARNING] /C:/Users/tiago/Documents/MineCraftProjects/FreeMinecraftModels/src/main/java/com/magmaguy/freeminecraftmodels/customentity/core/components/HitboxComponent.java:[19,5] Not generating getObbHitbox(): A method with that name already exists
+[INFO] /C:/Users/tiago/Documents/MineCraftProjects/FreeMinecraftModels/src/main/java/com/magmaguy/freeminecraftmodels/entities/ModelArmorStand.java: C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\entities\ModelArmorStand.java uses or overrides a deprecated API.
+[INFO] /C:/Users/tiago/Documents/MineCraftProjects/FreeMinecraftModels/src/main/java/com/magmaguy/freeminecraftmodels/entities/ModelArmorStand.java: Recompile with -Xlint:deprecation for details.
+[INFO] /C:/Users/tiago/Documents/MineCraftProjects/FreeMinecraftModels/src/main/java/com/magmaguy/freeminecraftmodels/dataconverter/AnimationBlueprint.java: Some input files use unchecked or unsafe operations.
+[INFO] /C:/Users/tiago/Documents/MineCraftProjects/FreeMinecraftModels/src/main/java/com/magmaguy/freeminecraftmodels/dataconverter/AnimationBlueprint.java: Recompile with -Xlint:unchecked for details.
+[INFO] 
+[INFO] --- resources:3.4.0:testResources (default-testResources) @ FreeMinecraftModels ---
+[INFO] skip non existing resourceDirectory C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\test\resources
+[INFO] 
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ FreeMinecraftModels ---
+[INFO] No sources to compile
+[INFO] 
+[INFO] --- surefire:3.5.4:test (default-test) @ FreeMinecraftModels ---
+[INFO] Tests are skipped.
+[INFO] 
+[INFO] --- jar:3.5.0:jar (default-jar) @ FreeMinecraftModels ---
+[INFO] Building jar: C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\target\FreeMinecraftModels.jar
+[INFO] 
+[INFO] --- shade:3.6.0:shade (default) @ FreeMinecraftModels ---
+[INFO] Including com.google.code.gson:gson:jar:2.9.0 in the shaded jar.
+[INFO] Including commons-io:commons-io:jar:2.13.0 in the shaded jar.
+[INFO] Including org.bstats:bstats-bukkit:jar:3.0.2 in the shaded jar.
+[INFO] Including org.bstats:bstats-base:jar:3.0.2 in the shaded jar.
+[INFO] Including com.magmaguy:EasyMinecraftGoals-dist:jar:1.19.25 in the shaded jar.
+[INFO] Including com.magmaguy:MagmaCore:jar:1.28-SNAPSHOT in the shaded jar.
+[INFO] Dependency-reduced POM written at: C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\dependency-reduced-pom.xml
+[WARNING] EasyMinecraftGoals-dist-1.19.25.jar, FreeMinecraftModels.jar, MagmaCore-1.28-SNAPSHOT.jar, bstats-base-3.0.2.jar, bstats-bukkit-3.0.2.jar, commons-io-2.13.0.jar, gson-2.9.0.jar define 1 overlapping resource: 
+[WARNING]   - META-INF/MANIFEST.MF
+[WARNING] maven-shade-plugin has detected that some files are
+[WARNING] present in two or more JARs. When this happens, only one
+[WARNING] single version of the file is copied to the uber jar.
+[WARNING] Usually this is not harmful and you can skip these warnings,
+[WARNING] otherwise try to manually exclude artifacts based on
+[WARNING] mvn dependency:tree -Ddetail=true and the above output.
+[WARNING] See https://maven.apache.org/plugins/maven-shade-plugin/
+[INFO] Replacing original artifact with shaded artifact.
+[INFO] Replacing C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\target\FreeMinecraftModels.jar with C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\target\FreeMinecraftModels-2.3.18-shaded.jar
+[INFO] 
+[INFO] --- install:3.1.4:install (default-install) @ FreeMinecraftModels ---
+[INFO] Installing C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\dependency-reduced-pom.xml to C:\Users\tiago\.m2\repository\com\magmaguy\FreeMinecraftModels\2.3.18\FreeMinecraftModels-2.3.18.pom
+[INFO] Installing C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\target\FreeMinecraftModels.jar to C:\Users\tiago\.m2\repository\com\magmaguy\FreeMinecraftModels\2.3.18\FreeMinecraftModels-2.3.18.jar
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  7.040 s
+[INFO] Finished at: 2026-03-11T10:11:17Z
+[INFO] ------------------------------------------------------------------------

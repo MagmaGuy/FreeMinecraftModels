@@ -1,11 +1,9 @@
 package com.magmaguy.freeminecraftmodels.commands;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
-import com.magmaguy.freeminecraftmodels.events.ResourcePackGenerationEvent;
 import com.magmaguy.magmacore.command.AdvancedCommand;
 import com.magmaguy.magmacore.command.CommandData;
-import com.magmaguy.magmacore.util.Logger;
-import org.bukkit.Bukkit;
+import com.magmaguy.magmacore.nightbreak.NightbreakPluginBootstrap;
 import org.bukkit.command.CommandSender;
 
 import java.util.List;
@@ -19,11 +17,10 @@ public class ReloadCommand extends AdvancedCommand {
     }
 
     public static void reloadPlugin(CommandSender sender) {
+        NightbreakPluginBootstrap.setPendingReloadSender((org.bukkit.plugin.java.JavaPlugin) MetadataHandler.PLUGIN, sender);
         MetadataHandler.PLUGIN.onDisable();
+        MetadataHandler.PLUGIN.onLoad();
         MetadataHandler.PLUGIN.onEnable();
-        if (Bukkit.getPluginManager().isPluginEnabled("ResourcePackManager"))
-            Bukkit.getPluginManager().callEvent(new ResourcePackGenerationEvent());
-        Logger.sendMessage(sender, "Reloaded!");
     }
 
     @Override

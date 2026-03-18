@@ -127,7 +127,12 @@ public class ParsedTexture {
 
 
     public boolean isAnimated() {
-        return height != uvHeight || width != uvWidth;
+        // A texture is animated when it has multiple frames stacked vertically
+        // (height > width and height is an exact multiple of width).
+        // We must NOT use "height != uvHeight" because in the Blockbench free-model format
+        // the uv dimensions are typically different from pixel dimensions (e.g. half),
+        // which would falsely flag every texture as animated.
+        return height > width && height % width == 0;
     }
 
     /**
