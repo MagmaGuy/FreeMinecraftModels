@@ -43,6 +43,9 @@ public class FileModelConverter {
         if (file.getName().contains(".bbmodel")) modelName = file.getName().replace(".bbmodel", "");
         else if (file.getName().contains(".fmmodel")) modelName = file.getName().replace(".fmmodel", "");
         else {
+            // Silently skip known companion files (e.g. .yml configs, .png textures)
+            if (file.getName().endsWith(".yml") || file.getName().endsWith(".yaml") || file.getName().endsWith(".png"))
+                return;
             Bukkit.getLogger().warning("File " + file.getName() + " should not be in the models folder!");
             return;
         }
