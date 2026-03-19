@@ -28,6 +28,8 @@ public class Skeleton {
     private final SkeletonBlueprint skeletonBlueprint;
     @Getter
     private final SkeletonWatchers skeletonWatchers;
+    @Getter
+    private final List<Bone> mountPointBones = new ArrayList<>();
     private final List<Bone> nametags = new ArrayList<>();
     // IK chains for inverse kinematics animation
     @Getter
@@ -65,6 +67,11 @@ public class Skeleton {
             ikChains.add(chain);
             String controllerName = chain.getControllerName();
             ikChainMap.put(controllerName, chain);
+        }
+
+        // Collect mount point bones
+        for (Bone bone : boneMap.values()) {
+            if (bone.getBoneBlueprint().isMountPoint()) mountPointBones.add(bone);
         }
     }
 

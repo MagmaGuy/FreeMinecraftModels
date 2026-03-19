@@ -20,6 +20,7 @@ com\magmaguy\freeminecraftmodels\dataconverter\CubeBlueprint$RotationDecompositi
 com\magmaguy\freeminecraftmodels\customentity\DynamicEntity.class
 com\magmaguy\freeminecraftmodels\customentity\ModeledEntityHitboxContactCallback.class
 com\magmaguy\freeminecraftmodels\customentity\PropEntity.class
+com\magmaguy\freeminecraftmodels\customentity\core\MountSeat.class
 com\magmaguy\freeminecraftmodels\animation\CustomAnimationState.class
 com\magmaguy\freeminecraftmodels\animation\AttackState.class
 com\magmaguy\freeminecraftmodels\animation\WalkState.class
@@ -46,6 +47,7 @@ com\magmaguy\freeminecraftmodels\listeners\ArmorStandListener.class
 com\magmaguy\freeminecraftmodels\scripting\ScriptableProp.class
 com\magmaguy\freeminecraftmodels\commands\DisguiseCommand.class
 com\magmaguy\freeminecraftmodels\api\StaticEntityRightClickEvent.class
+com\magmaguy\freeminecraftmodels\customentity\core\MountPointManager$1.class
 com\magmaguy\freeminecraftmodels\api\PropEntityHitboxContactEvent.class
 com\magmaguy\freeminecraftmodels\commands\DeleteAllCommand.class
 com\magmaguy\freeminecraftmodels\api\StaticEntityHitboxContactEvent.class
@@ -89,6 +91,7 @@ com\magmaguy\freeminecraftmodels\scripting\PropScriptManager.class
 com\magmaguy\freeminecraftmodels\animation\DeathState.class
 com\magmaguy\freeminecraftmodels\api\ModeledEntityManager.class
 com\magmaguy\freeminecraftmodels\commands\MountCommand.class
+com\magmaguy\freeminecraftmodels\listeners\MountDismountListener.class
 com\magmaguy\freeminecraftmodels\config\props\PropScriptLuaConfigFields.class
 com\magmaguy\freeminecraftmodels\menus\FreeMinecraftModelsFirstTimeSetupMenu$3.class
 com\magmaguy\freeminecraftmodels\customentity\core\components\InteractionComponent$2.class
@@ -100,8 +103,10 @@ com\magmaguy\freeminecraftmodels\animation\AnimationStateType.class
 com\magmaguy\freeminecraftmodels\menus\FreeMinecraftModelsFirstTimeSetupMenu$2.class
 com\magmaguy\freeminecraftmodels\dataconverter\CubeBlueprint.class
 com\magmaguy\freeminecraftmodels\utils\TransformationMatrix.class
+com\magmaguy\freeminecraftmodels\config\props\premade\PickupablePropConfig.class
 com\magmaguy\freeminecraftmodels\dataconverter\ParsedTexture$AnimationMeta.class
 com\magmaguy\freeminecraftmodels\utils\TransformationType.class
+com\magmaguy\freeminecraftmodels\customentity\core\MountPointManager.class
 com\magmaguy\freeminecraftmodels\api\ModeledEntityLeftClickEvent.class
 com\magmaguy\freeminecraftmodels\customentity\core\components\InteractionComponent.class
 com\magmaguy\freeminecraftmodels\animation\SpawnState.class

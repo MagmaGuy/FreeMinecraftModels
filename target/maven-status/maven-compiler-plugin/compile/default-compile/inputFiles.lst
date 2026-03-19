@@ -43,6 +43,7 @@ C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\ModelsFolder.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\OutputFolder.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\premade\InvulnerablePropConfig.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\premade\PickupablePropConfig.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\PropBlocks.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\PropScriptConfigFields.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\PropScriptLuaConfig.java
@@ -60,6 +61,8 @@ C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\customentity\core\IKChain.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\customentity\core\IKSolver.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\customentity\core\ModeledEntityInterface.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\customentity\core\MountPointManager.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\customentity\core\MountSeat.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\customentity\core\OBBHitDetection.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\customentity\core\OrientedBoundingBox.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\customentity\core\RegisterModelEntity.java
@@ -96,6 +99,7 @@ C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\listeners\ArmorStandListener.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\listeners\EntityTeleportEvent.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\listeners\ModelItemListener.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\listeners\MountDismountListener.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\menus\FreeMinecraftModelsFirstTimeSetupMenu.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\menus\FreeMinecraftModelsSetupMenu.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\MetadataHandler.java
