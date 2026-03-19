@@ -147,6 +147,10 @@
                             <pattern>org.reflections</pattern>
                             <shadedPattern>com.magmaguy.org.reflections</shadedPattern>
                         </relocation>
+                        <relocation>
+                            <pattern>com.magmaguy.easyminecraftgoals</pattern>
+                            <shadedPattern>com.magmaguy.freeminecraftmodels.easyminecraftgoals</shadedPattern>
+                        </relocation>
                     </relocations>
                 </configuration>
                 <executions>
