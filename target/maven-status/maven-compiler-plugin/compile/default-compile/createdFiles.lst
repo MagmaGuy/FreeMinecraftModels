@@ -1,4 +1,5 @@
 com\magmaguy\freeminecraftmodels\listeners\EntityTeleportEvent.class
+com\magmaguy\freeminecraftmodels\scripting\PropScriptManager$CancellableFlag.class
 com\magmaguy\freeminecraftmodels\utils\LoopType.class
 com\magmaguy\freeminecraftmodels\commands\ReloadCommand.class
 com\magmaguy\freeminecraftmodels\api\PropEntityLeftClickEvent.class
