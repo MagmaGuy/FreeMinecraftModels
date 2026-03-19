@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class PropScriptListener implements Listener {
 
+    @lombok.Getter
     private final Map<PropEntity, ScriptInstance> scriptedProps = new ConcurrentHashMap<>();
 
     /**
