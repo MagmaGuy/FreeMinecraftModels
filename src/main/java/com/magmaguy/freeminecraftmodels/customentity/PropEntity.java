@@ -101,7 +101,11 @@ public class PropEntity extends StaticEntity {
 
     private void initializePropEntity() {
         getDamageableComponent().setInternalHealth(3);
-        setLeftClickCallback((player, entity) -> entity.damage(player));
+        setLeftClickCallback((player, entity) -> {
+            if (!PropScriptManager.onPropLeftClick(this, player)) {
+                entity.damage(player);
+            }
+        });
         propBlockComponent.showFakePropBlocksToAllPlayers();
     }
 

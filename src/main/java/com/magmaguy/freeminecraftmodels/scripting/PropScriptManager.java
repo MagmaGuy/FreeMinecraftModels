@@ -15,6 +15,10 @@ import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 
+import org.bukkit.event.Cancellable;
+import org.bukkit.event.Event;
+import org.bukkit.event.HandlerList;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -131,6 +135,24 @@ public final class PropScriptManager {
     }
 
     /**
+     * Called by PropEntity's left-click callback. Fires ON_LEFT_CLICK on the
+     * script and returns true if the script cancelled the damage.
+     *
+     * @param prop   the prop that was punched
+     * @param player the player who punched it
+     * @return true if the script handled and cancelled the damage
+     */
+    public static boolean onPropLeftClick(PropEntity prop, org.bukkit.entity.Player player) {
+        if (!initialized || listener == null) return false;
+        ScriptInstance instance = listener.getScriptedProps().get(prop);
+        if (instance == null || instance.isClosed()) return false;
+        // Create a simple cancellable event wrapper
+        CancellableFlag flag = new CancellableFlag();
+        instance.handleEvent(ScriptableProp.ON_LEFT_CLICK, flag, player, null);
+        return flag.isCancelled();
+    }
+
+    /**
      * Shuts down the script instance associated with a prop when it is removed.
      *
      * @param prop the prop entity being removed
@@ -155,5 +177,19 @@ public final class PropScriptManager {
         LuaEngine.unregisterScriptProvider(NAMESPACE);
         provider = null;
         initialized = false;
+    }
+
+    /**
+     * Lightweight Bukkit Event that implements Cancellable, used to pass
+     * cancel state between Lua scripts and the prop damage callback.
+     */
+    static class CancellableFlag extends Event implements Cancellable {
+        private static final HandlerList HANDLER_LIST = new HandlerList();
+        private boolean cancelled = false;
+
+        @Override public boolean isCancelled() { return cancelled; }
+        @Override public void setCancelled(boolean cancel) { this.cancelled = cancel; }
+        @Override public HandlerList getHandlers() { return HANDLER_LIST; }
+        public static HandlerList getHandlerList() { return HANDLER_LIST; }
     }
 }
