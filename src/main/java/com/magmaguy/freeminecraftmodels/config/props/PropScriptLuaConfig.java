@@ -19,7 +19,6 @@ public class PropScriptLuaConfig {
             if (!scriptFile.exists()) {
                 scriptsFolder.mkdirs();
                 Files.writeString(scriptFile.toPath(), config.getSource(), StandardCharsets.UTF_8);
-                Logger.info("Created default prop script: " + config.getFilename());
             }
         } catch (Exception e) {
             Logger.warn("Failed to create prop script: " + config.getFilename());
