@@ -2,8 +2,6 @@ package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.props.PropBlocks;
-import com.magmaguy.freeminecraftmodels.config.props.PropsConfig;
-import com.magmaguy.freeminecraftmodels.config.props.PropsConfigFields;
 import com.magmaguy.freeminecraftmodels.customentity.core.components.PropBlockComponent;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.listeners.ArmorStandListener;
@@ -33,7 +31,6 @@ public class PropEntity extends StaticEntity {
     private final String entityID;
     @Getter
     private final PropBlockComponent propBlockComponent = new PropBlockComponent(this);
-    private PropsConfigFields propsConfigFields;
     @Getter
     private boolean persistent = true;
     private String chunkHash;
@@ -41,14 +38,12 @@ public class PropEntity extends StaticEntity {
     public PropEntity(String entityID, Location spawnLocation) {
         super(entityID, spawnLocation);
         this.entityID = entityID;
-        propsConfigFields = PropsConfig.getPropsConfigs().get(entityID + ".yml");
         initializePropEntity();
     }
 
     public PropEntity(String entityID, ArmorStand armorStand) {
         super(entityID, armorStand.getLocation());
         this.entityID = entityID;
-        propsConfigFields = PropsConfig.getPropsConfigs().get(entityID + ".yml");
         initializePropEntity();
 
         setUnderlyingEntity(armorStand);
@@ -78,13 +73,6 @@ public class PropEntity extends StaticEntity {
 
     public static void shutdown() {
         propEntities.clear();
-    }
-
-    public static PropEntity spawnPropEntity(String entityID, Location location, PropsConfigFields config) {
-        PropEntity propEntity = new PropEntity(entityID, location);
-        propEntity.propsConfigFields = config;
-        propEntity.spawn();
-        return propEntity;
     }
 
     public static PropEntity spawnPropEntity(String entityID, Location spawnLocation) {
