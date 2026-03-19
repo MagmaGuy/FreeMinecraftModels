@@ -7,6 +7,7 @@ import com.magmaguy.freeminecraftmodels.config.props.PropsConfigFields;
 import com.magmaguy.freeminecraftmodels.customentity.core.components.PropBlockComponent;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.listeners.ArmorStandListener;
+import com.magmaguy.freeminecraftmodels.scripting.PropScriptManager;
 import com.magmaguy.magmacore.util.ChunkLocationChecker;
 import lombok.Getter;
 import org.bukkit.*;
@@ -58,6 +59,7 @@ public class PropEntity extends StaticEntity {
 
         propEntities.put(armorStand.getUniqueId(), this);
         chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
+        PropScriptManager.onPropSpawn(this);
     }
 
     public static void onStartup() {
@@ -133,6 +135,7 @@ public class PropEntity extends StaticEntity {
         chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
         propEntities.put(underlyingEntity.getUniqueId(), this);
         ArmorStandListener.bypass = false;
+        PropScriptManager.onPropSpawn(this);
     }
 
     public void setCustomDataString(NamespacedKey customNamespacedKey, String data) {
@@ -145,6 +148,7 @@ public class PropEntity extends StaticEntity {
 
     @Override
     public void remove() {
+        PropScriptManager.onPropRemove(this);
         super.remove();
         showRealBlocksToAllPlayers();
         propEntities.remove(underlyingEntity.getUniqueId());
