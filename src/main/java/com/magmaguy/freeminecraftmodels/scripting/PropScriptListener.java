@@ -53,7 +53,7 @@ public class PropScriptListener implements Listener {
 
     // ── Interaction events ───────────────────────────────────────────────
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = false)
     public void onPlayerInteractAtEntity(PlayerInteractAtEntityEvent event) {
         Entity clicked = event.getRightClicked();
         if (!(clicked instanceof ArmorStand armorStand)) return;
@@ -70,7 +70,7 @@ public class PropScriptListener implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = false)
     public void onPlayerInteractEntity(PlayerInteractEntityEvent event) {
         // PlayerInteractEntityEvent fires for right-click on entities;
         // we handle it here as a fallback when PlayerInteractAtEntityEvent is not fired.
@@ -95,7 +95,7 @@ public class PropScriptListener implements Listener {
 
     // ── Projectile hit event ─────────────────────────────────────────────
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = false)
     public void onProjectileHit(ProjectileHitEvent event) {
         Entity hitEntity = event.getHitEntity();
         if (hitEntity == null) return;
@@ -115,7 +115,7 @@ public class PropScriptListener implements Listener {
 
     // ── Left click (damage) event ───────────────────────────────────────
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = false)
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
         Entity damaged = event.getEntity();
         if (!(damaged instanceof ArmorStand armorStand)) return;

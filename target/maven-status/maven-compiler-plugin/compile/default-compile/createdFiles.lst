@@ -12,7 +12,7 @@ com\magmaguy\freeminecraftmodels\thirdparty\Floodgate.class
 com\magmaguy\freeminecraftmodels\dataconverter\BoneBlueprint.class
 com\magmaguy\freeminecraftmodels\FreeMinecraftModels.class
 com\magmaguy\freeminecraftmodels\dataconverter\FileModelConverter.class
-com\magmaguy\freeminecraftmodels\config\props\PropsConfig.class
+com\magmaguy\freeminecraftmodels\scripting\LuaPropTable.class
 com\magmaguy\freeminecraftmodels\customentity\core\BoneTransforms.class
 com\magmaguy\freeminecraftmodels\config\contentpackages\premade\BetterStructuresPropPack.class
 com\magmaguy\freeminecraftmodels\dataconverter\CubeBlueprint$RotationDecomposition.class
@@ -41,8 +41,8 @@ com\magmaguy\freeminecraftmodels\thirdparty\BedrockChecker.class
 com\magmaguy\freeminecraftmodels\customentity\core\IKChain.class
 com\magmaguy\freeminecraftmodels\customentity\ModeledEntitiesClock.class
 com\magmaguy\freeminecraftmodels\config\OutputFolder.class
-com\magmaguy\freeminecraftmodels\config\props\PropsConfigFields.class
 com\magmaguy\freeminecraftmodels\listeners\ArmorStandListener.class
+com\magmaguy\freeminecraftmodels\scripting\ScriptableProp.class
 com\magmaguy\freeminecraftmodels\commands\DisguiseCommand.class
 com\magmaguy\freeminecraftmodels\api\StaticEntityRightClickEvent.class
 com\magmaguy\freeminecraftmodels\api\PropEntityHitboxContactEvent.class
@@ -55,6 +55,7 @@ com\magmaguy\freeminecraftmodels\api\DynamicEntityRightClickEvent.class
 com\magmaguy\freeminecraftmodels\commands\FreeMinecraftModelsCommand.class
 com\magmaguy\freeminecraftmodels\dataconverter\LocatorBlueprint.class
 com\magmaguy\freeminecraftmodels\animation\IAnimState.class
+com\magmaguy\freeminecraftmodels\config\props\premade\InvulnerablePropConfig.class
 com\magmaguy\freeminecraftmodels\customentity\core\SkeletonWatchers.class
 com\magmaguy\freeminecraftmodels\customentity\PlayerDisguiseEntity.class
 com\magmaguy\freeminecraftmodels\customentity\PropEntity$PropEntityEvents.class
@@ -72,7 +73,9 @@ com\magmaguy\freeminecraftmodels\config\ModelsFolder.class
 com\magmaguy\freeminecraftmodels\customentity\core\Bone.class
 com\magmaguy\freeminecraftmodels\dataconverter\IKAnimationFrame.class
 com\magmaguy\freeminecraftmodels\menus\FreeMinecraftModelsFirstTimeSetupMenu.class
+com\magmaguy\freeminecraftmodels\scripting\PropScriptProvider.class
 com\magmaguy\freeminecraftmodels\api\DynamicEntityHitboxContactEvent.class
+com\magmaguy\freeminecraftmodels\scripting\PropScriptListener.class
 com\magmaguy\freeminecraftmodels\utils\InterpolationType.class
 com\magmaguy\freeminecraftmodels\api\ModeledEntityHitByProjectileEvent.class
 com\magmaguy\freeminecraftmodels\customentity\core\components\InteractionComponent$InteractionComponentEvents.class
@@ -81,9 +84,11 @@ com\magmaguy\freeminecraftmodels\animation\Animation.class
 com\magmaguy\freeminecraftmodels\customentity\ModeledEntityRightClickCallback.class
 com\magmaguy\freeminecraftmodels\commands\UndisguiseCommand.class
 com\magmaguy\freeminecraftmodels\customentity\core\ModeledEntityInterface.class
+com\magmaguy\freeminecraftmodels\scripting\PropScriptManager.class
 com\magmaguy\freeminecraftmodels\animation\DeathState.class
 com\magmaguy\freeminecraftmodels\api\ModeledEntityManager.class
 com\magmaguy\freeminecraftmodels\commands\MountCommand.class
+com\magmaguy\freeminecraftmodels\config\props\PropScriptLuaConfigFields.class
 com\magmaguy\freeminecraftmodels\menus\FreeMinecraftModelsFirstTimeSetupMenu$3.class
 com\magmaguy\freeminecraftmodels\customentity\core\components\InteractionComponent$2.class
 com\magmaguy\freeminecraftmodels\customentity\core\OrientedBoundingBox.class
@@ -100,6 +105,7 @@ com\magmaguy\freeminecraftmodels\api\ModeledEntityLeftClickEvent.class
 com\magmaguy\freeminecraftmodels\customentity\core\components\InteractionComponent.class
 com\magmaguy\freeminecraftmodels\animation\SpawnState.class
 com\magmaguy\freeminecraftmodels\FreeMinecraftModels$1.class
+com\magmaguy\freeminecraftmodels\config\props\PropScriptLuaConfig.class
 com\magmaguy\freeminecraftmodels\content\FMMPackageRefresher.class
 com\magmaguy\freeminecraftmodels\dataconverter\ParsedTexture.class
 com\magmaguy\freeminecraftmodels\dataconverter\ParsedTexture$AnimationMeta$Animation.class
@@ -115,6 +121,7 @@ com\magmaguy\freeminecraftmodels\menus\FreeMinecraftModelsFirstTimeSetupMenu$1.c
 com\magmaguy\freeminecraftmodels\entities\ModelArmorStand.class
 com\magmaguy\freeminecraftmodels\animation\AnimationStateConfig.class
 com\magmaguy\freeminecraftmodels\api\StaticEntityLeftClickEvent.class
+com\magmaguy\freeminecraftmodels\config\props\PropScriptConfigFields.class
 com\magmaguy\freeminecraftmodels\customentity\ModeledEntitiesClock$1.class
 com\magmaguy\freeminecraftmodels\dataconverter\SkeletonBlueprint.class
 com\magmaguy\freeminecraftmodels\commands\StatsCommand.class

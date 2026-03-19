@@ -42,9 +42,11 @@ C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\DefaultConfig.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\ModelsFolder.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\OutputFolder.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\premade\InvulnerablePropConfig.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\PropBlocks.java
-C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\PropsConfig.java
-C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\PropsConfigFields.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\PropScriptConfigFields.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\PropScriptLuaConfig.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\PropScriptLuaConfigFields.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\content\FMMPackage.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\content\FMMPackageRefresher.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\customentity\core\Bone.java
@@ -100,6 +102,11 @@ C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\packets\PacketArmorStand.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\packets\PacketEntityDisplayHelper.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\packets\PushArmorStandState.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\LuaPropTable.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\PropScriptListener.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\PropScriptManager.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\PropScriptProvider.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\ScriptableProp.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\thirdparty\BedrockChecker.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\thirdparty\Floodgate.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\thirdparty\Geyser.java
