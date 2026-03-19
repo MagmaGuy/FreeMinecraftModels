@@ -130,7 +130,7 @@ public final class PropScriptManager {
 
             instance.handleEvent(ScriptHook.ON_SPAWN, null, null, null);
 
-            Logger.info("[FMM Scripts] Bound script '" + scriptFileName + "' to prop '" + prop.getEntityID() + "'");
+            //Logger.info("[FMM Scripts] Bound script '" + scriptFileName + "' to prop '" + prop.getEntityID() + "'");
         }
     }
 
