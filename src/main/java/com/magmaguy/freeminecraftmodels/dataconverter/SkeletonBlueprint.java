@@ -25,6 +25,8 @@ public class SkeletonBlueprint {
     @Getter
     private final List<IKChainBlueprint> ikChains = new ArrayList<>();
     @Getter
+    private final List<BoneBlueprint> mountPointBlueprints = new ArrayList<>();
+    @Getter
     private final List<BoneBlueprint> mainModel = new ArrayList<>();
     @Getter
     private String modelName = "Default Name";
@@ -65,6 +67,11 @@ public class SkeletonBlueprint {
 
         // Build IK chains after all bones, locators, and null objects are parsed
         buildIKChains();
+
+        // Collect mount point bone blueprints
+        for (BoneBlueprint bone : boneMap.values()) {
+            if (bone.isMountPoint()) mountPointBlueprints.add(bone);
+        }
     }
 
     /**

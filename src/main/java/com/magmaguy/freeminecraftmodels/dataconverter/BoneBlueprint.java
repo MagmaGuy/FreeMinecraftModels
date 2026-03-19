@@ -56,6 +56,8 @@ public class BoneBlueprint {
     private Vector3f blueprintOriginalBoneRotation = new Vector3f();
     @Getter
     private boolean isHead = false;
+    @Getter
+    private boolean mountPoint = false;
     /**
      * This is a bit of a cursed solution, but there's not that many ways around it.
      * The purpose of this bone is to create a parallel bone for meta bones without interfering with the structural bones.
@@ -117,6 +119,7 @@ public class BoneBlueprint {
         if (originalBoneName.startsWith("b_") || originalBoneName.equalsIgnoreCase("hitbox"))
             isDisplayModel = false;
         if (originalBoneName.startsWith("h_")) isHead = true;
+        if (originalBoneName.startsWith("mount_")) mountPoint = true;
 
         //Add bone to the map
         skeletonBlueprint.getBoneMap().put(originalBoneName, this);

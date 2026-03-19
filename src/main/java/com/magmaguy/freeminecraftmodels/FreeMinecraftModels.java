@@ -16,6 +16,7 @@ import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.listeners.ArmorStandListener;
 import com.magmaguy.freeminecraftmodels.listeners.EntityTeleportEvent;
 import com.magmaguy.freeminecraftmodels.listeners.ModelItemListener;
+import com.magmaguy.freeminecraftmodels.listeners.MountDismountListener;
 import com.magmaguy.freeminecraftmodels.scripting.PropScriptManager;
 import com.magmaguy.freeminecraftmodels.menus.FreeMinecraftModelsFirstTimeSetupMenu;
 import com.magmaguy.freeminecraftmodels.menus.FreeMinecraftModelsSetupMenu;
@@ -155,6 +156,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         Bukkit.getPluginManager().registerEvents(new DynamicEntity.ModeledEntityEvents(), this);
         Bukkit.getPluginManager().registerEvents(new InteractionComponent.InteractionComponentEvents(), this);
         Bukkit.getPluginManager().registerEvents(new ModelItemListener(), this);
+        Bukkit.getPluginManager().registerEvents(new MountDismountListener(), this);
         Bukkit.getPluginManager().registerEvents(new NightbreakFirstTimeSetupWarner(this, FIRST_TIME_SETUP_SPEC, DefaultConfig::isSetupDone), this);
         Bukkit.getPluginManager().registerEvents(this, this);
 

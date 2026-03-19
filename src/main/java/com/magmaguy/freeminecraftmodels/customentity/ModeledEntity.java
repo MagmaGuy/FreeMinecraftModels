@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.customentity;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
+import com.magmaguy.freeminecraftmodels.customentity.core.MountPointManager;
 import com.magmaguy.freeminecraftmodels.customentity.core.RegisterModelEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.Skeleton;
 import com.magmaguy.freeminecraftmodels.customentity.core.components.*;
@@ -67,6 +68,8 @@ public class ModeledEntity {
     @Setter
     private double scaleModifier = 1.0;
     @Getter
+    private MountPointManager mountPointManager = null;
+    @Getter
     private String displayName = null;
 
     public ModeledEntity(String entityID, Location spawnLocation) {
@@ -88,6 +91,16 @@ public class ModeledEntity {
         }
 
         skeleton = new Skeleton(skeletonBlueprint, this);
+
+        // Initialize mount points if the model has mount_ bones
+        if (!skeleton.getMountPointBones().isEmpty()) {
+            mountPointManager = new MountPointManager(skeleton);
+            setRightClickCallback((player, entity) -> {
+                if (mountPointManager != null && mountPointManager.hasMountPoints()) {
+                    mountPointManager.tryMount(player);
+                }
+            });
+        }
 
         animationComponent.initializeAnimationManager(fileModelConverter);
 
@@ -198,6 +211,10 @@ public class ModeledEntity {
             return;
         }
 
+        // Clean up mount points
+        if (mountPointManager != null) {
+            mountPointManager.cleanup();
+        }
         // Clear callbacks when removing
         interactionComponent.clearCallbacks();
         // Remove the packet interaction entity
