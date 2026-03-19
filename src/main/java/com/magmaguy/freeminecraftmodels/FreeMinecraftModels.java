@@ -192,8 +192,8 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         OBBHitDetection.startProjectileDetection();
 
         initializationContext.step("Prop Scripting");
-        PropScriptManager.initialize();
         new PropScriptLuaConfig(new File(getDataFolder(), "scripts"));
+        PropScriptManager.initialize();
         if (PropScriptManager.getListener() != null) {
             Bukkit.getPluginManager().registerEvents(PropScriptManager.getListener(), this);
         }
