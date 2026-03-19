@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.config.props;
 
 import com.magmaguy.freeminecraftmodels.config.props.premade.InvulnerablePropConfig;
+import com.magmaguy.freeminecraftmodels.config.props.premade.PickupablePropConfig;
 import com.magmaguy.magmacore.util.Logger;
 
 import java.io.File;
@@ -10,7 +11,7 @@ import java.nio.file.Files;
 public class PropScriptLuaConfig {
     public PropScriptLuaConfig(File scriptsFolder) {
         writePremadeScript(scriptsFolder, new InvulnerablePropConfig());
-        // Add future premade scripts here
+        writePremadeScript(scriptsFolder, new PickupablePropConfig());
     }
 
     private void writePremadeScript(File scriptsFolder, PropScriptLuaConfigFields config) {
