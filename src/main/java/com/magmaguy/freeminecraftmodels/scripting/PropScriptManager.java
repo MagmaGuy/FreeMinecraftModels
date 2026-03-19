@@ -1,24 +1,31 @@
 package com.magmaguy.freeminecraftmodels.scripting;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
+import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.magmacore.config.ConfigurationEngine;
 import com.magmaguy.magmacore.scripting.LuaEngine;
 import com.magmaguy.magmacore.scripting.ScriptDefinition;
+import com.magmaguy.magmacore.scripting.ScriptHook;
 import com.magmaguy.magmacore.scripting.ScriptInstance;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
+import org.bukkit.Bukkit;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 
+import java.io.File;
+import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * Manages the lifecycle of Lua scripts bound to props in FreeMinecraftModels.
  * <p>
- * Responsibilities:
- * <ul>
- *   <li>Initializes the {@link PropScriptProvider} and registers it with {@link LuaEngine}</li>
- *   <li>Creates {@link ScriptInstance} and {@link ScriptableProp} when a prop spawns with an associated script</li>
- *   <li>Shuts down script instances when props are removed</li>
- * </ul>
+ * On prop spawn, checks for a sibling YML config next to the model file.
+ * If absent, creates a default config asynchronously (no scripts this load).
+ * If present, reads the config and binds the listed scripts from the {@code scripts/} folder.
  */
 public final class PropScriptManager {
 
@@ -32,18 +39,18 @@ public final class PropScriptManager {
     private PropScriptManager() {}
 
     /**
-     * Called during plugin enable. Sets up the script provider and registers it
-     * with the Lua engine so that scripts in the {@code scripts/} directory are discovered.
+     * Called during plugin enable. Creates the {@code scripts/} directory,
+     * registers {@link PropScriptProvider} with {@link LuaEngine}, and
+     * creates the event listener.
      */
     public static void initialize() {
         if (initialized) return;
 
-        Path scriptDir = MetadataHandler.PLUGIN.getDataFolder().toPath().resolve("scripts");
-        if (!scriptDir.toFile().exists()) {
-            scriptDir.toFile().mkdirs();
-        }
+        File scriptsDir = new File(MetadataHandler.PLUGIN.getDataFolder(), "scripts");
+        if (!scriptsDir.exists()) scriptsDir.mkdirs();
 
-        provider = new PropScriptProvider(scriptDir);
+        Path scriptPath = scriptsDir.toPath();
+        provider = new PropScriptProvider(scriptPath);
         LuaEngine.registerScriptProvider(provider);
 
         listener = new PropScriptListener();
@@ -52,29 +59,75 @@ public final class PropScriptManager {
     }
 
     /**
-     * Attempts to bind a Lua script to a prop. The script is resolved by filename convention:
-     * the prop's entity ID with a {@code .lua} extension (e.g., {@code my_prop.lua}).
+     * Called when a PropEntity is created. Determines the sibling YML path
+     * from the model file, loads or creates the config, and binds scripts.
      *
-     * @param prop the prop entity to bind a script to
+     * @param prop the prop entity that just spawned
      */
     public static void onPropSpawn(PropEntity prop) {
         if (!initialized) return;
 
-        String scriptFileName = prop.getEntityID() + ".lua";
-        ScriptDefinition definition = LuaEngine.getDefinition(NAMESPACE, scriptFileName);
-        if (definition == null) return;
+        // 1. Find the model file via FileModelConverter
+        FileModelConverter converter = FileModelConverter.getConvertedFileModels().get(prop.getEntityID());
+        if (converter == null || converter.getSourceFile() == null) return;
 
-        ScriptableProp scriptable = new ScriptableProp(prop);
-        ScriptInstance instance = new ScriptInstance(definition, scriptable);
+        // 2. Compute the sibling YML path (same directory, same base name, .yml extension)
+        File modelFile = converter.getSourceFile();
+        String baseName = modelFile.getName();
+        // Strip model extension (.fmmodel or .bbmodel)
+        if (baseName.endsWith(".fmmodel")) baseName = baseName.substring(0, baseName.length() - 8);
+        else if (baseName.endsWith(".bbmodel")) baseName = baseName.substring(0, baseName.length() - 8);
+        File ymlFile = new File(modelFile.getParentFile(), baseName + ".yml");
 
-        listener.register(prop, instance);
+        // 3. If YML doesn't exist, create it async with defaults and return (no scripts this load)
+        if (!ymlFile.exists()) {
+            final File targetFile = ymlFile;
+            Bukkit.getScheduler().runTaskAsynchronously(MetadataHandler.PLUGIN, () -> {
+                try {
+                    targetFile.getParentFile().mkdirs();
+                    targetFile.createNewFile();
+                    PropScriptConfigFields defaults = new PropScriptConfigFields(targetFile.getName(), true);
+                    FileConfiguration config = new YamlConfiguration();
+                    defaults.setFileConfiguration(config);
+                    defaults.setFile(targetFile);
+                    defaults.processConfigFields();
+                    ConfigurationEngine.fileSaverCustomValues(config, targetFile);
+                } catch (IOException e) {
+                    Logger.warn("[FMM Scripts] Failed to create default config: " + targetFile.getName());
+                }
+            });
+            return;
+        }
 
-        // Fire ON_SPAWN hook
-        instance.handleEvent(
-                com.magmaguy.magmacore.scripting.ScriptHook.ON_SPAWN,
-                null, null, null);
+        // 4. Load the existing YML as PropScriptConfigFields
+        PropScriptConfigFields configFields = new PropScriptConfigFields(ymlFile.getName(), true);
+        FileConfiguration fileConfig = YamlConfiguration.loadConfiguration(ymlFile);
+        configFields.setFileConfiguration(fileConfig);
+        configFields.setFile(ymlFile);
+        configFields.processConfigFields();
 
-        Logger.info("[FMM Scripts] Bound script '" + scriptFileName + "' to prop '" + prop.getEntityID() + "'");
+        if (!configFields.isEnabled()) return;
+        List<String> scripts = configFields.getScripts();
+        if (scripts == null || scripts.isEmpty()) return;
+
+        // 5. For each script filename, resolve from scripts/ folder and bind
+        for (String scriptFileName : scripts) {
+            ScriptDefinition definition = LuaEngine.getDefinition(NAMESPACE, scriptFileName);
+            if (definition == null) {
+                Logger.warn("[FMM Scripts] Script '" + scriptFileName + "' not found in scripts/ folder (referenced by " + ymlFile.getName() + ")");
+                continue;
+            }
+
+            // 6. Create ScriptableProp + ScriptInstance, fire ON_SPAWN
+            ScriptableProp scriptable = new ScriptableProp(prop);
+            ScriptInstance instance = new ScriptInstance(definition, scriptable);
+
+            listener.register(prop, instance);
+
+            instance.handleEvent(ScriptHook.ON_SPAWN, null, null, null);
+
+            Logger.info("[FMM Scripts] Bound script '" + scriptFileName + "' to prop '" + prop.getEntityID() + "'");
+        }
     }
 
     /**

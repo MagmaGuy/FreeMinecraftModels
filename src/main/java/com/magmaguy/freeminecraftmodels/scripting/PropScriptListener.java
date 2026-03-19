@@ -9,6 +9,7 @@ import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
@@ -110,5 +111,25 @@ public class PropScriptListener implements Listener {
         // Pass the shooter as eventActor if it is a living entity
         Projectile projectile = event.getEntity();
         instance.handleEvent(ScriptableProp.ON_PROJECTILE_HIT, event, null, null);
+    }
+
+    // ── Left click (damage) event ───────────────────────────────────────
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
+    public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
+        Entity damaged = event.getEntity();
+        if (!(damaged instanceof ArmorStand armorStand)) return;
+        if (!PropEntity.isPropEntity(armorStand)) return;
+
+        Entity damager = event.getDamager();
+        if (!(damager instanceof Player)) return;
+
+        PropEntity prop = PropEntity.getPropEntities().get(armorStand.getUniqueId());
+        if (prop == null) return;
+
+        ScriptInstance instance = scriptedProps.get(prop);
+        if (instance == null || instance.isClosed()) return;
+
+        instance.handleEvent(ScriptableProp.ON_LEFT_CLICK, event, null, null);
     }
 }

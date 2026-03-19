@@ -26,6 +26,8 @@ public class FileModelConverter {
     private AnimationsBlueprint animationsBlueprint = null;
     @Getter
     private String ID;
+    @Getter
+    private File sourceFile;
     private int blockBenchVersion = 4;
     @Getter
     private Map<String, Object> meta;
@@ -37,6 +39,7 @@ public class FileModelConverter {
      * @param file bbmodel file to parse
      */
     public FileModelConverter(File file) {
+        this.sourceFile = file;
         if (file.getName().contains(".bbmodel")) modelName = file.getName().replace(".bbmodel", "");
         else if (file.getName().contains(".fmmodel")) modelName = file.getName().replace(".fmmodel", "");
         else {
