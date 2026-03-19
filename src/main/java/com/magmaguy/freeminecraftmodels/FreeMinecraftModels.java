@@ -6,6 +6,7 @@ import com.magmaguy.freeminecraftmodels.config.contentpackages.ContentPackageCon
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.config.ModelsFolder;
 import com.magmaguy.freeminecraftmodels.config.OutputFolder;
+import com.magmaguy.freeminecraftmodels.config.props.PropScriptLuaConfig;
 import com.magmaguy.freeminecraftmodels.config.props.PropsConfig;
 import com.magmaguy.freeminecraftmodels.content.FMMPackage;
 import com.magmaguy.freeminecraftmodels.content.FMMPackageRefresher;
@@ -41,6 +42,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.File;
 import java.util.List;
 
 public final class FreeMinecraftModels extends JavaPlugin implements Listener {
@@ -191,6 +193,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
 
         initializationContext.step("Prop Scripting");
         PropScriptManager.initialize();
+        new PropScriptLuaConfig(new File(getDataFolder(), "scripts"));
         if (PropScriptManager.getListener() != null) {
             Bukkit.getPluginManager().registerEvents(PropScriptManager.getListener(), this);
         }
