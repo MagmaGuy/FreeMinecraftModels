@@ -7,7 +7,6 @@ import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.config.ModelsFolder;
 import com.magmaguy.freeminecraftmodels.config.OutputFolder;
 import com.magmaguy.freeminecraftmodels.config.props.PropScriptLuaConfig;
-import com.magmaguy.freeminecraftmodels.config.props.PropsConfig;
 import com.magmaguy.freeminecraftmodels.content.FMMPackage;
 import com.magmaguy.freeminecraftmodels.content.FMMPackageRefresher;
 import com.magmaguy.freeminecraftmodels.customentity.*;
@@ -126,7 +125,6 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         OBBHitDetection.shutdown();
         PropEntity.shutdown();
         DynamicEntity.shutdown();
-        PropsConfig.shutdown();
         ConfigurationLocation.shutdown();
         Bukkit.getServer().getScheduler().cancelTasks(MetadataHandler.PLUGIN);
         HandlerList.unregisterAll(MetadataHandler.PLUGIN);
@@ -143,8 +141,6 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         ModelsFolder.initializeConfig();
         initializationContext.step("Content Packages");
         new ContentPackageConfig();
-        initializationContext.step("Props Config");
-        new PropsConfig();
         initializationContext.step("Resource Pack Zip");
         OutputFolder.zipResourcePack();
     }
@@ -208,7 +204,6 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         DynamicEntity.shutdown();
         FileModelConverter.shutdown();
         FMMPackage.shutdown();
-        PropsConfig.shutdown();
         ConfigurationLocation.shutdown();
 
         Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
@@ -217,7 +212,6 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
                 OutputFolder.initializeConfig();
                 ModelsFolder.initializeConfig();
                 new ContentPackageConfig();
-                new PropsConfig();
                 OutputFolder.zipResourcePack();
 
                 Bukkit.getScheduler().runTask(this, () -> {

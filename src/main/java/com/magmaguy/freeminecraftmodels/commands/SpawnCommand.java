@@ -1,8 +1,7 @@
 package com.magmaguy.freeminecraftmodels.commands;
 
-import com.magmaguy.freeminecraftmodels.config.props.PropsConfig;
-import com.magmaguy.freeminecraftmodels.config.props.PropsConfigFields;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
+import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.freeminecraftmodels.customentity.StaticEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.magmacore.command.AdvancedCommand;
@@ -72,9 +71,7 @@ public class SpawnCommand extends AdvancedCommand {
     }
 
     private void createProp(Player player, String propFilename) {
-        // Get or create the prop configuration, messaging is now handled in PropsConfig
-        PropsConfigFields prop = PropsConfig.addPropConfigurationFile(propFilename, player);
-        prop.permanentlyAddLocation(player.getLocation());
+        PropEntity.spawnPropEntity(propFilename, player.getLocation());
         Logger.sendMessage(player, "Successfully added prop!");
     }
 }
