@@ -16,6 +16,7 @@ import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.listeners.ArmorStandListener;
 import com.magmaguy.freeminecraftmodels.listeners.EntityTeleportEvent;
 import com.magmaguy.freeminecraftmodels.listeners.ModelItemListener;
+import com.magmaguy.freeminecraftmodels.scripting.PropScriptManager;
 import com.magmaguy.freeminecraftmodels.menus.FreeMinecraftModelsFirstTimeSetupMenu;
 import com.magmaguy.freeminecraftmodels.menus.FreeMinecraftModelsSetupMenu;
 import com.magmaguy.freeminecraftmodels.utils.ConfigurationLocation;
@@ -117,6 +118,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         FileModelConverter.shutdown();
         FMMPackage.shutdown();
         FMMPackageRefresher.reset();
+        PropScriptManager.shutdown();
         ModeledEntity.shutdown();
         ModeledEntitiesClock.shutdown();
         OBBHitDetection.shutdown();
@@ -186,6 +188,12 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         ModeledEntitiesClock.start();
         PropEntity.onStartup();
         OBBHitDetection.startProjectileDetection();
+
+        initializationContext.step("Prop Scripting");
+        PropScriptManager.initialize();
+        if (PropScriptManager.getListener() != null) {
+            Bukkit.getPluginManager().registerEvents(PropScriptManager.getListener(), this);
+        }
 
         initializationContext.step("Metrics");
         new Metrics(this, 19337);
