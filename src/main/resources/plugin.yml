@@ -13,3 +13,14 @@ commands:
     aliases:
       - fmm
     description: "Main command"
+
+permissions:
+  freeminecraftmodels.*:
+    description: Allows access to all FreeMinecraftModels commands
+    default: op
+  freeminecraftmodels.admin:
+    description: Allows access to the admin content browser
+    default: op
+  freeminecraftmodels.menu:
+    description: Allows access to the craftable items menu
+    default: true
