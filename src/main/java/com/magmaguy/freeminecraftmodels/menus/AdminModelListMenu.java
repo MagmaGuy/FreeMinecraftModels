@@ -188,8 +188,12 @@ public class AdminModelListMenu {
 
         @Override
         public void onClick(Player player) {
-            ItemStack item = ItemScriptManager.createItemStack(itemId);
-            if (item != null) player.getInventory().addItem(item);
+            com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields config =
+                    ItemScriptManager.getItemDefinitions().get(itemId);
+            if (config != null) {
+                player.getInventory().addItem(
+                        com.magmaguy.freeminecraftmodels.utils.ModelItemFactory.createCustomItem(itemId, config));
+            }
         }
     }
 }
