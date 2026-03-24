@@ -297,7 +297,7 @@ public final class ModelMenuHelper {
      * Builds a display item for a custom scriptable item in the admin menu.
      */
     public static ItemStack buildCustomItemDisplayItem(String itemId) {
-        com.magmaguy.freeminecraftmodels.config.items.ItemScriptConfigFields config =
+        com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields config =
                 com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager.getItemDefinitions().get(itemId);
 
         String formattedName = ModelItemFactory.formatModelName(itemId);
@@ -305,7 +305,7 @@ public final class ModelMenuHelper {
                 ? config.getItemName()
                 : "&d\u2726 &5" + formattedName + " &d\u2726";
 
-        Material material = config != null ? config.getParsedMaterial() : Material.PAPER;
+        Material material = (config != null && config.getParsedMaterial() != null) ? config.getParsedMaterial() : Material.PAPER;
 
         List<String> lore = new ArrayList<>();
         lore.add("&8Custom Item");

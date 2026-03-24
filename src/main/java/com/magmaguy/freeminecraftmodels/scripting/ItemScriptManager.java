@@ -1,7 +1,7 @@
 package com.magmaguy.freeminecraftmodels.scripting;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
-import com.magmaguy.freeminecraftmodels.config.items.ItemScriptConfigFields;
+import com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields;
 import com.magmaguy.magmacore.config.ConfigurationEngine;
 import com.magmaguy.magmacore.scripting.LuaEngine;
 import com.magmaguy.magmacore.scripting.ScriptDefinition;
@@ -32,9 +32,9 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Central manager for the custom item scripting system.
  * <p>
- * Handles scanning for custom item definitions (lone JSON files with no matching
- * model sibling), managing per-player script lifecycles based on equipped items,
- * and creating configured ItemStacks.
+ * Scans model YML configs for those with a {@code material} field set (custom items).
+ * Manages per-player script lifecycles based on equipped items,
+ * and creates configured ItemStacks.
  */
 public final class ItemScriptManager {
 
@@ -47,9 +47,9 @@ public final class ItemScriptManager {
             EquipmentSlot.LEGS, EquipmentSlot.FEET
     };
 
-    /** item id -> config fields */
+    /** item id -> config fields (only models with material set) */
     @Getter
-    private static final Map<String, ItemScriptConfigFields> itemDefinitions = new ConcurrentHashMap<>();
+    private static final Map<String, PropScriptConfigFields> itemDefinitions = new ConcurrentHashMap<>();
 
     /** item id -> source .json file location (for menu folder grouping) */
     @Getter
@@ -91,19 +91,19 @@ public final class ItemScriptManager {
     // ── 2. Custom item detection ─────────────────────────────────────────
 
     /**
-     * Recursively scans the given models folder for "lone" JSON files -- those
-     * that have no matching {@code .bbmodel} or {@code .fmmodel} sibling.
-     * For each lone JSON found, looks for a sibling YML config:
-     * <ul>
-     *   <li>If no YML exists, creates a default config asynchronously and skips this load cycle.</li>
-     *   <li>If YML exists, loads it as {@link ItemScriptConfigFields} and stores it in {@link #itemDefinitions}.</li>
-     * </ul>
+     * Scans the models folder for YML configs that define custom items
+     * (have a material field set). Uses the unified PropScriptConfigFields.
      *
      * @param modelsFolder the root models directory to scan
      */
     public static void scanForCustomItems(File modelsFolder) {
+        itemDefinitions.clear();
+        itemSourceFiles.clear();
         if (modelsFolder == null || !modelsFolder.isDirectory()) return;
         scanDirectory(modelsFolder);
+        if (!itemDefinitions.isEmpty()) {
+            Logger.info("Loaded " + itemDefinitions.size() + " custom item definition(s).");
+        }
     }
 
     private static void scanDirectory(File directory) {
@@ -116,51 +116,29 @@ public final class ItemScriptManager {
                 continue;
             }
 
-            if (!file.getName().endsWith(".json")) continue;
+            if (!file.getName().endsWith(".yml")) continue;
 
-            // Check for matching .bbmodel or .fmmodel sibling
-            String baseName = file.getName().substring(0, file.getName().length() - 5); // strip .json
-            File bbmodel = new File(file.getParentFile(), baseName + ".bbmodel");
-            File fmmodel = new File(file.getParentFile(), baseName + ".fmmodel");
-
-            if (bbmodel.exists() || fmmodel.exists()) continue; // not a lone JSON
-
-            // This is a lone JSON = custom item definition
-            String itemId = baseName.toLowerCase();
-            File ymlFile = new File(file.getParentFile(), baseName + ".yml");
-
-            if (!ymlFile.exists()) {
-                // Create default config async, skip this load cycle
-                final File targetFile = ymlFile;
-                Bukkit.getScheduler().runTaskAsynchronously(MetadataHandler.PLUGIN, () -> {
-                    try {
-                        targetFile.getParentFile().mkdirs();
-                        targetFile.createNewFile();
-                        ItemScriptConfigFields defaults = new ItemScriptConfigFields(targetFile.getName(), true);
-                        FileConfiguration config = new YamlConfiguration();
-                        defaults.setFileConfiguration(config);
-                        defaults.setFile(targetFile);
-                        defaults.processConfigFields();
-                        ConfigurationEngine.fileSaverCustomValues(config, targetFile);
-                    } catch (IOException e) {
-                        Logger.warn("[FMM Items] Failed to create default config: " + targetFile.getName());
-                    }
-                });
-                continue;
-            }
-
-            // Load existing YML
-            ItemScriptConfigFields configFields = new ItemScriptConfigFields(ymlFile.getName(), true);
-            FileConfiguration fileConfig = YamlConfiguration.loadConfiguration(ymlFile);
+            // Load the YML and check if it defines a custom item (has material set)
+            PropScriptConfigFields configFields = new PropScriptConfigFields(file.getName(), true);
+            FileConfiguration fileConfig = YamlConfiguration.loadConfiguration(file);
             configFields.setFileConfiguration(fileConfig);
-            configFields.setFile(ymlFile);
+            configFields.setFile(file);
             configFields.processConfigFields();
 
-            if (!configFields.isEnabled()) continue;
+            if (!configFields.isEnabled() || !configFields.isCustomItem()) continue;
+
+            // Item ID is the base filename without .yml
+            String baseName = file.getName();
+            if (baseName.endsWith(".yml")) baseName = baseName.substring(0, baseName.length() - 4);
+            String itemId = baseName;
+
+            // Find the corresponding model file for source tracking
+            File bbmodel = new File(file.getParentFile(), baseName + ".bbmodel");
+            File fmmodel = new File(file.getParentFile(), baseName + ".fmmodel");
+            File sourceFile = bbmodel.exists() ? bbmodel : fmmodel.exists() ? fmmodel : file;
 
             itemDefinitions.put(itemId, configFields);
-            itemSourceFiles.put(itemId, file);
-            Logger.info("[FMM Items] Loaded custom item definition: " + itemId);
+            itemSourceFiles.put(itemId, sourceFile);
         }
     }
 
@@ -214,7 +192,7 @@ public final class ItemScriptManager {
         for (String itemId : equippedIds) {
             if (playerScripts.containsKey(itemId)) continue;
 
-            ItemScriptConfigFields config = itemDefinitions.get(itemId);
+            PropScriptConfigFields config = itemDefinitions.get(itemId);
             if (config == null) continue;
 
             List<String> scripts = config.getScripts();
@@ -294,10 +272,11 @@ public final class ItemScriptManager {
      * @return the configured item stack, or null if the item ID is not registered
      */
     public static ItemStack createItemStack(String itemId) {
-        ItemScriptConfigFields config = itemDefinitions.get(itemId);
+        PropScriptConfigFields config = itemDefinitions.get(itemId);
         if (config == null) return null;
 
         Material material = config.getParsedMaterial();
+        if (material == null) material = Material.PAPER;
         ItemStack itemStack = new ItemStack(material);
         ItemMeta meta = itemStack.getItemMeta();
         if (meta == null) return itemStack;

@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
+import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.freeminecraftmodels.thirdparty.BedrockChecker;
 import org.bukkit.Bukkit;
@@ -45,6 +46,9 @@ public class SkeletonWatchers implements Listener {
 
     private boolean isUnderlyingEntityInvisible() {
         if (skeleton.getModeledEntity() == null) return false;
+        // Cosmetic invisibility (e.g. mount command) should not hide the model
+        if (skeleton.getModeledEntity() instanceof DynamicEntity de && de.isCosmeticInvisibility())
+            return false;
         if (skeleton.getModeledEntity().getUnderlyingEntity() instanceof LivingEntity livingEntity
                 && livingEntity.isValid())
             return livingEntity.hasPotionEffect(PotionEffectType.INVISIBILITY);

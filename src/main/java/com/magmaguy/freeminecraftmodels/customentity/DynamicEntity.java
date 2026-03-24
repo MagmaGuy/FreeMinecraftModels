@@ -15,6 +15,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.HashMap;
@@ -37,6 +39,13 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
      */
     @Getter
     private boolean syncMovement = true;
+    /**
+     * When true, the underlying entity's invisibility potion is cosmetic
+     * (used to hide the vanilla model while showing the custom one) and
+     * should NOT hide the custom model bones.
+     */
+    @Getter
+    private boolean cosmeticInvisibility = false;
     private boolean isEvokerAttacking = false;
 
     public DynamicEntity(String entityID, Location targetLocation) {
@@ -73,6 +82,28 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
                 player.hideEntity(MetadataHandler.PLUGIN, livingEntity);
             }
         });
+
+        livingEntity.getPersistentDataContainer().set(namespacedKey, PersistentDataType.BYTE, (byte) 0);
+        return dynamicEntity;
+    }
+
+    /**
+     * Creates a DynamicEntity wrapping the given living entity, using an
+     * invisibility potion instead of hiding the entity from clients.
+     * This keeps the entity tracked client-side (needed for vehicle steering).
+     */
+    @Nullable
+    public static DynamicEntity createWithInvisibility(String entityID, LivingEntity livingEntity) {
+        FileModelConverter fileModelConverter = FileModelConverter.getConvertedFileModels().get(entityID);
+        if (fileModelConverter == null) return null;
+        DynamicEntity dynamicEntity = new DynamicEntity(entityID, livingEntity.getLocation());
+        dynamicEntity.spawn(livingEntity);
+
+        // Make invisible instead of hiding from clients — the entity stays
+        // tracked so passengers can steer it
+        livingEntity.addPotionEffect(new PotionEffect(
+                PotionEffectType.INVISIBILITY, PotionEffect.INFINITE_DURATION, 0, false, false));
+        dynamicEntity.cosmeticInvisibility = true;
 
         livingEntity.getPersistentDataContainer().set(namespacedKey, PersistentDataType.BYTE, (byte) 0);
         return dynamicEntity;
