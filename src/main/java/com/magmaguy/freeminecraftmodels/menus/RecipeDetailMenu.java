@@ -87,9 +87,8 @@ public class RecipeDetailMenu {
             }
         }
 
-        // Arrow (MHF_ArrowRight skull head)
-        inventory.setItem(ARROW_SLOT,
-                ItemStackGenerator.generateSkullItemStack("MHF_ArrowRight", " ", List.of()));
+        // Arrow
+        inventory.setItem(ARROW_SLOT, ModelMenuHelper.buildArrowRightItem());
 
         // Output item
         inventory.setItem(OUTPUT_SLOT, ModelItemFactory.createModelItem(modelId, Material.PAPER));

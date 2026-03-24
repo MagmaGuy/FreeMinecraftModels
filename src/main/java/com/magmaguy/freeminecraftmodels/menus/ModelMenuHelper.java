@@ -225,17 +225,31 @@ public final class ModelMenuHelper {
     }
 
     /**
-     * Builds a simple navigation arrow item with the given display name.
+     * Builds a "Previous Page" navigation skull item.
      */
-    public static ItemStack buildNavItem(String name) {
-        return ItemStackGenerator.generateItemStack(Material.ARROW, name, List.of());
+    public static ItemStack buildPrevPageItem() {
+        return ItemStackGenerator.generateSkullItemStack("MHF_ArrowLeft", "&ePrevious Page", List.of());
     }
 
     /**
-     * Builds the "Back" button item.
+     * Builds a "Next Page" navigation skull item.
+     */
+    public static ItemStack buildNextPageItem() {
+        return ItemStackGenerator.generateSkullItemStack("MHF_ArrowRight", "&eNext Page", List.of());
+    }
+
+    /**
+     * Builds the "Back" button skull item.
      */
     public static ItemStack buildBackItem() {
-        return ItemStackGenerator.generateItemStack(Material.BARRIER, "&cBack", List.of("&7Return to pack list"));
+        return ItemStackGenerator.generateSkullItemStack("MHF_ArrowLeft", "&cBack", List.of("&7Return to previous menu"));
+    }
+
+    /**
+     * Builds a right-pointing arrow skull item (for recipe display, etc.).
+     */
+    public static ItemStack buildArrowRightItem() {
+        return ItemStackGenerator.generateSkullItemStack("MHF_ArrowRight", " ", List.of());
     }
 
     // ---------------------------------------------------------------
