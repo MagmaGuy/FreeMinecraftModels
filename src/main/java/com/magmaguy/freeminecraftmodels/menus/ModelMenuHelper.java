@@ -135,18 +135,19 @@ public final class ModelMenuHelper {
         List<String> lore = new ArrayList<>();
         lore.add("");
 
-        // Scripts section
-        List<String> scripts = getScriptsForModel(converter);
-        lore.add("&7Scripts:");
-        if (scripts.isEmpty()) {
-            lore.add("  &8None");
-        } else {
-            for (String script : scripts) {
-                lore.add("  &f- &7" + script);
+        // Scripts section (admin only — players don't need to see this)
+        if (adminMode) {
+            List<String> scripts = getScriptsForModel(converter);
+            lore.add("&7Scripts:");
+            if (scripts.isEmpty()) {
+                lore.add("  &8None");
+            } else {
+                for (String script : scripts) {
+                    lore.add("  &f- &7" + script);
+                }
             }
+            lore.add("");
         }
-
-        lore.add("");
 
         // Craftable status
         PropRecipeConfig recipe = PropRecipeManager.getLoadedRecipes().get(modelId);
@@ -166,7 +167,7 @@ public final class ModelMenuHelper {
                     if (mat != null) {
                         rowDisplay.append("&f").append(formatMaterialName(mat));
                     } else {
-                        rowDisplay.append("&8-");
+                        rowDisplay.append("&8Empty");
                     }
                 }
                 lore.add(rowDisplay.toString());
@@ -178,6 +179,9 @@ public final class ModelMenuHelper {
         if (adminMode) {
             lore.add("");
             lore.add("&eClick to get item");
+        } else if (recipe != null) {
+            lore.add("");
+            lore.add("&eClick for recipe");
         }
 
         lore.add("");
