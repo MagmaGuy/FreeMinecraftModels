@@ -1,15 +1,13 @@
 package com.magmaguy.freeminecraftmodels.config.recipes;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
-import com.magmaguy.freeminecraftmodels.commands.ItemifyCommand;
+import com.magmaguy.freeminecraftmodels.utils.ModelItemFactory;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.ShapedRecipe;
-import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.persistence.PersistentDataType;
 
 import java.io.File;
 import java.io.IOException;
@@ -60,21 +58,7 @@ public class PropRecipeConfig {
     public ShapedRecipe registerRecipe() {
         NamespacedKey recipeKey = new NamespacedKey(MetadataHandler.PLUGIN, "prop_recipe_" + modelId);
 
-        ItemStack output = new ItemStack(Material.PAPER);
-        ItemMeta meta = output.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName("\u00a7e\u2726 \u00a76" + ItemifyCommand.formatModelName(modelId) + " \u00a7e\u2726");
-            meta.setLore(List.of(
-                    "",
-                    "\u00a77Right-click on a block to place",
-                    "\u00a77Punch to pick back up",
-                    "",
-                    "\u00a78Model: " + modelId
-            ));
-            NamespacedKey modelKey = new NamespacedKey(MetadataHandler.PLUGIN, "model_id");
-            meta.getPersistentDataContainer().set(modelKey, PersistentDataType.STRING, modelId);
-            output.setItemMeta(meta);
-        }
+        ItemStack output = ModelItemFactory.createModelItem(modelId, Material.PAPER);
 
         ShapedRecipe recipe = new ShapedRecipe(recipeKey, output);
         recipe.shape(shape.toArray(new String[0]));
