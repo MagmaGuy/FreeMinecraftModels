@@ -193,13 +193,20 @@ public final class ModelMenuHelper {
 
         ItemStack item = ItemStackGenerator.generateItemStack(Material.PAPER, displayName, lore);
 
-        if (adminMode) {
-            ItemMeta meta = item.getItemMeta();
-            if (meta != null) {
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            // Set custom display model if available (1.21.4+)
+            if (!com.magmaguy.magmacore.util.VersionChecker.serverVersionOlderThan(21, 4)
+                    && com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry.hasDisplayModel(modelId)) {
+                meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + modelId));
+            }
+
+            if (adminMode) {
                 NamespacedKey key = new NamespacedKey(MetadataHandler.PLUGIN, "model_id");
                 meta.getPersistentDataContainer().set(key, PersistentDataType.STRING, modelId);
-                item.setItemMeta(meta);
             }
+
+            item.setItemMeta(meta);
         }
 
         return item;
