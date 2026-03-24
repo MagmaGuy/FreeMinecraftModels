@@ -94,8 +94,13 @@ public final class ItemScriptManager {
     public static void scanForCustomItems(File modelsFolder) {
         itemDefinitions.clear();
         itemSourceFiles.clear();
-        if (modelsFolder == null || !modelsFolder.isDirectory()) return;
+        Logger.info("[FMM Items DEBUG] scanForCustomItems called, folder: " + (modelsFolder != null ? modelsFolder.getAbsolutePath() : "null"));
+        if (modelsFolder == null || !modelsFolder.isDirectory()) {
+            Logger.info("[FMM Items DEBUG] Models folder is null or not a directory, aborting scan");
+            return;
+        }
         scanDirectory(modelsFolder);
+        Logger.info("[FMM Items DEBUG] Scan complete. Found " + itemDefinitions.size() + " custom item(s): " + itemDefinitions.keySet());
         if (!itemDefinitions.isEmpty()) {
             Logger.info("Loaded " + itemDefinitions.size() + " custom item definition(s).");
         }
@@ -113,12 +118,16 @@ public final class ItemScriptManager {
 
             if (!file.getName().endsWith(".yml")) continue;
 
+            Logger.info("[FMM Items DEBUG] Checking YML: " + file.getName());
+
             // Load the YML and check if it defines a custom item (has material set)
             PropScriptConfigFields configFields = new PropScriptConfigFields(file.getName(), true);
             FileConfiguration fileConfig = YamlConfiguration.loadConfiguration(file);
             configFields.setFileConfiguration(fileConfig);
             configFields.setFile(file);
             configFields.processConfigFields();
+
+            Logger.info("[FMM Items DEBUG]   enabled=" + configFields.isEnabled() + " isCustomItem=" + configFields.isCustomItem() + " material='" + configFields.getMaterial() + "' scripts=" + configFields.getScripts());
 
             if (!configFields.isEnabled() || !configFields.isCustomItem()) continue;
 
@@ -146,7 +155,10 @@ public final class ItemScriptManager {
      * @param player the player to update
      */
     public static void updateEquippedScripts(Player player) {
-        if (!initialized) return;
+        if (!initialized) {
+            Logger.info("[FMM Items DEBUG] updateEquippedScripts: not initialized, skipping");
+            return;
+        }
 
         UUID uuid = player.getUniqueId();
         Map<String, ScriptInstance> playerScripts = activeScripts.computeIfAbsent(uuid, k -> new ConcurrentHashMap<>());
@@ -164,10 +176,13 @@ public final class ItemScriptManager {
 
             PersistentDataContainer pdc = meta.getPersistentDataContainer();
             String itemId = pdc.get(ITEM_ID_KEY, PersistentDataType.STRING);
+            Logger.info("[FMM Items DEBUG] Slot " + slot + ": type=" + item.getType() + " fmm_item_id=" + itemId + " known=" + (itemId != null && itemDefinitions.containsKey(itemId)));
             if (itemId != null && itemDefinitions.containsKey(itemId)) {
                 equippedIds.add(itemId);
             }
         }
+
+        Logger.info("[FMM Items DEBUG] Equipped IDs: " + equippedIds + " | Active scripts: " + playerScripts.keySet() + " | Definitions: " + itemDefinitions.keySet());
 
         // Unequip: items that were active but are no longer equipped
         Iterator<Map.Entry<String, ScriptInstance>> it = playerScripts.entrySet().iterator();
@@ -196,12 +211,15 @@ public final class ItemScriptManager {
             // Use the first script for the primary instance stored in the map
             // (matching the single-instance-per-item pattern)
             for (String scriptFileName : scripts) {
+                Logger.info("[FMM Items DEBUG] Looking up script: namespace='" + NAMESPACE + "' file='" + scriptFileName + "'");
                 ScriptDefinition definition = LuaEngine.getDefinition(NAMESPACE, scriptFileName);
                 if (definition == null) {
                     Logger.warn("[FMM Items] Script '" + scriptFileName + "' not found in scripts/ folder (referenced by item '" + itemId + "')");
+                    Logger.info("[FMM Items DEBUG] Available definitions in namespace: " + LuaEngine.getDefinitions(NAMESPACE).stream().map(d -> d.getFileName()).toList());
                     continue;
                 }
 
+                Logger.info("[FMM Items DEBUG] Found script definition, creating ScriptInstance for " + itemId);
                 ScriptableItem scriptable = new ScriptableItem(player, itemId);
                 ScriptInstance instance = new ScriptInstance(definition, scriptable);
 
