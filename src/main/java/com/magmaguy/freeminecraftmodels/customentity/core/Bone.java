@@ -165,6 +165,7 @@ public class Bone {
     }
 
     public void setHorseLeatherArmorColor(Color color) {
+        if (boneBlueprint.isMountPoint()) return;
         if (boneTransforms.getPacketArmorStandEntity() != null)
             boneTransforms.getPacketArmorStandEntity().setHorseLeatherArmorColor(color);
         if (boneTransforms.getPacketDisplayEntity() != null)
@@ -185,6 +186,12 @@ public class Bone {
     }
 
     public Location getBoneLocation() {
+        // Mount-point bones need the raw global matrix position with no
+        // armor-stand pivot offset — the position is used to place a real
+        // server-side armor stand that players ride.
+        if (boneBlueprint.isMountPoint()) {
+            return boneTransforms.getMountPointTargetLocation();
+        }
         if (boneTransforms.getPacketDisplayEntity() != null) {
             return boneTransforms.getDisplayEntityTargetLocation();
         } else if (boneTransforms.getPacketArmorStandEntity() != null) {

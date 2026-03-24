@@ -148,7 +148,7 @@ public final class PropScriptManager {
         if (instance == null || instance.isClosed()) return false;
         // Create a simple cancellable event wrapper
         CancellableFlag flag = new CancellableFlag();
-        instance.handleEvent(ScriptableProp.ON_LEFT_CLICK, flag, player, null);
+        instance.handleEvent(ScriptableProp.ON_LEFT_CLICK, flag, null, player);
         return flag.isCancelled();
     }
 

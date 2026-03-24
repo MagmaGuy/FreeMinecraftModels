@@ -119,7 +119,7 @@ public class BoneBlueprint {
         if (originalBoneName.startsWith("b_") || originalBoneName.equalsIgnoreCase("hitbox"))
             isDisplayModel = false;
         if (originalBoneName.startsWith("h_")) isHead = true;
-        if (originalBoneName.startsWith("mount_")) mountPoint = true;
+        if (originalBoneName.startsWith("m_")) mountPoint = true;
 
         //Add bone to the map
         skeletonBlueprint.getBoneMap().put(originalBoneName, this);
@@ -224,6 +224,25 @@ public class BoneBlueprint {
     }
 
     private void processBoneValues(Map<String, Object> boneJSON) {
+        // Mount-point bones are empty (no cubes), so adjustCubes() never sets
+        // blueprintModelCenter — it stays at (0,0,0). Set it from the bone's
+        // origin BEFORE setOrigin() so that the pivot is computed correctly
+        // (pivot = modelCenter - origin/16 = origin/16 - origin/16 = 0).
+        // This makes the bone's position come from modelCenter in the
+        // transform chain, which propagates correctly through any parent depth.
+        if (mountPoint && cubeBlueprintChildren.isEmpty()) {
+            List<Double> origins = (List<Double>) boneJSON.get("origin");
+            if (origins != null) {
+                // getModelCenter() converts from RP units to world blocks via
+                // * (1/16) * (1/ARMOR_STAND_HEAD_SIZE_MULTIPLIER) = * 0.15625
+                // We want getModelCenter() = origin/16, so store origin/2.5
+                blueprintModelCenter = new Vector3f(
+                        origins.get(0).floatValue(),
+                        origins.get(1).floatValue(),
+                        origins.get(2).floatValue())
+                        .mul(1 / 2.5f);
+            }
+        }
         setOrigin(boneJSON);
         setBoneRotation(boneJSON);
         if (isNameTag()) {
