@@ -36,7 +36,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class ItemScriptManager {
 
-    private static final String NAMESPACE = "fmm_items";
+    private static final String NAMESPACE = "fmm";
     public static final NamespacedKey ITEM_ID_KEY = new NamespacedKey(MetadataHandler.PLUGIN, "fmm_item_id");
 
     private static final EquipmentSlot[] TRACKED_SLOTS = {
@@ -73,12 +73,9 @@ public final class ItemScriptManager {
     public static void initialize() {
         if (initialized) return;
 
-        File scriptsDir = new File(MetadataHandler.PLUGIN.getDataFolder(), "scripts");
-        if (!scriptsDir.exists()) scriptsDir.mkdirs();
-
-        Path scriptPath = scriptsDir.toPath();
-        provider = new ItemScriptProvider(scriptPath);
-        LuaEngine.registerScriptProvider(provider);
+        // No separate provider registration — uses the "fmm" namespace
+        // already registered by PropScriptManager, sharing the scripts/ directory.
+        // Item hooks are resolved by PropScriptProvider.
 
         listener = new ItemScriptListener();
         Bukkit.getPluginManager().registerEvents(listener, MetadataHandler.PLUGIN);
@@ -281,8 +278,7 @@ public final class ItemScriptManager {
         itemDefinitions.clear();
         itemSourceFiles.clear();
 
-        LuaEngine.unregisterScriptProvider(NAMESPACE);
-        provider = null;
+        // Don't unregister script provider — shared "fmm" namespace managed by PropScriptManager
         listener = null;
         initialized = false;
     }
