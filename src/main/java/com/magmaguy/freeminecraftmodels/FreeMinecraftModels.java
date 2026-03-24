@@ -197,6 +197,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         manager.registerCommand(new ItemifyCommand());
         manager.registerCommand(new CraftifyCommand());
         manager.registerCommand(new AdminCommand());
+        manager.registerCommand(new GiveItemCommand());
         NightbreakPluginBootstrap.registerStandardCommands(this,
                 manager,
                 NIGHTBREAK_PLUGIN_SPEC,
