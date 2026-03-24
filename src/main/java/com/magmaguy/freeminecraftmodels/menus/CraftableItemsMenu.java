@@ -65,13 +65,13 @@ public class CraftableItemsMenu {
 
         if (page > 0) {
             inventory.setItem(ModelMenuHelper.PREV_SLOT,
-                    ModelMenuHelper.buildNavItem("&ePrevious Page"));
+                    ModelMenuHelper.buildPrevPageItem());
         }
 
         int totalPages = Math.max(1, (int) Math.ceil((double) craftableModels.size() / ModelMenuHelper.ITEMS_PER_PAGE));
         if (page < totalPages - 1) {
             inventory.setItem(ModelMenuHelper.NEXT_SLOT,
-                    ModelMenuHelper.buildNavItem("&eNext Page"));
+                    ModelMenuHelper.buildNextPageItem());
         }
     }
 

@@ -67,13 +67,13 @@ public class AdminModelListMenu {
 
         // Previous page arrow
         if (page > 0) {
-            inventory.setItem(ModelMenuHelper.PREV_SLOT, ModelMenuHelper.buildNavItem("&ePrevious Page"));
+            inventory.setItem(ModelMenuHelper.PREV_SLOT, ModelMenuHelper.buildPrevPageItem());
         }
 
         // Next page arrow
         int totalPages = (int) Math.ceil((double) models.size() / ModelMenuHelper.ITEMS_PER_PAGE);
         if (page < totalPages - 1) {
-            inventory.setItem(ModelMenuHelper.NEXT_SLOT, ModelMenuHelper.buildNavItem("&eNext Page"));
+            inventory.setItem(ModelMenuHelper.NEXT_SLOT, ModelMenuHelper.buildNextPageItem());
         }
     }
 
