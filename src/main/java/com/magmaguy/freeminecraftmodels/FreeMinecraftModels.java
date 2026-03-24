@@ -102,6 +102,12 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
                     public void onInitializationSuccess() {
                         Bukkit.getLogger().info("[FreeMinecraftModels] Fully initialized!");
                         notifyResourcePackManager();
+                        // Scan all online players for equipped custom items (covers reload/restart)
+                        Bukkit.getScheduler().runTaskLater(FreeMinecraftModels.this, () -> {
+                            for (org.bukkit.entity.Player player : Bukkit.getOnlinePlayers()) {
+                                ItemScriptManager.updateEquippedScripts(player);
+                            }
+                        }, 40L);
                     }
 
                     @Override
