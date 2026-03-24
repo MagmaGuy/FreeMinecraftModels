@@ -1,7 +1,7 @@
 package com.magmaguy.freeminecraftmodels.menus;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
-import com.magmaguy.freeminecraftmodels.commands.ItemifyCommand;
+import com.magmaguy.freeminecraftmodels.utils.ModelItemFactory;
 import com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields;
 import com.magmaguy.freeminecraftmodels.config.recipes.PropRecipeConfig;
 import com.magmaguy.freeminecraftmodels.config.recipes.PropRecipeManager;
@@ -129,7 +129,7 @@ public final class ModelMenuHelper {
      */
     public static ItemStack buildModelItem(FileModelConverter converter, boolean adminMode) {
         String modelId = converter.getID();
-        String formattedName = ItemifyCommand.formatModelName(modelId);
+        String formattedName = ModelItemFactory.formatModelName(modelId);
         String displayName = "&e\u2726 &6" + formattedName + " &e\u2726";
 
         List<String> lore = new ArrayList<>();
