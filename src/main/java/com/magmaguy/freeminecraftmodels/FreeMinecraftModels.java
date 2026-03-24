@@ -15,6 +15,7 @@ import com.magmaguy.freeminecraftmodels.customentity.*;
 import com.magmaguy.freeminecraftmodels.customentity.core.OBBHitDetection;
 import com.magmaguy.freeminecraftmodels.customentity.core.components.InteractionComponent;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.freeminecraftmodels.menus.ModelMenuHelper;
 import com.magmaguy.freeminecraftmodels.menus.AdminContentMenu;
 import com.magmaguy.freeminecraftmodels.menus.AdminModelListMenu;
 import com.magmaguy.freeminecraftmodels.menus.CraftableItemsMenu;
@@ -126,6 +127,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         MagmaCore.shutdown(this);
         FileModelConverter.shutdown();
         DisplayModelRegistry.shutdown();
+        ModelMenuHelper.shutdown();
         FMMPackage.shutdown();
         FMMPackageRefresher.reset();
         PropScriptManager.shutdown();
@@ -166,6 +168,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         Bukkit.getPluginManager().registerEvents(new InteractionComponent.InteractionComponentEvents(), this);
         Bukkit.getPluginManager().registerEvents(new ModelItemListener(), this);
         Bukkit.getPluginManager().registerEvents(new CraftifyListener(), this);
+        ModelMenuHelper.initialize();
         AdminContentMenu.registerEvents(this);
         AdminModelListMenu.registerEvents(this);
         CraftableItemsMenu.registerEvents(this);
