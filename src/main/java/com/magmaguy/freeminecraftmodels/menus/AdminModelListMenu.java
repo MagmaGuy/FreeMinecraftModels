@@ -83,6 +83,7 @@ public class AdminModelListMenu {
 
     private void handleClick(int slot) {
         if (slot == ModelMenuHelper.BACK_SLOT) {
+            openMenus.remove(inventory);
             new AdminContentMenu(player);
             return;
         }

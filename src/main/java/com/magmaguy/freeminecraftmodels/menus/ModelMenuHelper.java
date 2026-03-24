@@ -62,16 +62,19 @@ public final class ModelMenuHelper {
         String folderName = pack.getContentPackageConfigFields().getFolderName();
         List<String> prefixes = pack.getContentPackageConfigFields().getContentFilePrefixes();
 
+        File modelsRoot = new File(MetadataHandler.PLUGIN.getDataFolder(), "models");
+
         return FileModelConverter.getConvertedFileModels().values().stream()
                 .filter(converter -> {
                     File source = converter.getSourceFile();
                     if (source == null) return false;
-                    String parentPath = source.getParentFile() != null
-                            ? source.getParentFile().getAbsolutePath()
-                            : "";
-                    // Check if the source file lives inside the pack's folder
-                    if (parentPath.contains(folderName)) return true;
-                    // Fall back to prefix matching
+                    // Walk parent directories up to models root, check for exact folder name match
+                    File parent = source.getParentFile();
+                    while (parent != null && !parent.equals(modelsRoot)) {
+                        if (parent.getName().equals(folderName)) return true;
+                        parent = parent.getParentFile();
+                    }
+                    // Fall back to content file prefix matching
                     if (prefixes != null) {
                         String fileName = source.getName();
                         for (String prefix : prefixes) {
