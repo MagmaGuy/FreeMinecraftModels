@@ -17,7 +17,7 @@ public class FreeMinecraftModelsCommand extends AdvancedCommand {
         addArgument("action", new ListStringCommandArgument(
                 List.of("visualize", "setup", "initialize", "downloadall", "updatecontent"),
                 "<action>"));
-        setPermission("freeminecraftmodels.*");
+        setPermission("freeminecraftmodels.menu");
         setDescription("Shares basic info about FreeMinecraftModels and points to the setup flow.");
         setUsage("/fmm");
         setSenderType(SenderType.PLAYER);
