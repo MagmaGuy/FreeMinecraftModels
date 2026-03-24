@@ -7,6 +7,7 @@ import com.magmaguy.freeminecraftmodels.config.recipes.PropRecipeConfig;
 import com.magmaguy.freeminecraftmodels.config.recipes.PropRecipeManager;
 import com.magmaguy.freeminecraftmodels.content.FMMPackage;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.ItemStackGenerator;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -224,32 +225,62 @@ public final class ModelMenuHelper {
         return ItemStackGenerator.generateItemStack(Material.CHEST, name, lore);
     }
 
+    // Pre-cached skull items — resolved once at startup to avoid
+    // blocking HTTP calls to Mojang API during menu creation.
+    private static ItemStack cachedArrowLeft;
+    private static ItemStack cachedArrowRight;
+
+    /**
+     * Pre-generates the MHF skull items. Call once during plugin initialization.
+     */
+    public static void initialize() {
+        cachedArrowLeft = ItemStackGenerator.generateSkullItemStack("MHF_ArrowLeft", " ", List.of());
+        cachedArrowRight = ItemStackGenerator.generateSkullItemStack("MHF_ArrowRight", " ", List.of());
+    }
+
+    public static void shutdown() {
+        cachedArrowLeft = null;
+        cachedArrowRight = null;
+    }
+
+    private static ItemStack skullWithMeta(ItemStack base, String name, List<String> lore) {
+        if (base == null) return ItemStackGenerator.generateItemStack(Material.ARROW, name, lore);
+        ItemStack clone = base.clone();
+        ItemMeta meta = clone.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(ChatColorConverter.convert(name));
+            meta.setLore(ChatColorConverter.convert(lore));
+            clone.setItemMeta(meta);
+        }
+        return clone;
+    }
+
     /**
      * Builds a "Previous Page" navigation skull item.
      */
     public static ItemStack buildPrevPageItem() {
-        return ItemStackGenerator.generateSkullItemStack("MHF_ArrowLeft", "&ePrevious Page", List.of());
+        return skullWithMeta(cachedArrowLeft, "&ePrevious Page", List.of());
     }
 
     /**
      * Builds a "Next Page" navigation skull item.
      */
     public static ItemStack buildNextPageItem() {
-        return ItemStackGenerator.generateSkullItemStack("MHF_ArrowRight", "&eNext Page", List.of());
+        return skullWithMeta(cachedArrowRight, "&eNext Page", List.of());
     }
 
     /**
      * Builds the "Back" button skull item.
      */
     public static ItemStack buildBackItem() {
-        return ItemStackGenerator.generateSkullItemStack("MHF_ArrowLeft", "&cBack", List.of("&7Return to previous menu"));
+        return skullWithMeta(cachedArrowLeft, "&cBack", List.of("&7Return to previous menu"));
     }
 
     /**
      * Builds a right-pointing arrow skull item (for recipe display, etc.).
      */
     public static ItemStack buildArrowRightItem() {
-        return ItemStackGenerator.generateSkullItemStack("MHF_ArrowRight", " ", List.of());
+        return skullWithMeta(cachedArrowRight, " ", List.of());
     }
 
     // ---------------------------------------------------------------
