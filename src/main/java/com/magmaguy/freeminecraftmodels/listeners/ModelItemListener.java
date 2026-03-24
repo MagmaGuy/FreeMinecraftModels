@@ -22,6 +22,7 @@ import org.bukkit.util.Vector;
 public class ModelItemListener implements Listener {
 
     private static final NamespacedKey MODEL_ID_KEY = new NamespacedKey(com.magmaguy.freeminecraftmodels.MetadataHandler.PLUGIN, "model_id");
+    private static final NamespacedKey ITEM_ID_KEY = new NamespacedKey(com.magmaguy.freeminecraftmodels.MetadataHandler.PLUGIN, "fmm_item_id");
 
     @EventHandler(priority = EventPriority.LOWEST)
     public void onPlayerInteract(PlayerInteractEvent event) {
@@ -34,6 +35,11 @@ public class ModelItemListener implements Listener {
 
         // Check if this is a model placement item
         if (!item.hasItemMeta() || !item.getItemMeta().getPersistentDataContainer().has(MODEL_ID_KEY, PersistentDataType.STRING)) {
+            return;
+        }
+
+        // Skip custom items — they use Lua scripts for right-click, not prop placement
+        if (item.getItemMeta().getPersistentDataContainer().has(ITEM_ID_KEY, PersistentDataType.STRING)) {
             return;
         }
 
