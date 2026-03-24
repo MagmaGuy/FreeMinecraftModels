@@ -56,13 +56,13 @@ public class AdminContentMenu {
 
         if (page > 0) {
             inventory.setItem(ModelMenuHelper.PREV_SLOT,
-                    ModelMenuHelper.buildNavItem("&aPrevious Page"));
+                    ModelMenuHelper.buildNavItem("&ePrevious Page"));
         }
 
         int totalPages = (int) Math.ceil((double) packs.size() / ModelMenuHelper.ITEMS_PER_PAGE);
         if (page < totalPages - 1) {
             inventory.setItem(ModelMenuHelper.NEXT_SLOT,
-                    ModelMenuHelper.buildNavItem("&aNext Page"));
+                    ModelMenuHelper.buildNavItem("&eNext Page"));
         }
     }
 
