@@ -18,6 +18,7 @@ import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.menus.AdminContentMenu;
 import com.magmaguy.freeminecraftmodels.menus.AdminModelListMenu;
 import com.magmaguy.freeminecraftmodels.menus.CraftableItemsMenu;
+import com.magmaguy.freeminecraftmodels.menus.RecipeDetailMenu;
 import com.magmaguy.freeminecraftmodels.listeners.ArmorStandListener;
 import com.magmaguy.freeminecraftmodels.listeners.EntityTeleportEvent;
 import com.magmaguy.freeminecraftmodels.listeners.CraftifyListener;
@@ -168,6 +169,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         AdminContentMenu.registerEvents(this);
         AdminModelListMenu.registerEvents(this);
         CraftableItemsMenu.registerEvents(this);
+        RecipeDetailMenu.registerEvents(this);
         Bukkit.getPluginManager().registerEvents(new MountDismountListener(), this);
         Bukkit.getPluginManager().registerEvents(new NightbreakFirstTimeSetupWarner(this, FIRST_TIME_SETUP_SPEC, DefaultConfig::isSetupDone), this);
         Bukkit.getPluginManager().registerEvents(this, this);

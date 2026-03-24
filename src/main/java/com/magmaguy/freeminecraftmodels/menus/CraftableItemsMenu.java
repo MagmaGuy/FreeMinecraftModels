@@ -106,6 +106,20 @@ public class CraftableItemsMenu {
                     menu.page++;
                     menu.populate(inventory);
                 }
+            } else {
+                // Check if a content slot was clicked — open recipe detail
+                int start = menu.page * ModelMenuHelper.ITEMS_PER_PAGE;
+                for (int i = 0; i < ModelMenuHelper.CONTENT_SLOTS.length; i++) {
+                    if (ModelMenuHelper.CONTENT_SLOTS[i] == slot) {
+                        int modelIndex = start + i;
+                        if (modelIndex < menu.craftableModels.size()) {
+                            openMenus.remove(inventory);
+                            new RecipeDetailMenu((Player) event.getWhoClicked(),
+                                    menu.craftableModels.get(modelIndex).getID());
+                        }
+                        return;
+                    }
+                }
             }
         }
 
