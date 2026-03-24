@@ -4,6 +4,7 @@ import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.freeminecraftmodels.commands.*;
 import com.magmaguy.freeminecraftmodels.config.contentpackages.ContentPackageConfig;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
+import com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry;
 import com.magmaguy.freeminecraftmodels.config.ModelsFolder;
 import com.magmaguy.freeminecraftmodels.config.OutputFolder;
 import com.magmaguy.freeminecraftmodels.config.props.PropScriptLuaConfig;
@@ -123,6 +124,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         // Plugin shutdown logic
         MagmaCore.shutdown(this);
         FileModelConverter.shutdown();
+        DisplayModelRegistry.shutdown();
         FMMPackage.shutdown();
         FMMPackageRefresher.reset();
         PropScriptManager.shutdown();
