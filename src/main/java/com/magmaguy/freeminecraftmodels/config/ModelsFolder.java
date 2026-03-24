@@ -1,9 +1,14 @@
 package com.magmaguy.freeminecraftmodels.config;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.freeminecraftmodels.dataconverter.ParsedTexture;
 import com.magmaguy.magmacore.util.Logger;
 import com.magmaguy.magmacore.util.VersionChecker;
 import org.apache.commons.io.FileUtils;
@@ -86,6 +91,8 @@ public class ModelsFolder {
                 File.separatorChar + "items");
         if (!itemModelsFolder.exists()) itemModelsFolder.mkdir();
 
+        DisplayModelRegistry.shutdown(); // Clear from any previous generation
+
         List<FileModelConverter> bbModelConverterList = new ArrayList<>();
         HashMap<String, Object> jsonConfig = new HashMap<>();
         processFolders(file, bbModelConverterList, jsonConfig, true);
@@ -135,6 +142,95 @@ public class ModelsFolder {
                         e.printStackTrace();
                     }
                 }
+            }
+        }
+
+        // --- Display model processing ---
+        File displayModelsFolder = new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() +
+                File.separatorChar + "output" +
+                File.separatorChar + "FreeMinecraftModels" +
+                File.separatorChar + "assets" +
+                File.separatorChar + "freeminecraftmodels" +
+                File.separatorChar + "models" +
+                File.separatorChar + "display");
+        if (!displayModelsFolder.exists()) displayModelsFolder.mkdirs();
+
+        File displayItemsFolder = new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() +
+                File.separatorChar + "output" +
+                File.separatorChar + "FreeMinecraftModels" +
+                File.separatorChar + "assets" +
+                File.separatorChar + "freeminecraftmodels" +
+                File.separatorChar + "items" +
+                File.separatorChar + "display");
+        if (!displayItemsFolder.exists()) displayItemsFolder.mkdirs();
+
+        for (FileModelConverter converter : bbModelConverterList) {
+            if (converter.getSourceFile() == null) continue;
+            File sourceFile = converter.getSourceFile();
+            String modelId = converter.getID();
+
+            // Check for sibling .json
+            String baseName = sourceFile.getName();
+            int dotIndex = baseName.lastIndexOf('.');
+            if (dotIndex > 0) baseName = baseName.substring(0, dotIndex);
+            File displayJsonFile = new File(sourceFile.getParentFile(), baseName + ".json");
+            if (!displayJsonFile.exists()) continue;
+
+            try {
+                // Read the admin-provided JSON
+                String jsonContent = FileUtils.readFileToString(displayJsonFile, StandardCharsets.UTF_8);
+                JsonObject displayModel = JsonParser.parseString(jsonContent).getAsJsonObject();
+
+                // Rewrite bare texture references (no ":" means not namespaced)
+                if (displayModel.has("textures")) {
+                    JsonObject textures = displayModel.getAsJsonObject("textures");
+                    // Build texture index → FMM path mapping
+                    Map<String, String> textureMapping = new HashMap<>();
+                    List<ParsedTexture> parsedTextures = converter.getParsedTextures();
+                    if (parsedTextures != null) {
+                        for (ParsedTexture pt : parsedTextures) {
+                            String fmmPath = "freeminecraftmodels:entity/" + modelId + "/"
+                                    + pt.getFilename().replace(".png", "");
+                            textureMapping.put("" + pt.getId(), fmmPath);
+                        }
+                    }
+
+                    for (Map.Entry<String, com.google.gson.JsonElement> entry :
+                            new java.util.ArrayList<>(textures.entrySet())) {
+                        String value = entry.getValue().getAsString();
+                        if (!value.contains(":")) {
+                            // Try to map by texture key (index)
+                            String mapped = textureMapping.get(entry.getKey());
+                            if (mapped != null) {
+                                textures.addProperty(entry.getKey(), mapped);
+                            } else if (!textureMapping.isEmpty()) {
+                                // Fallback: use first available texture
+                                textures.addProperty(entry.getKey(), textureMapping.values().iterator().next());
+                            }
+                        }
+                    }
+                }
+
+                // Write rewritten model
+                Gson prettyGson = new GsonBuilder().setPrettyPrinting().create();
+                FileUtils.writeStringToFile(
+                        new File(displayModelsFolder, modelId + ".json"),
+                        prettyGson.toJson(displayModel), StandardCharsets.UTF_8);
+
+                // Generate item model definition
+                HashMap<String, Object> itemDef = new HashMap<>();
+                HashMap<String, Object> modelObj = new HashMap<>();
+                modelObj.put("type", "minecraft:model");
+                modelObj.put("model", "freeminecraftmodels:display/" + modelId);
+                itemDef.put("model", modelObj);
+                FileUtils.writeStringToFile(
+                        new File(displayItemsFolder, modelId + ".json"),
+                        new Gson().toJson(itemDef), StandardCharsets.UTF_8);
+
+                DisplayModelRegistry.register(modelId);
+
+            } catch (Exception e) {
+                Logger.warn("Failed to process display model JSON for " + modelId + ": " + e.getMessage());
             }
         }
 

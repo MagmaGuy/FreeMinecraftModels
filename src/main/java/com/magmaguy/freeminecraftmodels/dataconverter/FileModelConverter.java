@@ -31,6 +31,8 @@ public class FileModelConverter {
     private int blockBenchVersion = 4;
     @Getter
     private Map<String, Object> meta;
+    @Getter
+    private List<ParsedTexture> parsedTextures = new ArrayList<>();
     private double resolutionWidth = 16;
     private double resolutionHeight = 16;
     /**
@@ -44,7 +46,7 @@ public class FileModelConverter {
         else if (file.getName().contains(".fmmodel")) modelName = file.getName().replace(".fmmodel", "");
         else {
             // Silently skip known companion files (e.g. .yml configs, .png textures)
-            if (file.getName().endsWith(".yml") || file.getName().endsWith(".yaml") || file.getName().endsWith(".png"))
+            if (file.getName().endsWith(".yml") || file.getName().endsWith(".yaml") || file.getName().endsWith(".png") || file.getName().endsWith(".json"))
                 return;
             Bukkit.getLogger().warning("File " + file.getName() + " should not be in the models folder!");
             return;
@@ -93,6 +95,7 @@ public class FileModelConverter {
         blockBenchVersion = detectVersion(map);
 
         List<ParsedTexture> parsedTextures = parseTextures(map);
+        this.parsedTextures = parsedTextures;
 
         //This parses the blocks/elements, separating them by type
         HashMap<String, Map<String, Object>> locators = new HashMap<>();
