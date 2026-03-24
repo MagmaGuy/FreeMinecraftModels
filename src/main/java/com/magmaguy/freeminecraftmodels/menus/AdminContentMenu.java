@@ -1,8 +1,10 @@
 package com.magmaguy.freeminecraftmodels.menus;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.config.items.ItemScriptConfigFields;
 import com.magmaguy.freeminecraftmodels.content.FMMPackage;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.ItemStackGenerator;
 import org.bukkit.Bukkit;
@@ -86,18 +88,49 @@ public class AdminContentMenu {
             }
         }
 
-        // Add folder groups (sorted)
-        folderGroups.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey())
-                .forEach(entry -> {
-                    entry.getValue().sort(Comparator.comparing(FileModelConverter::getID));
-                    result.add(new FolderEntry(entry.getKey(), entry.getValue()));
-                });
+        // 3. Include custom items (lone JSONs) in folder groups and root
+        Map<String, List<String>> itemFolderGroups = new LinkedHashMap<>();
+        List<String> rootItems = new ArrayList<>();
+
+        for (Map.Entry<String, File> entry : ItemScriptManager.getItemSourceFiles().entrySet()) {
+            String itemId = entry.getKey();
+            File sourceFile = entry.getValue();
+            File parent = sourceFile.getParentFile();
+
+            if (parent != null && parent.equals(modelsRoot)) {
+                rootItems.add(itemId);
+            } else if (parent != null) {
+                File folder = parent;
+                while (folder.getParentFile() != null && !folder.getParentFile().equals(modelsRoot)) {
+                    folder = folder.getParentFile();
+                }
+                itemFolderGroups.computeIfAbsent(folder.getName(), k -> new ArrayList<>()).add(itemId);
+            }
+        }
+
+        // Merge model folder groups and item folder groups into combined entries
+        Set<String> allFolderNames = new TreeSet<>();
+        allFolderNames.addAll(folderGroups.keySet());
+        allFolderNames.addAll(itemFolderGroups.keySet());
+
+        for (String folderName : allFolderNames) {
+            List<FileModelConverter> models = folderGroups.getOrDefault(folderName, Collections.emptyList());
+            models.sort(Comparator.comparing(FileModelConverter::getID));
+            List<String> items = itemFolderGroups.getOrDefault(folderName, Collections.emptyList());
+            Collections.sort(items);
+            int totalCount = models.size() + items.size();
+            result.add(new FolderEntry(folderName, models, items, totalCount));
+        }
 
         // Add root-level models individually (sorted)
         rootModels.stream()
                 .sorted(Comparator.comparing(FileModelConverter::getID))
                 .forEach(model -> result.add(new SingleModelEntry(model)));
+
+        // Add root-level custom items individually (sorted)
+        rootItems.stream()
+                .sorted()
+                .forEach(itemId -> result.add(new SingleCustomItemEntry(itemId)));
 
         return result;
     }
@@ -204,14 +237,18 @@ public class AdminContentMenu {
         }
     }
 
-    /** A folder of unclaimed models — shows folder name, opens model list. */
+    /** A folder of unclaimed models + custom items — shows folder name, opens model list. */
     private static class FolderEntry implements ContentEntry {
         private final String folderName;
         private final List<FileModelConverter> models;
+        private final List<String> customItemIds;
+        private final int totalCount;
 
-        FolderEntry(String folderName, List<FileModelConverter> models) {
+        FolderEntry(String folderName, List<FileModelConverter> models, List<String> customItemIds, int totalCount) {
             this.folderName = folderName;
             this.models = models;
+            this.customItemIds = customItemIds;
+            this.totalCount = totalCount;
         }
 
         @Override
@@ -220,7 +257,8 @@ public class AdminContentMenu {
             List<String> lore = new ArrayList<>();
             lore.add("&8Folder (no package)");
             lore.add("");
-            lore.add("&7Models: &f" + models.size());
+            if (!models.isEmpty()) lore.add("&7Props: &f" + models.size());
+            if (!customItemIds.isEmpty()) lore.add("&7Items: &f" + customItemIds.size());
             lore.add("");
             lore.add("&eClick to browse");
             return ItemStackGenerator.generateItemStack(Material.BARREL, name, lore);
@@ -228,7 +266,27 @@ public class AdminContentMenu {
 
         @Override
         public void onClick(Player player) {
-            new AdminModelListMenu(player, folderName, models);
+            new AdminModelListMenu(player, folderName, models, customItemIds);
+        }
+    }
+
+    /** A single custom item at root — gives item directly on click. */
+    private static class SingleCustomItemEntry implements ContentEntry {
+        private final String itemId;
+
+        SingleCustomItemEntry(String itemId) {
+            this.itemId = itemId;
+        }
+
+        @Override
+        public ItemStack buildDisplayItem() {
+            return ModelMenuHelper.buildCustomItemDisplayItem(itemId);
+        }
+
+        @Override
+        public void onClick(Player player) {
+            ItemStack item = ItemScriptManager.createItemStack(itemId);
+            if (item != null) player.getInventory().addItem(item);
         }
     }
 
