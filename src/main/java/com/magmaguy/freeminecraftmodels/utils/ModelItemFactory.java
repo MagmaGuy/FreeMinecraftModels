@@ -2,15 +2,18 @@ package com.magmaguy.freeminecraftmodels.utils;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry;
+import com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.VersionChecker;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.List;
+import java.util.Map;
 
 public final class ModelItemFactory {
 
@@ -43,6 +46,52 @@ public final class ModelItemFactory {
         if (!VersionChecker.serverVersionOlderThan(21, 4)
                 && DisplayModelRegistry.hasDisplayModel(modelId)) {
             meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + modelId));
+        }
+
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    /**
+     * Creates a custom item from a model config that has item fields (material, enchantments, etc.).
+     * Uses the display model for rendering, stores fmm_item_id PDC (not model_id).
+     */
+    public static ItemStack createCustomItem(String itemId, PropScriptConfigFields config) {
+        Material material = config.getParsedMaterial();
+        if (material == null) material = Material.PAPER;
+
+        ItemStack item = new ItemStack(material);
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) return item;
+
+        // Name — use config name if set, otherwise generate from ID
+        String name = config.getItemName();
+        if (name != null && !name.isEmpty()) {
+            meta.setDisplayName(ChatColorConverter.convert(name));
+        } else {
+            meta.setDisplayName(ChatColorConverter.convert(
+                    "&e\u2726 &6" + formatModelName(itemId) + " &e\u2726"));
+        }
+
+        // Lore
+        List<String> lore = config.getLore();
+        if (lore != null && !lore.isEmpty()) {
+            meta.setLore(ChatColorConverter.convert(lore));
+        }
+
+        // Enchantments
+        for (Map.Entry<Enchantment, Integer> entry : config.getParsedEnchantments().entrySet()) {
+            meta.addEnchant(entry.getKey(), entry.getValue(), true);
+        }
+
+        // PDC — custom item ID (not model_id, so ModelItemListener won't try to place it)
+        NamespacedKey itemKey = new NamespacedKey(MetadataHandler.PLUGIN, "fmm_item_id");
+        meta.getPersistentDataContainer().set(itemKey, PersistentDataType.STRING, itemId);
+
+        // Display model (1.21.4+)
+        if (!VersionChecker.serverVersionOlderThan(21, 4)
+                && DisplayModelRegistry.hasDisplayModel(itemId)) {
+            meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + itemId));
         }
 
         item.setItemMeta(meta);

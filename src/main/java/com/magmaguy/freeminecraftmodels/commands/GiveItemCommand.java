@@ -29,11 +29,13 @@ public class GiveItemCommand extends AdvancedCommand {
         Player player = commandData.getPlayerSender();
         String itemId = commandData.getStringArgument("item");
 
-        ItemStack item = ItemScriptManager.createItemStack(itemId);
-        if (item == null) {
+        com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields config =
+                ItemScriptManager.getItemDefinitions().get(itemId);
+        if (config == null) {
             Logger.sendMessage(player, "&cUnknown custom item: " + itemId);
             return;
         }
+        ItemStack item = com.magmaguy.freeminecraftmodels.utils.ModelItemFactory.createCustomItem(itemId, config);
 
         player.getInventory().addItem(item);
         Logger.sendMessage(player, "&aGave custom item: " + itemId);

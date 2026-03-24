@@ -6,7 +6,6 @@ import com.magmaguy.magmacore.config.ConfigurationEngine;
 import com.magmaguy.magmacore.scripting.LuaEngine;
 import com.magmaguy.magmacore.scripting.ScriptDefinition;
 import com.magmaguy.magmacore.scripting.ScriptInstance;
-import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import org.bukkit.Bukkit;
@@ -14,7 +13,6 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
@@ -262,57 +260,7 @@ public final class ItemScriptManager {
         return activeScripts.getOrDefault(playerUUID, Collections.emptyMap());
     }
 
-    // ── 4. Item creation ─────────────────────────────────────────────────
-
-    /**
-     * Creates an {@link ItemStack} from a registered item definition.
-     * Applies material, display name, lore, enchantments, and the PDC item ID tag.
-     *
-     * @param itemId the item identifier (must exist in {@link #itemDefinitions})
-     * @return the configured item stack, or null if the item ID is not registered
-     */
-    public static ItemStack createItemStack(String itemId) {
-        PropScriptConfigFields config = itemDefinitions.get(itemId);
-        if (config == null) return null;
-
-        Material material = config.getParsedMaterial();
-        if (material == null) material = Material.PAPER;
-        ItemStack itemStack = new ItemStack(material);
-        ItemMeta meta = itemStack.getItemMeta();
-        if (meta == null) return itemStack;
-
-        // Display name
-        String name = config.getItemName();
-        if (name != null && !name.isEmpty()) {
-            meta.setDisplayName(ChatColorConverter.convert(name));
-        }
-
-        // Lore
-        List<String> lore = config.getLore();
-        if (lore != null && !lore.isEmpty()) {
-            meta.setLore(ChatColorConverter.convert(lore));
-        }
-
-        // Enchantments
-        Map<Enchantment, Integer> enchantments = config.getParsedEnchantments();
-        for (Map.Entry<Enchantment, Integer> entry : enchantments.entrySet()) {
-            meta.addEnchant(entry.getKey(), entry.getValue(), true);
-        }
-
-        // PDC item ID tag
-        meta.getPersistentDataContainer().set(ITEM_ID_KEY, PersistentDataType.STRING, itemId);
-
-        // Set custom display model if available (1.21.4+)
-        if (!com.magmaguy.magmacore.util.VersionChecker.serverVersionOlderThan(21, 4)
-                && com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry.hasDisplayModel(itemId)) {
-            meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + itemId));
-        }
-
-        itemStack.setItemMeta(meta);
-        return itemStack;
-    }
-
-    // ── 5. Shutdown ──────────────────────────────────────────────────────
+    // ── 4. Shutdown ──────────────────────────────────────────────────────
 
     /**
      * Shuts down all active script instances, clears all maps,
