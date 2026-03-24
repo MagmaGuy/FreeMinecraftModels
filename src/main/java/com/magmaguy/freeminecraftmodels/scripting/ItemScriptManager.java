@@ -51,6 +51,10 @@ public final class ItemScriptManager {
     @Getter
     private static final Map<String, ItemScriptConfigFields> itemDefinitions = new ConcurrentHashMap<>();
 
+    /** item id -> source .json file location (for menu folder grouping) */
+    @Getter
+    private static final Map<String, File> itemSourceFiles = new ConcurrentHashMap<>();
+
     /** player UUID -> (item id -> script instance) */
     private static final Map<UUID, Map<String, ScriptInstance>> activeScripts = new ConcurrentHashMap<>();
 
@@ -155,6 +159,7 @@ public final class ItemScriptManager {
             if (!configFields.isEnabled()) continue;
 
             itemDefinitions.put(itemId, configFields);
+            itemSourceFiles.put(itemId, file);
             Logger.info("[FMM Items] Loaded custom item definition: " + itemId);
         }
     }
@@ -341,6 +346,7 @@ public final class ItemScriptManager {
         }
         activeScripts.clear();
         itemDefinitions.clear();
+        itemSourceFiles.clear();
 
         LuaEngine.unregisterScriptProvider(NAMESPACE);
         provider = null;

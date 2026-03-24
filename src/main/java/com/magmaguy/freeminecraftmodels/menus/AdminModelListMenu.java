@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.menus;
 
 import com.magmaguy.freeminecraftmodels.content.FMMPackage;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
 import com.magmaguy.freeminecraftmodels.utils.ModelItemFactory;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import org.bukkit.Bukkit;
@@ -15,30 +16,47 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
+/**
+ * Admin sub-menu listing all models and custom items in a pack or folder.
+ */
 public class AdminModelListMenu {
 
     private static final HashMap<Inventory, AdminModelListMenu> openMenus = new HashMap<>();
 
     private final Player player;
-    private final FMMPackage pack;
-    private final List<FileModelConverter> models;
+    private final List<ListEntry> entries;
     private final Inventory inventory;
     private int page;
 
+    /** Open from a package. */
     public AdminModelListMenu(Player player, FMMPackage pack) {
-        this(player,
-                pack.getContentPackageConfigFields().getName(),
-                ModelMenuHelper.getModelsForPack(pack));
+        this(player, pack.getContentPackageConfigFields().getName(),
+                ModelMenuHelper.getModelsForPack(pack), Collections.emptyList());
     }
 
+    /** Open from a folder with models only (backwards compat). */
     public AdminModelListMenu(Player player, String title, List<FileModelConverter> models) {
+        this(player, title, models, Collections.emptyList());
+    }
+
+    /** Open from a folder with models + custom items. */
+    public AdminModelListMenu(Player player, String title, List<FileModelConverter> models, List<String> customItemIds) {
         this.player = player;
-        this.pack = null;
         this.page = 0;
-        this.models = models;
+
+        // Build unified entry list: models first, then custom items
+        this.entries = new ArrayList<>();
+        for (FileModelConverter model : models) {
+            entries.add(new ModelEntry(model));
+        }
+        for (String itemId : customItemIds) {
+            entries.add(new CustomItemEntry(itemId));
+        }
 
         this.inventory = Bukkit.createInventory(null, 54,
                 ChatColorConverter.convert("&8FMM Admin - " + title));
@@ -51,28 +69,23 @@ public class AdminModelListMenu {
     private void populateInventory() {
         inventory.clear();
 
-        // Back button
         inventory.setItem(ModelMenuHelper.BACK_SLOT, ModelMenuHelper.buildBackItem());
 
-        // Content items for current page
         int startIndex = page * ModelMenuHelper.ITEMS_PER_PAGE;
         for (int i = 0; i < ModelMenuHelper.CONTENT_SLOTS.length; i++) {
-            int modelIndex = startIndex + i;
-            if (modelIndex < models.size()) {
-                inventory.setItem(ModelMenuHelper.CONTENT_SLOTS[i],
-                        ModelMenuHelper.buildModelItem(models.get(modelIndex), true));
+            int entryIndex = startIndex + i;
+            if (entryIndex < entries.size()) {
+                inventory.setItem(ModelMenuHelper.CONTENT_SLOTS[i], entries.get(entryIndex).buildDisplayItem());
             } else {
                 inventory.setItem(ModelMenuHelper.CONTENT_SLOTS[i], null);
             }
         }
 
-        // Previous page arrow
         if (page > 0) {
             inventory.setItem(ModelMenuHelper.PREV_SLOT, ModelMenuHelper.buildPrevPageItem());
         }
 
-        // Next page arrow
-        int totalPages = (int) Math.ceil((double) models.size() / ModelMenuHelper.ITEMS_PER_PAGE);
+        int totalPages = Math.max(1, (int) Math.ceil((double) entries.size() / ModelMenuHelper.ITEMS_PER_PAGE));
         if (page < totalPages - 1) {
             inventory.setItem(ModelMenuHelper.NEXT_SLOT, ModelMenuHelper.buildNextPageItem());
         }
@@ -91,14 +104,13 @@ public class AdminModelListMenu {
             return;
         }
 
-        int totalPages = (int) Math.ceil((double) models.size() / ModelMenuHelper.ITEMS_PER_PAGE);
+        int totalPages = Math.max(1, (int) Math.ceil((double) entries.size() / ModelMenuHelper.ITEMS_PER_PAGE));
         if (slot == ModelMenuHelper.NEXT_SLOT && page < totalPages - 1) {
             page++;
             populateInventory();
             return;
         }
 
-        // Check if clicked slot is a content slot
         int contentIndex = -1;
         for (int i = 0; i < ModelMenuHelper.CONTENT_SLOTS.length; i++) {
             if (ModelMenuHelper.CONTENT_SLOTS[i] == slot) {
@@ -109,12 +121,10 @@ public class AdminModelListMenu {
 
         if (contentIndex < 0) return;
 
-        int modelIndex = page * ModelMenuHelper.ITEMS_PER_PAGE + contentIndex;
-        if (modelIndex >= models.size()) return;
+        int entryIndex = page * ModelMenuHelper.ITEMS_PER_PAGE + contentIndex;
+        if (entryIndex >= entries.size()) return;
 
-        String modelId = models.get(modelIndex).getID();
-
-        player.getInventory().addItem(ModelItemFactory.createModelItem(modelId, Material.PAPER));
+        entries.get(entryIndex).onClick(player);
     }
 
     public static void registerEvents(Plugin plugin) {
@@ -122,7 +132,6 @@ public class AdminModelListMenu {
     }
 
     public static class Events implements Listener {
-
         @EventHandler
         public void onInventoryClick(InventoryClickEvent event) {
             Inventory clickedInventory = event.getInventory();
@@ -130,8 +139,6 @@ public class AdminModelListMenu {
             if (menu == null) return;
 
             event.setCancelled(true);
-
-            // Ignore clicks in the player's own inventory
             if (event.getClickedInventory() != clickedInventory) return;
 
             ItemStack clicked = event.getCurrentItem();
@@ -143,6 +150,46 @@ public class AdminModelListMenu {
         @EventHandler
         public void onInventoryClose(InventoryCloseEvent event) {
             openMenus.remove(event.getInventory());
+        }
+    }
+
+    // ── Entry types ─────────────────────────────────────────────────
+
+    private interface ListEntry {
+        ItemStack buildDisplayItem();
+        void onClick(Player player);
+    }
+
+    private static class ModelEntry implements ListEntry {
+        private final FileModelConverter model;
+
+        ModelEntry(FileModelConverter model) { this.model = model; }
+
+        @Override
+        public ItemStack buildDisplayItem() {
+            return ModelMenuHelper.buildModelItem(model, true);
+        }
+
+        @Override
+        public void onClick(Player player) {
+            player.getInventory().addItem(ModelItemFactory.createModelItem(model.getID(), Material.PAPER));
+        }
+    }
+
+    private static class CustomItemEntry implements ListEntry {
+        private final String itemId;
+
+        CustomItemEntry(String itemId) { this.itemId = itemId; }
+
+        @Override
+        public ItemStack buildDisplayItem() {
+            return ModelMenuHelper.buildCustomItemDisplayItem(itemId);
+        }
+
+        @Override
+        public void onClick(Player player) {
+            ItemStack item = ItemScriptManager.createItemStack(itemId);
+            if (item != null) player.getInventory().addItem(item);
         }
     }
 }
