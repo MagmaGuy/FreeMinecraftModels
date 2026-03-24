@@ -151,6 +151,8 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         MagmaCore.initializeImporter(this);
         initializationContext.step("Output Folder");
         OutputFolder.initializeConfig();
+        initializationContext.step("Item Scripting");
+        ItemScriptManager.initialize();
         initializationContext.step("Models Folder");
         ModelsFolder.initializeConfig();
         initializationContext.step("Content Packages");
@@ -214,7 +216,6 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         initializationContext.step("Prop Scripting");
         new PropScriptLuaConfig(new File(getDataFolder(), "scripts"));
         PropScriptManager.initialize();
-        ItemScriptManager.initialize();
         if (PropScriptManager.getListener() != null) {
             Bukkit.getPluginManager().registerEvents(PropScriptManager.getListener(), this);
         }
