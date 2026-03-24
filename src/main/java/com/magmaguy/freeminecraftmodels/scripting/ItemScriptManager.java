@@ -302,6 +302,12 @@ public final class ItemScriptManager {
         // PDC item ID tag
         meta.getPersistentDataContainer().set(ITEM_ID_KEY, PersistentDataType.STRING, itemId);
 
+        // Set custom display model if available (1.21.4+)
+        if (!com.magmaguy.magmacore.util.VersionChecker.serverVersionOlderThan(21, 4)
+                && com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry.hasDisplayModel(itemId)) {
+            meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + itemId));
+        }
+
         itemStack.setItemMeta(meta);
         return itemStack;
     }
