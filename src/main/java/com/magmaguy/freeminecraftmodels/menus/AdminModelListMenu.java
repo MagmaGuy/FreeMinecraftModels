@@ -1,13 +1,11 @@
 package com.magmaguy.freeminecraftmodels.menus;
 
-import com.magmaguy.freeminecraftmodels.MetadataHandler;
-import com.magmaguy.freeminecraftmodels.commands.ItemifyCommand;
 import com.magmaguy.freeminecraftmodels.content.FMMPackage;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.freeminecraftmodels.utils.ModelItemFactory;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
-import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -15,8 +13,6 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
 
 import java.util.HashMap;
@@ -117,20 +113,7 @@ public class AdminModelListMenu {
 
         String modelId = models.get(modelIndex).getID();
 
-        ItemStack giveItem = new ItemStack(Material.PAPER);
-        ItemMeta meta = giveItem.getItemMeta();
-        meta.setDisplayName(ChatColorConverter.convert("&e\u2726 &6" + ItemifyCommand.formatModelName(modelId) + " &e\u2726"));
-        meta.setLore(List.of(
-                "",
-                ChatColorConverter.convert("&7Right-click on a block to place"),
-                ChatColorConverter.convert("&7Punch to pick back up"),
-                "",
-                ChatColorConverter.convert("&8Model: " + modelId)
-        ));
-        NamespacedKey key = new NamespacedKey(MetadataHandler.PLUGIN, "model_id");
-        meta.getPersistentDataContainer().set(key, PersistentDataType.STRING, modelId);
-        giveItem.setItemMeta(meta);
-        player.getInventory().addItem(giveItem);
+        player.getInventory().addItem(ModelItemFactory.createModelItem(modelId, Material.PAPER));
     }
 
     public static void registerEvents(Plugin plugin) {
