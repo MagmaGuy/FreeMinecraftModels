@@ -293,6 +293,54 @@ public final class ModelMenuHelper {
         return skullWithMeta(cachedArrowRight, " ", List.of());
     }
 
+    /**
+     * Builds a display item for a custom scriptable item in the admin menu.
+     */
+    public static ItemStack buildCustomItemDisplayItem(String itemId) {
+        com.magmaguy.freeminecraftmodels.config.items.ItemScriptConfigFields config =
+                com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager.getItemDefinitions().get(itemId);
+
+        String formattedName = ModelItemFactory.formatModelName(itemId);
+        String displayName = config != null && !config.getItemName().isEmpty()
+                ? config.getItemName()
+                : "&d\u2726 &5" + formattedName + " &d\u2726";
+
+        Material material = config != null ? config.getParsedMaterial() : Material.PAPER;
+
+        List<String> lore = new ArrayList<>();
+        lore.add("&8Custom Item");
+        lore.add("");
+
+        if (config != null) {
+            // Scripts
+            List<String> scripts = config.getScripts();
+            lore.add("&7Scripts:");
+            if (scripts == null || scripts.isEmpty()) {
+                lore.add("  &8None");
+            } else {
+                for (String script : scripts) {
+                    lore.add("  &f- &7" + script);
+                }
+            }
+            lore.add("");
+
+            // Enchantments
+            if (!config.getEnchantments().isEmpty()) {
+                lore.add("&7Enchantments:");
+                for (String ench : config.getEnchantments()) {
+                    lore.add("  &b" + ench);
+                }
+                lore.add("");
+            }
+        }
+
+        lore.add("&eClick to get item");
+        lore.add("");
+        lore.add("&8ID: " + itemId);
+
+        return ItemStackGenerator.generateItemStack(material, displayName, lore);
+    }
+
     // ---------------------------------------------------------------
     // Internal helpers
     // ---------------------------------------------------------------
