@@ -27,16 +27,19 @@ import java.util.stream.Collectors;
 public final class ModelMenuHelper {
 
     /**
-     * Inventory slots used for content items (3 rows of 7, starting at row 2).
+     * Inventory slots used for content items (rows 1-5, all 9 columns).
+     * Row 6 (slots 45-53) is reserved for navigation.
      */
     public static final int[] CONTENT_SLOTS = {
-            10, 11, 12, 13, 14, 15, 16,
-            19, 20, 21, 22, 23, 24, 25,
-            28, 29, 30, 31, 32, 33, 34
+             0,  1,  2,  3,  4,  5,  6,  7,  8,
+             9, 10, 11, 12, 13, 14, 15, 16, 17,
+            18, 19, 20, 21, 22, 23, 24, 25, 26,
+            27, 28, 29, 30, 31, 32, 33, 34, 35,
+            36, 37, 38, 39, 40, 41, 42, 43, 44
     };
 
     /** Number of items displayed per page. */
-    public static final int ITEMS_PER_PAGE = 21;
+    public static final int ITEMS_PER_PAGE = 45;
 
     /** Slot index for the "Previous Page" navigation button. */
     public static final int PREV_SLOT = 45;
@@ -44,8 +47,8 @@ public final class ModelMenuHelper {
     /** Slot index for the "Next Page" navigation button. */
     public static final int NEXT_SLOT = 53;
 
-    /** Slot index for the "Back" navigation button. */
-    public static final int BACK_SLOT = 0;
+    /** Slot index for the "Back" navigation button (in the nav row). */
+    public static final int BACK_SLOT = 49;
 
     private ModelMenuHelper() {
         // utility class
