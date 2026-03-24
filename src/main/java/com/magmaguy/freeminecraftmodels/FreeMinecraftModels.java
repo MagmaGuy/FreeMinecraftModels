@@ -25,6 +25,7 @@ import com.magmaguy.freeminecraftmodels.listeners.EntityTeleportEvent;
 import com.magmaguy.freeminecraftmodels.listeners.CraftifyListener;
 import com.magmaguy.freeminecraftmodels.listeners.ModelItemListener;
 import com.magmaguy.freeminecraftmodels.listeners.MountDismountListener;
+import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
 import com.magmaguy.freeminecraftmodels.scripting.PropScriptManager;
 import com.magmaguy.freeminecraftmodels.menus.FreeMinecraftModelsFirstTimeSetupMenu;
 import com.magmaguy.freeminecraftmodels.menus.FreeMinecraftModelsSetupMenu;
@@ -131,6 +132,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         FMMPackage.shutdown();
         FMMPackageRefresher.reset();
         PropScriptManager.shutdown();
+        ItemScriptManager.shutdown();
         PropRecipeManager.shutdown();
         ModeledEntity.shutdown();
         ModeledEntitiesClock.shutdown();
@@ -211,6 +213,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         initializationContext.step("Prop Scripting");
         new PropScriptLuaConfig(new File(getDataFolder(), "scripts"));
         PropScriptManager.initialize();
+        ItemScriptManager.initialize();
         if (PropScriptManager.getListener() != null) {
             Bukkit.getPluginManager().registerEvents(PropScriptManager.getListener(), this);
         }

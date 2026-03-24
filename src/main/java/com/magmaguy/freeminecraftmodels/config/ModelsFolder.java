@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry;
+import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.ParsedTexture;
@@ -233,6 +234,9 @@ public class ModelsFolder {
                 Logger.warn("Failed to process display model JSON for " + modelId + ": " + e.getMessage());
             }
         }
+
+        // Scan for lone .json files that define custom items
+        ItemScriptManager.scanForCustomItems(file);
 
     }
 
