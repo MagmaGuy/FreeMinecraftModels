@@ -29,18 +29,19 @@ public class AdminModelListMenu {
     private int page;
 
     public AdminModelListMenu(Player player, FMMPackage pack) {
-        this(player, pack, 0);
+        this(player,
+                pack.getContentPackageConfigFields().getName(),
+                ModelMenuHelper.getModelsForPack(pack));
     }
 
-    public AdminModelListMenu(Player player, FMMPackage pack, int page) {
+    public AdminModelListMenu(Player player, String title, List<FileModelConverter> models) {
         this.player = player;
-        this.pack = pack;
-        this.page = page;
-        this.models = ModelMenuHelper.getModelsForPack(pack);
+        this.pack = null;
+        this.page = 0;
+        this.models = models;
 
-        String packName = pack.getContentPackageConfigFields().getName();
-        String title = ChatColorConverter.convert("&8FMM Admin - " + packName);
-        this.inventory = Bukkit.createInventory(null, 54, title);
+        this.inventory = Bukkit.createInventory(null, 54,
+                ChatColorConverter.convert("&8FMM Admin - " + title));
 
         populateInventory();
         openMenus.put(inventory, this);
