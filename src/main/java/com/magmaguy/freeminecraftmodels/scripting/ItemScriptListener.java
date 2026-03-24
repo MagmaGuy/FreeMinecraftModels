@@ -86,8 +86,9 @@ public class ItemScriptListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerJoin(PlayerJoinEvent event) {
+        // Longer delay on join — inventory may not be fully loaded yet
         Bukkit.getScheduler().runTaskLater(MetadataHandler.PLUGIN,
-                () -> ItemScriptManager.updateEquippedScripts(event.getPlayer()), 5L);
+                () -> ItemScriptManager.updateEquippedScripts(event.getPlayer()), 20L);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
