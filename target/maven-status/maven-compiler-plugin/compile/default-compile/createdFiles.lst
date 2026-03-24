@@ -102,6 +102,7 @@ com\magmaguy\freeminecraftmodels\api\ModeledEntityHitByProjectileEvent.class
 com\magmaguy\freeminecraftmodels\customentity\core\components\InteractionComponent$InteractionComponentEvents.class
 com\magmaguy\freeminecraftmodels\customentity\core\OBBHitDetection$1$1.class
 com\magmaguy\freeminecraftmodels\animation\Animation.class
+com\magmaguy\freeminecraftmodels\commands\GiveItemCommand.class
 com\magmaguy\freeminecraftmodels\customentity\ModeledEntityRightClickCallback.class
 com\magmaguy\freeminecraftmodels\commands\UndisguiseCommand.class
 com\magmaguy\freeminecraftmodels\customentity\core\ModeledEntityInterface.class
