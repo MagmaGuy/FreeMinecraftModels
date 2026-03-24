@@ -18,8 +18,9 @@ public class PickupablePropConfig extends PropScriptLuaConfigFields {
                     end,
                     on_left_click = function(context)
                         if context.event then
-                            context.event.cancel()
+                            context.event:cancel()
                         end
+                        context.prop:hurt_visual()
                         local state = context.state
                         state.hits = (state.hits or 0) + 1
                         if state.hits >= 3 then
@@ -29,9 +30,9 @@ public class PickupablePropConfig extends PropScriptLuaConfigFields {
                         end
                         -- reset hit counter after 100 ticks (5 seconds)
                         if state.reset_task then
-                            state.reset_task.cancel()
+                            context.scheduler:cancel(state.reset_task)
                         end
-                        state.reset_task = context.scheduler.run_later(100, function()
+                        state.reset_task = context.scheduler:run_later(100, function()
                             state.hits = 0
                             state.reset_task = nil
                         end)

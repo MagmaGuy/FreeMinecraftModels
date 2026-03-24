@@ -67,7 +67,7 @@ public class PropScriptListener implements Listener {
         if (instance == null || instance.isClosed()) return;
 
         if (event.getHand() == EquipmentSlot.HAND) {
-            instance.handleEvent(ScriptableProp.ON_RIGHT_CLICK, event, null, null);
+            instance.handleEvent(ScriptableProp.ON_RIGHT_CLICK, event, null, event.getPlayer());
         }
     }
 
@@ -90,7 +90,7 @@ public class PropScriptListener implements Listener {
         if (instance == null || instance.isClosed()) return;
 
         if (event.getHand() == EquipmentSlot.HAND) {
-            instance.handleEvent(ScriptableProp.ON_RIGHT_CLICK, event, null, null);
+            instance.handleEvent(ScriptableProp.ON_RIGHT_CLICK, event, null, event.getPlayer());
         }
     }
 
@@ -109,9 +109,10 @@ public class PropScriptListener implements Listener {
         ScriptInstance instance = scriptedProps.get(prop);
         if (instance == null || instance.isClosed()) return;
 
-        // Pass the shooter as eventActor if it is a living entity
+        // Pass the shooter as eventActor if it is a player
         Projectile projectile = event.getEntity();
-        instance.handleEvent(ScriptableProp.ON_PROJECTILE_HIT, event, null, null);
+        Player shooter = (projectile.getShooter() instanceof Player p) ? p : null;
+        instance.handleEvent(ScriptableProp.ON_PROJECTILE_HIT, event, null, shooter);
     }
 
     // ── Left click (damage) event ───────────────────────────────────────
@@ -131,6 +132,6 @@ public class PropScriptListener implements Listener {
         ScriptInstance instance = scriptedProps.get(prop);
         if (instance == null || instance.isClosed()) return;
 
-        instance.handleEvent(ScriptableProp.ON_LEFT_CLICK, event, null, null);
+        instance.handleEvent(ScriptableProp.ON_LEFT_CLICK, event, null, (Player) damager);
     }
 }

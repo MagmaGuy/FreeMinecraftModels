@@ -134,6 +134,13 @@ public class BoneTransforms {
 
     public void generateDisplay() {
         transform();
+        if (bone.getBoneBlueprint().isMountPoint()) {
+            // Mount-point bones need a packet entity for position tracking
+            // (so getBoneLocation() works and tick updates follow animations)
+            // but no visible model since the bone is empty.
+            initializeMountPointBone();
+            return;
+        }
         if (bone.getBoneBlueprint().isDisplayModel()) {
             if (bone.getBoneBlueprint().isNameTag()) {
                 initializeTextDisplayBone();
@@ -149,6 +156,15 @@ public class BoneTransforms {
         packetTextDisplayArmorStandEntity = NMSManager.getAdapter().createPacketTextArmorStandEntity(textDisplayLocation);
         packetTextDisplayArmorStandEntity.initializeText(textDisplayLocation);
         packetTextDisplayArmorStandEntity.sendLocationAndRotationPacket(textDisplayLocation, new EulerAngle(0, 0, 0));
+    }
+
+    private void initializeMountPointBone() {
+        // Create an invisible packet armor stand just for position tracking.
+        // No model is set — this entity is never shown to players, it only
+        // provides a location that follows the skeleton's animation transforms.
+        Location loc = getMountPointTargetLocation();
+        packetArmorStandEntity = NMSManager.getAdapter().createPacketArmorStandEntity(loc);
+        packetArmorStandEntity.sendLocationAndRotationPacket(loc, new EulerAngle(0, 0, 0));
     }
 
     private void initializeDisplayEntityBone() {
@@ -180,6 +196,20 @@ public class BoneTransforms {
         if (parent == null) {
             localMatrix.rotateLocal(0, (float) -Math.toRadians(bone.getSkeleton().getCurrentLocation().getYaw() + 180), 0);
         }
+    }
+
+    /**
+     * Returns the bone's world position derived purely from the global
+     * transform matrix, with no armor-stand pivot offset. Used for mount
+     * points where the raw pivot position is needed.
+     */
+    protected Location getMountPointTargetLocation() {
+        double[] translatedGlobalMatrix = globalMatrix.getTranslation();
+        return new Location(bone.getSkeleton().getCurrentLocation().getWorld(),
+                translatedGlobalMatrix[0],
+                translatedGlobalMatrix[1],
+                translatedGlobalMatrix[2])
+                .add(bone.getSkeleton().getCurrentLocation());
     }
 
     protected Location getArmorStandTargetLocation() {

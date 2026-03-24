@@ -49,26 +49,15 @@ public class ParsedTexture {
                 this.uvWidth = (double) textureObject.get("uv_width");
                 this.frameTime = (double) textureObject.get("frame_time");
             } else {
-                // No explicit metadata - read from image and detect animation
+                // No explicit metadata - read dimensions from image.
+                // Without Blockbench metadata we cannot reliably distinguish
+                // animated textures from portrait-orientation texture atlases,
+                // so we treat the texture as static.
                 BufferedImage bufferedImage = ImageIO.read(imageFile);
                 this.height = bufferedImage.getHeight();
                 this.width = bufferedImage.getWidth();
-
-                // Detect animated textures
-                // Minecraft animated textures have frames stacked vertically
-                // If height is evenly divisible by width and > width, it's likely animated
-                if (this.height > this.width && this.height % this.width == 0) {
-                    // This is an animated texture - each frame is square (width x width)
-                    this.uvHeight = this.width;
-                    this.uvWidth = this.width;
-                    // Frame time defaults to 1 (1 tick per frame)
-                    this.frameTime = 1.0;
-                    Logger.info("Detected animated texture: " + filename + " (" + (this.height / this.width) + " frames)");
-                } else {
-                    // Static texture
-                    this.uvHeight = bufferedImage.getHeight();
-                    this.uvWidth = bufferedImage.getWidth();
-                }
+                this.uvHeight = this.height;
+                this.uvWidth = this.width;
             }
 
         } catch (Exception e) {
@@ -127,12 +116,15 @@ public class ParsedTexture {
 
 
     public boolean isAnimated() {
-        // A texture is animated when it has multiple frames stacked vertically
-        // (height > width and height is an exact multiple of width).
-        // We must NOT use "height != uvHeight" because in the Blockbench free-model format
-        // the uv dimensions are typically different from pixel dimensions (e.g. half),
-        // which would falsely flag every texture as animated.
-        return height > width && height % width == 0;
+        // A texture is animated when its pixel dimensions differ from its UV
+        // dimensions. This only happens when explicit Blockbench metadata
+        // provides separate uv_height / uv_width values indicating that the
+        // image contains stacked animation frames.
+        // Without metadata, uvHeight/uvWidth are set equal to height/width so
+        // this safely returns false, avoiding false positives on portrait-
+        // orientation texture atlases.
+        if (uvHeight <= 0 || uvWidth <= 0) return false;
+        return height != uvHeight || width != uvWidth;
     }
 
     /**

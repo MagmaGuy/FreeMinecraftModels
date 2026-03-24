@@ -61,14 +61,14 @@ public class MountSeat {
      * Dismounts the current occupant and removes the vehicle ArmorStand.
      */
     public void dismount() {
-        if (vehicle != null) {
-            if (occupant != null) {
-                vehicle.removePassenger(occupant);
-            }
-            vehicle.remove();
-            vehicle = null;
+        if (occupant != null && vehicle != null) {
+            vehicle.removePassenger(occupant);
         }
         occupant = null;
+        if (vehicle != null) {
+            vehicle.remove();
+        }
+        vehicle = null;
     }
 
     /**

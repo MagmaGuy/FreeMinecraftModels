@@ -7,6 +7,7 @@ import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -76,7 +77,10 @@ public class ModelItemListener implements Listener {
         // Place the model
         PropEntity staticEntity = PropEntity.spawnPropEntity(modelID, placementLocation);
         if (staticEntity != null) {
-            Logger.sendMessage(player, "§aSuccessfully placed model " + modelID + "!");
+            // Consume the item unless in creative mode
+            if (player.getGameMode() != GameMode.CREATIVE) {
+                item.setAmount(item.getAmount() - 1);
+            }
         } else {
             Logger.sendMessage(player, "§cFailed to place model " + modelID + "!");
         }
@@ -86,8 +90,8 @@ public class ModelItemListener implements Listener {
         // Calculate yaw from direction vector
         double yaw = Math.atan2(-direction.getX(), direction.getZ()) * 180 / Math.PI;
 
-        // Clamp to 90-degree increments
-        yaw = Math.round(yaw / 90.0) * 90.0;
+        // Snap to 10-degree increments
+        yaw = Math.round(yaw / 10.0) * 10.0;
 
         // Ensure yaw is positive
         if (yaw < 0) yaw += 360;
