@@ -64,14 +64,17 @@ public class ItemScriptListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerItemHeld(PlayerItemHeldEvent event) {
-        ItemScriptManager.updateEquippedScripts(event.getPlayer());
+        // Delay 1 tick so the held item slot is fully updated
+        Bukkit.getScheduler().runTaskLater(MetadataHandler.PLUGIN,
+                () -> ItemScriptManager.updateEquippedScripts(event.getPlayer()), 1L);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerSwapHandItems(PlayerSwapHandItemsEvent event) {
         Player player = event.getPlayer();
-        ItemScriptManager.updateEquippedScripts(player);
         fireForAllEquipped(player, ScriptableItem.ON_SWAP_HANDS, event);
+        Bukkit.getScheduler().runTaskLater(MetadataHandler.PLUGIN,
+                () -> ItemScriptManager.updateEquippedScripts(player), 1L);
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -83,7 +86,8 @@ public class ItemScriptListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerJoin(PlayerJoinEvent event) {
-        ItemScriptManager.updateEquippedScripts(event.getPlayer());
+        Bukkit.getScheduler().runTaskLater(MetadataHandler.PLUGIN,
+                () -> ItemScriptManager.updateEquippedScripts(event.getPlayer()), 5L);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
