@@ -69,8 +69,9 @@ public class ModelItemListener implements Listener {
             return;
         }
 
-        // Calculate placement location (adjacent to the hit face)
-        Location placementLocation = targetBlock.getLocation().add(hitFace.getDirection());
+        // Calculate placement location — center of the hit face surface
+        // The model's bottom-center origin is placed at this point
+        Location placementLocation = getFaceCenterLocation(targetBlock, hitFace);
 
         // Calculate the direction from the placement location to the player
         Vector toPlayer = player.getLocation().toVector().subtract(placementLocation.toVector()).normalize();
@@ -90,6 +91,28 @@ public class ModelItemListener implements Listener {
         } else {
             Logger.sendMessage(player, "§cFailed to place model " + modelID + "!");
         }
+    }
+
+    /**
+     * Returns the center of the given face of a block.
+     * For UP:    block + (0.5, 1.0, 0.5) — center of the top surface
+     * For DOWN:  block + (0.5, 0.0, 0.5) — center of the bottom surface
+     * For NORTH: block + (0.5, 0.5, 0.0) — center of the north face
+     * For SOUTH: block + (0.5, 0.5, 1.0) — center of the south face
+     * For WEST:  block + (0.0, 0.5, 0.5) — center of the west face
+     * For EAST:  block + (1.0, 0.5, 0.5) — center of the east face
+     */
+    private Location getFaceCenterLocation(Block block, BlockFace face) {
+        Location loc = block.getLocation();
+        return switch (face) {
+            case UP -> loc.add(0.5, 1.0, 0.5);
+            case DOWN -> loc.add(0.5, 0.0, 0.5);
+            case NORTH -> loc.add(0.5, 0.5, 0.0);
+            case SOUTH -> loc.add(0.5, 0.5, 1.0);
+            case WEST -> loc.add(0.0, 0.5, 0.5);
+            case EAST -> loc.add(1.0, 0.5, 0.5);
+            default -> loc.add(0.5, 1.0, 0.5);
+        };
     }
 
     private float calculateYawFromDirection(Vector direction) {
