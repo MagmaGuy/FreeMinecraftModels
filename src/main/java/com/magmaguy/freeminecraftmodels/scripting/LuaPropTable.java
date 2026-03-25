@@ -14,19 +14,30 @@ import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import com.magmaguy.shaded.luaj.vm2.LuaTable;
 import com.magmaguy.shaded.luaj.vm2.LuaValue;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.util.Base64;
 import java.util.UUID;
+
+import org.bukkit.util.io.BukkitObjectInputStream;
+import org.bukkit.util.io.BukkitObjectOutputStream;
 
 /**
  * Builds the {@code context.prop} Lua table exposed to scripts bound to a {@link PropEntity}.
  * Uses {@link LuaEntityTable#build(Entity)} as the base when the prop has a backing armor stand.
  */
 public final class LuaPropTable {
+
+    static final NamespacedKey INVENTORY_KEY = new NamespacedKey(MetadataHandler.PLUGIN, "fmm_prop_inventory");
+    private static final NamespacedKey INVENTORY_SIZE_KEY = new NamespacedKey(MetadataHandler.PLUGIN, "fmm_prop_inventory_size");
+    private static final NamespacedKey BOOK_KEY = new NamespacedKey(MetadataHandler.PLUGIN, "fmm_prop_book");
 
     private LuaPropTable() {}
 
@@ -154,6 +165,169 @@ public final class LuaPropTable {
             return LuaValue.NIL;
         }));
 
+        // open_inventory(player, title, rows) — opens a persistent chest inventory
+        table.set("open_inventory", LuaTableSupport.tableMethod(table, args -> {
+            LuaTable playerTable = args.arg1().checktable();
+            String title = args.checkjstring(2);
+            int rows = args.optint(3, 3);
+            rows = Math.max(1, Math.min(6, rows));
+
+            UUID uuid = UUID.fromString(playerTable.get("uuid").tojstring());
+            Player player = Bukkit.getPlayer(uuid);
+            if (player == null || !(underlying instanceof ArmorStand armorStand)) return LuaValue.FALSE;
+
+            int size = rows * 9;
+            final int finalSize = size;
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+                Inventory inv = Bukkit.createInventory(null, finalSize, title);
+
+                // Load existing contents from PDC
+                String savedData = armorStand.getPersistentDataContainer()
+                        .get(INVENTORY_KEY, PersistentDataType.STRING);
+                if (savedData != null) {
+                    ItemStack[] items = deserializeInventory(savedData);
+                    if (items != null) {
+                        for (int i = 0; i < Math.min(items.length, finalSize); i++) {
+                            if (items[i] != null) inv.setItem(i, items[i]);
+                        }
+                    }
+                }
+
+                // Track this inventory so we can save on close
+                PropInventoryListener.initialize();
+                PropInventoryListener.trackInventory(player.getUniqueId(), inv, armorStand);
+                player.openInventory(inv);
+            });
+            return LuaValue.TRUE;
+        }));
+
+        // place_book(player) — takes the held written book and stores it on the prop
+        table.set("place_book", LuaTableSupport.tableMethod(table, args -> {
+            LuaTable playerTable = args.arg1().checktable();
+            UUID uuid = UUID.fromString(playerTable.get("uuid").tojstring());
+            Player player = Bukkit.getPlayer(uuid);
+            if (player == null || !(underlying instanceof ArmorStand armorStand)) return LuaValue.FALSE;
+
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+                ItemStack held = player.getInventory().getItemInMainHand();
+                if (held.getType() != Material.WRITTEN_BOOK && held.getType() != Material.WRITABLE_BOOK) return;
+
+                // Check if prop already has a book
+                if (armorStand.getPersistentDataContainer().has(BOOK_KEY, PersistentDataType.STRING)) return;
+
+                // Serialize and store
+                String bookData = serializeItem(held);
+                if (bookData == null) return;
+                armorStand.getPersistentDataContainer().set(BOOK_KEY, PersistentDataType.STRING, bookData);
+
+                // Remove from player's hand
+                held.setAmount(held.getAmount() - 1);
+            });
+            return LuaValue.TRUE;
+        }));
+
+        // read_book(player) — opens the stored book for reading
+        table.set("read_book", LuaTableSupport.tableMethod(table, args -> {
+            LuaTable playerTable = args.arg1().checktable();
+            UUID uuid = UUID.fromString(playerTable.get("uuid").tojstring());
+            Player player = Bukkit.getPlayer(uuid);
+            if (player == null || !(underlying instanceof ArmorStand armorStand)) return LuaValue.FALSE;
+
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+                String bookData = armorStand.getPersistentDataContainer()
+                        .get(BOOK_KEY, PersistentDataType.STRING);
+                if (bookData == null) return;
+
+                ItemStack book = deserializeItem(bookData);
+                if (book == null || book.getType() != Material.WRITTEN_BOOK) return;
+
+                player.openBook(book);
+            });
+            return LuaValue.TRUE;
+        }));
+
+        // take_book(player) — returns the stored book to the player
+        table.set("take_book", LuaTableSupport.tableMethod(table, args -> {
+            LuaTable playerTable = args.arg1().checktable();
+            UUID uuid = UUID.fromString(playerTable.get("uuid").tojstring());
+            Player player = Bukkit.getPlayer(uuid);
+            if (player == null || !(underlying instanceof ArmorStand armorStand)) return LuaValue.FALSE;
+
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+                String bookData = armorStand.getPersistentDataContainer()
+                        .get(BOOK_KEY, PersistentDataType.STRING);
+                if (bookData == null) return;
+
+                ItemStack book = deserializeItem(bookData);
+                if (book == null) return;
+
+                armorStand.getPersistentDataContainer().remove(BOOK_KEY);
+                player.getInventory().addItem(book);
+            });
+            return LuaValue.TRUE;
+        }));
+
+        // has_book() — returns whether a book is stored on this prop
+        table.set("has_book", LuaTableSupport.tableMethod(table, args -> {
+            if (!(underlying instanceof ArmorStand armorStand)) return LuaValue.FALSE;
+            return LuaValue.valueOf(armorStand.getPersistentDataContainer().has(BOOK_KEY, PersistentDataType.STRING));
+        }));
+
         return table;
+    }
+
+    static String serializeInventory(Inventory inventory) {
+        try {
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            BukkitObjectOutputStream dataOutput = new BukkitObjectOutputStream(outputStream);
+            dataOutput.writeInt(inventory.getSize());
+            for (int i = 0; i < inventory.getSize(); i++) {
+                dataOutput.writeObject(inventory.getItem(i));
+            }
+            dataOutput.close();
+            return Base64.getEncoder().encodeToString(outputStream.toByteArray());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static ItemStack[] deserializeInventory(String data) {
+        try {
+            ByteArrayInputStream inputStream = new ByteArrayInputStream(Base64.getDecoder().decode(data));
+            BukkitObjectInputStream dataInput = new BukkitObjectInputStream(inputStream);
+            int size = dataInput.readInt();
+            ItemStack[] items = new ItemStack[size];
+            for (int i = 0; i < size; i++) {
+                items[i] = (ItemStack) dataInput.readObject();
+            }
+            dataInput.close();
+            return items;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String serializeItem(ItemStack item) {
+        try {
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            BukkitObjectOutputStream dataOutput = new BukkitObjectOutputStream(outputStream);
+            dataOutput.writeObject(item);
+            dataOutput.close();
+            return Base64.getEncoder().encodeToString(outputStream.toByteArray());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static ItemStack deserializeItem(String data) {
+        try {
+            ByteArrayInputStream inputStream = new ByteArrayInputStream(Base64.getDecoder().decode(data));
+            BukkitObjectInputStream dataInput = new BukkitObjectInputStream(inputStream);
+            ItemStack item = (ItemStack) dataInput.readObject();
+            dataInput.close();
+            return item;
+        } catch (Exception e) {
+            return null;
+        }
     }
 }
