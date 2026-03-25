@@ -41,6 +41,12 @@ public class FMMPackage extends AbstractNightbreakContentPackage {
         }
 
         NightbreakFileUtils.moveEntriesFlat(disabledEntries, getInstalledModelsFolder());
+
+        List<File> disabledScripts = collectManagedScriptEntries(getDisabledScriptsFolder());
+        if (!disabledScripts.isEmpty()) {
+            NightbreakFileUtils.moveEntriesFlat(disabledScripts, getInstalledScriptsFolder());
+        }
+
         handleStateSave(player,
                 contentPackageConfigFields.setEnabledAndSave(true),
                 () -> {
@@ -62,6 +68,12 @@ public class FMMPackage extends AbstractNightbreakContentPackage {
         }
 
         NightbreakFileUtils.moveEntriesFlat(installedEntries, getDisabledModelsFolder());
+
+        List<File> installedScripts = collectManagedScriptEntries(getInstalledScriptsFolder());
+        if (!installedScripts.isEmpty()) {
+            NightbreakFileUtils.moveEntriesFlat(installedScripts, getDisabledScriptsFolder());
+        }
+
         handleStateSave(player,
                 contentPackageConfigFields.setEnabledAndSave(false),
                 () -> {
@@ -81,10 +93,24 @@ public class FMMPackage extends AbstractNightbreakContentPackage {
         return new File(MetadataHandler.PLUGIN.getDataFolder(), "models_disabled");
     }
 
+    private File getInstalledScriptsFolder() {
+        return new File(MetadataHandler.PLUGIN.getDataFolder(), "scripts");
+    }
+
+    private File getDisabledScriptsFolder() {
+        return new File(MetadataHandler.PLUGIN.getDataFolder(), "scripts_disabled");
+    }
+
     private List<File> collectManagedEntries(File rootFolder) {
         return NightbreakFileUtils.collectRootEntries(rootFolder,
                 contentPackageConfigFields.getFolderName(),
                 contentPackageConfigFields.getContentFilePrefixes());
+    }
+
+    private List<File> collectManagedScriptEntries(File rootFolder) {
+        return NightbreakFileUtils.collectRootEntries(rootFolder,
+                null,
+                contentPackageConfigFields.getScriptFilePrefixes());
     }
 
     @Override
@@ -158,6 +184,8 @@ public class FMMPackage extends AbstractNightbreakContentPackage {
     @Override
     public boolean isDownloaded() {
         return !collectManagedEntries(getInstalledModelsFolder()).isEmpty()
-                || !collectManagedEntries(getDisabledModelsFolder()).isEmpty();
+                || !collectManagedEntries(getDisabledModelsFolder()).isEmpty()
+                || !collectManagedScriptEntries(getInstalledScriptsFolder()).isEmpty()
+                || !collectManagedScriptEntries(getDisabledScriptsFolder()).isEmpty();
     }
 }

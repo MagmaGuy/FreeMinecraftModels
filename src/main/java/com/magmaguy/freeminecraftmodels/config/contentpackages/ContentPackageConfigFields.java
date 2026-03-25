@@ -23,6 +23,9 @@ public class ContentPackageConfigFields extends CustomConfigFields {
     @Getter
     @Setter
     private List<String> contentFilePrefixes;
+    @Getter
+    @Setter
+    private List<String> scriptFilePrefixes;
 
     public ContentPackageConfigFields(String filename,
                                       boolean isEnabled,
@@ -36,6 +39,7 @@ public class ContentPackageConfigFields extends CustomConfigFields {
         this.downloadLink = downloadLink;
         this.folderName = folderName;
         this.contentFilePrefixes = List.of(folderName);
+        this.scriptFilePrefixes = List.of(folderName);
     }
 
     public ContentPackageConfigFields(String filename, boolean isEnabled) {
@@ -52,5 +56,6 @@ public class ContentPackageConfigFields extends CustomConfigFields {
         this.folderName = processString("folderName", folderName, null, true);
         this.nightbreakSlug = processString("nightbreakSlug", nightbreakSlug, null, false);
         this.contentFilePrefixes = processStringList("contentFilePrefixes", contentFilePrefixes, List.of(folderName), false);
+        this.scriptFilePrefixes = processStringList("scriptFilePrefixes", scriptFilePrefixes, List.of(folderName), false);
     }
 }
