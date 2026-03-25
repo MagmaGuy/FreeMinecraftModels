@@ -19,7 +19,9 @@ import org.bukkit.plugin.Plugin;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Admin sub-menu listing all models and custom items in a pack or folder.
@@ -36,7 +38,7 @@ public class AdminModelListMenu {
     /** Open from a package. */
     public AdminModelListMenu(Player player, FMMPackage pack) {
         this(player, pack.getContentPackageConfigFields().getName(),
-                ModelMenuHelper.getModelsForPack(pack), Collections.emptyList());
+                ModelMenuHelper.getModelsForPack(pack), ModelMenuHelper.getItemsForPack(pack));
     }
 
     /** Open from a folder with models only (backwards compat). */
@@ -49,10 +51,14 @@ public class AdminModelListMenu {
         this.player = player;
         this.page = 0;
 
-        // Build unified entry list: models first, then custom items
+        // Build unified entry list: models (pure props) first, then custom items.
+        // Models that are also custom items appear only in the items section.
+        Set<String> itemIds = new HashSet<>(customItemIds);
         this.entries = new ArrayList<>();
         for (FileModelConverter model : models) {
-            entries.add(new ModelEntry(model));
+            if (!itemIds.contains(model.getID())) {
+                entries.add(new ModelEntry(model));
+            }
         }
         for (String itemId : customItemIds) {
             entries.add(new CustomItemEntry(itemId));

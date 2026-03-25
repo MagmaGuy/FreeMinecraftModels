@@ -92,6 +92,40 @@ public final class ModelMenuHelper {
     }
 
     /**
+     * Returns all custom item IDs whose source file belongs to the given
+     * content pack, sorted alphabetically.
+     */
+    public static List<String> getItemsForPack(FMMPackage pack) {
+        String folderName = pack.getContentPackageConfigFields().getFolderName();
+        List<String> prefixes = pack.getContentPackageConfigFields().getContentFilePrefixes();
+
+        File modelsRoot = new File(MetadataHandler.PLUGIN.getDataFolder(), "models");
+
+        return com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager.getItemSourceFiles().entrySet().stream()
+                .filter(entry -> {
+                    File source = entry.getValue();
+                    if (source == null) return false;
+                    // Walk parent directories up to models root, check for exact folder name match
+                    File parent = source.getParentFile();
+                    while (parent != null && !parent.equals(modelsRoot)) {
+                        if (parent.getName().equals(folderName)) return true;
+                        parent = parent.getParentFile();
+                    }
+                    // Fall back to content file prefix matching
+                    if (prefixes != null) {
+                        String fileName = source.getName();
+                        for (String prefix : prefixes) {
+                            if (fileName.startsWith(prefix)) return true;
+                        }
+                    }
+                    return false;
+                })
+                .map(Map.Entry::getKey)
+                .sorted()
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Reads the sibling {@code .yml} config file for a model and returns
      * the list of attached script filenames, or an empty list if none.
      */
@@ -227,8 +261,15 @@ public final class ModelMenuHelper {
             }
         }
         lore.add("");
-        int modelCount = getModelsForPack(pack).size();
-        lore.add("&7Models: &f" + modelCount);
+        List<String> packItems = getItemsForPack(pack);
+        Set<String> packItemIds = new HashSet<>(packItems);
+        List<FileModelConverter> packModels = getModelsForPack(pack);
+        int itemCount = packItems.size();
+        int propCount = (int) packModels.stream()
+                .filter(m -> !packItemIds.contains(m.getID())).count();
+        if (propCount > 0) lore.add("&7Props: &f" + propCount);
+        if (itemCount > 0) lore.add("&7Items: &f" + itemCount);
+        if (propCount == 0 && itemCount == 0) lore.add("&7Models: &f0");
         lore.add("");
         lore.add("&eClick to browse");
 

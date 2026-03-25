@@ -49,8 +49,9 @@ public class AdminContentMenu {
     private static List<ContentEntry> buildEntries() {
         List<ContentEntry> result = new ArrayList<>();
 
-        // 1. Collect all models claimed by packages
+        // 1. Collect all models and items claimed by packages
         Set<String> claimedModelIds = new HashSet<>();
+        Set<String> claimedItemIds = new HashSet<>();
         List<FMMPackage> enabledPacks = FMMPackage.getFmmPackages().values().stream()
                 .filter(pack -> pack.getContentPackageConfigFields().isEnabled())
                 .sorted(Comparator.comparing(pack ->
@@ -62,10 +63,15 @@ public class AdminContentMenu {
             for (FileModelConverter model : packModels) {
                 claimedModelIds.add(model.getID());
             }
+            List<String> packItems = ModelMenuHelper.getItemsForPack(pack);
+            claimedItemIds.addAll(packItems);
             result.add(new PackageEntry(pack));
         }
 
-        // 2. Find unclaimed models and group by parent folder
+        // Set of model IDs that are also custom items — these will only appear in the items section
+        Set<String> itemModelIds = ItemScriptManager.getItemDefinitions().keySet();
+
+        // 2. Find unclaimed models and group by parent folder (excluding models that are custom items)
         File modelsRoot = new File(MetadataHandler.PLUGIN.getDataFolder(), "models");
         Map<String, List<FileModelConverter>> folderGroups = new LinkedHashMap<>();
         List<FileModelConverter> rootModels = new ArrayList<>();
@@ -73,13 +79,12 @@ public class AdminContentMenu {
         for (FileModelConverter converter : FileModelConverter.getConvertedFileModels().values()) {
             if (claimedModelIds.contains(converter.getID())) continue;
             if (converter.getSourceFile() == null) continue;
+            if (itemModelIds.contains(converter.getID())) continue;
 
             File parent = converter.getSourceFile().getParentFile();
             if (parent != null && parent.equals(modelsRoot)) {
-                // Root-level model
                 rootModels.add(converter);
             } else if (parent != null) {
-                // In a subfolder — group by immediate subfolder name relative to models root
                 File folder = parent;
                 while (folder.getParentFile() != null && !folder.getParentFile().equals(modelsRoot)) {
                     folder = folder.getParentFile();
@@ -88,12 +93,13 @@ public class AdminContentMenu {
             }
         }
 
-        // 3. Include custom items (lone JSONs) in folder groups and root
+        // 3. Include unclaimed custom items in folder groups and root
         Map<String, List<String>> itemFolderGroups = new LinkedHashMap<>();
         List<String> rootItems = new ArrayList<>();
 
         for (Map.Entry<String, File> entry : ItemScriptManager.getItemSourceFiles().entrySet()) {
             String itemId = entry.getKey();
+            if (claimedItemIds.contains(itemId)) continue;
             File sourceFile = entry.getValue();
             File parent = sourceFile.getParentFile();
 
