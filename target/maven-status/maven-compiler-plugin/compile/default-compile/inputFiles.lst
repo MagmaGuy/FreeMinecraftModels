@@ -21,6 +21,7 @@ C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\api\PropEntityHitboxContactEvent.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\api\PropEntityLeftClickEvent.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\api\PropEntityRightClickEvent.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\api\ScriptedItemAPI.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\api\StaticEntityHitboxContactEvent.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\api\StaticEntityLeftClickEvent.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\api\StaticEntityRightClickEvent.java
@@ -40,6 +41,7 @@ C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\commands\VersionCommand.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\contentpackages\ContentPackageConfig.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\contentpackages\ContentPackageConfigFields.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\contentpackages\premade\BasicFurniturePack.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\contentpackages\premade\BetterStructuresPropPack.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\contentpackages\premade\EliteMobsPropPack.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\DefaultConfig.java
@@ -48,6 +50,8 @@ C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\OutputFolder.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\premade\InvulnerablePropConfig.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\premade\PickupablePropConfig.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\premade\StorageDoublePropConfig.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\premade\StorageSinglePropConfig.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\PropBlocks.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\PropScriptConfigFields.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\PropScriptLuaConfig.java
@@ -123,6 +127,7 @@ C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\ItemScriptProvider.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\LuaItemTable.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\LuaPropTable.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\PropInventoryListener.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\PropScriptListener.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\PropScriptManager.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\PropScriptProvider.java

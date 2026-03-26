@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.listeners.ArmorStandListener;
 import lombok.Getter;
 import org.bukkit.Location;
@@ -20,13 +21,20 @@ public class MountSeat {
 
     @Getter
     private final Bone bone;
+    private final ModeledEntity modeledEntity;
     @Getter
     private ArmorStand vehicle;
     @Getter
     private Player occupant;
 
-    public MountSeat(Bone bone) {
+    public MountSeat(Bone bone, ModeledEntity modeledEntity) {
         this.bone = bone;
+        this.modeledEntity = modeledEntity;
+    }
+
+    private float getEntityYaw() {
+        Location loc = modeledEntity.getSpawnLocation();
+        return loc != null ? loc.getYaw() : 0f;
     }
 
     /**
@@ -41,6 +49,7 @@ public class MountSeat {
         Location loc = bone.getBoneLocation();
         if (loc == null || loc.getWorld() == null) return false;
 
+        loc.setYaw(getEntityYaw());
         ArmorStandListener.bypass = true;
         vehicle = (ArmorStand) loc.getWorld().spawnEntity(loc, EntityType.ARMOR_STAND);
         vehicle.setVisible(false);
@@ -83,6 +92,7 @@ public class MountSeat {
         }
         Location boneLoc = bone.getBoneLocation();
         if (boneLoc != null && boneLoc.getWorld() != null) {
+            boneLoc.setYaw(getEntityYaw());
             vehicle.teleport(boneLoc);
         }
     }

@@ -7,11 +7,15 @@ import com.magmaguy.freeminecraftmodels.api.ModeledEntityLeftClickEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityRightClickEvent;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntityHitboxContactCallback;
+import com.magmaguy.freeminecraftmodels.customentity.core.MountPointManager;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntityLeftClickCallback;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntityRightClickCallback;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.Bukkit;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
@@ -28,6 +32,7 @@ public class InteractionComponent {
     @Setter
     private ModeledEntityLeftClickCallback leftClickCallback;
     @Setter
+    @Getter
     private ModeledEntityRightClickCallback rightClickCallback;
     @Setter
     @Getter
@@ -35,6 +40,10 @@ public class InteractionComponent {
     @Setter
     @Getter
     private ModeledEntityHitByProjectileCallback projectileHitCallback;
+
+    // Cooldown to prevent double-firing from both packet interaction entity and OBB raytrace
+    private static final long RIGHT_CLICK_COOLDOWN_MS = 100;
+    private final Map<UUID, Long> rightClickCooldowns = new HashMap<>();
 
     public InteractionComponent(ModeledEntity modeledEntity) {
         this.modeledEntity = modeledEntity;
@@ -48,6 +57,10 @@ public class InteractionComponent {
 
     public void callRightClickEvent(Player player) {
         if (modeledEntity.isDying()) return;
+        long now = System.currentTimeMillis();
+        Long last = rightClickCooldowns.get(player.getUniqueId());
+        if (last != null && (now - last) < RIGHT_CLICK_COOLDOWN_MS) return;
+        rightClickCooldowns.put(player.getUniqueId(), now);
         ModeledEntityRightClickEvent event = new ModeledEntityRightClickEvent(player, modeledEntity);
         Bukkit.getPluginManager().callEvent(event);
     }
@@ -90,10 +103,15 @@ public class InteractionComponent {
     }
 
     public void handleRightClickEvent(Player player) {
-        if (rightClickCallback == null) {
+        if (rightClickCallback != null) {
+            rightClickCallback.onRightClick(player, modeledEntity);
             return;
         }
-        rightClickCallback.onRightClick(player, modeledEntity);
+        // Default behavior: try mounting if the entity has mount points
+        MountPointManager mountPointManager = modeledEntity.getMountPointManager();
+        if (mountPointManager != null && mountPointManager.hasMountPoints()) {
+            mountPointManager.tryMount(player);
+        }
     }
 
     public void handleHitboxContactEvent(Player player) {

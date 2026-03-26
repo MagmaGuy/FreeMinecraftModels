@@ -13,6 +13,5 @@ public class EliteMobsPropPack extends ContentPackageConfigFields {
                 "https://nightbreak.io/plugin/freeminecraftmodels/",
                 "em_dungeon_prop_pack");
         setNightbreakSlug("elitemobs-prop-pack");
-        setContentFilePrefixes(List.of("em_dungeon_prop_pack", "em_"));
     }
 }

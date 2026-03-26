@@ -19,6 +19,7 @@ com\magmaguy\freeminecraftmodels\dataconverter\BoneBlueprint.class
 com\magmaguy\freeminecraftmodels\FreeMinecraftModels.class
 com\magmaguy\freeminecraftmodels\dataconverter\FileModelConverter.class
 com\magmaguy\freeminecraftmodels\scripting\ItemScriptProvider.class
+com\magmaguy\freeminecraftmodels\scripting\PropInventoryListener.class
 com\magmaguy\freeminecraftmodels\scripting\LuaPropTable.class
 com\magmaguy\freeminecraftmodels\customentity\core\BoneTransforms.class
 com\magmaguy\freeminecraftmodels\listeners\CraftifyListener.class
@@ -39,6 +40,7 @@ com\magmaguy\freeminecraftmodels\api\PropEntityRightClickEvent.class
 com\magmaguy\freeminecraftmodels\dataconverter\NullObjectBlueprint.class
 com\magmaguy\freeminecraftmodels\customentity\core\OBBHitDetection.class
 com\magmaguy\freeminecraftmodels\customentity\DynamicEntity$ModeledEntityEvents.class
+com\magmaguy\freeminecraftmodels\config\props\premade\StorageSinglePropConfig.class
 com\magmaguy\freeminecraftmodels\customentity\core\components\HitboxComponent.class
 com\magmaguy\freeminecraftmodels\commands\HitboxDebugCommand.class
 com\magmaguy\freeminecraftmodels\customentity\ModeledEntity.class
@@ -86,6 +88,7 @@ com\magmaguy\freeminecraftmodels\animation\IdleState.class
 com\magmaguy\freeminecraftmodels\config\ModelsFolder$1.class
 com\magmaguy\freeminecraftmodels\customentity\core\components\AnimationComponent.class
 com\magmaguy\freeminecraftmodels\config\ModelsFolder.class
+com\magmaguy\freeminecraftmodels\listeners\ModelItemListener$1.class
 com\magmaguy\freeminecraftmodels\customentity\core\Bone.class
 com\magmaguy\freeminecraftmodels\menus\AdminModelListMenu$Events.class
 com\magmaguy\freeminecraftmodels\dataconverter\IKAnimationFrame.class
@@ -95,6 +98,7 @@ com\magmaguy\freeminecraftmodels\api\DynamicEntityHitboxContactEvent.class
 com\magmaguy\freeminecraftmodels\config\DisplayModelRegistry.class
 com\magmaguy\freeminecraftmodels\menus\AdminContentMenu$SingleModelEntry.class
 com\magmaguy\freeminecraftmodels\menus\AdminContentMenu$PackageEntry.class
+com\magmaguy\freeminecraftmodels\config\contentpackages\premade\BasicFurniturePack.class
 com\magmaguy\freeminecraftmodels\menus\AdminContentMenu$SingleCustomItemEntry.class
 com\magmaguy\freeminecraftmodels\scripting\PropScriptListener.class
 com\magmaguy\freeminecraftmodels\utils\InterpolationType.class
@@ -108,7 +112,9 @@ com\magmaguy\freeminecraftmodels\commands\UndisguiseCommand.class
 com\magmaguy\freeminecraftmodels\customentity\core\ModeledEntityInterface.class
 com\magmaguy\freeminecraftmodels\config\recipes\PropRecipeManager.class
 com\magmaguy\freeminecraftmodels\scripting\PropScriptManager.class
+com\magmaguy\freeminecraftmodels\config\props\premade\StorageDoublePropConfig.class
 com\magmaguy\freeminecraftmodels\animation\DeathState.class
+com\magmaguy\freeminecraftmodels\scripting\PropInventoryListener$TrackedInventory.class
 com\magmaguy\freeminecraftmodels\api\ModeledEntityManager.class
 com\magmaguy\freeminecraftmodels\commands\MountCommand.class
 com\magmaguy\freeminecraftmodels\listeners\MountDismountListener.class
@@ -176,5 +182,6 @@ com\magmaguy\freeminecraftmodels\config\DefaultConfig.class
 com\magmaguy\freeminecraftmodels\customentity\PropEntity$1.class
 com\magmaguy\freeminecraftmodels\customentity\StaticEntity.class
 com\magmaguy\freeminecraftmodels\animation\AnimationManager.class
+com\magmaguy\freeminecraftmodels\api\ScriptedItemAPI.class
 com\magmaguy\freeminecraftmodels\menus\RecipeDetailMenu.class
 com\magmaguy\freeminecraftmodels\utils\ChunkHasher.class

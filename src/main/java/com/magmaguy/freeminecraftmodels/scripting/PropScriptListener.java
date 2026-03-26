@@ -1,137 +1,58 @@
 package com.magmaguy.freeminecraftmodels.scripting;
 
+import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.magmacore.scripting.ScriptInstance;
-import org.bukkit.entity.ArmorStand;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.Player;
-import org.bukkit.entity.Projectile;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
+import org.bukkit.Bukkit;
 import org.bukkit.event.Listener;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.player.PlayerInteractAtEntityEvent;
-import org.bukkit.event.player.PlayerInteractEntityEvent;
-import org.bukkit.event.entity.ProjectileHitEvent;
-import org.bukkit.inventory.EquipmentSlot;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Bukkit event listener that bridges player interactions and projectile hits on props
- * to the Lua scripting engine via {@link ScriptInstance#handleEvent}.
+ * Manages the mapping between props and their script instances.
+ * Event dispatch is handled through the OBB hit detection system via
+ * {@link PropScriptManager#onPropLeftClick} and {@link PropScriptManager#onPropRightClick}.
  */
 public class PropScriptListener implements Listener {
 
     @lombok.Getter
-    private final Map<PropEntity, ScriptInstance> scriptedProps = new ConcurrentHashMap<>();
+    private final Map<PropEntity, List<ScriptInstance>> scriptedProps = new ConcurrentHashMap<>();
 
     /**
-     * Registers a prop with an active script instance so that events on its
-     * backing entity are forwarded to the Lua script.
+     * Registers a prop with an active script instance.
      */
     public void register(PropEntity prop, ScriptInstance instance) {
-        scriptedProps.put(prop, instance);
+        scriptedProps.computeIfAbsent(prop, k -> new ArrayList<>()).add(instance);
     }
 
     /**
-     * Unregisters a prop, stopping event forwarding.
+     * Unregisters a prop and shuts down all its script instances.
      */
     public void unregister(PropEntity prop) {
-        scriptedProps.remove(prop);
+        List<ScriptInstance> instances = scriptedProps.remove(prop);
+        if (instances == null) return;
+        for (ScriptInstance instance : instances) {
+            if (instance != null && !instance.isClosed()) {
+                instance.shutdown();
+                Bukkit.getScheduler().runTaskLater(MetadataHandler.PLUGIN, () -> {
+                    if (!instance.isClosed()) instance.shutdown();
+                }, 200L);
+            }
+        }
     }
 
     /**
      * Shuts down all tracked script instances and clears the map.
      */
     public void shutdownAll() {
-        for (ScriptInstance instance : scriptedProps.values()) {
-            instance.shutdown();
+        for (List<ScriptInstance> instances : scriptedProps.values()) {
+            for (ScriptInstance instance : instances) {
+                instance.shutdown();
+            }
         }
         scriptedProps.clear();
-    }
-
-    // ── Interaction events ───────────────────────────────────────────────
-
-    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = false)
-    public void onPlayerInteractAtEntity(PlayerInteractAtEntityEvent event) {
-        Entity clicked = event.getRightClicked();
-        if (!(clicked instanceof ArmorStand armorStand)) return;
-        if (!PropEntity.isPropEntity(armorStand)) return;
-
-        PropEntity prop = PropEntity.getPropEntities().get(armorStand.getUniqueId());
-        if (prop == null) return;
-
-        ScriptInstance instance = scriptedProps.get(prop);
-        if (instance == null || instance.isClosed()) return;
-
-        if (event.getHand() == EquipmentSlot.HAND) {
-            instance.handleEvent(ScriptableProp.ON_RIGHT_CLICK, event, null, event.getPlayer());
-        }
-    }
-
-    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = false)
-    public void onPlayerInteractEntity(PlayerInteractEntityEvent event) {
-        // PlayerInteractEntityEvent fires for right-click on entities;
-        // we handle it here as a fallback when PlayerInteractAtEntityEvent is not fired.
-        // Avoid double-firing: PlayerInteractAtEntityEvent extends PlayerInteractEntityEvent,
-        // so only handle the base type here.
-        if (event instanceof PlayerInteractAtEntityEvent) return;
-
-        Entity clicked = event.getRightClicked();
-        if (!(clicked instanceof ArmorStand armorStand)) return;
-        if (!PropEntity.isPropEntity(armorStand)) return;
-
-        PropEntity prop = PropEntity.getPropEntities().get(armorStand.getUniqueId());
-        if (prop == null) return;
-
-        ScriptInstance instance = scriptedProps.get(prop);
-        if (instance == null || instance.isClosed()) return;
-
-        if (event.getHand() == EquipmentSlot.HAND) {
-            instance.handleEvent(ScriptableProp.ON_RIGHT_CLICK, event, null, event.getPlayer());
-        }
-    }
-
-    // ── Projectile hit event ─────────────────────────────────────────────
-
-    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = false)
-    public void onProjectileHit(ProjectileHitEvent event) {
-        Entity hitEntity = event.getHitEntity();
-        if (hitEntity == null) return;
-        if (!(hitEntity instanceof ArmorStand armorStand)) return;
-        if (!PropEntity.isPropEntity(armorStand)) return;
-
-        PropEntity prop = PropEntity.getPropEntities().get(armorStand.getUniqueId());
-        if (prop == null) return;
-
-        ScriptInstance instance = scriptedProps.get(prop);
-        if (instance == null || instance.isClosed()) return;
-
-        // Pass the shooter as eventActor if it is a player
-        Projectile projectile = event.getEntity();
-        Player shooter = (projectile.getShooter() instanceof Player p) ? p : null;
-        instance.handleEvent(ScriptableProp.ON_PROJECTILE_HIT, event, null, shooter);
-    }
-
-    // ── Left click (damage) event ───────────────────────────────────────
-
-    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = false)
-    public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
-        Entity damaged = event.getEntity();
-        if (!(damaged instanceof ArmorStand armorStand)) return;
-        if (!PropEntity.isPropEntity(armorStand)) return;
-
-        Entity damager = event.getDamager();
-        if (!(damager instanceof Player)) return;
-
-        PropEntity prop = PropEntity.getPropEntities().get(armorStand.getUniqueId());
-        if (prop == null) return;
-
-        ScriptInstance instance = scriptedProps.get(prop);
-        if (instance == null || instance.isClosed()) return;
-
-        instance.handleEvent(ScriptableProp.ON_LEFT_CLICK, event, null, (Player) damager);
     }
 }

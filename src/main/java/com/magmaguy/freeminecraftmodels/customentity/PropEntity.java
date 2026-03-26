@@ -4,6 +4,7 @@ import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.props.PropBlocks;
 import com.magmaguy.freeminecraftmodels.customentity.core.components.PropBlockComponent;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.freeminecraftmodels.dataconverter.HitboxBlueprint;
 import com.magmaguy.freeminecraftmodels.listeners.ArmorStandListener;
 import com.magmaguy.freeminecraftmodels.scripting.PropScriptManager;
 import com.magmaguy.magmacore.util.ChunkLocationChecker;
@@ -20,6 +21,7 @@ import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.Bukkit;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.*;
@@ -33,7 +35,64 @@ public class PropEntity extends StaticEntity {
     private final PropBlockComponent propBlockComponent = new PropBlockComponent(this);
     @Getter
     private boolean persistent = true;
+    @Getter
+    private boolean voxelize = false;
+    @Getter
+    private boolean solidify = false;
     private String chunkHash;
+
+    public void setVoxelizeConfig(boolean voxelize, boolean solidify) {
+        this.voxelize = voxelize;
+        this.solidify = solidify && voxelize;
+    }
+
+    public void applySolidify() {
+        if (!solidify || !voxelize) return;
+
+        FileModelConverter converter = FileModelConverter.getConvertedFileModels().get(getEntityID());
+        if (converter == null) return;
+
+        HitboxBlueprint hitbox = converter.getSkeletonBlueprint().getHitbox();
+        int modelX, modelY, modelZ;
+        if (hitbox != null) {
+            modelX = Math.max(1, (int) Math.ceil(hitbox.getWidthX() - 0.24));
+            modelY = Math.max(1, (int) Math.ceil(hitbox.getHeight() - 0.24));
+            modelZ = Math.max(1, (int) Math.ceil(hitbox.getWidthZ() - 0.24));
+        } else {
+            modelX = modelY = modelZ = 1;
+        }
+
+        // Rotate footprint to match yaw — same logic as ModelItemListener
+        float yaw = getSpawnLocation().getYaw() % 360;
+        if (yaw < 0) yaw += 360;
+        int rotation = Math.round(yaw / 90f) % 4;
+        int footX, footZ;
+        if (rotation == 1 || rotation == 3) {
+            footX = modelZ;
+            footZ = modelX;
+        } else {
+            footX = modelX;
+            footZ = modelZ;
+        }
+
+        // Generate barriers in world-space using the rotated footprint
+        List<PropBlocks> barriers = new ArrayList<>();
+        int offsetX = -(footX / 2);
+        int offsetZ = -(footZ / 2);
+
+        for (int x = 0; x < footX; x++) {
+            for (int y = 0; y < modelY; y++) {
+                for (int z = 0; z < footZ; z++) {
+                    barriers.add(new PropBlocks(
+                            new org.bukkit.util.Vector(offsetX + x, y, offsetZ + z),
+                            Material.BARRIER
+                    ));
+                }
+            }
+        }
+
+        setPropBlocks(barriers);
+    }
 
     public PropEntity(String entityID, Location spawnLocation) {
         super(entityID, spawnLocation);
@@ -105,8 +164,23 @@ public class PropEntity extends StaticEntity {
             if (!PropScriptManager.onPropLeftClick(this, player)) {
                 entity.damage(player);
             }
+            resendFakeBlocks(player);
+        });
+        setRightClickCallback((player, entity) -> {
+            PropScriptManager.onPropRightClick(this, player);
+            // Fall back to mount if this prop has mount points and no script consumed the click
+            if (getMountPointManager() != null && getMountPointManager().hasMountPoints()) {
+                getMountPointManager().tryMount(player);
+            }
+            resendFakeBlocks(player);
         });
         propBlockComponent.showFakePropBlocksToAllPlayers();
+    }
+
+    private void resendFakeBlocks(org.bukkit.entity.Player player) {
+        if (propBlockComponent.propBlocks.isEmpty()) return;
+        Bukkit.getScheduler().runTaskLater(MetadataHandler.PLUGIN,
+                () -> propBlockComponent.showFakePropBlocksToPlayer(player), 1L);
     }
 
     public void setPersistent(boolean persistent) {

@@ -69,11 +69,17 @@ public final class PropScriptManager {
      * @param prop the prop entity that just spawned
      */
     public static void onPropSpawn(PropEntity prop) {
-        if (!initialized) return;
+        if (!initialized) {
+            Logger.debug("[FMM Debug] onPropSpawn: PropScriptManager not initialized");
+            return;
+        }
 
         // 1. Find the model file via FileModelConverter
         FileModelConverter converter = FileModelConverter.getConvertedFileModels().get(prop.getEntityID());
-        if (converter == null || converter.getSourceFile() == null) return;
+        if (converter == null || converter.getSourceFile() == null) {
+            Logger.debug("[FMM Debug] onPropSpawn: no FileModelConverter for " + prop.getEntityID());
+            return;
+        }
 
         // 2. Compute the sibling YML path (same directory, same base name, .yml extension)
         File modelFile = converter.getSourceFile();
@@ -82,9 +88,11 @@ public final class PropScriptManager {
         if (baseName.endsWith(".fmmodel")) baseName = baseName.substring(0, baseName.length() - 8);
         else if (baseName.endsWith(".bbmodel")) baseName = baseName.substring(0, baseName.length() - 8);
         File ymlFile = new File(modelFile.getParentFile(), baseName + ".yml");
+        Logger.debug("[FMM Debug] onPropSpawn: looking for YML at " + ymlFile.getAbsolutePath());
 
         // 3. If YML doesn't exist, create it async with defaults and return (no scripts this load)
         if (!ymlFile.exists()) {
+            Logger.debug("[FMM Debug] onPropSpawn: YML not found, creating default");
             final File targetFile = ymlFile;
             Bukkit.getScheduler().runTaskAsynchronously(MetadataHandler.PLUGIN, () -> {
                 try {
@@ -110,12 +118,26 @@ public final class PropScriptManager {
         configFields.setFile(ymlFile);
         configFields.processConfigFields();
 
-        if (!configFields.isEnabled()) return;
+        prop.setVoxelizeConfig(configFields.isVoxelize(), configFields.isSolidify());
+        prop.applySolidify();
+
+        if (!configFields.isEnabled()) {
+            Logger.debug("[FMM Debug] onPropSpawn: config disabled for " + ymlFile.getName());
+            return;
+        }
         List<String> scripts = configFields.getScripts();
-        if (scripts == null || scripts.isEmpty()) return;
+        if (scripts == null || scripts.isEmpty()) {
+            Logger.debug("[FMM Debug] onPropSpawn: no scripts listed in " + ymlFile.getName());
+            return;
+        }
+
+        Logger.debug("[FMM Debug] onPropSpawn: found " + scripts.size() + " script(s) in " + ymlFile.getName() + ": " + scripts);
 
         // 5. For each script filename, resolve from scripts/ folder and bind
         for (String scriptFileName : scripts) {
+            // Append .lua if not already present — YML configs may omit the extension
+            if (!scriptFileName.toLowerCase(java.util.Locale.ROOT).endsWith(".lua"))
+                scriptFileName = scriptFileName + ".lua";
             ScriptDefinition definition = LuaEngine.getDefinition(NAMESPACE, scriptFileName);
             if (definition == null) {
                 Logger.warn("[FMM Scripts] Script '" + scriptFileName + "' not found in scripts/ folder (referenced by " + ymlFile.getName() + ")");
@@ -127,10 +149,9 @@ public final class PropScriptManager {
             ScriptInstance instance = new ScriptInstance(definition, scriptable);
 
             listener.register(prop, instance);
+            Logger.debug("[FMM Debug] onPropSpawn: registered script '" + scriptFileName + "' for prop '" + prop.getEntityID() + "' (total registered: " + listener.getScriptedProps().size() + ")");
 
             instance.handleEvent(ScriptHook.ON_SPAWN, null, null, null);
-
-            //Logger.info("[FMM Scripts] Bound script '" + scriptFileName + "' to prop '" + prop.getEntityID() + "'");
         }
     }
 
@@ -144,12 +165,31 @@ public final class PropScriptManager {
      */
     public static boolean onPropLeftClick(PropEntity prop, org.bukkit.entity.Player player) {
         if (!initialized || listener == null) return false;
-        ScriptInstance instance = listener.getScriptedProps().get(prop);
-        if (instance == null || instance.isClosed()) return false;
-        // Create a simple cancellable event wrapper
+        List<ScriptInstance> instances = listener.getScriptedProps().get(prop);
+        if (instances == null || instances.isEmpty()) return false;
         CancellableFlag flag = new CancellableFlag();
-        instance.handleEvent(ScriptableProp.ON_LEFT_CLICK, flag, null, player);
+        for (ScriptInstance instance : instances) {
+            if (!instance.isClosed())
+                instance.handleEvent(ScriptableProp.ON_LEFT_CLICK, flag, null, player);
+        }
         return flag.isCancelled();
+    }
+
+    /**
+     * Called by PropEntity's right-click callback. Fires ON_RIGHT_CLICK on all
+     * scripts bound to this prop, if any.
+     *
+     * @param prop   the prop that was right-clicked
+     * @param player the player who right-clicked it
+     */
+    public static void onPropRightClick(PropEntity prop, org.bukkit.entity.Player player) {
+        if (!initialized || listener == null) return;
+        List<ScriptInstance> instances = listener.getScriptedProps().get(prop);
+        if (instances == null || instances.isEmpty()) return;
+        for (ScriptInstance instance : instances) {
+            if (!instance.isClosed())
+                instance.handleEvent(ScriptableProp.ON_RIGHT_CLICK, null, null, player);
+        }
     }
 
     /**
@@ -159,6 +199,14 @@ public final class PropScriptManager {
      */
     public static void onPropRemove(PropEntity prop) {
         if (!initialized || listener == null) return;
+        // Fire ON_DESTROY on all scripts before shutting them down
+        List<ScriptInstance> instances = listener.getScriptedProps().get(prop);
+        if (instances != null) {
+            for (ScriptInstance instance : instances) {
+                if (!instance.isClosed())
+                    instance.handleEvent(ScriptableProp.ON_DESTROY, null, null, null);
+            }
+        }
         listener.unregister(prop);
     }
 

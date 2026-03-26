@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.customentity.core.components;
 import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.PacketInteractionEntity;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
+import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.OrientedBoundingBox;
 import com.magmaguy.freeminecraftmodels.packets.PacketEntityDisplayHelper;
 import lombok.Getter;
@@ -100,14 +101,15 @@ public class HitboxComponent {
      * Creates a packet-only Interaction entity for click detection.
      * This entity is invisible to players but receives their clicks.
      * Should be called after the model is spawned.
-     * Only created for entities WITHOUT an underlying entity (props).
-     * Dynamic entities with underlying entities use OBB-based detection instead.
+     * Props also get packet interaction entities for reliable right-click detection
+     * even when no block is behind the model. Dynamic entities with underlying
+     * living entities use OBB-based detection instead.
      */
     public void createPacketInteractionEntity() {
         if (packetInteractionEntity != null) return;
         if (modeledEntity.getLocation() == null) return;
-        // Don't create for entities with underlying entities - they use OBB-based detection
-        if (modeledEntity.getUnderlyingEntity() != null) return;
+        // Skip non-prop entities that have underlying entities - they use OBB-based detection
+        if (modeledEntity.getUnderlyingEntity() != null && !(modeledEntity instanceof PropEntity)) return;
 
         // Get hitbox dimensions - use the smaller dimension for width since
         // Interaction entities have equal X and Z sizes

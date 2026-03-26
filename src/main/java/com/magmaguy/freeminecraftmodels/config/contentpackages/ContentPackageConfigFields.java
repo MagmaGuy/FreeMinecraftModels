@@ -38,8 +38,8 @@ public class ContentPackageConfigFields extends CustomConfigFields {
         this.description = description;
         this.downloadLink = downloadLink;
         this.folderName = folderName;
-        this.contentFilePrefixes = List.of(folderName);
-        this.scriptFilePrefixes = List.of(folderName);
+        this.contentFilePrefixes = List.of();
+        this.scriptFilePrefixes = List.of();
     }
 
     public ContentPackageConfigFields(String filename, boolean isEnabled) {

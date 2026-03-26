@@ -95,12 +95,7 @@ public class ModeledEntity {
         // Initialize mount points if the model has mount_ bones
         if (!skeleton.getMountPointBones().isEmpty()) {
             Logger.debug("Initializing mount points for entity: " + entityID);
-            mountPointManager = new MountPointManager(skeleton);
-            setRightClickCallback((player, entity) -> {
-                if (mountPointManager != null && mountPointManager.hasMountPoints()) {
-                    mountPointManager.tryMount(player);
-                }
-            });
+            mountPointManager = new MountPointManager(skeleton, this);
         }
 
         animationComponent.initializeAnimationManager(fileModelConverter);

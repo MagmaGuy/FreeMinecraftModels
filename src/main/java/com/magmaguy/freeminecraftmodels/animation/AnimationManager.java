@@ -88,7 +88,7 @@ public class AnimationManager {
                 lastCommitted != null ? lastCommitted : AnimationStateType.IDLE
         );
 
-        if (blendAnimation) nextQueued = custom;
+        if (blendAnimation && current != null) nextQueued = custom;
         else transitionTo(custom);
 
         return true;

@@ -27,7 +27,7 @@ public class ModelsFolder {
         counter = 1;
         folderCounter = 50;
 
-        File file = new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar + "models");
+        File file = new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar + "Models");
 
         if (!file.exists()) {
             file.mkdirs();

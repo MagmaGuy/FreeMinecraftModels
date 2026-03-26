@@ -34,6 +34,10 @@ public class PropScriptConfigFields extends CustomConfigFields {
     private List<String> lore = new ArrayList<>();
     @Getter
     private List<String> enchantments = new ArrayList<>();
+    @Getter
+    private boolean voxelize = false;
+    @Getter
+    private boolean solidify = false;
 
     /**
      * Used when creating a new default config or loading an existing one.
@@ -53,6 +57,8 @@ public class PropScriptConfigFields extends CustomConfigFields {
         this.itemName = processString("name", itemName, "", false);
         this.lore = processStringList("lore", lore, new ArrayList<>(), false);
         this.enchantments = processStringList("enchantments", enchantments, new ArrayList<>(), false);
+        this.voxelize = processBoolean("voxelize", voxelize, false, false);
+        this.solidify = processBoolean("solidify", solidify, false, false);
     }
 
     /**
