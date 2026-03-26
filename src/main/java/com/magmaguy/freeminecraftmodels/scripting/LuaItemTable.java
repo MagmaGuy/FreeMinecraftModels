@@ -7,6 +7,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import com.magmaguy.shaded.luaj.vm2.LuaTable;
@@ -100,6 +101,72 @@ public final class LuaItemTable {
                 if (meta == null) return;
                 meta.getPersistentDataContainer().set(KEY_ITEM_USES, PersistentDataType.INTEGER, n);
                 item.setItemMeta(meta);
+            });
+            return LuaValue.NIL;
+        }));
+
+        // get_durability() — returns {current, max} or nil if item has no durability bar
+        table.set("get_durability", LuaTableSupport.tableMethod(table, args -> {
+            ItemStack item = findEquippedItem(player, itemId);
+            if (item == null || item.getType().getMaxDurability() == 0) return LuaValue.NIL;
+            ItemMeta meta = item.getItemMeta();
+            if (!(meta instanceof Damageable damageable)) return LuaValue.NIL;
+            int max = item.getType().getMaxDurability();
+            LuaTable result = new LuaTable();
+            result.set("current", max - damageable.getDamage());
+            result.set("max", max);
+            return result;
+        }));
+
+        // use_durability(amount, can_break) — reduces durability by a flat amount
+        table.set("use_durability", LuaTableSupport.tableMethod(table, args -> {
+            int amount = args.checkint(1);
+            boolean canBreak = args.narg() >= 2 && !args.arg(2).isnil() && args.arg(2).checkboolean();
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+                ItemStack item = findEquippedItem(player, itemId);
+                if (item == null || item.getType().getMaxDurability() == 0) return;
+                ItemMeta meta = item.getItemMeta();
+                if (!(meta instanceof Damageable damageable)) return;
+                int max = item.getType().getMaxDurability();
+                int newDamage = damageable.getDamage() + amount;
+                if (newDamage >= max) {
+                    if (canBreak) {
+                        item.setAmount(0);
+                    } else {
+                        damageable.setDamage(max - 1);
+                        item.setItemMeta(damageable);
+                    }
+                } else {
+                    damageable.setDamage(Math.max(0, newDamage));
+                    item.setItemMeta(damageable);
+                }
+            });
+            return LuaValue.NIL;
+        }));
+
+        // use_durability_percentage(fraction, can_break) — reduces durability by a percentage of max
+        table.set("use_durability_percentage", LuaTableSupport.tableMethod(table, args -> {
+            double fraction = args.checkdouble(1);
+            boolean canBreak = args.narg() >= 2 && !args.arg(2).isnil() && args.arg(2).checkboolean();
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+                ItemStack item = findEquippedItem(player, itemId);
+                if (item == null || item.getType().getMaxDurability() == 0) return;
+                ItemMeta meta = item.getItemMeta();
+                if (!(meta instanceof Damageable damageable)) return;
+                int max = item.getType().getMaxDurability();
+                int amount = (int) Math.ceil(max * fraction);
+                int newDamage = damageable.getDamage() + amount;
+                if (newDamage >= max) {
+                    if (canBreak) {
+                        item.setAmount(0);
+                    } else {
+                        damageable.setDamage(max - 1);
+                        item.setItemMeta(damageable);
+                    }
+                } else {
+                    damageable.setDamage(Math.max(0, newDamage));
+                    item.setItemMeta(damageable);
+                }
             });
             return LuaValue.NIL;
         }));
