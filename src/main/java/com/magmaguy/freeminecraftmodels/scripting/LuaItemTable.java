@@ -118,6 +118,16 @@ public final class LuaItemTable {
             return result;
         }));
 
+        // get_durability_percentage() — returns remaining durability as a 0.0–1.0 fraction, or nil
+        table.set("get_durability_percentage", LuaTableSupport.tableMethod(table, args -> {
+            ItemStack item = findEquippedItem(player, itemId);
+            if (item == null || item.getType().getMaxDurability() == 0) return LuaValue.NIL;
+            ItemMeta meta = item.getItemMeta();
+            if (!(meta instanceof Damageable damageable)) return LuaValue.NIL;
+            int max = item.getType().getMaxDurability();
+            return LuaValue.valueOf((double) (max - damageable.getDamage()) / max);
+        }));
+
         // use_durability(amount, can_break) — reduces durability by a flat amount
         table.set("use_durability", LuaTableSupport.tableMethod(table, args -> {
             int amount = args.checkint(1);
