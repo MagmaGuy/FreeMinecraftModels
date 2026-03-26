@@ -14,7 +14,6 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.ProjectileLaunchEvent;
-import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
@@ -197,21 +196,6 @@ public class OBBHitDetection implements Listener {
         else if (action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK) {
             executeRightClickInteraction(event.getPlayer());
         }
-    }
-
-    @EventHandler
-    public void onPlayerInteractEntity(PlayerInteractEntityEvent event) {
-        executeLeftClickAttack(event.getPlayer());
-    }
-
-    @EventHandler
-    public void EntityInteractEvent(PlayerInteractEvent event) {
-        // Only process right-click actions (both air and block)
-        if (event.getAction() != Action.RIGHT_CLICK_AIR &&
-                event.getAction() != Action.RIGHT_CLICK_BLOCK) {
-            return;
-        }
-        executeRightClickInteraction(event.getPlayer());
     }
 
     @EventHandler

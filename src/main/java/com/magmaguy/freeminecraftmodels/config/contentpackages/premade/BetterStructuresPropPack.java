@@ -13,6 +13,5 @@ public class BetterStructuresPropPack extends ContentPackageConfigFields {
                 "https://nightbreak.io/plugin/freeminecraftmodels/",
                 "bs prop pack");
         setNightbreakSlug("betterstructures-prop-pack");
-        setContentFilePrefixes(List.of("bs prop pack", "bs_", "BetterStructures Props Pack"));
     }
 }

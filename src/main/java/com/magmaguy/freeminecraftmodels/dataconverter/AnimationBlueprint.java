@@ -231,7 +231,7 @@ public class AnimationBlueprint {
 
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                float t = j / (float) durationBetweenKeyframes;
+                float t = durationBetweenKeyframes > 1 ? j / (float) (durationBetweenKeyframes - 1) : 0f;
 
                 if (blockBenchVersion < 5) {
                     animationFramesArray[currentFrame].xRotation = interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t);
@@ -298,7 +298,7 @@ public class AnimationBlueprint {
 
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                float t = j / (float) durationBetweenKeyframes;
+                float t = durationBetweenKeyframes > 1 ? j / (float) (durationBetweenKeyframes - 1) : 0f;
                 if (blockBenchVersion < 5) {
                     animationFramesArray[currentFrame].xPosition = interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t) / 16f;
                     animationFramesArray[currentFrame].yPosition = interpolateWithType(interpType, previousFrame.getDataY(), animationFrame.getDataY(), t) / 16f;
@@ -361,7 +361,7 @@ public class AnimationBlueprint {
 
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                float t = j / (float) durationBetweenKeyframes;
+                float t = durationBetweenKeyframes > 1 ? j / (float) (durationBetweenKeyframes - 1) : 0f;
 
                 animationFramesArray[currentFrame].scaleX = interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t);
                 animationFramesArray[currentFrame].scaleY = interpolateWithType(interpType, previousFrame.getDataY(), animationFrame.getDataY(), t);
@@ -408,7 +408,7 @@ public class AnimationBlueprint {
 
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
-                float t = j / (float) durationBetweenKeyframes;
+                float t = durationBetweenKeyframes > 1 ? j / (float) (durationBetweenKeyframes - 1) : 0f;
 
                 // Interpolate position (IK goal offset)
                 // Apply coordinate system conversion similar to bone positions

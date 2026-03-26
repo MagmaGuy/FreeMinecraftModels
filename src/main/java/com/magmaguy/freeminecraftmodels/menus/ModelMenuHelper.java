@@ -64,26 +64,17 @@ public final class ModelMenuHelper {
      */
     public static List<FileModelConverter> getModelsForPack(FMMPackage pack) {
         String folderName = pack.getContentPackageConfigFields().getFolderName();
-        List<String> prefixes = pack.getContentPackageConfigFields().getContentFilePrefixes();
 
-        File modelsRoot = new File(MetadataHandler.PLUGIN.getDataFolder(), "models");
+        File modelsRoot = new File(MetadataHandler.PLUGIN.getDataFolder(), "Models");
 
         return FileModelConverter.getConvertedFileModels().values().stream()
                 .filter(converter -> {
                     File source = converter.getSourceFile();
                     if (source == null) return false;
-                    // Walk parent directories up to models root, check for exact folder name match
                     File parent = source.getParentFile();
                     while (parent != null && !parent.equals(modelsRoot)) {
                         if (parent.getName().equals(folderName)) return true;
                         parent = parent.getParentFile();
-                    }
-                    // Fall back to content file prefix matching
-                    if (prefixes != null) {
-                        String fileName = source.getName();
-                        for (String prefix : prefixes) {
-                            if (fileName.startsWith(prefix)) return true;
-                        }
                     }
                     return false;
                 })
@@ -97,26 +88,17 @@ public final class ModelMenuHelper {
      */
     public static List<String> getItemsForPack(FMMPackage pack) {
         String folderName = pack.getContentPackageConfigFields().getFolderName();
-        List<String> prefixes = pack.getContentPackageConfigFields().getContentFilePrefixes();
 
-        File modelsRoot = new File(MetadataHandler.PLUGIN.getDataFolder(), "models");
+        File modelsRoot = new File(MetadataHandler.PLUGIN.getDataFolder(), "Models");
 
         return com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager.getItemSourceFiles().entrySet().stream()
                 .filter(entry -> {
                     File source = entry.getValue();
                     if (source == null) return false;
-                    // Walk parent directories up to models root, check for exact folder name match
                     File parent = source.getParentFile();
                     while (parent != null && !parent.equals(modelsRoot)) {
                         if (parent.getName().equals(folderName)) return true;
                         parent = parent.getParentFile();
-                    }
-                    // Fall back to content file prefix matching
-                    if (prefixes != null) {
-                        String fileName = source.getName();
-                        for (String prefix : prefixes) {
-                            if (fileName.startsWith(prefix)) return true;
-                        }
                     }
                     return false;
                 })

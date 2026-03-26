@@ -21,9 +21,9 @@ public class MountPointManager {
     private final List<MountSeat> seats = new ArrayList<>();
     private BukkitTask tickTask;
 
-    public MountPointManager(Skeleton skeleton) {
+    public MountPointManager(Skeleton skeleton, com.magmaguy.freeminecraftmodels.customentity.ModeledEntity modeledEntity) {
         for (Bone bone : skeleton.getMountPointBones()) {
-            seats.add(new MountSeat(bone));
+            seats.add(new MountSeat(bone, modeledEntity));
         }
     }
 

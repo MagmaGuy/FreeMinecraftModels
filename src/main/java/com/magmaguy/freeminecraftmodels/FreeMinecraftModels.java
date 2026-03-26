@@ -26,6 +26,7 @@ import com.magmaguy.freeminecraftmodels.listeners.CraftifyListener;
 import com.magmaguy.freeminecraftmodels.listeners.ModelItemListener;
 import com.magmaguy.freeminecraftmodels.listeners.MountDismountListener;
 import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
+import com.magmaguy.freeminecraftmodels.scripting.PropInventoryListener;
 import com.magmaguy.freeminecraftmodels.scripting.PropScriptManager;
 import com.magmaguy.freeminecraftmodels.menus.FreeMinecraftModelsFirstTimeSetupMenu;
 import com.magmaguy.freeminecraftmodels.menus.FreeMinecraftModelsSetupMenu;
@@ -137,6 +138,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         ModelMenuHelper.shutdown();
         FMMPackage.shutdown();
         FMMPackageRefresher.reset();
+        PropInventoryListener.shutdown();
         PropScriptManager.shutdown();
         ItemScriptManager.shutdown();
         PropRecipeManager.shutdown();
@@ -216,7 +218,6 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
 
         initializationContext.step("Runtime Tasks");
         ModeledEntitiesClock.start();
-        PropEntity.onStartup();
         OBBHitDetection.startProjectileDetection();
 
         initializationContext.step("Prop Scripting");
@@ -225,6 +226,9 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         if (PropScriptManager.getListener() != null) {
             Bukkit.getPluginManager().registerEvents(PropScriptManager.getListener(), this);
         }
+
+        // Scan existing props AFTER script manager is initialized so scripts bind correctly
+        PropEntity.onStartup();
 
         initializationContext.step("Prop Recipes");
         PropRecipeManager.initialize();
@@ -250,6 +254,14 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
                 OutputFolder.zipResourcePack();
 
                 Bukkit.getScheduler().runTask(this, () -> {
+                    // Re-initialize script managers before scanning props
+                    PropScriptManager.shutdown();
+                    PropScriptManager.initialize();
+                    if (PropScriptManager.getListener() != null) {
+                        Bukkit.getPluginManager().registerEvents(PropScriptManager.getListener(), FreeMinecraftModels.this);
+                    }
+                    ItemScriptManager.shutdown();
+                    ItemScriptManager.initialize();
                     PropEntity.onStartup();
                     notifyResourcePackManager();
                     if (sender != null) {

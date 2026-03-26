@@ -3,6 +3,8 @@ package com.magmaguy.freeminecraftmodels.scripting;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.commands.ItemifyCommand;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
+import com.magmaguy.freeminecraftmodels.customentity.core.MountPointManager;
+import com.magmaguy.freeminecraftmodels.customentity.core.MountSeat;
 import com.magmaguy.magmacore.scripting.tables.LuaEntityTable;
 import com.magmaguy.magmacore.scripting.tables.LuaLivingEntityTable;
 import com.magmaguy.magmacore.scripting.tables.LuaTableSupport;
@@ -97,35 +99,55 @@ public final class LuaPropTable {
             return LuaValue.NIL;
         }));
 
-        // mount(player_entity) — makes a player sit on the prop's armor stand
+        // has_mount_points() — returns whether this prop has mount point bones
+        table.set("has_mount_points", LuaTableSupport.tableMethod(table, args -> {
+            MountPointManager mpm = prop.getMountPointManager();
+            return LuaValue.valueOf(mpm != null && mpm.hasMountPoints());
+        }));
+
+        // mount(player_entity) — mounts a player onto the first available mount point seat
         table.set("mount", LuaTableSupport.tableMethod(table, args -> {
             LuaTable playerTable = args.arg1().checktable();
             UUID uuid = UUID.fromString(playerTable.get("uuid").tojstring());
             Player player = Bukkit.getPlayer(uuid);
-            if (player != null && underlying instanceof ArmorStand armorStand) {
-                Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> armorStand.addPassenger(player));
-            }
-            return LuaValue.NIL;
+            if (player == null) return LuaValue.FALSE;
+            MountPointManager mpm = prop.getMountPointManager();
+            if (mpm == null || !mpm.hasMountPoints()) return LuaValue.FALSE;
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> mpm.tryMount(player));
+            return LuaValue.TRUE;
         }));
 
-        // dismount(player_entity) — removes a player from the prop
+        // dismount(player_entity) — dismounts a player from their mount point seat
         table.set("dismount", LuaTableSupport.tableMethod(table, args -> {
             LuaTable playerTable = args.arg1().checktable();
             UUID uuid = UUID.fromString(playerTable.get("uuid").tojstring());
             Player player = Bukkit.getPlayer(uuid);
-            if (player != null && underlying instanceof ArmorStand armorStand) {
-                Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> armorStand.removePassenger(player));
-            }
-            return LuaValue.NIL;
+            if (player == null) return LuaValue.FALSE;
+            MountPointManager mpm = prop.getMountPointManager();
+            if (mpm == null) return LuaValue.FALSE;
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+                for (MountSeat seat : mpm.getSeats()) {
+                    if (player.equals(seat.getOccupant())) {
+                        if (seat.getVehicle() != null) {
+                            mpm.handleDismount(player, seat.getVehicle());
+                        }
+                        break;
+                    }
+                }
+            });
+            return LuaValue.TRUE;
         }));
 
-        // get_passengers() — returns a Lua array of entity tables for all current passengers
+        // get_passengers() — returns a Lua array of entity tables for mounted players
         table.set("get_passengers", LuaTableSupport.tableMethod(table, args -> {
             LuaTable passengers = new LuaTable();
-            if (underlying != null) {
+            MountPointManager mpm = prop.getMountPointManager();
+            if (mpm != null) {
                 int index = 1;
-                for (Entity passenger : underlying.getPassengers()) {
-                    passengers.set(index++, LuaEntityTable.build(passenger));
+                for (MountSeat seat : mpm.getSeats()) {
+                    if (seat.isOccupied() && seat.getOccupant() != null) {
+                        passengers.set(index++, LuaEntityTable.build(seat.getOccupant()));
+                    }
                 }
             }
             return passengers;
@@ -179,7 +201,7 @@ public final class LuaPropTable {
             int size = rows * 9;
             final int finalSize = size;
             Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
-                Inventory inv = Bukkit.createInventory(null, finalSize, title);
+                Inventory inv = Bukkit.createInventory(null, finalSize, com.magmaguy.magmacore.util.ChatColorConverter.convert(title));
 
                 // Load existing contents from PDC
                 String savedData = armorStand.getPersistentDataContainer()
@@ -271,6 +293,89 @@ public final class LuaPropTable {
         table.set("has_book", LuaTableSupport.tableMethod(table, args -> {
             if (!(underlying instanceof ArmorStand armorStand)) return LuaValue.FALSE;
             return LuaValue.valueOf(armorStand.getPersistentDataContainer().has(BOOK_KEY, PersistentDataType.STRING));
+        }));
+
+        // drop_inventory() — drops all stored inventory contents at the prop location and clears storage
+        // Closes any viewers first to prevent duplication
+        table.set("drop_inventory", LuaTableSupport.tableMethod(table, args -> {
+            if (!(underlying instanceof ArmorStand armorStand)) return LuaValue.FALSE;
+
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+                // 1. Force-close all viewers and untrack them so InventoryCloseEvent doesn't re-save
+                PropInventoryListener.closeAndUntrackAll(armorStand);
+
+                // 2. Load stored contents from PDC
+                String savedData = armorStand.getPersistentDataContainer()
+                        .get(INVENTORY_KEY, PersistentDataType.STRING);
+                if (savedData == null) return;
+
+                ItemStack[] items = deserializeInventory(savedData);
+
+                // 3. Clear PDC data BEFORE dropping to prevent duplication on double-destroy
+                armorStand.getPersistentDataContainer().remove(INVENTORY_KEY);
+
+                // 4. Drop items at prop location
+                if (items != null) {
+                    Location dropLoc = armorStand.getLocation();
+                    if (dropLoc.getWorld() != null) {
+                        for (ItemStack item : items) {
+                            if (item != null && item.getType() != Material.AIR) {
+                                dropLoc.getWorld().dropItemNaturally(dropLoc, item);
+                            }
+                        }
+                    }
+                }
+            });
+            return LuaValue.TRUE;
+        }));
+
+        // drop_book() — drops the stored book at the prop location and clears storage
+        table.set("drop_book", LuaTableSupport.tableMethod(table, args -> {
+            if (!(underlying instanceof ArmorStand armorStand)) return LuaValue.FALSE;
+
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+                String bookData = armorStand.getPersistentDataContainer()
+                        .get(BOOK_KEY, PersistentDataType.STRING);
+                if (bookData == null) return;
+
+                armorStand.getPersistentDataContainer().remove(BOOK_KEY);
+
+                ItemStack book = deserializeItem(bookData);
+                if (book != null) {
+                    Location dropLoc = armorStand.getLocation();
+                    if (dropLoc.getWorld() != null) {
+                        dropLoc.getWorld().dropItemNaturally(dropLoc, book);
+                    }
+                }
+            });
+            return LuaValue.TRUE;
+        }));
+
+        // is_viewing_inventory(player) — returns whether the player has this prop's inventory open
+        table.set("is_viewing_inventory", LuaTableSupport.tableMethod(table, args -> {
+            LuaTable playerTable = args.arg1().checktable();
+            UUID uuid = UUID.fromString(playerTable.get("uuid").tojstring());
+            if (!(underlying instanceof ArmorStand armorStand)) return LuaValue.FALSE;
+            return LuaValue.valueOf(PropInventoryListener.isViewingInventory(uuid, armorStand));
+        }));
+
+        // set_persistent_data(key, value) — stores a string value on the prop's armor stand PDC
+        table.set("set_persistent_data", LuaTableSupport.tableMethod(table, args -> {
+            String key = args.checkjstring(1);
+            String value = args.checkjstring(2);
+            if (!(underlying instanceof ArmorStand armorStand)) return LuaValue.FALSE;
+            NamespacedKey nsKey = new NamespacedKey(MetadataHandler.PLUGIN, "fmm_lua_" + key);
+            armorStand.getPersistentDataContainer().set(nsKey, PersistentDataType.STRING, value);
+            return LuaValue.TRUE;
+        }));
+
+        // get_persistent_data(key) — retrieves a string value from the prop's armor stand PDC
+        table.set("get_persistent_data", LuaTableSupport.tableMethod(table, args -> {
+            String key = args.checkjstring(1);
+            if (!(underlying instanceof ArmorStand armorStand)) return LuaValue.NIL;
+            NamespacedKey nsKey = new NamespacedKey(MetadataHandler.PLUGIN, "fmm_lua_" + key);
+            String value = armorStand.getPersistentDataContainer().get(nsKey, PersistentDataType.STRING);
+            return value != null ? LuaValue.valueOf(value) : LuaValue.NIL;
         }));
 
         return table;
