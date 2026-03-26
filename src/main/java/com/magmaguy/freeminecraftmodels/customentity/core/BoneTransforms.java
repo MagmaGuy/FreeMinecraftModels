@@ -74,8 +74,8 @@ public class BoneTransforms {
         shiftPivotPoint();
         translateModelCenter();
         translateAnimation();
-        rotateAnimation();
         rotateDefaultBoneRotation();
+        rotateAnimation();
         scaleAnimation();
         shiftPivotPointBack();
         rotateByEntityYaw();
