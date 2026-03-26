@@ -72,7 +72,7 @@ public class AdminContentMenu {
         Set<String> itemModelIds = ItemScriptManager.getItemDefinitions().keySet();
 
         // 2. Find unclaimed models and group by parent folder (excluding models that are custom items)
-        File modelsRoot = new File(MetadataHandler.PLUGIN.getDataFolder(), "models");
+        File modelsRoot = new File(MetadataHandler.PLUGIN.getDataFolder(), "Models");
         Map<String, List<FileModelConverter>> folderGroups = new LinkedHashMap<>();
         List<FileModelConverter> rootModels = new ArrayList<>();
 

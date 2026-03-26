@@ -86,11 +86,11 @@ public class FMMPackage extends AbstractNightbreakContentPackage {
     }
 
     private File getInstalledModelsFolder() {
-        return new File(MetadataHandler.PLUGIN.getDataFolder(), "models");
+        return new File(MetadataHandler.PLUGIN.getDataFolder(), "Models");
     }
 
     private File getDisabledModelsFolder() {
-        return new File(MetadataHandler.PLUGIN.getDataFolder(), "models_disabled");
+        return new File(MetadataHandler.PLUGIN.getDataFolder(), "Models_disabled");
     }
 
     private File getInstalledScriptsFolder() {

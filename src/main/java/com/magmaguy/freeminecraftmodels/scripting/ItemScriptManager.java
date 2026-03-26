@@ -196,6 +196,9 @@ public final class ItemScriptManager {
             // Use the first script for the primary instance stored in the map
             // (matching the single-instance-per-item pattern)
             for (String scriptFileName : scripts) {
+                // Append .lua if not already present — YML configs may omit the extension
+                if (!scriptFileName.toLowerCase(java.util.Locale.ROOT).endsWith(".lua"))
+                    scriptFileName = scriptFileName + ".lua";
                 ScriptDefinition definition = LuaEngine.getDefinition(NAMESPACE, scriptFileName);
                 if (definition == null) {
                     Logger.warn("[FMM Items] Script '" + scriptFileName + "' not found in scripts/ folder (referenced by item '" + itemId + "')");
