@@ -1,12 +1,12 @@
 package com.magmaguy.freeminecraftmodels.menus;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
-import com.magmaguy.freeminecraftmodels.utils.ModelItemFactory;
 import com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields;
 import com.magmaguy.freeminecraftmodels.config.recipes.PropRecipeConfig;
 import com.magmaguy.freeminecraftmodels.config.recipes.PropRecipeManager;
 import com.magmaguy.freeminecraftmodels.content.FMMPackage;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.freeminecraftmodels.utils.ModelItemFactory;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.ItemStackGenerator;
 import org.bukkit.Material;
@@ -176,7 +176,7 @@ public final class ModelMenuHelper {
             lore.add("");
             // Render the 3x3 recipe grid
             List<String> shape = recipe.getShapeList();
-            Map<Character, Material> ingredients = recipe.getIngredients();
+            Map<Character, Material> ingredients = recipe.getParsedIngredients();
             lore.add("&7Recipe:");
             for (String row : shape) {
                 StringBuilder rowDisplay = new StringBuilder("  ");

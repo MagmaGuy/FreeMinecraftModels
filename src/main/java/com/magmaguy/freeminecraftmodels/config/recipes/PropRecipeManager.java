@@ -1,7 +1,10 @@
 package com.magmaguy.freeminecraftmodels.config.recipes;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.magmacore.config.ConfigurationEngine;
 import com.magmaguy.magmacore.util.Logger;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
 import java.util.HashMap;
@@ -18,23 +21,38 @@ public class PropRecipeManager {
             recipesFolder.mkdirs();
             return;
         }
-        File[] files = recipesFolder.listFiles((dir, name) -> name.endsWith(".yml"));
+        scanRecipeDirectory(recipesFolder);
+        if (!loadedRecipes.isEmpty()) {
+            Logger.info("Loaded " + loadedRecipes.size() + " prop recipe(s).");
+        }
+    }
+
+    private static void scanRecipeDirectory(File directory) {
+        File[] files = directory.listFiles();
         if (files == null) return;
         for (File file : files) {
-            PropRecipeConfig config = PropRecipeConfig.load(file);
-            if (config == null) {
-                Logger.warn("Failed to load recipe from " + file.getName());
+            if (file.isDirectory()) {
+                scanRecipeDirectory(file);
                 continue;
             }
+            if (!file.getName().endsWith(".yml")) continue;
+
+            PropRecipeConfig config = new PropRecipeConfig(file.getName(), true);
+            FileConfiguration fileConfig = YamlConfiguration.loadConfiguration(file);
+            config.setFileConfiguration(fileConfig);
+            config.setFile(file);
+            config.processConfigFields();
+
+            if (!config.isEnabled() || config.getModelId().isEmpty()) {
+                continue;
+            }
+
             try {
                 config.registerRecipe();
                 loadedRecipes.put(config.getModelId(), config);
             } catch (Exception e) {
                 Logger.warn("Failed to register recipe for " + config.getModelId() + ": " + e.getMessage());
             }
-        }
-        if (!loadedRecipes.isEmpty()) {
-            Logger.info("Loaded " + loadedRecipes.size() + " prop recipe(s).");
         }
     }
 
@@ -51,7 +69,7 @@ public class PropRecipeManager {
             existing.unregisterRecipe();
         }
         try {
-            config.save(getRecipesFolder());
+            ConfigurationEngine.fileSaverCustomValues(config.getFileConfiguration(), config.getFile());
             config.registerRecipe();
             loadedRecipes.put(config.getModelId(), config);
         } catch (Exception e) {
