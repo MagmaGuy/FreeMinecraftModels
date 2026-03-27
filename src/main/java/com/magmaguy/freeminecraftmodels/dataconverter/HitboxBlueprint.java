@@ -45,7 +45,7 @@ public class HitboxBlueprint {
     }
 
     private void parseCube(Map<String, Object> cubeJSON) {
-        double scaleFactor = .16D / 2.5;
+        double scaleFactor = 1.0 / 16.0;
         ArrayList<Double> fromList = (ArrayList<Double>) cubeJSON.get("from");
         Vector from = new Vector(Round.fourDecimalPlaces(fromList.get(0) * scaleFactor), Round.fourDecimalPlaces(fromList.get(1) * scaleFactor), Round.fourDecimalPlaces(fromList.get(2) * scaleFactor));
         ArrayList<Double> toList = (ArrayList<Double>) cubeJSON.get("to");

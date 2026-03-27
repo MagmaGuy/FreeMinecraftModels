@@ -8,5 +8,9 @@ public final class DisplayModelRegistry {
     private DisplayModelRegistry() {}
     public static void register(String modelId) { displayModels.add(modelId); }
     public static boolean hasDisplayModel(String modelId) { return displayModels.contains(modelId); }
+
+    public static Set<String> getRegisteredModels() {
+        return Set.copyOf(displayModels);
+    }
     public static void shutdown() { displayModels.clear(); }
 }

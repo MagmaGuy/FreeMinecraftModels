@@ -1,8 +1,8 @@
 package com.magmaguy.freeminecraftmodels.scripting;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.config.BowStateDetector;
 import com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields;
-import com.magmaguy.magmacore.config.ConfigurationEngine;
 import com.magmaguy.magmacore.scripting.LuaEngine;
 import com.magmaguy.magmacore.scripting.ScriptDefinition;
 import com.magmaguy.magmacore.scripting.ScriptInstance;
@@ -22,8 +22,6 @@ import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -112,6 +110,10 @@ public final class ItemScriptManager {
             }
 
             if (!file.getName().endsWith(".yml")) continue;
+
+            // Skip draw state YMLs — bow/crossbow states are handled by the base model's YML
+            String nameWithoutExt = file.getName().substring(0, file.getName().length() - 4);
+            if (BowStateDetector.isDrawStateSuffix(nameWithoutExt)) continue;
 
             // Load the YML and check if it defines a custom item (has material set)
             PropScriptConfigFields configFields = new PropScriptConfigFields(file.getName(), true);

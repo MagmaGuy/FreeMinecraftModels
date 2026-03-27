@@ -21,7 +21,6 @@ import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.Bukkit;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.*;
@@ -55,9 +54,9 @@ public class PropEntity extends StaticEntity {
         HitboxBlueprint hitbox = converter.getSkeletonBlueprint().getHitbox();
         int modelX, modelY, modelZ;
         if (hitbox != null) {
-            modelX = Math.max(1, (int) Math.ceil(hitbox.getWidthX() - 0.24));
-            modelY = Math.max(1, (int) Math.ceil(hitbox.getHeight() - 0.24));
-            modelZ = Math.max(1, (int) Math.ceil(hitbox.getWidthZ() - 0.24));
+            modelX = Math.max(1, (int) Math.ceil(hitbox.getWidthX() - 0.4));
+            modelY = Math.max(1, (int) Math.ceil(hitbox.getHeight() - 0.4));
+            modelZ = Math.max(1, (int) Math.ceil(hitbox.getWidthZ() - 0.4));
         } else {
             modelX = modelY = modelZ = 1;
         }

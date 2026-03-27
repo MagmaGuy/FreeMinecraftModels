@@ -58,6 +58,10 @@ public class StorageDoublePropConfig extends PropScriptLuaConfigFields {
                     context.prop:open_inventory(player, INVENTORY_TITLE, INVENTORY_ROWS)
 
                     local player_uuid = player.uuid
+                    local existing = context.state["task_" .. player_uuid]
+                    if existing then
+                        context.scheduler:cancel(existing)
+                    end
                     context.state["task_" .. player_uuid] = context.scheduler:run_repeating(5, 5, function(tick_context)
                         local prop_loc = tick_context.prop.current_location
                         if prop_loc == nil then

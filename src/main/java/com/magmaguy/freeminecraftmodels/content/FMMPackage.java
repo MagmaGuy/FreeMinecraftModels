@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.content;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.commands.ReloadCommand;
+import com.magmaguy.freeminecraftmodels.config.ModelsFolder;
 import com.magmaguy.freeminecraftmodels.config.contentpackages.ContentPackageConfigFields;
 import com.magmaguy.magmacore.nightbreak.AbstractNightbreakContentPackage;
 import com.magmaguy.magmacore.nightbreak.NightbreakFileUtils;
@@ -86,11 +87,13 @@ public class FMMPackage extends AbstractNightbreakContentPackage {
     }
 
     private File getInstalledModelsFolder() {
-        return new File(MetadataHandler.PLUGIN.getDataFolder(), "Models");
+        return ModelsFolder.resolveModelsFolder();
     }
 
     private File getDisabledModelsFolder() {
-        return new File(MetadataHandler.PLUGIN.getDataFolder(), "Models_disabled");
+        File legacy = new File(MetadataHandler.PLUGIN.getDataFolder(), "Models_disabled");
+        if (legacy.exists()) return legacy;
+        return new File(MetadataHandler.PLUGIN.getDataFolder(), "models_disabled");
     }
 
     private File getInstalledScriptsFolder() {

@@ -5,11 +5,10 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
-import com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry;
-import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.ParsedTexture;
+import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
 import com.magmaguy.magmacore.util.Logger;
 import com.magmaguy.magmacore.util.VersionChecker;
 import org.apache.commons.io.FileUtils;
@@ -23,11 +22,21 @@ public class ModelsFolder {
     private static int counter;
     private static int folderCounter;
 
+    /**
+     * Returns the models folder, preferring the legacy "Models" name if it already exists,
+     * otherwise using lowercase "models" for new installs.
+     */
+    public static File resolveModelsFolder() {
+        File legacy = new File(MetadataHandler.PLUGIN.getDataFolder(), "Models");
+        if (legacy.exists()) return legacy;
+        return new File(MetadataHandler.PLUGIN.getDataFolder(), "models");
+    }
+
     public static void initializeConfig() {
         counter = 1;
         folderCounter = 50;
 
-        File file = new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar + "Models");
+        File file = resolveModelsFolder();
 
         if (!file.exists()) {
             file.mkdirs();
@@ -233,6 +242,49 @@ public class ModelsFolder {
             } catch (Exception e) {
                 Logger.warn("Failed to process display model JSON for " + modelId + ": " + e.getMessage());
             }
+        }
+
+        // --- Bow/Crossbow draw state detection ---
+        // After all display models are processed, detect state groups and generate
+        // conditional item definitions (replacing the simple ones generated above).
+        Set<String> allDisplayModelIds = new HashSet<>(DisplayModelRegistry.getRegisteredModels());
+        List<BowStateDetector.StateGroup> stateGroups = BowStateDetector.detectStateGroups(allDisplayModelIds);
+        Set<String> stateModelIds = new HashSet<>(); // track which IDs are part of a group
+
+        for (BowStateDetector.StateGroup group : stateGroups) {
+            String base = group.baseName();
+
+            // Collect all state model IDs so we can suppress their individual item defs
+            stateModelIds.add(base + "_idle");
+            stateModelIds.add(base + "_draw_start");
+            stateModelIds.add(base + "_draw_half");
+            stateModelIds.add(base + "_draw_full");
+            if (group.isCrossbow()) stateModelIds.add(base + "_charged");
+
+            // Generate conditional item definition for the _idle model only
+            String itemJson = group.isCrossbow()
+                    ? BowStateDetector.generateCrossbowItemJson(base, "freeminecraftmodels")
+                    : BowStateDetector.generateBowItemJson(base, "freeminecraftmodels");
+
+            try {
+                // Write as the base name (without _idle) so the item references the base
+                FileUtils.writeStringToFile(
+                        new File(displayItemsFolder, base + "_idle.json"),
+                        itemJson, StandardCharsets.UTF_8);
+                Logger.info("Generated " + (group.isCrossbow() ? "crossbow" : "bow")
+                        + " state item definition for: " + base);
+            } catch (IOException e) {
+                Logger.warn("Failed to write bow/crossbow item definition for " + base + ": " + e.getMessage());
+            }
+
+            // Remove individual item definitions for draw/charged states (they shouldn't have their own)
+            new File(displayItemsFolder, base + "_draw_start.json").delete();
+            new File(displayItemsFolder, base + "_draw_half.json").delete();
+            new File(displayItemsFolder, base + "_draw_full.json").delete();
+            if (group.isCrossbow()) new File(displayItemsFolder, base + "_charged.json").delete();
+
+            // Only register the _idle model ID (draw states are only referenced, not standalone)
+            // The draw state models keep their display JSONs but lose their item definitions
         }
 
         // Scan for lone .json files that define custom items

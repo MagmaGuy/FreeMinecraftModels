@@ -5,13 +5,13 @@ import com.magmaguy.freeminecraftmodels.utils.StringToResourcePackFilename;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import org.apache.commons.io.FileUtils;
-import org.yaml.snakeyaml.external.biz.base64Coder.Base64Coder;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.util.Base64;
 import java.util.Map;
 
 public class ParsedTexture {
@@ -78,7 +78,7 @@ public class ParsedTexture {
     private File generateImageFile(Map<?, ?> textureObject, String modelName) {
         String base64Image = (String) textureObject.get("source");
         base64Image = base64Image.split(",")[base64Image.split(",").length - 1];
-        ByteArrayInputStream inputStream = new ByteArrayInputStream(Base64Coder.decodeLines(base64Image));
+        ByteArrayInputStream inputStream = new ByteArrayInputStream(Base64.getMimeDecoder().decode(base64Image));
         imagePath = MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() +
                 File.separatorChar + "output" +
                 File.separatorChar + "FreeMinecraftModels" +
