@@ -61,9 +61,16 @@ public final class ScriptedItemAPI {
         );
 
         // Set the item model if available (1.21.4+)
-        if (!VersionChecker.serverVersionOlderThan(21, 4)
-                && DisplayModelRegistry.hasDisplayModel(itemId)) {
-            meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + itemId));
+        // For bow/crossbow items, the display model is registered as {itemId}_idle
+        if (!VersionChecker.serverVersionOlderThan(21, 4)) {
+            String displayModelId = itemId;
+            if (!DisplayModelRegistry.hasDisplayModel(displayModelId)
+                    && DisplayModelRegistry.hasDisplayModel(displayModelId + "_idle")) {
+                displayModelId = displayModelId + "_idle";
+            }
+            if (DisplayModelRegistry.hasDisplayModel(displayModelId)) {
+                meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + displayModelId));
+            }
         }
 
         itemStack.setItemMeta(meta);

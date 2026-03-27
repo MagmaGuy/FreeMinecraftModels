@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.scripting;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.config.BowStateDetector;
 import com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
@@ -69,17 +70,11 @@ public final class PropScriptManager {
      * @param prop the prop entity that just spawned
      */
     public static void onPropSpawn(PropEntity prop) {
-        if (!initialized) {
-            Logger.debug("[FMM Debug] onPropSpawn: PropScriptManager not initialized");
-            return;
-        }
+        if (!initialized) return;
 
         // 1. Find the model file via FileModelConverter
         FileModelConverter converter = FileModelConverter.getConvertedFileModels().get(prop.getEntityID());
-        if (converter == null || converter.getSourceFile() == null) {
-            Logger.debug("[FMM Debug] onPropSpawn: no FileModelConverter for " + prop.getEntityID());
-            return;
-        }
+        if (converter == null || converter.getSourceFile() == null) return;
 
         // 2. Compute the sibling YML path (same directory, same base name, .yml extension)
         File modelFile = converter.getSourceFile();
@@ -87,12 +82,12 @@ public final class PropScriptManager {
         // Strip model extension (.fmmodel or .bbmodel)
         if (baseName.endsWith(".fmmodel")) baseName = baseName.substring(0, baseName.length() - 8);
         else if (baseName.endsWith(".bbmodel")) baseName = baseName.substring(0, baseName.length() - 8);
+        // Strip bow/crossbow draw state suffixes so only one YML is created per weapon set
+        baseName = BowStateDetector.stripStateSuffix(baseName);
         File ymlFile = new File(modelFile.getParentFile(), baseName + ".yml");
-        Logger.debug("[FMM Debug] onPropSpawn: looking for YML at " + ymlFile.getAbsolutePath());
 
         // 3. If YML doesn't exist, create it async with defaults and return (no scripts this load)
         if (!ymlFile.exists()) {
-            Logger.debug("[FMM Debug] onPropSpawn: YML not found, creating default");
             final File targetFile = ymlFile;
             Bukkit.getScheduler().runTaskAsynchronously(MetadataHandler.PLUGIN, () -> {
                 try {
@@ -121,17 +116,9 @@ public final class PropScriptManager {
         prop.setVoxelizeConfig(configFields.isVoxelize(), configFields.isSolidify());
         prop.applySolidify();
 
-        if (!configFields.isEnabled()) {
-            Logger.debug("[FMM Debug] onPropSpawn: config disabled for " + ymlFile.getName());
-            return;
-        }
+        if (!configFields.isEnabled()) return;
         List<String> scripts = configFields.getScripts();
-        if (scripts == null || scripts.isEmpty()) {
-            Logger.debug("[FMM Debug] onPropSpawn: no scripts listed in " + ymlFile.getName());
-            return;
-        }
-
-        Logger.debug("[FMM Debug] onPropSpawn: found " + scripts.size() + " script(s) in " + ymlFile.getName() + ": " + scripts);
+        if (scripts == null || scripts.isEmpty()) return;
 
         // 5. For each script filename, resolve from scripts/ folder and bind
         for (String scriptFileName : scripts) {
@@ -149,7 +136,6 @@ public final class PropScriptManager {
             ScriptInstance instance = new ScriptInstance(definition, scriptable);
 
             listener.register(prop, instance);
-            Logger.debug("[FMM Debug] onPropSpawn: registered script '" + scriptFileName + "' for prop '" + prop.getEntityID() + "' (total registered: " + listener.getScriptedProps().size() + ")");
 
             instance.handleEvent(ScriptHook.ON_SPAWN, null, null, null);
         }
