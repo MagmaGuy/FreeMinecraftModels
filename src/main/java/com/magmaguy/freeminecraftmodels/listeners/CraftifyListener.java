@@ -17,7 +17,6 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.persistence.PersistentDataType;
 
 import java.util.*;
 
@@ -173,7 +172,7 @@ public class CraftifyListener implements Listener {
         }
 
         // Save and register
-        PropRecipeConfig config = new PropRecipeConfig(modelId, shape, ingredients);
+        PropRecipeConfig config = PropRecipeConfig.create(modelId, shape, ingredients, PropRecipeManager.getRecipesFolder());
         PropRecipeManager.addRecipe(config);
 
         // Visual feedback
