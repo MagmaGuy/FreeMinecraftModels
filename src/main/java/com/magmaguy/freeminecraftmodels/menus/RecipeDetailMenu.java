@@ -68,7 +68,7 @@ public class RecipeDetailMenu {
 
         // Render 3x3 crafting grid
         List<String> shape = recipe.getShapeList();
-        Map<Character, Material> ingredients = recipe.getIngredients();
+        Map<Character, Material> ingredients = recipe.getParsedIngredients();
 
         for (int row = 0; row < shape.size() && row < 3; row++) {
             String rowStr = shape.get(row);
