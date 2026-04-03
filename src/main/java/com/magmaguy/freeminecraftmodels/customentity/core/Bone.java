@@ -136,7 +136,7 @@ public class Bone {
     public void displayTo(Player player) {
         if (player == null || !player.isValid() || !player.isOnline()) return;
         boolean isBedrock = BedrockChecker.isBedrock(player);
-        if (isBedrock && DefaultConfig.sendCustomModelsToBedrockClients) return;
+        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients) return;
         if (boneBlueprint.isNameTag()) {
             if (boneTransforms.getPacketTextDisplayArmorStandEntity() == null) {
                 if (!warned) {
