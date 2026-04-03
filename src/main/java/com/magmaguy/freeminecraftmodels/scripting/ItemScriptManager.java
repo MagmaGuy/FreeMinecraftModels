@@ -236,6 +236,7 @@ public final class ItemScriptManager {
                 instance.shutdown();
             }
         }
+        ScriptableItem.clearGlobalCooldowns(player.getUniqueId());
     }
 
     /**

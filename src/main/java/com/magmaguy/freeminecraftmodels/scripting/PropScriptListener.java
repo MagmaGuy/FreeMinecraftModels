@@ -42,6 +42,7 @@ public class PropScriptListener implements Listener {
                 }, 200L);
             }
         }
+        ScriptableProp.clearGlobalCooldowns(prop);
     }
 
     /**
