@@ -9,7 +9,10 @@ import org.bukkit.entity.Entity;
 import com.magmaguy.shaded.luaj.vm2.LuaTable;
 import com.magmaguy.shaded.luaj.vm2.LuaValue;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Adapts a {@link PropEntity} for Lua scripting via the Magmacore scripting engine.
@@ -71,5 +74,18 @@ public class ScriptableProp extends ScriptableEntity {
     @Override
     public LuaValue resolveExtraContext(String key, ScriptInstance instance) {
         return LuaValue.NIL;
+    }
+
+    // ── Global cooldown (shared per PropEntity) ────────────────────────
+
+    private static final Map<PropEntity, Map<String, Long>> propGlobalCooldowns = new ConcurrentHashMap<>();
+
+    @Override
+    public Map<String, Long> getGlobalCooldownStore() {
+        return propGlobalCooldowns.computeIfAbsent(propEntity, k -> new HashMap<>());
+    }
+
+    public static void clearGlobalCooldowns(PropEntity prop) {
+        propGlobalCooldowns.remove(prop);
     }
 }

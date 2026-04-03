@@ -10,7 +10,11 @@ import org.bukkit.entity.Player;
 import com.magmaguy.shaded.luaj.vm2.LuaTable;
 import com.magmaguy.shaded.luaj.vm2.LuaValue;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Adapts a per-player item for Lua scripting via the MagmaCore scripting engine.
@@ -98,5 +102,18 @@ public class ScriptableItem extends ScriptableEntity {
             return LuaLivingEntityTable.build(player);
         }
         return LuaValue.NIL;
+    }
+
+    // ── Global cooldown (shared per player across all items) ───────────
+
+    private static final Map<UUID, Map<String, Long>> playerGlobalCooldowns = new ConcurrentHashMap<>();
+
+    @Override
+    public Map<String, Long> getGlobalCooldownStore() {
+        return playerGlobalCooldowns.computeIfAbsent(player.getUniqueId(), k -> new HashMap<>());
+    }
+
+    public static void clearGlobalCooldowns(UUID playerUUID) {
+        playerGlobalCooldowns.remove(playerUUID);
     }
 }
