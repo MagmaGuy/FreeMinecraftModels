@@ -237,6 +237,7 @@ public final class ItemScriptManager {
             }
         }
         ScriptableItem.clearGlobalCooldowns(player.getUniqueId());
+        ScriptableItem.clearLocalCooldowns(player.getUniqueId());
     }
 
     /**
