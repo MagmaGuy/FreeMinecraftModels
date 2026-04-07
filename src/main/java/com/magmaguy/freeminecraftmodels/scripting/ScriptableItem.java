@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.scripting;
 
+import com.magmaguy.magmacore.scripting.ScriptDefinition;
 import com.magmaguy.magmacore.scripting.ScriptHook;
 import com.magmaguy.magmacore.scripting.ScriptInstance;
 import com.magmaguy.magmacore.scripting.ScriptableEntity;
@@ -115,5 +116,26 @@ public class ScriptableItem extends ScriptableEntity {
 
     public static void clearGlobalCooldowns(UUID playerUUID) {
         playerGlobalCooldowns.remove(playerUUID);
+    }
+
+    // ── Local cooldown (persisted per player+item+script across re-equip) ──
+    //
+    // ScriptInstance for an item is destroyed every time the item is unequipped
+    // (see ItemScriptManager#updateEquippedScripts), so the default in-instance
+    // local cooldown map would die on every swap. We persist it here, keyed by
+    // player UUID -> "itemId:scriptFile" -> cooldown key -> expiry.
+
+    private static final Map<UUID, Map<String, Map<String, Long>>> playerLocalCooldowns = new ConcurrentHashMap<>();
+
+    @Override
+    public Map<String, Long> getLocalCooldownStore(ScriptDefinition definition) {
+        String scope = itemId + ":" + definition.getFileName();
+        return playerLocalCooldowns
+                .computeIfAbsent(player.getUniqueId(), k -> new ConcurrentHashMap<>())
+                .computeIfAbsent(scope, k -> new HashMap<>());
+    }
+
+    public static void clearLocalCooldowns(UUID playerUUID) {
+        playerLocalCooldowns.remove(playerUUID);
     }
 }
