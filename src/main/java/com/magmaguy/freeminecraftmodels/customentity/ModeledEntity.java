@@ -4,6 +4,7 @@ import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
 import com.magmaguy.freeminecraftmodels.customentity.core.MountPointManager;
+import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.customentity.core.RegisterModelEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.Skeleton;
 import com.magmaguy.freeminecraftmodels.customentity.core.components.*;
@@ -71,6 +72,7 @@ public class ModeledEntity {
     private MountPointManager mountPointManager = null;
     @Getter
     private String displayName = null;
+    private int viewDistanceOverride = -1;
 
     public ModeledEntity(String entityID, Location spawnLocation) {
         this.entityID = entityID;
@@ -94,7 +96,6 @@ public class ModeledEntity {
 
         // Initialize mount points if the model has mount_ bones
         if (!skeleton.getMountPointBones().isEmpty()) {
-            Logger.debug("Initializing mount points for entity: " + entityID);
             mountPointManager = new MountPointManager(skeleton, this);
         }
 
@@ -217,13 +218,18 @@ public class ModeledEntity {
         hitboxComponent.removePacketInteractionEntity();
         skeleton.remove();
         loadedModeledEntities.remove(this);
-        if (underlyingEntity != null &&
-                (!(this instanceof PropEntity) ||
-                        this instanceof PropEntity propEntity && !propEntity.isPersistent())) {
+        // Always drop the underlyingEntity->ModeledEntity mapping so removed
+        // props don't leak stale references when the chunk unloads.
+        if (underlyingEntity != null) {
             loadedModeledEntitiesWithUnderlyingEntities.remove(underlyingEntity);
-            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
-                underlyingEntity.remove();
-            });
+            // Only actually despawn the underlying entity for non-persistent
+            // cases — persistent props must serialize with the chunk.
+            if (!(this instanceof PropEntity) ||
+                    this instanceof PropEntity propEntity && !propEntity.isPersistent()) {
+                Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+                    underlyingEntity.remove();
+                });
+            }
         }
         isRemoved = true;
     }
@@ -447,6 +453,31 @@ public class ModeledEntity {
      */
     public boolean hasAnimation(String animationName) {
         return animationComponent.hasAnimation(animationName);
+    }
+
+    /**
+     * Overrides the plugin-wide default view distance for this single modeled entity.
+     * Pass -1 to revert to default.
+     *
+     * @param blocks the view distance in blocks, or -1 to use the plugin-wide default
+     *               ({@code DefaultConfig.maxModelViewDistance})
+     * @return the current {@code ModeledEntity} instance, allowing for method chaining
+     */
+    public ModeledEntity setViewDistanceOverride(int blocks) {
+        this.viewDistanceOverride = blocks;
+        return this;
+    }
+
+    /**
+     * Returns the effective view distance for this entity. If an override has been
+     * set via {@link #setViewDistanceOverride(int)} with a value greater than zero,
+     * the override is returned; otherwise the plugin-wide default
+     * ({@code DefaultConfig.maxModelViewDistance}) is returned.
+     *
+     * @return the effective view distance in blocks
+     */
+    public int getEffectiveViewDistance() {
+        return viewDistanceOverride > 0 ? viewDistanceOverride : DefaultConfig.maxModelViewDistance;
     }
 
 }
