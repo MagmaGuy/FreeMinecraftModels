@@ -16,6 +16,7 @@ import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.Bukkit;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.*;
@@ -73,6 +74,7 @@ public class ModeledEntity {
     @Getter
     private String displayName = null;
     private int viewDistanceOverride = -1;
+    private Color persistentTint = null;
 
     public ModeledEntity(String entityID, Location spawnLocation) {
         this.entityID = entityID;
@@ -478,6 +480,28 @@ public class ModeledEntity {
      */
     public int getEffectiveViewDistance() {
         return viewDistanceOverride > 0 ? viewDistanceOverride : DefaultConfig.maxModelViewDistance;
+    }
+
+    /**
+     * Persistent tint applied via the leather-armor dye channel. Damage flash
+     * temporarily overrides, then fades back to this tint. Pass null to clear.
+     *
+     * @param color the persistent color to apply, or {@code null} to revert to
+     *              undyed (equivalent to {@link Color#WHITE} on the dye channel)
+     * @return the current {@code ModeledEntity} instance, allowing for method chaining
+     */
+    public ModeledEntity setTintColor(Color color) {
+        this.persistentTint = color;
+        if (skeleton != null) skeleton.applyPersistentTint(color);
+        return this;
+    }
+
+    /**
+     * Returns the persistent tint set via {@link #setTintColor(Color)}, or
+     * {@code null} if no persistent tint has been applied.
+     */
+    public Color getTintColor() {
+        return persistentTint;
     }
 
 }
