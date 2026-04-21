@@ -8,12 +8,19 @@ import com.magmaguy.magmacore.util.MathToolkit;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * The AnimationComponent class provides functionalities to manage and animate
  * a ModeledEntity instance. It enables playing, stopping, and blending animations
  * as well as scaling down and removing the entity with transitions.
  */
 public class AnimationComponent {
+    // Deduped across the JVM lifetime so models with no animations don't spam the log.
+    // Key format: "<entityId>:<animationName>".
+    private static final Set<String> WARNED_MISSING_ANIMATION_MANAGER = ConcurrentHashMap.newKeySet();
+
     private final ModeledEntity modeledEntity;
     private final int scaleDurationTicks = 20;
     @Setter
@@ -44,6 +51,10 @@ public class AnimationComponent {
      * @return Whether the animation successfully started playing.
      */
     public boolean playAnimation(String animationName, boolean blendAnimation, boolean loop) {
+        if (animationManager == null) {
+            warnMissingAnimationManagerOnce(animationName);
+            return false;
+        }
         return animationManager.play(animationName, blendAnimation, loop);
     }
 
@@ -113,5 +124,14 @@ public class AnimationComponent {
         scaleTicksElapsed = 0;
         scaleStart = modeledEntity.getScaleModifier();
         scaleEnd = 0.0;
+    }
+
+    private void warnMissingAnimationManagerOnce(String animationName) {
+        String entityId = modeledEntity != null ? modeledEntity.getEntityID() : "<unknown>";
+        String key = entityId + ":" + animationName;
+        if (WARNED_MISSING_ANIMATION_MANAGER.add(key)) {
+            Logger.warn("Model " + entityId + " has no animations; skipping animation request '" + animationName
+                    + "'. Further requests for this model will be silent.");
+        }
     }
 }
