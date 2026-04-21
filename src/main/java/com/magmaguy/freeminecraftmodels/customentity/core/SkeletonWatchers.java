@@ -122,7 +122,10 @@ public class SkeletonWatchers implements Listener {
         List<UUID> toRemove = new ArrayList<>();
 
         double sightCheckDistanceMin = Math.pow(MIN_VIEW_DISTANCE, 2);
-        double maxViewDistanceSquared = Math.pow(DefaultConfig.maxModelViewDistance, 2);
+        int effectiveViewDistance = skeleton.getModeledEntity() != null
+                ? skeleton.getModeledEntity().getEffectiveViewDistance()
+                : DefaultConfig.maxModelViewDistance;
+        double maxViewDistanceSquared = Math.pow(effectiveViewDistance, 2);
 
         for (Player player : skeleton.getCurrentLocation().getWorld().getPlayers()) {
             double distance = player.getLocation().distanceSquared(skeleton.getCurrentLocation());

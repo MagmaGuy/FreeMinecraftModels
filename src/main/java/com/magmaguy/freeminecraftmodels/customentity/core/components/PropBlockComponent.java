@@ -1,6 +1,5 @@
 package com.magmaguy.freeminecraftmodels.customentity.core.components;
 
-import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.config.props.PropBlocks;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import org.bukkit.Bukkit;
@@ -31,8 +30,9 @@ public class PropBlockComponent {
     public void setPropBlocks(List<PropBlocks> propBlocks) {
         this.propBlocks = propBlocks;
         Location spawnLocation = modeledEntity.getSpawnLocation();
+        double maxViewDistanceSquared = Math.pow(modeledEntity.getEffectiveViewDistance(), 2);
         for (Player player : spawnLocation.getWorld().getPlayers()) {
-            if (spawnLocation.distanceSquared(player.getLocation()) < Math.pow(DefaultConfig.maxModelViewDistance, 2)) {
+            if (spawnLocation.distanceSquared(player.getLocation()) < maxViewDistanceSquared) {
                 showFakePropBlocksToPlayer(player);
             }
         }
