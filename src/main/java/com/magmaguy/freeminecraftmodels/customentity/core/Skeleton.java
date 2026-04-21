@@ -111,6 +111,7 @@ public class Skeleton {
 
     private boolean tinting = false;
     private int tintCounter = 0;
+    private Color persistentTint = null;
 
     /**
      * This updates animations. The plugin runs this automatically, don't use it unless you know what you're doing!
@@ -130,9 +131,10 @@ public class Skeleton {
             } else {
                 // after frame 10, either keep poofing (if dying) or finish
                 if (!modeledEntity.isDying()) {
-                    // done
+                    // done — fade back to persistent tint when set, else undyed
                     tinting = false;
-                    boneMap.values().forEach(b -> b.setHorseLeatherArmorColor(Color.WHITE));
+                    Color restore = persistentTint != null ? persistentTint : Color.WHITE;
+                    boneMap.values().forEach(b -> b.setHorseLeatherArmorColor(restore));
                 } else if (modeledEntity.isRemoved()) {
                     // entity gone, cancel
                     tinting = false;
@@ -154,6 +156,28 @@ public class Skeleton {
         // start (or restart) the tint animation
         tinting = true;
         tintCounter = 0;
+    }
+
+    /**
+     * Stores the given color as this skeleton's persistent tint and immediately
+     * pushes it to every bone via the leather-armor dye channel. The damage
+     * flash animation (see {@link #tint()}) now fades back to this value once
+     * it completes. While a flash is in flight, the new color is stored but
+     * does not clobber the in-flight animation — the flash restore path picks
+     * the updated value up when it finishes.
+     *
+     * @param color the color to apply, or {@code null} to clear the persistent
+     *              tint (bones revert to undyed / {@link Color#WHITE})
+     */
+    public void applyPersistentTint(Color color) {
+        this.persistentTint = color;
+        if (tinting) return;
+        Color applied = color != null ? color : Color.WHITE;
+        boneMap.values().forEach(b -> b.setHorseLeatherArmorColor(applied));
+    }
+
+    public Color getPersistentTint() {
+        return persistentTint;
     }
 
     /**
