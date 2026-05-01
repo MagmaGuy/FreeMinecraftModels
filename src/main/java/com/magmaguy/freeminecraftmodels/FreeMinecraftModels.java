@@ -7,8 +7,11 @@ import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry;
 import com.magmaguy.freeminecraftmodels.config.ModelsFolder;
 import com.magmaguy.freeminecraftmodels.config.OutputFolder;
+import com.magmaguy.freeminecraftmodels.config.ShopConfig;
 import com.magmaguy.freeminecraftmodels.config.props.PropScriptLuaConfig;
 import com.magmaguy.freeminecraftmodels.config.recipes.PropRecipeManager;
+import com.magmaguy.freeminecraftmodels.shop.ShopMenu;
+import com.magmaguy.freeminecraftmodels.shop.VaultEconomyHook;
 import com.magmaguy.freeminecraftmodels.content.FMMPackage;
 import com.magmaguy.freeminecraftmodels.content.FMMPackageRefresher;
 import com.magmaguy.freeminecraftmodels.customentity.*;
@@ -155,6 +158,8 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
     private void asyncInitialization(PluginInitializationContext initializationContext) {
         initializationContext.step("Default Config");
         new DefaultConfig();
+        initializationContext.step("Shop Config");
+        new ShopConfig();
         initializationContext.step("Content Importer");
         MagmaCore.initializeImporter(this);
         initializationContext.step("Output Folder");
@@ -196,6 +201,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         CommandManager manager = new CommandManager(this, "freeminecraftmodels");
         manager.registerCommand(new MountCommand());
         manager.registerCommand(new HitboxDebugCommand());
+        manager.registerCommand(new com.magmaguy.freeminecraftmodels.commands.LocationDebugCommand());
         manager.registerCommand(new DeleteAllCommand());
         manager.registerCommand(new ReloadCommand());
         manager.registerCommand(new SpawnCommand());
@@ -208,6 +214,13 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         manager.registerCommand(new CraftifyCommand());
         manager.registerCommand(new AdminCommand());
         manager.registerCommand(new GiveItemCommand());
+
+        VaultEconomyHook.initialize();
+        if (ShopConfig.isEnabled() && VaultEconomyHook.isEnabled()) {
+            manager.registerCommand(new ShopCommand());
+            ShopMenu.registerEvents(this);
+        }
+
         NightbreakPluginBootstrap.registerStandardCommands(this,
                 manager,
                 NIGHTBREAK_PLUGIN_SPEC,
@@ -226,6 +239,8 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         if (PropScriptManager.getListener() != null) {
             Bukkit.getPluginManager().registerEvents(PropScriptManager.getListener(), this);
         }
+        com.magmaguy.freeminecraftmodels.scripting.LuaEntityEnricher.register();
+        com.magmaguy.magmacore.location.LocationQueryRegistry.initializeBuiltInProtectionProviders();
 
         // Scan existing props AFTER script manager is initialized so scripts bind correctly
         PropEntity.onStartup();

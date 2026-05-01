@@ -1,5 +1,5 @@
 name: FreeMinecraftModels
-version: '2.4.0'
+version: '2.5.0'
 main: com.magmaguy.freeminecraftmodels.FreeMinecraftModels
 api-version: 1.18
 prefix: FreeMinecraftModels
@@ -7,6 +7,11 @@ load: STARTUP
 authors: [ MagmaGuy ]
 description: Welcome to the new age of custom Minecraft models.
 website: magmaguy.com
+softdepend:
+  - WorldGuard
+  - WorldEdit
+  - GriefPrevention
+  - Vault
 
 commands:
   freeminecraftmodels:
@@ -23,4 +28,7 @@ permissions:
     default: op
   freeminecraftmodels.menu:
     description: Allows access to the craftable items menu
+    default: true
+  freeminecraftmodels.shop:
+    description: Allows access to the furniture shop
     default: true

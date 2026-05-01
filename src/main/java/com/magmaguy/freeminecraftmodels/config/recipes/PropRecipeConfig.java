@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.config.recipes;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.config.ShopConfig;
 import com.magmaguy.freeminecraftmodels.utils.ModelItemFactory;
 import com.magmaguy.magmacore.config.CustomConfigFields;
 import lombok.Getter;
@@ -24,6 +25,10 @@ public class PropRecipeConfig extends CustomConfigFields {
     private List<String> shape = new ArrayList<>();
     @Getter
     private Map<Character, Material> parsedIngredients = new LinkedHashMap<>();
+    @Getter
+    private boolean shopEnabled = true;
+    @Getter
+    private double shopPrice = 100.0;
 
     public PropRecipeConfig(String filename, boolean isEnabled) {
         super(filename, isEnabled);
@@ -68,6 +73,10 @@ public class PropRecipeConfig extends CustomConfigFields {
                 }
             }
         }
+
+        this.shopEnabled = processBoolean("shopEnabled", shopEnabled, true, true);
+        double defaultPrice = ShopConfig.getDefaultPrice() > 0 ? ShopConfig.getDefaultPrice() : 100.0;
+        this.shopPrice = processDouble("shopPrice", defaultPrice, defaultPrice, true);
     }
 
     public ShapedRecipe registerRecipe() {
