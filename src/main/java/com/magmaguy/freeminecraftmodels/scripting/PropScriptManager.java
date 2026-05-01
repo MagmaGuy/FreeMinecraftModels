@@ -162,20 +162,23 @@ public final class PropScriptManager {
     }
 
     /**
-     * Called by PropEntity's right-click callback. Fires ON_RIGHT_CLICK on all
-     * scripts bound to this prop, if any.
+     * Called by PropEntity's right-click callback. Fires ON_RIGHT_CLICK on the
+     * script and returns true if the script cancelled the default mount fallback.
      *
      * @param prop   the prop that was right-clicked
      * @param player the player who right-clicked it
+     * @return true if the script handled and cancelled the default behavior
      */
-    public static void onPropRightClick(PropEntity prop, org.bukkit.entity.Player player) {
-        if (!initialized || listener == null) return;
+    public static boolean onPropRightClick(PropEntity prop, org.bukkit.entity.Player player) {
+        if (!initialized || listener == null) return false;
         List<ScriptInstance> instances = listener.getScriptedProps().get(prop);
-        if (instances == null || instances.isEmpty()) return;
+        if (instances == null || instances.isEmpty()) return false;
+        CancellableFlag flag = new CancellableFlag();
         for (ScriptInstance instance : instances) {
             if (!instance.isClosed())
-                instance.handleEvent(ScriptableProp.ON_RIGHT_CLICK, null, null, player);
+                instance.handleEvent(ScriptableProp.ON_RIGHT_CLICK, flag, null, player);
         }
+        return flag.isCancelled();
     }
 
     /**

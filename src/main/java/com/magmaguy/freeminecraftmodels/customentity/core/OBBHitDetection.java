@@ -183,7 +183,7 @@ public class OBBHitDetection implements Listener {
         interactionCallback.accept(hitEntity.get());
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlayerInteract(PlayerInteractEvent event) {
         Action action = event.getAction();
 

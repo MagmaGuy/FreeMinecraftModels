@@ -13,6 +13,7 @@ C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\api\DynamicEntityHitboxContactEvent.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\api\DynamicEntityLeftClickEvent.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\api\DynamicEntityRightClickEvent.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\api\LocationAPI.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\api\ModeledEntityHitboxContactEvent.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\api\ModeledEntityHitByProjectileEvent.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\api\ModeledEntityLeftClickEvent.java
@@ -33,12 +34,15 @@ C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\commands\GiveItemCommand.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\commands\HitboxDebugCommand.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\commands\ItemifyCommand.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\commands\LocationDebugCommand.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\commands\MountCommand.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\commands\ReloadCommand.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\commands\ShopCommand.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\commands\SpawnCommand.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\commands\StatsCommand.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\commands\UndisguiseCommand.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\commands\VersionCommand.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\BowStateDetector.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\contentpackages\ContentPackageConfig.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\contentpackages\ContentPackageConfigFields.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\contentpackages\premade\BasicFurniturePack.java
@@ -58,6 +62,7 @@ C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\props\PropScriptLuaConfigFields.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\recipes\PropRecipeConfig.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\recipes\PropRecipeManager.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\config\ShopConfig.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\content\FMMPackage.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\content\FMMPackageRefresher.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\customentity\core\Bone.java
@@ -125,6 +130,7 @@ C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\ItemScriptListener.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\ItemScriptManager.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\ItemScriptProvider.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\LuaEntityEnricher.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\LuaItemTable.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\LuaPropTable.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\PropInventoryListener.java
@@ -133,7 +139,12 @@ C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\PropScriptProvider.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\ScriptableItem.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\scripting\ScriptableProp.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\shop\PurchaseHandler.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\shop\ShopMenu.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\shop\VaultEconomyHook.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\thirdparty\BedrockChecker.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\thirdparty\EliteMobsBossSpawner.java
+C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\thirdparty\EliteMobsEntityEnricher.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\thirdparty\Floodgate.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\thirdparty\Geyser.java
 C:\Users\tiago\Documents\MineCraftProjects\FreeMinecraftModels\src\main\java\com\magmaguy\freeminecraftmodels\utils\ChunkHasher.java

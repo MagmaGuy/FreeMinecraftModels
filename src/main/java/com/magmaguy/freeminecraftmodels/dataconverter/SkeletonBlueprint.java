@@ -62,6 +62,12 @@ public class SkeletonBlueprint {
             }
         }
 
+        // Freefloating cubes (bbmodel entries declared at the top of the outliner without a
+        // containing group) arrive as bare UUID strings — attach them to the auto-generated
+        // root bone so they actually render.
+        rootBone.appendFreefloatingCubes(parsedTextures, outlinerJSON, values, textureReferences,
+                modelName, resolutionWidth, resolutionHeight);
+
         rootBone.setBoneBlueprintChildren(rootChildren);
         mainModel.add(rootBone);
 

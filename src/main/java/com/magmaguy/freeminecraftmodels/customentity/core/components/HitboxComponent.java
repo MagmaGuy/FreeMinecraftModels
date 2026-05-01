@@ -159,10 +159,13 @@ public class HitboxComponent {
      * Should be called during tick.
      */
     private void updatePacketInteractionEntityPosition() {
-        if (packetInteractionEntity == null) return;
+        // Snapshot the field: tick() runs async, removePacketInteractionEntity()
+        // on the main thread can null this between the check and the teleport.
+        PacketInteractionEntity entity = packetInteractionEntity;
+        if (entity == null) return;
         Location location = modeledEntity.getLocation();
         if (location == null) return;
-        packetInteractionEntity.teleport(location);
+        entity.teleport(location);
     }
 
     /**
