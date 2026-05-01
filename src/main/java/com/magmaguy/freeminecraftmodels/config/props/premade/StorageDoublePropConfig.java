@@ -44,6 +44,13 @@ public class StorageDoublePropConfig extends PropScriptLuaConfigFields {
                     local player = context.event and context.event.player
                     if not player then return end
 
+                    -- Anti-exploit: block interaction in protected zones and dungeons
+                    local protect_loc = context.prop.current_location
+                    if protect_loc and (em.location.is_protected(protect_loc) or em.location.is_in_dungeon(protect_loc)) then
+                        if context.event then context.event:cancel() end
+                        return
+                    end
+
                     context.state.open_count = (context.state.open_count or 0) + 1
 
                     if OPEN_ANIMATION then

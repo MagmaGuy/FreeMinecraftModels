@@ -5,6 +5,7 @@ import com.magmaguy.freeminecraftmodels.commands.ItemifyCommand;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.MountPointManager;
 import com.magmaguy.freeminecraftmodels.customentity.core.MountSeat;
+import com.magmaguy.freeminecraftmodels.thirdparty.EliteMobsBossSpawner;
 import com.magmaguy.magmacore.scripting.tables.LuaEntityTable;
 import com.magmaguy.magmacore.scripting.tables.LuaLivingEntityTable;
 import com.magmaguy.magmacore.scripting.tables.LuaTableSupport;
@@ -164,25 +165,15 @@ public final class LuaPropTable {
                 return LuaValue.NIL;
             }
 
+            Location propLoc = prop.getLocation();
+            org.bukkit.World world = propLoc != null ? propLoc.getWorld() : null;
+            if (world == null) return LuaValue.NIL;
+
             try {
-                Class<?> customBossClass = Class.forName("com.magmaguy.elitemobs.mobconstructor.custombosses.CustomBossEntity");
-                Object boss = customBossClass.getMethod("createCustomBossEntity", String.class).invoke(null, filename);
-                if (boss == null) return LuaValue.NIL;
-
-                Location propLoc = prop.getLocation();
-                org.bukkit.World world = propLoc != null ? propLoc.getWorld() : null;
-                if (world == null) return LuaValue.NIL;
-
-                Location spawnLoc = new Location(world, x, y, z);
-                customBossClass.getMethod("spawn", Location.class, boolean.class).invoke(boss, spawnLoc, false);
-
-                // Try to get the LivingEntity from the boss
-                Object livingEntity = customBossClass.getMethod("getLivingEntity").invoke(boss);
-                if (livingEntity instanceof LivingEntity le) {
-                    return LuaLivingEntityTable.build(le);
-                }
-            } catch (Exception e) {
-                // EliteMobs not available or boss not found — fail silently
+                LivingEntity spawned = EliteMobsBossSpawner.spawn(filename, new Location(world, x, y, z));
+                if (spawned != null) return LuaLivingEntityTable.build(spawned);
+            } catch (NoClassDefFoundError ignored) {
+                // EliteMobs not on the classpath — install check above should prevent this, but stay safe.
             }
             return LuaValue.NIL;
         }));

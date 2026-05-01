@@ -10,6 +10,15 @@ public class PickupablePropConfig extends PropScriptLuaConfigFields {
     @Override
     public String getSource() {
         return """
+                local function is_blocked(context)
+                    local loc = context.prop.current_location
+                    if loc and (em.location.is_protected(loc) or em.location.is_in_dungeon(loc)) then
+                        if context.event then context.event:cancel() end
+                        return true
+                    end
+                    return false
+                end
+
                 return {
                     api_version = 1,
                     on_spawn = function(context)
@@ -20,6 +29,7 @@ public class PickupablePropConfig extends PropScriptLuaConfigFields {
                         if context.event then
                             context.event:cancel()
                         end
+                        if is_blocked(context) then return end
                         context.prop:hurt_visual()
                         local state = context.state
                         state.hits = (state.hits or 0) + 1
@@ -36,6 +46,10 @@ public class PickupablePropConfig extends PropScriptLuaConfigFields {
                             state.hits = 0
                             state.reset_task = nil
                         end)
+                    end,
+                    on_right_click = function(context)
+                        -- Block mount fallback in protected zones / dungeons
+                        is_blocked(context)
                     end
                 }
                 """;

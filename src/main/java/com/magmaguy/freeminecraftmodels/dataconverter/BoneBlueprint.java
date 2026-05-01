@@ -330,6 +330,40 @@ public class BoneBlueprint {
                 .mul(1 / 16f));
     }
 
+    /**
+     * Ingests freefloating cubes (cubes declared at the top level of the outliner, not nested
+     * inside any group) and attaches them to this bone. Intended for the auto-generated root
+     * bone so that bbmodels which mix grouped and ungrouped cubes render both.
+     */
+    public void appendFreefloatingCubes(List<ParsedTexture> parsedTextures,
+                                        List<?> outlinerJSON,
+                                        HashMap<String, Object> values,
+                                        Map<String, Map<String, Object>> textureReferences,
+                                        String modelName,
+                                        double resolutionWidth,
+                                        double resolutionHeight) {
+        boolean added = false;
+        for (Object entry : outlinerJSON) {
+            if (!(entry instanceof String uuid)) continue;
+            Object rawCube = values.get(uuid);
+            if (!(rawCube instanceof Map<?, ?>)) continue;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> cubeData = (Map<String, Object>) rawCube;
+            CubeBlueprint cubeBlueprint = new CubeBlueprint(parsedTextures, cubeData, modelName, resolutionWidth, resolutionHeight);
+            if (cubeBlueprint.isValidatedData()) {
+                cubeBlueprintChildren.add(cubeBlueprint);
+                added = true;
+            } else {
+                Logger.warn("Model " + modelName + " has an invalid freefloating cube configuration; skipping.");
+            }
+        }
+        if (!added) return;
+
+        adjustCubes();
+        String filename = StringToResourcePackFilename.convert(originalBoneName);
+        generateAndWriteCubes(filename, textureReferences, modelName);
+    }
+
     private void generateAndWriteCubes(String filename, Map<String, Map<String, Object>> textureReferences, String modelName) {
         if (filename.equalsIgnoreCase("hitbox") || filename.equalsIgnoreCase("tag_name") || cubeBlueprintChildren.isEmpty())
             return;

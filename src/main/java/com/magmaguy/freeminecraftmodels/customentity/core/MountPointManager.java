@@ -1,7 +1,6 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
-import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Player;
@@ -41,8 +40,6 @@ public class MountPointManager {
      * @return true if the player was successfully mounted
      */
     public boolean tryMount(Player player) {
-        Logger.debug("trying to mount");
-
         // Don't mount if the player is already in one of our seats
         for (MountSeat seat : seats) {
             if (player.equals(seat.getOccupant())) return false;

@@ -29,6 +29,8 @@ public class PropEntity extends StaticEntity {
     public static final NamespacedKey propNamespacedKey = new NamespacedKey(MetadataHandler.PLUGIN, "prop");
     @Getter
     public static HashMap<UUID, PropEntity> propEntities = new HashMap<>();
+    // Props ignore click callbacks for this long after spawn so the placement click can't trigger them.
+    private static final long POST_SPAWN_INTERACTION_GRACE_MS = 500L;
     private final String entityID;
     @Getter
     private final PropBlockComponent propBlockComponent = new PropBlockComponent(this);
@@ -39,6 +41,7 @@ public class PropEntity extends StaticEntity {
     @Getter
     private boolean solidify = false;
     private String chunkHash;
+    private final long spawnTimeMillis = System.currentTimeMillis();
 
     public void setVoxelizeConfig(boolean voxelize, boolean solidify) {
         this.voxelize = voxelize;
@@ -108,10 +111,7 @@ public class PropEntity extends StaticEntity {
         super.spawnLocation = armorStand.getLocation();
         displayInitializer();
         chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
-        propEntities.put(underlyingEntity.getUniqueId(), this);
-
         propEntities.put(armorStand.getUniqueId(), this);
-        chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
         PropScriptManager.onPropSpawn(this);
     }
 
@@ -160,26 +160,34 @@ public class PropEntity extends StaticEntity {
     private void initializePropEntity() {
         getDamageableComponent().setInternalHealth(3);
         setLeftClickCallback((player, entity) -> {
+            if (isWithinPostSpawnGrace()) return;
             if (!PropScriptManager.onPropLeftClick(this, player)) {
                 entity.damage(player);
             }
             resendFakeBlocks(player);
         });
         setRightClickCallback((player, entity) -> {
-            PropScriptManager.onPropRightClick(this, player);
-            // Fall back to mount if this prop has mount points and no script consumed the click
-            if (getMountPointManager() != null && getMountPointManager().hasMountPoints()) {
-                getMountPointManager().tryMount(player);
+            if (isWithinPostSpawnGrace()) return;
+            if (!PropScriptManager.onPropRightClick(this, player)) {
+                if (getMountPointManager() != null && getMountPointManager().hasMountPoints()) {
+                    getMountPointManager().tryMount(player);
+                }
             }
             resendFakeBlocks(player);
         });
         propBlockComponent.showFakePropBlocksToAllPlayers();
     }
 
+    private boolean isWithinPostSpawnGrace() {
+        return System.currentTimeMillis() - spawnTimeMillis < POST_SPAWN_INTERACTION_GRACE_MS;
+    }
+
     private void resendFakeBlocks(org.bukkit.entity.Player player) {
         if (propBlockComponent.propBlocks.isEmpty()) return;
-        Bukkit.getScheduler().runTaskLater(MetadataHandler.PLUGIN,
-                () -> propBlockComponent.showFakePropBlocksToPlayer(player), 1L);
+        Bukkit.getScheduler().runTaskLater(MetadataHandler.PLUGIN, () -> {
+            if (isRemoved()) return;
+            propBlockComponent.showFakePropBlocksToPlayer(player);
+        }, 1L);
     }
 
     public void setPersistent(boolean persistent) {
