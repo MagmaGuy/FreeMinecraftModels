@@ -8,14 +8,17 @@ import com.magmaguy.freeminecraftmodels.api.ModeledEntityRightClickEvent;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntityHitboxContactCallback;
 import com.magmaguy.freeminecraftmodels.customentity.core.MountPointManager;
+import com.magmaguy.freeminecraftmodels.customentity.core.OBBHitDetection;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntityLeftClickCallback;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntityRightClickCallback;
+import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.Bukkit;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
@@ -43,7 +46,9 @@ public class InteractionComponent {
 
     // Cooldown to prevent double-firing from both packet interaction entity and OBB raytrace
     private static final long RIGHT_CLICK_COOLDOWN_MS = 100;
+    private static final long LEFT_CLICK_COOLDOWN_MS = 100;
     private final Map<UUID, Long> rightClickCooldowns = new HashMap<>();
+    private final Map<UUID, Long> leftClickCooldowns = new HashMap<>();
 
     public InteractionComponent(ModeledEntity modeledEntity) {
         this.modeledEntity = modeledEntity;
@@ -51,6 +56,10 @@ public class InteractionComponent {
 
     public void callLeftClickEvent(Player player) {
         if (modeledEntity.isDying()) return;
+        long now = System.currentTimeMillis();
+        Long last = leftClickCooldowns.get(player.getUniqueId());
+        if (last != null && (now - last) < LEFT_CLICK_COOLDOWN_MS) return;
+        leftClickCooldowns.put(player.getUniqueId(), now);
         ModeledEntityLeftClickEvent event = new ModeledEntityLeftClickEvent(player, modeledEntity);
         Bukkit.getPluginManager().callEvent(event);
     }
@@ -98,8 +107,26 @@ public class InteractionComponent {
     }
 
     public void handleLeftClickEvent(Player player) {
-        if (leftClickCallback == null) return;
-        leftClickCallback.onLeftClick(player, modeledEntity);
+        if (leftClickCallback != null) {
+            leftClickCallback.onLeftClick(player, modeledEntity);
+            return;
+        }
+        // Default behavior for dynamic entities (those with an underlying
+        // LivingEntity backing the model): forward the swing to the underlying
+        // entity as a vanilla attack so it takes damage normally. Without this
+        // default, OBB-edge clicks reach this callback path with no handler and
+        // the entity stays un-attackable outside its resized vanilla bbox —
+        // i.e. the custom hitbox visually exists but doesn't register hits.
+        // The applyDamage flag bypasses OBBHitDetection's own
+        // EntityDamageByEntityEvent cancel for this single dispatch.
+        if (modeledEntity instanceof PropEntity) return;
+        if (!(modeledEntity.getUnderlyingEntity() instanceof LivingEntity underlying)) return;
+        OBBHitDetection.applyDamage = true;
+        try {
+            player.attack(underlying);
+        } finally {
+            OBBHitDetection.applyDamage = false;
+        }
     }
 
     public void handleRightClickEvent(Player player) {
