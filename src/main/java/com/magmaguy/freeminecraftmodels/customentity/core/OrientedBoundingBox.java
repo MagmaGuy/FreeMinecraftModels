@@ -210,7 +210,13 @@ public class OrientedBoundingBox {
         // Get all modeled entities
         HashSet<ModeledEntity> entities = ModeledEntityManager.getAllEntities();
 
-        // Filter entities to only include those in the same world
+        // Filter entities to only include those in the same world.
+        // We do NOT exclude entities with packet-interaction here, even though
+        // it means static/prop clicks can fire from both paths — the
+        // InteractionComponent's per-player left/right-click cooldown dedupes
+        // any duplicate dispatches. Excluding them here would silently break
+        // clicks whenever the packet path isn't delivering (e.g. visibility
+        // races, version-incompatible NMS adapter, or pipeline conflicts).
         entities.removeIf(entity -> entity.getWorld() == null ||
                 !entity.getWorld().getName().equals(worldName));
 
@@ -340,7 +346,11 @@ public class OrientedBoundingBox {
         if (Math.abs(currentYaw - yaw) > 0.01d) {
             currentYaw = yaw;
             rotation.identity().rotateY(yaw);
-            inverseRotationDirty = true;
+            // rotation is a pure rotation matrix → inverse is the transpose.
+            // Without this, rayIntersection/containsPoint silently use a stale
+            // identity inverse, breaking click hit-detection on rotated entities.
+            rotation.transpose(inverseRotation);
+            inverseRotationDirty = false;
             updateAxes();
         }
 

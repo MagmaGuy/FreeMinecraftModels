@@ -7,6 +7,7 @@ import lombok.Getter;
 import org.bukkit.damage.DamageType;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
+import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -143,26 +144,12 @@ public class OBBHitDetection implements Listener {
 
     private static void executeRightClickInteraction(Player player) {
         executePlayerInteraction(player, rightClickCooldownPlayers,
-                hitEntity -> {
-                    hitEntity.getInteractionComponent().callRightClickEvent(player);
-                });
+                hitEntity -> hitEntity.getInteractionComponent().callRightClickEvent(player));
     }
 
-    /**
-     * Generic method to handle player interactions with cooldown management
-     *
-     * @param player              The player performing the interaction
-     * @param cooldownSet         The cooldown set for this type of interaction
-     * @param interactionCallback The callback to execute when an entity is hit
-     */
     private static void executePlayerInteraction(Player player, HashSet<Player> cooldownSet,
                                                  Consumer<ModeledEntity> interactionCallback) {
-        // Check cooldown
-        if (cooldownSet.contains(player)) {
-            return;
-        }
-
-        // Add to cooldown
+        if (cooldownSet.contains(player)) return;
         cooldownSet.add(player);
         new BukkitRunnable() {
             @Override
@@ -171,29 +158,28 @@ public class OBBHitDetection implements Listener {
             }
         }.runTaskLater(MetadataHandler.PLUGIN, 1);
 
-        // Check for hit entity
         Optional<ModeledEntity> hitEntity = OrientedBoundingBox.raytraceFromPlayer(player);
-
-        // If no entity was hit, allow normal processing
-        if (hitEntity.isEmpty()) {
-            return;
-        }
-
-        // Process the hit using the provided callback
+        if (hitEntity.isEmpty()) return;
         interactionCallback.accept(hitEntity.get());
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    // ignoreCancelled=false on purpose: LEFT_CLICK_AIR / RIGHT_CLICK_AIR arrive
+    // with useInteractedBlock=DENY (there's no block to "use"), and Bukkit
+    // reports such events as cancelled — so ignoreCancelled=true would silently
+    // skip every air click, breaking hit detection on any entity without a
+    // block behind it. Suppress only when BOTH useBlock and useItem are DENY,
+    // which is the real "another plugin cancelled this" signal.
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onPlayerInteract(PlayerInteractEvent event) {
+        if (event.useInteractedBlock() == Event.Result.DENY
+                && event.useItemInHand() == Event.Result.DENY) {
+            return;
+        }
         Action action = event.getAction();
-
-        // Handle left clicks
         if (action == Action.LEFT_CLICK_AIR || action == Action.LEFT_CLICK_BLOCK) {
             attackCooldowns.put(event.getPlayer(), event.getPlayer().getAttackCooldown());
             executeLeftClickAttack(event.getPlayer());
-        }
-        // Handle right clicks
-        else if (action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK) {
+        } else if (action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK) {
             executeRightClickInteraction(event.getPlayer());
         }
     }
