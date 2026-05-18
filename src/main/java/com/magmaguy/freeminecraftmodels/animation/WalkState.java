@@ -22,6 +22,17 @@ public class WalkState implements IAnimState {
     @Override
     public void update() {
         requestedNext = null;
+        if (entity.getUnderlyingEntity() == null) {
+            // No underlying entity — e.g. a PlayerDisguiseEntity, which intentionally
+            // does not register the disguised player as the underlying entity (to keep
+            // it out of the modeled-entity-with-underlying registry and PDC tagging).
+            // The disguise drives its own animation state via DisguiseAnimationController,
+            // so this generic state machine just needs to idle silently. IdleState
+            // already null-guards the same way (see IdleState.java:25). Without this,
+            // every tick of WalkState crashes with NPE during /fmm disguise.
+            requestedNext = AnimationStateType.IDLE;
+            return;
+        }
         if (!entity.getUnderlyingEntity().isOnGround()) {
             requestedNext = AnimationStateType.JUMP;
         } else if (entity.getUnderlyingEntity().getVelocity().length() <= .08) {
