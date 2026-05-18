@@ -1,0 +1,11 @@
+.gradle/
+build/
+target/
+.idea/
+*.iml
+testbed/
+.DS_Store
+Thumbs.db
+codex-build.log
+.claude/
+dependency-reduced-pom.xml

@@ -256,6 +256,10 @@ public class SkeletonWatchers implements Listener {
     }
 
     private void displayTo(Player player) {
+        displayTo(player, true);
+    }
+
+    private void displayTo(Player player, boolean allowBedrockResyncSchedule) {
         if (player == null || !player.isValid()) return;
         boolean isBedrock = BedrockChecker.isBedrock(player);
         if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getUnderlyingEntity() != null) {
@@ -263,7 +267,7 @@ public class SkeletonWatchers implements Listener {
                     player.showEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getUnderlyingEntity())
             );
         }
-        viewers.add(player.getUniqueId());
+        boolean wasAlreadyViewing = !viewers.add(player.getUniqueId());
         // Only show bones if the underlying entity is not invisible
         if (!isUnderlyingEntityInvisible())
             skeleton.getBones().forEach(bone -> bone.displayTo(player));
@@ -271,6 +275,54 @@ public class SkeletonWatchers implements Listener {
             propEntity.showFakePropBlocksToPlayer(player);
         // Show the packet interaction entity for click detection (always, even when invisible)
         skeleton.getModeledEntity().getHitboxComponent().showPacketInteractionEntityTo(player);
+        // Bedrock-only: the initial AddEntity → EntityData → Equipment → HeadPose
+        // sequence races against Geyser's per-session entity-registration state.
+        // When it loses the race, Bedrock binds the attachable to the wrong rotation
+        // reference (or fails to bind at all) and the model appears broken until
+        // the player walks out of range and back — which empirically forces the
+        // attachable to re-bind correctly. We replicate that hide+show here on a
+        // short delay so the user doesn't have to do it manually. The
+        // allowBedrockResyncSchedule guard prevents the resync from re-triggering
+        // itself: the deferred resync calls displayTo(player, false) so this
+        // branch is suppressed, otherwise every resync fires another resync 10
+        // ticks later and the model visibly flickers/resets twice per second.
+        if (allowBedrockResyncSchedule && isBedrock && !wasAlreadyViewing) scheduleBedrockInitialResync(player);
+    }
+
+    /**
+     * Schedules a {@code hideFrom + displayTo} cycle ~10 ticks (500ms) after the
+     * initial Bedrock display. The cycle forces Geyser to tear down the bedrock
+     * entity binding and re-create it, which reliably triggers attachable
+     * rebinding on the Bedrock client. Without this the initial display works
+     * sporadically and players have to manually walk out of range and back.
+     * <p>
+     * Calls {@code displayTo(player, false)} explicitly so the resync's own
+     * displayTo doesn't schedule another resync — otherwise it would loop
+     * forever, visibly flickering the model every 500ms.
+     * <p>
+     * Cost: one extra round-trip of AddEntity + EntityData + Equipment per
+     * Bedrock viewer per spawn. Bandwidth-cheap, only fires once per add-viewer
+     * event, and only for Bedrock — Java viewers see no extra packets.
+     */
+    private void scheduleBedrockInitialResync(Player player) {
+        final UUID uuid = player.getUniqueId();
+        Bukkit.getScheduler().runTaskLater(MetadataHandler.PLUGIN, () -> {
+            // Abort if the entity was removed in the meantime. Without this
+            // check, if the entity was destroyed (e.g. /fmm disguise twice in
+            // quick succession, where the first disguise is removed before its
+            // 10-tick resync fires), the resync would re-send AddEntity packets
+            // for the destroyed entity's bones and a ghost copy of the old
+            // model would persist on the bedrock client until they walked out
+            // of range. Manifested as "double disguise" — both old and new
+            // models visible at once.
+            if (skeleton.getModeledEntity() == null
+                    || skeleton.getModeledEntity().isRemoved()) return;
+            if (!viewers.contains(uuid)) return; // player left or got hideFrom'd in the meantime
+            Player p = Bukkit.getPlayer(uuid);
+            if (p == null || !p.isOnline()) return;
+            hideFrom(uuid);
+            displayTo(p, false);
+        }, 10L);
     }
 
     private void hideFrom(UUID uuid) {

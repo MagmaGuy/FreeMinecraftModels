@@ -180,13 +180,31 @@ public class CubeBlueprint {
             textureWidth = texture.getTextureWidth();
             textureHeight = texture.getTextureHeight();
         }
+        // Clamp UV pixel coordinates to the texture's bounds before scaling. Some
+        // bbmodel authors leave negative or oversized UVs in faces (texture atlas
+        // gets resized, autouv produces values just past the edge, etc.). MC
+        // 1.21.x tolerated these silently; MC 26.1+ refuses to bake the model
+        // and logs "Cannot compute translucency out of bounds: [...] in WxH image".
+        // We clamp into [0, textureSize] so the model bakes; faces with out-of-bounds
+        // UV lose at most a few pixels of texture detail (which the renderer would
+        // have shown as transparent or wrapped anyway in older versions).
+        double u1 = clamp(originalUV.get(0), 0.0, textureWidth);
+        double v1 = clamp(originalUV.get(1), 0.0, textureHeight);
+        double u2 = clamp(originalUV.get(2), 0.0, textureWidth);
+        double v2 = clamp(originalUV.get(3), 0.0, textureHeight);
         double uvWidthMultiplier = 16.0 / textureWidth;
         double uvHeightMultiplier = 16.0 / textureHeight;
         map.put("uv", List.of(
-                Round.fourDecimalPlaces(originalUV.get(0) * uvWidthMultiplier),
-                Round.fourDecimalPlaces(originalUV.get(1) * uvHeightMultiplier),
-                Round.fourDecimalPlaces(originalUV.get(2) * uvWidthMultiplier),
-                Round.fourDecimalPlaces(originalUV.get(3) * uvHeightMultiplier)));
+                Round.fourDecimalPlaces(u1 * uvWidthMultiplier),
+                Round.fourDecimalPlaces(v1 * uvHeightMultiplier),
+                Round.fourDecimalPlaces(u2 * uvWidthMultiplier),
+                Round.fourDecimalPlaces(v2 * uvHeightMultiplier)));
+    }
+
+    private static double clamp(double value, double min, double max) {
+        if (value < min) return min;
+        if (value > max) return max;
+        return value;
     }
 
     public void shiftPosition() {

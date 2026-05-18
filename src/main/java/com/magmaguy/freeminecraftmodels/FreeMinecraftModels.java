@@ -26,6 +26,7 @@ import com.magmaguy.freeminecraftmodels.menus.RecipeDetailMenu;
 import com.magmaguy.freeminecraftmodels.listeners.ArmorStandListener;
 import com.magmaguy.freeminecraftmodels.listeners.EntityTeleportEvent;
 import com.magmaguy.freeminecraftmodels.listeners.CraftifyListener;
+import com.magmaguy.freeminecraftmodels.listeners.DisguiseListeners;
 import com.magmaguy.freeminecraftmodels.listeners.ModelItemListener;
 import com.magmaguy.freeminecraftmodels.listeners.MountDismountListener;
 import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
@@ -112,6 +113,13 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
                                 ItemScriptManager.updateEquippedScripts(player);
                             }
                         }, 40L);
+                        // Notify consumers (EliteMobs, BetterStructures, etc.) that FMM finished
+                        // initializing. On reload, they'll need to re-attach custom models to
+                        // their surviving underlying entities (NPCs/bosses/etc.); on first
+                        // startup the consumers' entity registries are still empty so the event
+                        // is a harmless no-op for them.
+                        Bukkit.getScheduler().runTaskLater(FreeMinecraftModels.this, () ->
+                                Bukkit.getPluginManager().callEvent(new com.magmaguy.freeminecraftmodels.api.FmmReloadedEvent()), 40L);
                     }
 
                     @Override
@@ -145,6 +153,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         PropScriptManager.shutdown();
         ItemScriptManager.shutdown();
         PropRecipeManager.shutdown();
+        DisguiseManager.shutdown();
         ModeledEntity.shutdown();
         ModeledEntitiesClock.shutdown();
         OBBHitDetection.shutdown();
@@ -185,12 +194,14 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         Bukkit.getPluginManager().registerEvents(new InteractionComponent.InteractionComponentEvents(), this);
         Bukkit.getPluginManager().registerEvents(new ModelItemListener(), this);
         Bukkit.getPluginManager().registerEvents(new CraftifyListener(), this);
+        Bukkit.getPluginManager().registerEvents(new com.magmaguy.freeminecraftmodels.customentity.DisguiseEffectListener(), this);
         ModelMenuHelper.initialize();
         AdminContentMenu.registerEvents(this);
         AdminModelListMenu.registerEvents(this);
         CraftableItemsMenu.registerEvents(this);
         RecipeDetailMenu.registerEvents(this);
         Bukkit.getPluginManager().registerEvents(new MountDismountListener(), this);
+        Bukkit.getPluginManager().registerEvents(new DisguiseListeners(), this);
         Bukkit.getPluginManager().registerEvents(new NightbreakFirstTimeSetupWarner(this, FIRST_TIME_SETUP_SPEC, DefaultConfig::isSetupDone), this);
         Bukkit.getPluginManager().registerEvents(this, this);
 
@@ -210,6 +221,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         manager.registerCommand(new FreeMinecraftModelsCommand());
         manager.registerCommand(new DisguiseCommand());
         manager.registerCommand(new UndisguiseCommand());
+        manager.registerCommand(new com.magmaguy.freeminecraftmodels.commands.DisguiseListCommand());
         manager.registerCommand(new ItemifyCommand());
         manager.registerCommand(new CraftifyCommand());
         manager.registerCommand(new AdminCommand());
@@ -253,6 +265,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
     }
 
     public void reloadImportedContent(CommandSender sender) {
+        DisguiseManager.shutdown();
         ModeledEntity.shutdown();
         PropEntity.shutdown();
         DynamicEntity.shutdown();

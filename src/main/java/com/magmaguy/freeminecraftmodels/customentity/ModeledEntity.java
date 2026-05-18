@@ -127,8 +127,7 @@ public class ModeledEntity {
     public void setUnderlyingEntity(Entity underlyingEntity) {
         this.underlyingEntity = underlyingEntity;
         loadedModeledEntitiesWithUnderlyingEntities.put(underlyingEntity, this);
-        if (!(underlyingEntity instanceof PlayerDisguiseEntity))
-            RegisterModelEntity.registerModelEntity(underlyingEntity, getSkeletonBlueprint().getModelName());
+        RegisterModelEntity.registerModelEntity(underlyingEntity, getSkeletonBlueprint().getModelName());
         hitboxComponent.setCustomHitboxOnUnderlyingEntity();
     }
 
