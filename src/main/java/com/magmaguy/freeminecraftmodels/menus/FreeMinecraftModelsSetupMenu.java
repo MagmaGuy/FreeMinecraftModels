@@ -1,10 +1,11 @@
 package com.magmaguy.freeminecraftmodels.menus;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.content.FMMPackage;
 import com.magmaguy.freeminecraftmodels.content.FMMPackageRefresher;
 import com.magmaguy.magmacore.menus.MenuButton;
-import com.magmaguy.magmacore.menus.SetupMenu;
+import com.magmaguy.magmacore.menus.SetupMenuBuilder;
 import com.magmaguy.magmacore.nightbreak.DownloadAllContentPackage;
 import com.magmaguy.magmacore.nightbreak.NightbreakAccount;
 import com.magmaguy.magmacore.util.ChatColorConverter;
@@ -25,6 +26,10 @@ public class FreeMinecraftModelsSetupMenu {
     }
 
     public static void createMenu(Player player) {
+        if (!DefaultConfig.isSetupDone()) {
+            DefaultConfig.toggleSetupDone(true);
+        }
+
         List<FMMPackage> packages = new ArrayList<>(FMMPackage.getFmmPackages().values()).stream()
                 .sorted(Comparator.comparing(pkg ->
                         ChatColor.stripColor(ChatColorConverter.convert(pkg.getContentPackageConfigFields().getName()))))
@@ -66,12 +71,14 @@ public class FreeMinecraftModelsSetupMenu {
             }
         };
 
-        List<com.magmaguy.magmacore.menus.ContentPackage> allPackages = new ArrayList<>(packages);
-        allPackages.add(new DownloadAllContentPackage<>(() -> new ArrayList<>(FMMPackage.getFmmPackages().values()),
-                "FreeMinecraftModels",
-                "https://nightbreak.io/plugin/freeminecraftmodels/",
-                "fmm downloadall"));
-
-        new SetupMenu((JavaPlugin) MetadataHandler.PLUGIN, player, infoButton, allPackages, List.of(), "Setup menu");
+        new SetupMenuBuilder((JavaPlugin) MetadataHandler.PLUGIN, player)
+                .title("Setup menu")
+                .infoButton(infoButton)
+                .packages(packages)
+                .appendPackage(new DownloadAllContentPackage<>(() -> new ArrayList<>(FMMPackage.getFmmPackages().values()),
+                        "FreeMinecraftModels",
+                        "https://nightbreak.io/plugin/freeminecraftmodels/",
+                        "fmm downloadall"))
+                .open();
     }
 }
