@@ -11,7 +11,7 @@ public class CraftenmineToolsItemPack extends ContentPackageConfigFields {
                 "&2Craftenmine Tools Item Pack",
                 List.of("&fA collection of tool item models by Craftenmine."),
                 "https://nightbreak.io/plugin/freeminecraftmodels/",
-                "fmm_craftenmine_tools_items_pack_v1");
+                "fmm_craftenmine_tools_items_pack");
         setNightbreakSlug("craftenmine-tools-item-pack");
     }
 }

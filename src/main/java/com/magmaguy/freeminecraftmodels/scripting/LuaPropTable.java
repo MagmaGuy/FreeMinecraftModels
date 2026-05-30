@@ -28,6 +28,8 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.Base64;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import org.bukkit.util.io.BukkitObjectInputStream;
 import org.bukkit.util.io.BukkitObjectOutputStream;
@@ -42,11 +44,36 @@ public final class LuaPropTable {
     private static final NamespacedKey INVENTORY_SIZE_KEY = new NamespacedKey(MetadataHandler.PLUGIN, "fmm_prop_inventory_size");
     private static final NamespacedKey BOOK_KEY = new NamespacedKey(MetadataHandler.PLUGIN, "fmm_prop_book");
 
+    // Per-prop cache of the built Lua table. Built once per prop, reused on every script
+    // invocation (the async ModeledEntitiesClock can call this every tick). All mutable
+    // fields inside are exposed via __index lazy lookups so reads always see fresh data.
+    private static final ConcurrentMap<UUID, LuaTable> CACHE = new ConcurrentHashMap<>();
+
     private LuaPropTable() {}
+
+    /**
+     * Invalidates the cached Lua table for the given prop. Call when the prop is removed
+     * so the cached closures (which hold strong references to the underlying entity) can
+     * be GC'd promptly.
+     */
+    public static void invalidate(PropEntity prop) {
+        Entity underlying = prop.getUnderlyingEntity();
+        if (underlying != null) CACHE.remove(underlying.getUniqueId());
+    }
+
+    public static void invalidate(UUID propUuid) {
+        if (propUuid != null) CACHE.remove(propUuid);
+    }
 
     public static LuaTable build(PropEntity prop) {
         // Start from the entity table if we have a backing armor stand
         Entity underlying = prop.getUnderlyingEntity();
+        UUID cacheKey = underlying != null ? underlying.getUniqueId() : null;
+        if (cacheKey != null) {
+            LuaTable cached = CACHE.get(cacheKey);
+            if (cached != null) return cached;
+        }
+
         LuaTable table = (underlying != null) ? LuaEntityTable.build(underlying) : new LuaTable();
 
         // model_id — the blueprint model name
@@ -54,11 +81,13 @@ public final class LuaPropTable {
             table.set("model_id", prop.getSkeletonBlueprint().getModelName());
         }
 
-        // current_location — always up-to-date
-        Location loc = prop.getLocation();
-        if (loc != null) {
-            table.set("current_location", LuaTableSupport.locationToTable(loc));
-        }
+        // current_location — lazy so every read is fresh, but built once.
+        // Overrides the underlying-entity location set by LuaEntityTable for props
+        // whose getLocation() may differ (e.g. cached bone-transform position).
+        LuaTableSupport.lazyField(table, "current_location", () -> {
+            Location l = prop.getLocation();
+            return l != null ? LuaTableSupport.locationToTable(l) : LuaValue.NIL;
+        });
 
         // play_animation(name) — plays the named animation blended and looped
         table.set("play_animation", LuaTableSupport.tableMethod(table, args -> {
@@ -369,6 +398,10 @@ public final class LuaPropTable {
             return value != null ? LuaValue.valueOf(value) : LuaValue.NIL;
         }));
 
+        if (cacheKey != null) {
+            LuaTable existing = CACHE.putIfAbsent(cacheKey, table);
+            if (existing != null) return existing;
+        }
         return table;
     }
 

@@ -27,6 +27,7 @@ import com.magmaguy.freeminecraftmodels.listeners.ArmorStandListener;
 import com.magmaguy.freeminecraftmodels.listeners.EntityTeleportEvent;
 import com.magmaguy.freeminecraftmodels.listeners.CraftifyListener;
 import com.magmaguy.freeminecraftmodels.listeners.DisguiseListeners;
+import com.magmaguy.freeminecraftmodels.listeners.FreeMinecraftModelsFirstTimeSetupWarner;
 import com.magmaguy.freeminecraftmodels.listeners.ModelItemListener;
 import com.magmaguy.freeminecraftmodels.listeners.MountDismountListener;
 import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
@@ -41,7 +42,6 @@ import com.magmaguy.magmacore.initialization.PluginInitializationConfig;
 import com.magmaguy.magmacore.initialization.PluginInitializationContext;
 import com.magmaguy.magmacore.initialization.PluginInitializationState;
 import com.magmaguy.magmacore.nightbreak.NightbreakFirstTimeSetupSpec;
-import com.magmaguy.magmacore.nightbreak.NightbreakFirstTimeSetupWarner;
 import com.magmaguy.magmacore.nightbreak.NightbreakPluginBootstrap;
 import com.magmaguy.magmacore.nightbreak.NightbreakPluginHooks;
 import com.magmaguy.magmacore.nightbreak.NightbreakPluginSpec;
@@ -73,8 +73,8 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
             "FreeMinecraftModels",
             "freeminecraftmodels.*",
             null,
-            "/freeminecraftmodels setup",
-            "/freeminecraftmodels downloadall",
+            "/fmm setup",
+            "/fmm downloadall",
             "https://nightbreak.io/plugin/freeminecraftmodels/",
             "",
             List.of(),
@@ -88,6 +88,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         Bukkit.getLogger().info("|__|_|__|__||__|__|_____|____|__| |___._|__| |____|__|_|__||_____|_____||_____||__||_____|");
         Bukkit.getLogger().info("Version " + this.getDescription().getVersion());
         MetadataHandler.PLUGIN = this;
+        MagmaCore.exportSharedAssets(this);
         MagmaCore.checkVersionUpdate("111660", "https://nightbreak.io/plugin/freeminecraftmodels/");
         NightbreakPluginBootstrap.startInitialization(this,
                 new PluginInitializationConfig("FreeMinecraftModels", "freeminecraftmodels.*", 12),
@@ -202,7 +203,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         RecipeDetailMenu.registerEvents(this);
         Bukkit.getPluginManager().registerEvents(new MountDismountListener(), this);
         Bukkit.getPluginManager().registerEvents(new DisguiseListeners(), this);
-        Bukkit.getPluginManager().registerEvents(new NightbreakFirstTimeSetupWarner(this, FIRST_TIME_SETUP_SPEC, DefaultConfig::isSetupDone), this);
+        Bukkit.getPluginManager().registerEvents(new FreeMinecraftModelsFirstTimeSetupWarner(this), this);
         Bukkit.getPluginManager().registerEvents(this, this);
 
         initializationContext.step("NMS Adapter");
@@ -212,6 +213,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         CommandManager manager = new CommandManager(this, "freeminecraftmodels");
         manager.registerCommand(new MountCommand());
         manager.registerCommand(new HitboxDebugCommand());
+        manager.registerCommand(new BedrockDebugCommand());
         manager.registerCommand(new com.magmaguy.freeminecraftmodels.commands.LocationDebugCommand());
         manager.registerCommand(new DeleteAllCommand());
         manager.registerCommand(new ReloadCommand());

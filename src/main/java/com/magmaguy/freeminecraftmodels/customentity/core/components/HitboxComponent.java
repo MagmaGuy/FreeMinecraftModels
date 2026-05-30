@@ -11,11 +11,12 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 public class HitboxComponent {
+    private static final double PLAYER_COLLISION_RANGE_SQUARED = 100.0; // 10 blocks
     private final ModeledEntity modeledEntity;
     @Getter
     private OrientedBoundingBox obbHitbox = null;
@@ -71,10 +72,19 @@ public class HitboxComponent {
         if (modeledEntity.getHitboxComponent().getObbHitbox() == null) return;
         if (modeledEntity.getWorld() == null) return;
 
-        // Check for nearby players (within 10 blocks)
-        List<Player> nearbyPlayers = modeledEntity.getWorld().getPlayers().stream()
-                .filter(player -> player.getLocation().distanceSquared(modeledEntity.getLocation()) < Math.pow(10, 2))
-                .collect(Collectors.toList());
+        Location entityLocation = modeledEntity.getLocation();
+        // Local scratch — checkPlayerCollisions is invoked from the async
+        // ModeledEntitiesClock, and consecutive ticks can overlap on different
+        // async threads when a tick takes >1 server tick. An instance-level
+        // scratch list was being clear()ed under one thread's iteration on the
+        // other, producing a ConcurrentModificationException at the iteration
+        // below. Allocating per call keeps the scope thread-local.
+        List<Player> nearbyPlayers = new ArrayList<>();
+        for (Player player : modeledEntity.getWorld().getPlayers()) {
+            if (player.getLocation().distanceSquared(entityLocation) < PLAYER_COLLISION_RANGE_SQUARED) {
+                nearbyPlayers.add(player);
+            }
+        }
 
         // For each nearby player, check collision
         for (Player player : nearbyPlayers) {
@@ -89,7 +99,10 @@ public class HitboxComponent {
      * Checks if a player is colliding with this entity's OBB hitbox
      */
     protected boolean isPlayerColliding(Player player) {
-        return getObbHitbox().isAABBCollidingWithOBB(player.getBoundingBox());
+        OrientedBoundingBox obb = getObbHitbox();
+        org.bukkit.util.BoundingBox aabb = player.getBoundingBox();
+        // Cheap reject first, then exact SAT — avoids false hits on rotated, long entities.
+        return obb.quickAabbReject(aabb) && obb.intersectsAABB(aabb);
     }
 
     public void setCustomHitboxOnUnderlyingEntity() {

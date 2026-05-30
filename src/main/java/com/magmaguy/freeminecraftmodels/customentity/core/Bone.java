@@ -4,7 +4,7 @@ import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.packets.PacketEntityDisplayHelper;
-import com.magmaguy.freeminecraftmodels.thirdparty.BedrockChecker;
+import com.magmaguy.easyminecraftgoals.thirdparty.BedrockChecker;
 import com.magmaguy.magmacore.util.Logger;
 import com.magmaguy.magmacore.util.VersionChecker;
 import lombok.Getter;
@@ -51,15 +51,16 @@ public class Bone {
     }
 
     public void updateAnimationTranslation(float x, float y, float z) {
-        animationTranslation = new Vector3f(x, y, z);
+        animationTranslation.set(x, y, z);
     }
 
+    // x, y, z are already in radians (precomputed in AnimationBlueprint at load time).
     public void updateAnimationRotation(double x, double y, double z) {
-        animationRotation = new Vector3f((float) Math.toRadians(x), (float) Math.toRadians(y), (float) Math.toRadians(z));
+        animationRotation.set((float) x, (float) y, (float) z);
     }
 
     public void updateAnimationScale(float scaleX, float scaleY, float scaleZ) {
-        this.animationScale = new Vector3f(scaleX, scaleY, scaleZ);
+        this.animationScale.set(scaleX, scaleY, scaleZ);
     }
 
     /**
@@ -135,8 +136,21 @@ public class Bone {
 
     public void displayTo(Player player) {
         if (player == null || !player.isValid() || !player.isOnline()) return;
+        // Mount-point bones have a packet armor stand created in
+        // BoneTransforms.initializeMountPointBone for position tracking, but it has
+        // no model and no invisibility flags set. Without this early-return the
+        // bone is routed through the ARMOR_STAND branch below and a bare vanilla
+        // armor stand is sent to every viewer — visible on Bedrock (and Java if
+        // no resource-pack attachable covers it). The packet entity itself is only
+        // used server-side; it must never be displayed to a player.
+        if (boneBlueprint.isMountPoint()) return;
         boolean isBedrock = BedrockChecker.isBedrock(player);
-        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients) return;
+        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClientsV2) {
+            com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                    "Bone.displayTo SKIPPED (bedrock + V2=false) — player=" + player.getName()
+                            + " bone=" + boneBlueprint.getBoneName());
+            return;
+        }
         if (boneBlueprint.isNameTag()) {
             if (boneTransforms.getPacketTextDisplayArmorStandEntity() == null) {
                 if (!warned) {
@@ -145,14 +159,36 @@ public class Bone {
                 }
                 return;
             }
+            com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                    "Bone.displayTo branch=TEXT bedrock=" + isBedrock
+                            + " player=" + player.getName()
+                            + " bone=" + boneBlueprint.getBoneName());
             PacketEntityDisplayHelper.displayToPlayer(boneTransforms.getPacketTextDisplayArmorStandEntity(), player);
         } else if (boneTransforms.getPacketArmorStandEntity() != null &&
                 (!DefaultConfig.useDisplayEntitiesWhenPossible ||
                         isBedrock ||
-                        VersionChecker.serverVersionOlderThan(19, 4)))
+                        VersionChecker.serverVersionOlderThan(19, 4))) {
+            com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                    "Bone.displayTo branch=ARMOR_STAND bedrock=" + isBedrock
+                            + " player=" + player.getName()
+                            + " bone=" + boneBlueprint.getBoneName()
+                            + " modelID=" + boneBlueprint.getModelID()
+                            + " packetClass=" + boneTransforms.getPacketArmorStandEntity().getClass().getSimpleName());
             PacketEntityDisplayHelper.displayToPlayer(boneTransforms.getPacketArmorStandEntity(), player);
-        else if (boneTransforms.getPacketDisplayEntity() != null)
+        } else if (boneTransforms.getPacketDisplayEntity() != null) {
+            com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                    "Bone.displayTo branch=DISPLAY_ENTITY bedrock=" + isBedrock
+                            + " player=" + player.getName()
+                            + " bone=" + boneBlueprint.getBoneName()
+                            + " modelID=" + boneBlueprint.getModelID());
             PacketEntityDisplayHelper.displayToPlayer(boneTransforms.getPacketDisplayEntity(), player);
+        } else {
+            com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                    "Bone.displayTo branch=NONE — no packet entity initialized! bedrock=" + isBedrock
+                            + " player=" + player.getName()
+                            + " bone=" + boneBlueprint.getBoneName()
+                            + " (BUG: every bone except mount-points should have ≥1 packet entity)");
+        }
     }
 
     public void hideFrom(UUID playerUUID) {

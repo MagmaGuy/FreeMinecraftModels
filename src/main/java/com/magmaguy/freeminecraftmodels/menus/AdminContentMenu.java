@@ -60,10 +60,14 @@ public class AdminContentMenu {
 
         for (FMMPackage pack : enabledPacks) {
             List<FileModelConverter> packModels = ModelMenuHelper.getModelsForPack(pack);
+            List<String> packItems = ModelMenuHelper.getItemsForPack(pack);
+            if (packModels.isEmpty() && packItems.isEmpty()) {
+                continue;
+            }
+
             for (FileModelConverter model : packModels) {
                 claimedModelIds.add(model.getID());
             }
-            List<String> packItems = ModelMenuHelper.getItemsForPack(pack);
             claimedItemIds.addAll(packItems);
             result.add(new PackageEntry(pack));
         }

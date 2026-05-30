@@ -2,18 +2,21 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
-import com.magmaguy.freeminecraftmodels.listeners.ArmorStandListener;
 import lombok.Getter;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
-import org.bukkit.entity.ArmorStand;
-import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Interaction;
 import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataType;
 
 /**
  * Represents a single seat on a mount-point bone.
- * The seat uses an invisible ArmorStand as the vehicle entity.
+ * <p>
+ * Uses an Interaction entity (1.19.4+) as the vehicle. Interaction has no model on
+ * either Java or Bedrock by design, which bypasses Geyser's armor-stand renderer
+ * entirely — that renderer continued to draw the seat for Bedrock viewers no matter
+ * which Java-side visibility flag was set (setVisible, setInvisible, marker,
+ * hideEntity all proven ineffective for the rider-vehicle case).
  */
 public class MountSeat {
 
@@ -23,7 +26,7 @@ public class MountSeat {
     private final Bone bone;
     private final ModeledEntity modeledEntity;
     @Getter
-    private ArmorStand vehicle;
+    private Interaction vehicle;
     @Getter
     private Player occupant;
 
@@ -38,7 +41,7 @@ public class MountSeat {
     }
 
     /**
-     * Mounts a player onto this seat by spawning a vehicle ArmorStand
+     * Mounts a player onto this seat by spawning a vehicle Interaction entity
      * at the bone location and adding the player as a passenger.
      *
      * @param player the player to mount
@@ -50,16 +53,15 @@ public class MountSeat {
         if (loc == null || loc.getWorld() == null) return false;
 
         loc.setYaw(getEntityYaw());
-        ArmorStandListener.bypass = true;
-        vehicle = (ArmorStand) loc.getWorld().spawnEntity(loc, EntityType.ARMOR_STAND);
-        vehicle.setVisible(false);
-        vehicle.setGravity(false);
-        vehicle.setInvulnerable(true);
-        vehicle.setPersistent(false);
-        vehicle.setSmall(true);
-        vehicle.setMarker(true);
-        vehicle.getPersistentDataContainer().set(MOUNT_SEAT_KEY, PersistentDataType.BYTE, (byte) 1);
-        ArmorStandListener.bypass = false;
+        vehicle = loc.getWorld().spawn(loc, Interaction.class, it -> {
+            it.setInteractionWidth(0.0f);
+            it.setInteractionHeight(0.0f);
+            it.setResponsive(false);
+            it.setGravity(false);
+            it.setInvulnerable(true);
+            it.setPersistent(false);
+            it.getPersistentDataContainer().set(MOUNT_SEAT_KEY, PersistentDataType.BYTE, (byte) 1);
+        });
 
         vehicle.addPassenger(player);
         occupant = player;
@@ -67,7 +69,7 @@ public class MountSeat {
     }
 
     /**
-     * Dismounts the current occupant and removes the vehicle ArmorStand.
+     * Dismounts the current occupant and removes the vehicle.
      */
     public void dismount() {
         if (occupant != null && vehicle != null) {

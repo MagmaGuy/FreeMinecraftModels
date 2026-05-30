@@ -80,16 +80,27 @@ public class DamageableComponent {
         modeledEntity.getSkeleton().tint();
     }
 
-    public boolean damage(Projectile projectile) {
-        double damage = 0;
+    // Dedup: an arrow can reach here from both the OBB sweep and the vanilla-hitbox
+    // redirect in the same tick (before arrow.remove() lands). Apply each projectile to
+    // a modeled entity at most once, wiped after 1s — a live arrow shouldn't still be
+    // colliding past that, and a returning trident re-thrown later still registers.
+    private static final java.util.Set<java.util.UUID> recentProjectileHits =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
 
+    public boolean damage(Projectile projectile) {
         if (projectile.getShooter() != null && projectile.getShooter().equals(modeledEntity.getUnderlyingEntity()))
             return false;
 
-        if (!(projectile instanceof Arrow arrow)) return false;
+        if (!(projectile instanceof AbstractArrow arrow)) return false;
+
+        if (!recentProjectileHits.add(projectile.getUniqueId())) return false;
+        final java.util.UUID dedupId = projectile.getUniqueId();
+        org.bukkit.Bukkit.getScheduler().runTaskLater(
+                com.magmaguy.freeminecraftmodels.MetadataHandler.PLUGIN,
+                () -> recentProjectileHits.remove(dedupId), 20L);
 
         double speed = arrow.getVelocity().length();
-        damage = Math.ceil(speed * arrow.getDamage());
+        double damage = Math.max(1.0, Math.ceil(speed * arrow.getDamage()));
 
         boolean piercing = false;
 
@@ -97,8 +108,8 @@ public class DamageableComponent {
             ItemStack bow = null;
             try {
                 bow = arrow.getWeapon();
-            } catch (Exception e) {
-                // getWeapon() failed, bow remains null
+            } catch (Exception | NoSuchMethodError e) {
+                // getWeapon() failed or is unavailable on this server API, bow remains null
             }
 
             if (bow != null && bow.containsEnchantment(Enchantment.POWER)) {
@@ -112,12 +123,46 @@ public class DamageableComponent {
             }
         }
 
-        if (projectile.getShooter() instanceof LivingEntity damager) {
-            damage(damager, damage);
-        } else {
-            damage((Entity) projectile.getShooter(), damage);
+        double hpBefore = modeledEntity.getUnderlyingEntity() instanceof LivingEntity le ? le.getHealth() : -1;
+        if (OBBHitDetection.DEBUG_PROJECTILE_HITS)
+            com.magmaguy.magmacore.util.Logger.warn("[FMM-ProjTrace] DamageableComponent.damage(Projectile)"
+                    + " arrow=" + projectile.getUniqueId()
+                    + " speed=" + String.format("%.4f", speed)
+                    + " fmmDamageInput=" + String.format("%.2f", damage)
+                    + " dealingAs=ARROW(cause=PROJECTILE) shooter="
+                    + (projectile.getShooter() instanceof Entity e ? e.getType() : "null")
+                    + " hpBefore=" + String.format("%.2f", hpBefore));
+
+        // Deal the hit AS the arrow, not its shooter, so the resulting
+        // EntityDamageByEntityEvent carries cause=PROJECTILE. Passing the shooter (a
+        // player) made Bukkit classify the hit as ENTITY_ATTACK (melee); combat plugins
+        // such as EliteMobs then ran their MELEE damage formula using the player's
+        // mainhand — which for an archer is a bow, treated as an unarmed weapon —
+        // collapsing every arrow hit on a modeled mob to a tiny (~0.17) value. The arrow
+        // still resolves back to its shooter downstream for kill credit and skill XP.
+        //
+        // Protect this redirected hit from FMM's OWN EntityDamageByEntityEvent listeners:
+        // applyDamage stops the LOWEST-priority cancel, bypassProjectileRedirect stops the
+        // HIGHEST-priority re-redirect (which now fires because the damager is a projectile).
+        // The default handleModeledEntityHitByProjectileEvent path already sets both; this
+        // DynamicEntity callback path did not, so the redirected PROJECTILE event was being
+        // cancelled/re-routed before any combat plugin could see it (no damage, no popup).
+        OBBHitDetection.applyDamage = true;
+        OBBHitDetection.bypassProjectileRedirect = true;
+        try {
+            damage((Entity) projectile, damage);
+        } finally {
+            OBBHitDetection.applyDamage = false;
+            OBBHitDetection.bypassProjectileRedirect = false;
         }
         modeledEntity.getSkeleton().tint();
+
+        if (OBBHitDetection.DEBUG_PROJECTILE_HITS && hpBefore >= 0
+                && modeledEntity.getUnderlyingEntity() instanceof LivingEntity le2)
+            com.magmaguy.magmacore.util.Logger.warn("[FMM-ProjTrace] APPLIED hpBefore="
+                    + String.format("%.2f", hpBefore) + " hpAfter=" + String.format("%.2f", le2.getHealth())
+                    + " actualApplied=" + String.format("%.4f", hpBefore - le2.getHealth())
+                    + " §8(real HP lost after EliteMobs' formula override)");
 
         if (!piercing) {
             arrow.remove();

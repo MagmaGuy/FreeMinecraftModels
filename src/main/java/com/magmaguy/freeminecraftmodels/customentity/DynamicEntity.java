@@ -76,7 +76,15 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         if (fileModelConverter == null) return null;
         DynamicEntity dynamicEntity = new DynamicEntity(entityID, livingEntity.getLocation());
         dynamicEntity.spawn(livingEntity);
+        // Paper-only per-viewer suppression. Java clients honour this; Geyser does NOT
+        // reliably honour it at the NMS fetch level, so on its own it leaves the mob
+        // visible to Bedrock viewers underneath the FMM bone attachables.
         livingEntity.setVisibleByDefault(false);
+        // Base-entity INVISIBLE flag (same flag invisibility potions toggle). Geyser
+        // does translate this one — Bedrock viewers see the underlying mob as
+        // invisible, so only the bone packet armor stands render. Required for FMM
+        // disguises on EliteMobs custom bosses to appear correctly on Bedrock.
+        livingEntity.setInvisible(true);
         Bukkit.getOnlinePlayers().forEach(player -> {
             if (player.getLocation().getWorld().equals(dynamicEntity.getLocation().getWorld())) {
                 player.hideEntity(MetadataHandler.PLUGIN, livingEntity);

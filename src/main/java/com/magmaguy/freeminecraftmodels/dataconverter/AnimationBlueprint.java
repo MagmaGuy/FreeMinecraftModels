@@ -233,14 +233,16 @@ public class AnimationBlueprint {
                 int currentFrame = j + previousFrame.getTimeInTicks();
                 float t = durationBetweenKeyframes > 1 ? j / (float) (durationBetweenKeyframes - 1) : 0f;
 
+                // Pre-convert degrees to radians once at load time so the per-tick
+                // animation path can use the value directly without per-frame Math.toRadians().
                 if (blockBenchVersion < 5) {
-                    animationFramesArray[currentFrame].xRotation = interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t);
-                    animationFramesArray[currentFrame].yRotation = interpolateWithType(interpType, previousFrame.getDataY(), animationFrame.getDataY(), t);
-                    animationFramesArray[currentFrame].zRotation = interpolateWithType(interpType, previousFrame.getDataZ(), animationFrame.getDataZ(), t);
+                    animationFramesArray[currentFrame].xRotation = (float) Math.toRadians(interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t));
+                    animationFramesArray[currentFrame].yRotation = (float) Math.toRadians(interpolateWithType(interpType, previousFrame.getDataY(), animationFrame.getDataY(), t));
+                    animationFramesArray[currentFrame].zRotation = (float) Math.toRadians(interpolateWithType(interpType, previousFrame.getDataZ(), animationFrame.getDataZ(), t));
                 } else {
-                    animationFramesArray[currentFrame].xRotation = -interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t);
-                    animationFramesArray[currentFrame].yRotation = -interpolateWithType(interpType, previousFrame.getDataY(), animationFrame.getDataY(), t);
-                    animationFramesArray[currentFrame].zRotation = interpolateWithType(interpType, previousFrame.getDataZ(), animationFrame.getDataZ(), t);
+                    animationFramesArray[currentFrame].xRotation = (float) Math.toRadians(-interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t));
+                    animationFramesArray[currentFrame].yRotation = (float) Math.toRadians(-interpolateWithType(interpType, previousFrame.getDataY(), animationFrame.getDataY(), t));
+                    animationFramesArray[currentFrame].zRotation = (float) Math.toRadians(interpolateWithType(interpType, previousFrame.getDataZ(), animationFrame.getDataZ(), t));
                 }
             }
             previousFrame = animationFrame;
@@ -252,13 +254,13 @@ public class AnimationBlueprint {
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 int currentFrame = j + previousFrame.getTimeInTicks();
                 if (blockBenchVersion < 5) {
-                    animationFramesArray[currentFrame].xRotation = lastFrame.getDataX();
-                    animationFramesArray[currentFrame].yRotation = lastFrame.getDataY();
-                    animationFramesArray[currentFrame].zRotation = lastFrame.getDataZ();
+                    animationFramesArray[currentFrame].xRotation = (float) Math.toRadians(lastFrame.getDataX());
+                    animationFramesArray[currentFrame].yRotation = (float) Math.toRadians(lastFrame.getDataY());
+                    animationFramesArray[currentFrame].zRotation = (float) Math.toRadians(lastFrame.getDataZ());
                 } else {
-                    animationFramesArray[currentFrame].xRotation = -lastFrame.getDataX();
-                    animationFramesArray[currentFrame].yRotation = -lastFrame.getDataY();
-                    animationFramesArray[currentFrame].zRotation = lastFrame.getDataZ();
+                    animationFramesArray[currentFrame].xRotation = (float) Math.toRadians(-lastFrame.getDataX());
+                    animationFramesArray[currentFrame].yRotation = (float) Math.toRadians(-lastFrame.getDataY());
+                    animationFramesArray[currentFrame].zRotation = (float) Math.toRadians(lastFrame.getDataZ());
                 }
             }
         }
@@ -267,13 +269,13 @@ public class AnimationBlueprint {
             durationBetweenKeyframes = Math.min(durationBetweenKeyframes, duration - 1);
             for (int j = 0; j < durationBetweenKeyframes; j++) {
                 if (blockBenchVersion < 5) {
-                    animationFramesArray[j].xRotation = firstFrame.getDataX();
-                    animationFramesArray[j].yRotation = firstFrame.getDataY();
-                    animationFramesArray[j].zRotation = firstFrame.getDataZ();
+                    animationFramesArray[j].xRotation = (float) Math.toRadians(firstFrame.getDataX());
+                    animationFramesArray[j].yRotation = (float) Math.toRadians(firstFrame.getDataY());
+                    animationFramesArray[j].zRotation = (float) Math.toRadians(firstFrame.getDataZ());
                 } else {
-                    animationFramesArray[j].xRotation = -firstFrame.getDataX();
-                    animationFramesArray[j].yRotation = -firstFrame.getDataY();
-                    animationFramesArray[j].zRotation = firstFrame.getDataZ();
+                    animationFramesArray[j].xRotation = (float) Math.toRadians(-firstFrame.getDataX());
+                    animationFramesArray[j].yRotation = (float) Math.toRadians(-firstFrame.getDataY());
+                    animationFramesArray[j].zRotation = (float) Math.toRadians(firstFrame.getDataZ());
                 }
             }
         }

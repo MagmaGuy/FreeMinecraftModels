@@ -1,5 +1,5 @@
 name: FreeMinecraftModels
-version: '2.6.0'
+version: '2.7.0'
 main: com.magmaguy.freeminecraftmodels.FreeMinecraftModels
 api-version: '1.21.4'
 prefix: FreeMinecraftModels
@@ -35,6 +35,9 @@ permissions:
     default: op
   freeminecraftmodels.disguise.others:
     description: Allows /fmm disguise / undisguise targeting other players, plus /fmm disguiselist
+    default: op
+  freeminecraftmodels.bypassregionprotection:
+    description: Allows placing props inside WorldGuard regions / GriefPrevention claims
     default: op
   freeminecraftmodels.menu:
     description: Allows access to the craftable items menu

@@ -19,7 +19,6 @@ import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 import org.joml.Matrix3d;
 import org.joml.Vector3d;
-import org.joml.Vector3f;
 
 import java.util.HashSet;
 import java.util.Optional;
@@ -71,6 +70,16 @@ public class OrientedBoundingBox {
     // Current rotation values for change detection
     private double currentYaw = 0d;
     private Location lastLocation = null;
+    // Cached primitives from the last update(). Used to short-circuit the
+    // common case where an entity is stationary or barely moving — avoids
+    // even constructing an equals comparison against the last Location.
+    // Epsilons: 1e-4 blocks for position, 1e-3 radians for yaw.
+    private double lastX = Double.NaN;
+    private double lastY = Double.NaN;
+    private double lastZ = Double.NaN;
+    private double lastYawRadians = Double.NaN;
+    private static final double POSITION_EPSILON = 1e-4;
+    private static final double YAW_EPSILON = 1e-3;
     private ModeledEntity associatedEntity = null; // Reference to the entity for scale calculations
 
     /**
@@ -319,14 +328,27 @@ public class OrientedBoundingBox {
      * @return this OrientedBoundingBox for method chaining
      */
     public OrientedBoundingBox update(Location location) {
-        if (lastLocation != null && lastLocation.equals(location)) {
-            // Still check for scale updates even if location hasn't changed
+        double x = location.getX();
+        double y = location.getY();
+        double z = location.getZ();
+        double yaw = Math.toRadians(-location.getYaw() - 90);
+
+        boolean positionUnchanged = Math.abs(x - lastX) < POSITION_EPSILON
+                && Math.abs(y - lastY) < POSITION_EPSILON
+                && Math.abs(z - lastZ) < POSITION_EPSILON;
+        boolean yawUnchanged = Math.abs(yaw - lastYawRadians) < YAW_EPSILON;
+
+        if (positionUnchanged && yawUnchanged) {
+            // Still check for scale updates even if pose hasn't changed
             updateScale();
             updateHalfExtents();
             return this;
         }
 
         lastLocation = location;
+        lastX = x;
+        lastY = y;
+        lastZ = z;
 
         // Update scale first
         updateScale();
@@ -334,17 +356,15 @@ public class OrientedBoundingBox {
 
         // Update position - account for scale in Y offset
         center.set(
-                location.getX(),
-                location.getY() + halfExtents.y,            // ← use scaled half-extents
-                location.getZ()
+                x,
+                y + halfExtents.y,            // ← use scaled half-extents
+                z
         );
 
-        // Update rotation
-        double yaw = Math.toRadians(-location.getYaw() - 90);
-
         // Only update rotation if it has changed significantly
-        if (Math.abs(currentYaw - yaw) > 0.01d) {
+        if (!yawUnchanged) {
             currentYaw = yaw;
+            lastYawRadians = yaw;
             rotation.identity().rotateY(yaw);
             // rotation is a pure rotation matrix → inverse is the transpose.
             // Without this, rayIntersection/containsPoint silently use a stale
@@ -418,12 +438,36 @@ public class OrientedBoundingBox {
      * @return The distance to the intersection point, or -1 if no intersection
      */
     public double rayIntersection(Location eyeLocation, double maxDistance) {
-        // Set the local origin cache directly from the eye location
-        localOriginCache.set(eyeLocation.getX(), eyeLocation.getY(), eyeLocation.getZ());
-
-        // Get direction vector from the location and set the local direction cache
         Vector dir = eyeLocation.getDirection();
-        localDirCache.set(dir.getX(), dir.getY(), dir.getZ());
+        return rayIntersection(
+                eyeLocation.getX(), eyeLocation.getY(), eyeLocation.getZ(),
+                dir.getX(), dir.getY(), dir.getZ(),
+                maxDistance);
+    }
+
+    /**
+     * Ray/segment intersection against this OBB from an explicit origin and
+     * direction. Identical slab math to the {@link Location} overload, exposed
+     * for swept projectile detection: testing the segment a fast projectile
+     * traversed between ticks (origin = last position, direction = normalized
+     * travel, maxDistance = distance moved) catches arrows that a single-sample
+     * AABB overlap test tunnels straight through.
+     *
+     * @param ox          ray origin X (world space)
+     * @param oy          ray origin Y (world space)
+     * @param oz          ray origin Z (world space)
+     * @param dx          ray direction X (should be unit length)
+     * @param dy          ray direction Y (should be unit length)
+     * @param dz          ray direction Z (should be unit length)
+     * @param maxDistance maximum distance along the ray to consider
+     * @return distance to the nearest intersection, or -1 if none within range
+     */
+    public double rayIntersection(double ox, double oy, double oz,
+                                  double dx, double dy, double dz,
+                                  double maxDistance) {
+        // Set the local origin/direction caches directly from the parameters
+        localOriginCache.set(ox, oy, oz);
+        localDirCache.set(dx, dy, dz);
 
         // Transform origin to local space
         Vector3d tempOrigin = localOriginCache.sub(center);
@@ -479,34 +523,134 @@ public class OrientedBoundingBox {
         return tMin > 0 ? tMin : tMax;
     }
 
-    public boolean isAABBCollidingWithOBB(BoundingBox aabb) {
-        // Get AABB center and half-extents
-        Vector3f aabbCenter = new Vector3f(
-                (float) ((aabb.getMinX() + aabb.getMaxX()) / 2),
-                (float) ((aabb.getMinY() + aabb.getMaxY()) / 2),
-                (float) ((aabb.getMinZ() + aabb.getMaxZ()) / 2)
-        );
+    /**
+     * Coarse pre-filter: returns true if the AABB overlaps the OBB's enclosing
+     * world-aligned bounding box. Cheap; meant as a quick reject before a full
+     * {@link #intersectsAABB} call. "true" means "might collide, check further";
+     * "false" means "definitely no collision".
+     * <p>
+     * The enclosing world AABB half-extent along world axis i is
+     * {@code |xAxis_i|*hx + |yAxis_i|*hy + |zAxis_i|*hz} — i.e. the OBB's local
+     * half-extents projected onto the world axis. Using the raw local
+     * {@code halfExtents} here (the previous behavior) undersized the bound for
+     * any rotated OBB and silently rejected valid hits along the rotated
+     * model's "fattest" world-axis profile — the source of arrows passing
+     * through visibly-correct hitboxes on yawed mobs.
+     */
+    public boolean quickAabbReject(BoundingBox aabb) {
+        updateHalfExtents();
 
-        Vector3f aabbHalfExtents = new Vector3f(
-                (float) ((aabb.getMaxX() - aabb.getMinX()) / 2),
-                (float) ((aabb.getMaxY() - aabb.getMinY()) / 2),
-                (float) ((aabb.getMaxZ() - aabb.getMinZ()) / 2)
-        );
+        double aabbCenterX = (aabb.getMinX() + aabb.getMaxX()) / 2d;
+        double aabbCenterY = (aabb.getMinY() + aabb.getMaxY()) / 2d;
+        double aabbCenterZ = (aabb.getMinZ() + aabb.getMaxZ()) / 2d;
 
-        // Get OBB center and scaled half-extents
-        Vector3d obbCenter = getCenter();
-        Vector3d obbHalfExtents = getHalfExtents(); // This will return scaled half extents
+        double aabbHalfX = (aabb.getMaxX() - aabb.getMinX()) / 2d;
+        double aabbHalfY = (aabb.getMaxY() - aabb.getMinY()) / 2d;
+        double aabbHalfZ = (aabb.getMaxZ() - aabb.getMinZ()) / 2d;
 
-        // Calculate distance between centers
-        double distX = Math.abs(obbCenter.x - aabbCenter.x);
-        double distY = Math.abs(obbCenter.y - aabbCenter.y);
-        double distZ = Math.abs(obbCenter.z - aabbCenter.z);
+        // World-axis half-extents of the OBB's enclosing AABB. Each is the sum of
+        // |axis-component| * corresponding half-extent across the OBB's three axes.
+        double obbWorldHalfX = Math.abs(xAxis.x) * halfExtents.x
+                + Math.abs(yAxis.x) * halfExtents.y
+                + Math.abs(zAxis.x) * halfExtents.z;
+        double obbWorldHalfY = Math.abs(xAxis.y) * halfExtents.x
+                + Math.abs(yAxis.y) * halfExtents.y
+                + Math.abs(zAxis.y) * halfExtents.z;
+        double obbWorldHalfZ = Math.abs(xAxis.z) * halfExtents.x
+                + Math.abs(yAxis.z) * halfExtents.y
+                + Math.abs(zAxis.z) * halfExtents.z;
 
-        // Check if distances are less than sum of half-extents
-        // This is a simplified collision check that works well for most cases
-        return distX < (obbHalfExtents.x + aabbHalfExtents.x) &&
-                distY < (obbHalfExtents.y + aabbHalfExtents.y) &&
-                distZ < (obbHalfExtents.z + aabbHalfExtents.z);
+        double distX = Math.abs(center.x - aabbCenterX);
+        double distY = Math.abs(center.y - aabbCenterY);
+        double distZ = Math.abs(center.z - aabbCenterZ);
+
+        return distX <= (obbWorldHalfX + aabbHalfX) &&
+                distY <= (obbWorldHalfY + aabbHalfY) &&
+                distZ <= (obbWorldHalfZ + aabbHalfZ);
+    }
+
+    /**
+     * Exact OBB-vs-AABB intersection via the Separating Axis Theorem (15 axes).
+     * More expensive than {@link #quickAabbReject}; call after that returns true.
+     */
+    public boolean intersectsAABB(BoundingBox aabb) {
+        updateHalfExtents();
+
+        double aabbCenterX = (aabb.getMinX() + aabb.getMaxX()) / 2d;
+        double aabbCenterY = (aabb.getMinY() + aabb.getMaxY()) / 2d;
+        double aabbCenterZ = (aabb.getMinZ() + aabb.getMaxZ()) / 2d;
+
+        double aabbHalfX = (aabb.getMaxX() - aabb.getMinX()) / 2d;
+        double aabbHalfY = (aabb.getMaxY() - aabb.getMinY()) / 2d;
+        double aabbHalfZ = (aabb.getMaxZ() - aabb.getMinZ()) / 2d;
+
+        // Translation vector from OBB center to AABB center, in world space.
+        double tx = aabbCenterX - center.x;
+        double ty = aabbCenterY - center.y;
+        double tz = aabbCenterZ - center.z;
+
+        // 15 candidate separating axes: 3 world axes, 3 OBB axes, 9 cross products.
+        // Each axis (ax, ay, az) need not be unit length — SAT compares projections in the same scale.
+        double[][] axesToTest = new double[15][3];
+
+        // 3 world axes
+        axesToTest[0][0] = 1; axesToTest[0][1] = 0; axesToTest[0][2] = 0;
+        axesToTest[1][0] = 0; axesToTest[1][1] = 1; axesToTest[1][2] = 0;
+        axesToTest[2][0] = 0; axesToTest[2][1] = 0; axesToTest[2][2] = 1;
+
+        // 3 OBB axes
+        axesToTest[3][0] = xAxis.x; axesToTest[3][1] = xAxis.y; axesToTest[3][2] = xAxis.z;
+        axesToTest[4][0] = yAxis.x; axesToTest[4][1] = yAxis.y; axesToTest[4][2] = yAxis.z;
+        axesToTest[5][0] = zAxis.x; axesToTest[5][1] = zAxis.y; axesToTest[5][2] = zAxis.z;
+
+        // 9 cross products (world axis × OBB axis)
+        int idx = 6;
+        for (int w = 0; w < 3; w++) {
+            double wx = (w == 0) ? 1 : 0;
+            double wy = (w == 1) ? 1 : 0;
+            double wz = (w == 2) ? 1 : 0;
+            for (int o = 0; o < 3; o++) {
+                Vector3d oa = axes[o];
+                // cross = world × obb
+                double cx = wy * oa.z - wz * oa.y;
+                double cy = wz * oa.x - wx * oa.z;
+                double cz = wx * oa.y - wy * oa.x;
+                axesToTest[idx][0] = cx;
+                axesToTest[idx][1] = cy;
+                axesToTest[idx][2] = cz;
+                idx++;
+            }
+        }
+
+        final double EPSILON_SQ = 1e-8;
+
+        for (int i = 0; i < 15; i++) {
+            double ax = axesToTest[i][0];
+            double ay = axesToTest[i][1];
+            double az = axesToTest[i][2];
+
+            double lenSq = ax * ax + ay * ay + az * az;
+            if (lenSq < EPSILON_SQ) continue; // degenerate axis (parallel cross product)
+
+            // Project AABB onto axis: sum of |axis · world-axis-i| * half-extent-i
+            double aabbProj = Math.abs(ax) * aabbHalfX
+                    + Math.abs(ay) * aabbHalfY
+                    + Math.abs(az) * aabbHalfZ;
+
+            // Project OBB onto axis: sum of |axis · obbAxis-i| * half-extent-i
+            double obbProj = Math.abs(ax * xAxis.x + ay * xAxis.y + az * xAxis.z) * halfExtents.x
+                    + Math.abs(ax * yAxis.x + ay * yAxis.y + az * yAxis.z) * halfExtents.y
+                    + Math.abs(ax * zAxis.x + ay * zAxis.y + az * zAxis.z) * halfExtents.z;
+
+            // Project center-to-center translation onto axis
+            double centerProj = Math.abs(ax * tx + ay * ty + az * tz);
+
+            if (centerProj > aabbProj + obbProj) {
+                return false; // separating axis found
+            }
+        }
+
+        return true;
     }
 
     /**

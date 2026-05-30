@@ -6,6 +6,7 @@ import com.magmaguy.freeminecraftmodels.customentity.core.components.PropBlockCo
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.HitboxBlueprint;
 import com.magmaguy.freeminecraftmodels.listeners.ArmorStandListener;
+import com.magmaguy.freeminecraftmodels.scripting.LuaPropTable;
 import com.magmaguy.freeminecraftmodels.scripting.PropScriptManager;
 import com.magmaguy.magmacore.util.ChunkLocationChecker;
 import lombok.Getter;
@@ -199,11 +200,18 @@ public class PropEntity extends StaticEntity {
     public void spawn() {
         ArmorStandListener.bypass = true;
         super.spawn(getSpawnLocation().getWorld().spawn(getSpawnLocation(), EntityType.ARMOR_STAND.getEntityClass(), entity -> {
-            entity.setVisibleByDefault(false);
-            entity.setGravity(false);
-            entity.setInvulnerable(true);
-            entity.setPersistent(true);
-            entity.getPersistentDataContainer().set(propNamespacedKey, PersistentDataType.STRING, entityID);
+            ArmorStand armorStand = (ArmorStand) entity;
+            armorStand.setVisibleByDefault(false);
+            armorStand.setVisible(false);
+            armorStand.setMarker(true);
+            armorStand.setSmall(true);
+            // Base-entity INVISIBLE flag — required for Bedrock/Geyser, which does not honour
+            // setVisibleByDefault for entities it fetches at NMS level.
+            armorStand.setInvisible(true);
+            armorStand.setGravity(false);
+            armorStand.setInvulnerable(true);
+            armorStand.setPersistent(true);
+            armorStand.getPersistentDataContainer().set(propNamespacedKey, PersistentDataType.STRING, entityID);
         }));
         chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
         propEntities.put(underlyingEntity.getUniqueId(), this);
@@ -222,6 +230,7 @@ public class PropEntity extends StaticEntity {
     @Override
     public void remove() {
         PropScriptManager.onPropRemove(this);
+        LuaPropTable.invalidate(this);
         super.remove();
         showRealBlocksToAllPlayers();
         propEntities.remove(underlyingEntity.getUniqueId());

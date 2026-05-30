@@ -1,13 +1,22 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
+import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import lombok.Getter;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.util.EnumMap;
+import java.util.Map;
 
 /**
  * A modeled entity that visually replaces a player. The disguised
@@ -100,7 +109,137 @@ public class PlayerDisguiseEntity extends ModeledEntity {
             ));
             entity.appliedInvisibilityEffect = true;
         }
+        // Armor / handheld items are rendered independently of the player
+        // body — Minecraft keeps drawing them even when the entity is
+        // invisible (vanilla quirk: invisibility potion hides skin but
+        // not equipment; setVisibleByDefault hides the whole entity from
+        // the tracker but Geyser still echoes equipment to Bedrock from
+        // its own cache). Without this they clip through the disguise
+        // model. Hide all six equipment slots from every current viewer
+        // here; future viewers are handled by the join/world-change
+        // listeners in DisguiseEquipmentListener.
+        entity.broadcastHiddenEquipment();
         return entity;
+    }
+
+    /**
+     * Empty-slot map used for {@link Player#sendEquipmentChange(org.bukkit.entity.LivingEntity, Map)}.
+     * AIR / null are treated as "no item" by the underlying packet, which
+     * is what we want for the disguised player's six visible slots. BODY
+     * is omitted on purpose — it's the wolf-armor slot and doesn't apply
+     * to players (sending it would be a no-op but pollutes the packet).
+     */
+    private static Map<EquipmentSlot, ItemStack> emptyEquipmentMap() {
+        Map<EquipmentSlot, ItemStack> map = new EnumMap<>(EquipmentSlot.class);
+        ItemStack air = new ItemStack(Material.AIR);
+        map.put(EquipmentSlot.HAND, air);
+        map.put(EquipmentSlot.OFF_HAND, air);
+        map.put(EquipmentSlot.HEAD, air);
+        map.put(EquipmentSlot.CHEST, air);
+        map.put(EquipmentSlot.LEGS, air);
+        map.put(EquipmentSlot.FEET, air);
+        return map;
+    }
+
+    /**
+     * Builds a snapshot of the player's CURRENT equipment in all six
+     * visible slots. Used when restoring real equipment to viewers on
+     * undisguise — we have to ship the actual items, not just "tell the
+     * client to refresh", because the previous {@code sendEquipmentChange}
+     * overrode the client's notion of what's worn.
+     */
+    private Map<EquipmentSlot, ItemStack> realEquipmentMap() {
+        Map<EquipmentSlot, ItemStack> map = new EnumMap<>(EquipmentSlot.class);
+        PlayerInventory inv = disguisedPlayer.getInventory();
+        map.put(EquipmentSlot.HAND, safeCopy(inv.getItemInMainHand()));
+        map.put(EquipmentSlot.OFF_HAND, safeCopy(inv.getItemInOffHand()));
+        map.put(EquipmentSlot.HEAD, safeCopy(inv.getHelmet()));
+        map.put(EquipmentSlot.CHEST, safeCopy(inv.getChestplate()));
+        map.put(EquipmentSlot.LEGS, safeCopy(inv.getLeggings()));
+        map.put(EquipmentSlot.FEET, safeCopy(inv.getBoots()));
+        return map;
+    }
+
+    private static ItemStack safeCopy(@Nullable ItemStack stack) {
+        return stack == null ? new ItemStack(Material.AIR) : stack.clone();
+    }
+
+    /**
+     * Sends an empty-equipment override to {@code viewer} so the disguised
+     * player's armor / held items don't render on the viewer's screen.
+     * Self-view excluded: the disguised player still needs to see their
+     * own armor in the inventory UI / first-person hand, and viewer ==
+     * disguised player is the third-person F5 case which we leave alone
+     * (the player's own client decides whether to show their body via
+     * the visibility flag anyway).
+     */
+    public void hideEquipmentFor(Player viewer) {
+        if (viewer == null || !viewer.isOnline()) return;
+        if (viewer.getUniqueId().equals(disguisedPlayer.getUniqueId())) return;
+        if (!disguisedPlayer.isOnline()) return;
+        viewer.sendEquipmentChange(disguisedPlayer, emptyEquipmentMap());
+    }
+
+    /**
+     * Re-sends the disguised player's actual equipment to {@code viewer}
+     * so the client picks up what they're really wearing. Called from
+     * {@link #remove()} for each viewer; vanilla doesn't push an
+     * equipment refresh on its own because, as far as the server's entity
+     * tracker is concerned, nothing changed.
+     */
+    public void restoreEquipmentFor(Player viewer) {
+        if (viewer == null || !viewer.isOnline()) return;
+        if (viewer.getUniqueId().equals(disguisedPlayer.getUniqueId())) return;
+        if (!disguisedPlayer.isOnline()) return;
+        viewer.sendEquipmentChange(disguisedPlayer, realEquipmentMap());
+    }
+
+    /**
+     * Iterates every online viewer (we don't filter by world — the
+     * tracker handles distance / world culling, and a stray packet for an
+     * entity the viewer can't see is a no-op on the client) and sends
+     * the empty-equipment override. Must run on the main thread:
+     * {@code sendEquipmentChange} is not async-safe on Spigot.
+     */
+    private void broadcastHiddenEquipment() {
+        Runnable task = () -> {
+            if (!disguisedPlayer.isOnline()) return;
+            Map<EquipmentSlot, ItemStack> empty = emptyEquipmentMap();
+            for (Player viewer : Bukkit.getOnlinePlayers()) {
+                if (viewer.getUniqueId().equals(disguisedPlayer.getUniqueId())) continue;
+                viewer.sendEquipmentChange(disguisedPlayer, empty);
+            }
+        };
+        if (Bukkit.isPrimaryThread()) {
+            task.run();
+        } else {
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, task);
+        }
+    }
+
+    /**
+     * Inverse of {@link #broadcastHiddenEquipment()} — called from
+     * {@link #remove()}. Snapshot the player's real equipment ONCE before
+     * scheduling the sync task, because by the time the task runs (next
+     * tick) the disguise has already been torn down and {@code remove()}
+     * has returned; we want the equipment state at the moment of
+     * undisguise.
+     */
+    private void broadcastRestoredEquipment() {
+        if (!disguisedPlayer.isOnline()) return;
+        final Map<EquipmentSlot, ItemStack> snapshot = realEquipmentMap();
+        Runnable task = () -> {
+            if (!disguisedPlayer.isOnline()) return;
+            for (Player viewer : Bukkit.getOnlinePlayers()) {
+                if (viewer.getUniqueId().equals(disguisedPlayer.getUniqueId())) continue;
+                viewer.sendEquipmentChange(disguisedPlayer, snapshot);
+            }
+        };
+        if (Bukkit.isPrimaryThread()) {
+            task.run();
+        } else {
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, task);
+        }
     }
 
     @Override
@@ -110,6 +249,12 @@ public class PlayerDisguiseEntity extends ModeledEntity {
             if (appliedInvisibilityEffect) {
                 disguisedPlayer.removePotionEffect(PotionEffectType.INVISIBILITY);
             }
+            // Push the real equipment back to every viewer. Without this,
+            // clients keep the empty-slot override we sent on disguise
+            // creation until the player triggers a fresh equipment update
+            // (e.g. swaps items), which leaves the player visually naked
+            // post-undisguise.
+            broadcastRestoredEquipment();
         }
         super.remove();
     }

@@ -1,9 +1,11 @@
 package com.magmaguy.freeminecraftmodels.listeners;
 
+import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.HitboxBlueprint;
+import com.magmaguy.magmacore.location.LocationQueryRegistry;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.Location;
@@ -82,6 +84,17 @@ public class ModelItemListener implements Listener {
         if (hitFace == null) {
             Logger.sendMessage(player, ChatColorConverter.convert("&cCould not determine block face!"));
             return;
+        }
+
+        // Block placement inside protected regions (WorldGuard / GriefPrevention) unless the player may bypass.
+        // The prop occupies the cell adjacent to the clicked face, so that's the cell we test.
+        if (DefaultConfig.preventPropPlacementInProtectedRegions
+                && !player.hasPermission("freeminecraftmodels.bypassregionprotection")) {
+            Location protectionCheckLocation = targetBlock.getRelative(hitFace).getLocation();
+            if (LocationQueryRegistry.isInAnyProtectedRegion(protectionCheckLocation)) {
+                Logger.sendMessage(player, ChatColorConverter.convert("&cYou can't place models inside a protected region here!"));
+                return;
+            }
         }
 
         // Load prop config to check for voxelize mode

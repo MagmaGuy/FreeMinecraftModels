@@ -21,6 +21,8 @@ public class BoneTransforms {
     private final Bone parent;
     private final Bone bone;
     private final TransformationMatrix localMatrix = new TransformationMatrix();
+    // Reused Vector for rotateAnimation()'s local math — never escapes the method.
+    private final Vector animationRotationVector = new Vector();
     private TransformationMatrix globalMatrix = new TransformationMatrix();
     @Getter
     private PacketModelEntity packetArmorStandEntity = null;
@@ -112,12 +114,14 @@ public class BoneTransforms {
     private void rotateAnimation() {
         // Use IK rotation if available, otherwise use animation rotation
         org.joml.Vector3f effectiveRotation = bone.getEffectiveRotation();
-        Vector test = new Vector(effectiveRotation.get(0), -effectiveRotation.get(1), -effectiveRotation.get(2));
-        test.rotateAroundY(Math.PI);
+        animationRotationVector.setX(effectiveRotation.get(0));
+        animationRotationVector.setY(-effectiveRotation.get(1));
+        animationRotationVector.setZ(-effectiveRotation.get(2));
+        animationRotationVector.rotateAroundY(Math.PI);
         localMatrix.rotateAnimation(
-                (float) test.getX(),
-                (float) test.getY(),
-                (float) test.getZ());
+                (float) animationRotationVector.getX(),
+                (float) animationRotationVector.getY(),
+                (float) animationRotationVector.getZ());
     }
 
     private void rotateDefaultBoneRotation() {
@@ -220,7 +224,7 @@ public class BoneTransforms {
                 translatedGlobalMatrix[2])
                 .add(bone.getSkeleton().getCurrentLocation());
         armorStandLocation.setYaw(180);
-        armorStandLocation.subtract(new Vector(0, BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT(), 0));
+        armorStandLocation.subtract(0, BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT(), 0);
         return armorStandLocation;
     }
 
