@@ -11,7 +11,7 @@ public class CraftenminesWeaponsItemPack extends ContentPackageConfigFields {
                 "&2Craftenmine's Weapons Item Pack",
                 List.of("&fA collection of weapon item models by Craftenmine."),
                 "https://nightbreak.io/plugin/freeminecraftmodels/",
-                "fmm_craftenmine_weapons_items_pack_v1");
+                "fmm_craftenmine_weapons_items_pack");
         setNightbreakSlug("craftenmines-weapons-item-pack");
     }
 }

@@ -5,7 +5,7 @@ import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
-import com.magmaguy.freeminecraftmodels.thirdparty.BedrockChecker;
+import com.magmaguy.easyminecraftgoals.thirdparty.BedrockChecker;
 import org.bukkit.Bukkit;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
@@ -29,9 +29,6 @@ public class SkeletonWatchers implements Listener {
         return new HashSet<>(viewers);
     }
 
-    // Reused collections to avoid constant reallocation
-    private final List<UUID> newPlayers = new ArrayList<>();
-    private final List<UUID> toRemove = new ArrayList<>();
     private final int resetTimer = 20 * 60;
     private int counter = ThreadLocalRandom.current().nextInt(20 * 60);
 
@@ -113,33 +110,30 @@ public class SkeletonWatchers implements Listener {
     }
 
     private static final int MIN_VIEW_DISTANCE = 10;
+    private static final double MIN_VIEW_DISTANCE_SQUARED = MIN_VIEW_DISTANCE * (double) MIN_VIEW_DISTANCE;
 
     private void updateWatcherList() {
         if (skeleton.getCurrentLocation() == null) return;
 
-        // Create local collections instead of reusing instance variables
         List<UUID> newPlayers = new ArrayList<>();
         List<UUID> toRemove = new ArrayList<>();
 
-        double sightCheckDistanceMin = Math.pow(MIN_VIEW_DISTANCE, 2);
         int effectiveViewDistance = skeleton.getModeledEntity() != null
                 ? skeleton.getModeledEntity().getEffectiveViewDistance()
                 : DefaultConfig.maxModelViewDistance;
-        double maxViewDistanceSquared = Math.pow(effectiveViewDistance, 2);
+        double maxViewDistanceSquared = (double) effectiveViewDistance * effectiveViewDistance;
 
         for (Player player : skeleton.getCurrentLocation().getWorld().getPlayers()) {
             double distance = player.getLocation().distanceSquared(skeleton.getCurrentLocation());
 
-            if (distance < sightCheckDistanceMin ||
+            if (distance < MIN_VIEW_DISTANCE_SQUARED ||
                     distance < maxViewDistanceSquared && isModelInSight(player)) {
                 newPlayers.add(player.getUniqueId());
                 if (!viewers.contains(player.getUniqueId())) displayTo(player);
             }
         }
 
-        // Create a snapshot of viewers to iterate safely
-        Set<UUID> viewerSnapshot = new HashSet<>(viewers);
-        for (UUID viewer : viewerSnapshot) {
+        for (UUID viewer : viewers) {
             if (!newPlayers.contains(viewer)) {
                 toRemove.add(viewer);
             }
@@ -262,12 +256,30 @@ public class SkeletonWatchers implements Listener {
     private void displayTo(Player player, boolean allowBedrockResyncSchedule) {
         if (player == null || !player.isValid()) return;
         boolean isBedrock = BedrockChecker.isBedrock(player);
-        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getUnderlyingEntity() != null) {
+        if (isBedrock) {
+            com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                    "SkeletonWatchers.displayTo entry — player=" + player.getName()
+                            + " v2=" + DefaultConfig.sendCustomModelsToBedrockClientsV2
+                            + " allowResync=" + allowBedrockResyncSchedule
+                            + " entityClass=" + (skeleton.getModeledEntity() == null
+                                    ? "null" : skeleton.getModeledEntity().getClass().getSimpleName())
+                            + " boneCount=" + skeleton.getBones().size()
+                            + " underlyingInvisible=" + isUnderlyingEntityInvisible());
+        }
+        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClientsV2 && skeleton.getModeledEntity().getUnderlyingEntity() != null) {
+            com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                    "SkeletonWatchers.displayTo: V2=false fallback — showing native underlying entity to "
+                            + player.getName() + " instead of bones");
             Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () ->
                     player.showEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getUnderlyingEntity())
             );
         }
         boolean wasAlreadyViewing = !viewers.add(player.getUniqueId());
+        if (isBedrock) {
+            com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                    "SkeletonWatchers.displayTo: wasAlreadyViewing=" + wasAlreadyViewing
+                            + " for " + player.getName());
+        }
         // Only show bones if the underlying entity is not invisible
         if (!isUnderlyingEntityInvisible())
             skeleton.getBones().forEach(bone -> bone.displayTo(player));
@@ -306,6 +318,9 @@ public class SkeletonWatchers implements Listener {
      */
     private void scheduleBedrockInitialResync(Player player) {
         final UUID uuid = player.getUniqueId();
+        com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                "SkeletonWatchers.scheduleBedrockInitialResync: queued 10-tick hide+show for "
+                        + player.getName() + " (Geyser attachable rebind dance)");
         Bukkit.getScheduler().runTaskLater(MetadataHandler.PLUGIN, () -> {
             // Abort if the entity was removed in the meantime. Without this
             // check, if the entity was destroyed (e.g. /fmm disguise twice in
@@ -320,6 +335,9 @@ public class SkeletonWatchers implements Listener {
             if (!viewers.contains(uuid)) return; // player left or got hideFrom'd in the meantime
             Player p = Bukkit.getPlayer(uuid);
             if (p == null || !p.isOnline()) return;
+            com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                    "SkeletonWatchers.scheduleBedrockInitialResync: FIRING hide+show now for "
+                            + p.getName());
             hideFrom(uuid);
             displayTo(p, false);
         }, 10L);
@@ -337,7 +355,7 @@ public class SkeletonWatchers implements Listener {
         if (player == null || !player.isValid()) return;
 
         boolean isBedrock = BedrockChecker.isBedrock(player);
-        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClients && skeleton.getModeledEntity().getUnderlyingEntity() != null) {
+        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClientsV2 && skeleton.getModeledEntity().getUnderlyingEntity() != null) {
             Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () ->
                     player.hideEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getUnderlyingEntity())
             );

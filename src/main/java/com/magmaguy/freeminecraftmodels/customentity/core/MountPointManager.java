@@ -2,7 +2,7 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import lombok.Getter;
-import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
@@ -59,12 +59,12 @@ public class MountPointManager {
     /**
      * Handles a player dismount. Called from the dismount event listener.
      *
-     * @param player    the player who dismounted
-     * @param armorStand the armor stand they dismounted from
+     * @param player  the player who dismounted
+     * @param vehicle the seat-vehicle entity they dismounted from
      */
-    public void handleDismount(Player player, ArmorStand armorStand) {
+    public void handleDismount(Player player, Entity vehicle) {
         for (MountSeat seat : seats) {
-            if (armorStand.equals(seat.getVehicle())) {
+            if (vehicle.equals(seat.getVehicle())) {
                 seat.dismount();
                 stopTickTaskIfEmpty();
                 return;
@@ -73,11 +73,11 @@ public class MountPointManager {
     }
 
     /**
-     * Checks if the given armor stand belongs to any of this manager's seats.
+     * Checks if the given entity is the seat-vehicle of any of this manager's seats.
      */
-    public boolean isMountArmorStand(ArmorStand armorStand) {
+    public boolean isMountVehicle(Entity vehicle) {
         for (MountSeat seat : seats) {
-            if (armorStand.equals(seat.getVehicle())) return true;
+            if (vehicle.equals(seat.getVehicle())) return true;
         }
         return false;
     }
