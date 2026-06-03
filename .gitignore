@@ -9,3 +9,5 @@ Thumbs.db
 codex-build.log
 .claude/
 dependency-reduced-pom.xml
+# Local design docs and plan notes - not tracked
+docs/
