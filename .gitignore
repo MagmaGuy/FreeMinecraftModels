@@ -11,3 +11,5 @@ codex-build.log
 dependency-reduced-pom.xml
 # Local design docs and plan notes - not tracked
 docs/
+# Build/IDE artifacts - not tracked
+.idea/
