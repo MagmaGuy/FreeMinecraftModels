@@ -103,7 +103,7 @@ FreeMinecraftModels can be used as a dependency in other plugins. Do **not** sha
 <dependency>
     <groupId>com.magmaguy</groupId>
     <artifactId>FreeMinecraftModels</artifactId>
-    <version>2.7.0</version>
+    <version>2.7.1</version>
     <scope>provided</scope>
 </dependency>
 ```
