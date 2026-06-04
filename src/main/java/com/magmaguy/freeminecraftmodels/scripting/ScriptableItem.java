@@ -98,6 +98,11 @@ public class ScriptableItem extends ScriptableEntity {
     }
 
     @Override
+    public boolean isScriptOwnerActive() {
+        return player != null && player.isOnline() && player.isValid();
+    }
+
+    @Override
     public LuaValue resolveExtraContext(String key, ScriptInstance instance) {
         if ("player".equals(key)) {
             return LuaLivingEntityTable.build(player);
