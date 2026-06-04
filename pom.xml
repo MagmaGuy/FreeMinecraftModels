@@ -197,4 +197,41 @@
             <url>https://repo.magmaguy.com/releases</url>
         </repository>
     </distributionManagement>
+    <!-- Mirror the built plugin jar to the shared top-level dist/ folder.
+         Active only when MC_DIST_DIR is set, so clones/CI/public builds stay
+         unaffected and no machine-specific path is ever committed. -->
+    <profiles>
+        <profile>
+            <id>mc-dist-mirror</id>
+            <activation>
+                <property>
+                    <name>env.MC_DIST_DIR</name>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <executions>
+                            <execution>
+                                <id>copy-to-mc-dist</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                                <configuration>
+                                    <target>
+                                        <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                                              todir="${env.MC_DIST_DIR}" overwrite="true"/>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
