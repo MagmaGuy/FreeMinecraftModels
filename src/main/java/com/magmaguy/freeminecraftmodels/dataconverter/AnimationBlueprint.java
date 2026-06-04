@@ -72,6 +72,9 @@ public class AnimationBlueprint {
             return;
         }
 
+        // Blockbench effect tracks are not skeleton bones and have no FMM runtime animation.
+        if (type != null && !"bone".equals(type)) return;
+
         // Standard bone animation
         BoneBlueprint boneBlueprint = skeletonBlueprint.getBoneMap().get(name);
         //hitboxes do not get animated!
