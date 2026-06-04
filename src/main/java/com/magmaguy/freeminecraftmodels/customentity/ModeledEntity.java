@@ -227,9 +227,13 @@ public class ModeledEntity {
             // cases — persistent props must serialize with the chunk.
             if (!(this instanceof PropEntity) ||
                     this instanceof PropEntity propEntity && !propEntity.isPersistent()) {
-                Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
-                    underlyingEntity.remove();
-                });
+                Entity entityToRemove = underlyingEntity;
+                Runnable removeUnderlyingEntity = entityToRemove::remove;
+                if (Bukkit.isPrimaryThread() || MetadataHandler.PLUGIN == null || !MetadataHandler.PLUGIN.isEnabled()) {
+                    removeUnderlyingEntity.run();
+                } else {
+                    Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, removeUnderlyingEntity);
+                }
             }
         }
         isRemoved = true;
