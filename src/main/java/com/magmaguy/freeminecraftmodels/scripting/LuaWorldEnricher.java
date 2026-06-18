@@ -34,6 +34,8 @@ public final class LuaWorldEnricher {
                 dropEliteMobsProceduralLoot(world, args)));
         table.set("drop_elitemobs_random_loot", LuaTableSupport.tableMethod(table, args ->
                 dropEliteMobsRandomLoot(world, args)));
+        table.set("drop_elitemobs_custom_loot", LuaTableSupport.tableMethod(table, args ->
+                dropEliteMobsCustomLoot(world, args)));
     }
 
     private static LuaValue dropEliteMobsProceduralLoot(World defaultWorld, Varargs args) {
@@ -77,6 +79,30 @@ public final class LuaWorldEnricher {
 
         try {
             return LuaValue.valueOf(EliteMobsLootDropper.dropRandomLoot(player, level, location));
+        } catch (NoClassDefFoundError ignored) {
+            return LuaValue.FALSE;
+        }
+    }
+
+    private static LuaValue dropEliteMobsCustomLoot(World defaultWorld, Varargs args) {
+        if (!Bukkit.getPluginManager().isPluginEnabled("EliteMobs")) {
+            return LuaValue.FALSE;
+        }
+
+        Player player = resolvePlayer(args.arg(1));
+        if (player == null) {
+            return LuaValue.FALSE;
+        }
+
+        String filename = args.checkjstring(2);
+        int level = args.checkint(3);
+        Location location = resolveLocation(args.arg(4), defaultWorld);
+        if (location == null || location.getWorld() == null) {
+            location = player.getLocation();
+        }
+
+        try {
+            return LuaValue.valueOf(EliteMobsLootDropper.dropCustomLoot(player, filename, level, location));
         } catch (NoClassDefFoundError ignored) {
             return LuaValue.FALSE;
         }
