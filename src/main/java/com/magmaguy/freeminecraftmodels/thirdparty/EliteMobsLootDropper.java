@@ -5,6 +5,7 @@ import com.magmaguy.elitemobs.config.ProceduralItemGenerationSettingsConfig;
 import com.magmaguy.elitemobs.items.RareDropEffect;
 import com.magmaguy.elitemobs.items.LootTables;
 import com.magmaguy.elitemobs.items.customenchantments.SoulbindEnchantment;
+import com.magmaguy.elitemobs.items.customitems.CustomItem;
 import com.magmaguy.elitemobs.items.itemconstructor.ItemConstructor;
 import org.bukkit.Location;
 import org.bukkit.entity.Item;
@@ -61,6 +62,25 @@ public final class EliteMobsLootDropper {
 
         try {
             return LootTables.generateLoot(level, location, player) != null;
+        } catch (Exception exception) {
+            return false;
+        }
+    }
+
+    public static boolean dropCustomLoot(Player player, String filename, int level, Location location) {
+        if (player == null || !player.isOnline() || filename == null || filename.isBlank()
+                || location == null || location.getWorld() == null) {
+            return false;
+        }
+
+        CustomItem customItem = CustomItem.getCustomItem(filename);
+        if (customItem == null) {
+            return false;
+        }
+
+        try {
+            Item dropped = customItem.dropPlayerLootExact(player, level, location, null);
+            return dropped != null && dropped.isValid();
         } catch (Exception exception) {
             return false;
         }
