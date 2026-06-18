@@ -11,6 +11,7 @@ import com.magmaguy.shaded.luaj.vm2.LuaValue;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 
 import java.util.Map;
 
@@ -46,6 +47,12 @@ public final class LuaEntityEnricher {
     }
 
     private static void addFmmFields(LuaTable table, Entity entity) {
+        if (entity instanceof Player player) {
+            table.set("has_permission", LuaTableSupport.tableMethod(table, args ->
+                    LuaValue.valueOf(player.hasPermission(args.checkjstring(1)))));
+            table.set("is_op", LuaValue.valueOf(player.isOp()));
+        }
+
         Map<Entity, ModeledEntity> loaded = ModeledEntity.getLoadedModeledEntitiesWithUnderlyingEntities();
         ModeledEntity modeledEntity = loaded != null ? loaded.get(entity) : null;
         boolean isModeled = modeledEntity != null;

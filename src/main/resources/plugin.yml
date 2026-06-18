@@ -25,10 +25,14 @@ permissions:
     default: op
     children:
       freeminecraftmodels.admin: true
+      freeminecraftmodels.deleteall: true
       freeminecraftmodels.disguise.self: true
       freeminecraftmodels.disguise.others: true
   freeminecraftmodels.admin:
     description: Allows access to the admin content browser
+    default: op
+  freeminecraftmodels.deleteall:
+    description: Allows deleting all loaded FreeMinecraftModels entities and props
     default: op
   freeminecraftmodels.disguise.self:
     description: Allows /fmm disguise / undisguise on yourself
@@ -37,7 +41,7 @@ permissions:
     description: Allows /fmm disguise / undisguise targeting other players, plus /fmm disguiselist
     default: op
   freeminecraftmodels.bypassregionprotection:
-    description: Allows placing props inside WorldGuard regions / GriefPrevention claims
+    description: Allows placing and interacting with props inside WorldGuard regions / GriefPrevention claims
     default: op
   freeminecraftmodels.menu:
     description: Allows access to the craftable items menu

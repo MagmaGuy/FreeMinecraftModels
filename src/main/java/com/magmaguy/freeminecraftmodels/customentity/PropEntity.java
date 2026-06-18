@@ -113,6 +113,7 @@ public class PropEntity extends StaticEntity {
         displayInitializer();
         chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
         propEntities.put(armorStand.getUniqueId(), this);
+        PropCleanupRegistry.register(this);
         PropScriptManager.onPropSpawn(this);
     }
 
@@ -194,6 +195,11 @@ public class PropEntity extends StaticEntity {
     public void setPersistent(boolean persistent) {
         this.persistent = persistent;
         underlyingEntity.setPersistent(persistent);
+        if (persistent) {
+            PropCleanupRegistry.register(this);
+        } else {
+            PropCleanupRegistry.unregister(underlyingEntity.getUniqueId());
+        }
     }
 
     @Override
@@ -215,6 +221,7 @@ public class PropEntity extends StaticEntity {
         }));
         chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
         propEntities.put(underlyingEntity.getUniqueId(), this);
+        PropCleanupRegistry.register(this);
         ArmorStandListener.bypass = false;
         PropScriptManager.onPropSpawn(this);
     }
@@ -229,23 +236,32 @@ public class PropEntity extends StaticEntity {
 
     @Override
     public void remove() {
+        remove(true);
+    }
+
+    public void remove(boolean showRealBlocks) {
+        UUID underlyingUuid = underlyingEntity != null ? underlyingEntity.getUniqueId() : null;
+        boolean removePersistentBackingEntity = persistent && isDying() && underlyingUuid != null;
+        if (removePersistentBackingEntity) PropCleanupRegistry.unregister(underlyingUuid);
+
         PropScriptManager.onPropRemove(this);
         LuaPropTable.invalidate(this);
         super.remove();
-        showRealBlocksToAllPlayers();
-        propEntities.remove(underlyingEntity.getUniqueId());
-        if (!persistent) underlyingEntity.remove();
-        if (isDying() && underlyingEntity != null) {
+        if (showRealBlocks) showRealBlocksToAllPlayers();
+        if (underlyingUuid != null) propEntities.remove(underlyingUuid);
+        if (!persistent && underlyingEntity != null) underlyingEntity.remove();
+        if (removePersistentBackingEntity) {
             new BukkitRunnable() {
                 @Override
                 public void run() {
-                    underlyingEntity.remove();
+                    if (underlyingEntity != null) underlyingEntity.remove();
                 }
             }.runTask(MetadataHandler.PLUGIN);
         }
     }
 
     public void permanentlyRemove() {
+        if (underlyingEntity != null) PropCleanupRegistry.unregister(underlyingEntity.getUniqueId());
         remove();
         if (underlyingEntity != null)
             new BukkitRunnable() {
@@ -328,7 +344,7 @@ public class PropEntity extends StaticEntity {
             Collection<PropEntity> propEntitiesClone = new ArrayList<>(PropEntity.propEntities.values());
             for (PropEntity value : propEntitiesClone) {
                 if (value.chunkHash.equals(chunkHash)) {
-                    value.remove();
+                    value.remove(false);
                 }
             }
         }

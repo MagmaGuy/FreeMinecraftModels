@@ -69,10 +69,16 @@ public class PropBlockComponent {
     public void showRealBlocksToPlayer(Player player) {
         for (PropBlocks propBlock : propBlocks) {
             Location finalLocation = propBlock.getProcessedLocation(modeledEntity.getSpawnLocation());
+            if (!locationChunkIsLoaded(finalLocation)) continue;
             player.sendBlockChange(
                     finalLocation,
                     finalLocation.getBlock().getBlockData());
         }
+    }
+
+    private boolean locationChunkIsLoaded(Location location) {
+        if (location == null || location.getWorld() == null) return false;
+        return location.getWorld().isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4);
     }
 
     /**
