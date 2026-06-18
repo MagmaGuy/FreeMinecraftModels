@@ -24,9 +24,22 @@ public class PropScriptLuaConfig {
             if (!scriptFile.exists()) {
                 scriptsFolder.mkdirs();
                 Files.writeString(scriptFile.toPath(), config.getSource(), StandardCharsets.UTF_8);
+                return;
+            }
+
+            String existingSource = normalizeSource(Files.readString(scriptFile.toPath(), StandardCharsets.UTF_8));
+            boolean isLegacyDefault = config.getLegacySources().stream()
+                    .map(this::normalizeSource)
+                    .anyMatch(existingSource::equals);
+            if (isLegacyDefault) {
+                Files.writeString(scriptFile.toPath(), config.getSource(), StandardCharsets.UTF_8);
             }
         } catch (Exception e) {
             Logger.warn("Failed to create prop script: " + config.getFilename());
         }
+    }
+
+    private String normalizeSource(String source) {
+        return source.replace("\r\n", "\n");
     }
 }
