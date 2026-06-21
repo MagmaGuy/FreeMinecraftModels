@@ -9,6 +9,7 @@ import com.magmaguy.easyminecraftgoals.thirdparty.BedrockChecker;
 import org.bukkit.Bukkit;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
@@ -275,6 +276,19 @@ public class SkeletonWatchers implements Listener {
             );
         }
         boolean wasAlreadyViewing = !viewers.add(player.getUniqueId());
+        if (!isBedrock) {
+            hideUnderlyingEntityFromJavaViewer(player);
+        }
+        if (isBedrock
+                && DefaultConfig.sendCustomModelsToBedrockClientsV2
+                && skeleton.getModeledEntity().getBedrockModeledEntity() != null
+                && skeleton.getModeledEntity().getBedrockModeledEntity().isAvailable()) {
+            skeleton.getModeledEntity().getBedrockModeledEntity().displayTo(player);
+            if (skeleton.getModeledEntity() instanceof PropEntity propEntity)
+                propEntity.showFakePropBlocksToPlayer(player);
+            skeleton.getModeledEntity().getHitboxComponent().showPacketInteractionEntityTo(player);
+            return;
+        }
         if (isBedrock) {
             com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
                     "SkeletonWatchers.displayTo: wasAlreadyViewing=" + wasAlreadyViewing
@@ -299,6 +313,17 @@ public class SkeletonWatchers implements Listener {
         // branch is suppressed, otherwise every resync fires another resync 10
         // ticks later and the model visibly flickers/resets twice per second.
         if (allowBedrockResyncSchedule && isBedrock && !wasAlreadyViewing) scheduleBedrockInitialResync(player);
+    }
+
+    private void hideUnderlyingEntityFromJavaViewer(Player player) {
+        if (MetadataHandler.PLUGIN == null || skeleton.getModeledEntity() == null) {
+            return;
+        }
+        Entity underlyingEntity = skeleton.getModeledEntity().getUnderlyingEntity();
+        if (underlyingEntity == null || !underlyingEntity.isValid()) {
+            return;
+        }
+        player.hideEntity(MetadataHandler.PLUGIN, underlyingEntity);
     }
 
     /**
@@ -346,6 +371,9 @@ public class SkeletonWatchers implements Listener {
     private void hideFrom(UUID uuid) {
         // Always clean up viewer state, even if player is offline
         viewers.remove(uuid);
+        if (skeleton.getModeledEntity().getBedrockModeledEntity() != null) {
+            skeleton.getModeledEntity().getBedrockModeledEntity().hideFrom(uuid);
+        }
         skeleton.getBones().forEach(bone -> bone.hideFrom(uuid));
         // Hide the packet interaction entity (uses UUID, works even if player is offline)
         skeleton.getModeledEntity().getHitboxComponent().hidePacketInteractionEntityFrom(uuid);

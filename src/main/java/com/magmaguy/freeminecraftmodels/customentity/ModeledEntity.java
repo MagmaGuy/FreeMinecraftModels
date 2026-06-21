@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
+import com.magmaguy.freeminecraftmodels.bedrock.BedrockModeledEntity;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
 import com.magmaguy.freeminecraftmodels.customentity.core.MountPointManager;
@@ -65,6 +66,8 @@ public class ModeledEntity {
     @Getter
     private Skeleton skeleton;
     @Getter
+    private BedrockModeledEntity bedrockModeledEntity;
+    @Getter
     private boolean isRemoved = false;
     @Getter
     @Setter
@@ -102,6 +105,11 @@ public class ModeledEntity {
         }
 
         animationComponent.initializeAnimationManager(fileModelConverter);
+        try {
+            bedrockModeledEntity = new BedrockModeledEntity(this, fileModelConverter);
+        } catch (Throwable throwable) {
+            Logger.warn("Failed to initialize Bedrock custom entity backend for " + entityID + ": " + throwable.getMessage());
+        }
 
         loadedModeledEntities.add(this);
     }
@@ -184,6 +192,7 @@ public class ModeledEntity {
         //check if the entity exists, basically
         if (isRemoved || getLocation() == null) return;
         getSkeleton().tick(abstractPacketBundle);
+        if (bedrockModeledEntity != null) bedrockModeledEntity.tick();
         hitboxComponent.tick(tickCounter);
         animationComponent.tick();
         tickCounter++;
@@ -217,6 +226,7 @@ public class ModeledEntity {
         interactionComponent.clearCallbacks();
         // Remove the packet interaction entity
         hitboxComponent.removePacketInteractionEntity();
+        if (bedrockModeledEntity != null) bedrockModeledEntity.remove();
         skeleton.remove();
         loadedModeledEntities.remove(this);
         // Always drop the underlyingEntity->ModeledEntity mapping so removed
@@ -448,6 +458,10 @@ public class ModeledEntity {
      */
     public void stopCurrentAnimations() {
         animationComponent.stopCurrentAnimations();
+    }
+
+    public void updateBedrockAnimation(String animationName) {
+        if (bedrockModeledEntity != null) bedrockModeledEntity.playAnimation(animationName);
     }
 
     /**

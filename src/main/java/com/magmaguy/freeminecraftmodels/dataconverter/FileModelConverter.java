@@ -28,6 +28,7 @@ public class FileModelConverter {
     private String ID;
     @Getter
     private File sourceFile;
+    @Getter
     private int blockBenchVersion = 4;
     @Getter
     private Map<String, Object> meta;

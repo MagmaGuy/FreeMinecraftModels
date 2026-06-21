@@ -129,6 +129,7 @@ public class AnimationManager {
 
     private void renderCurrentFrame() {
         Animation anim = current.getAnimation();
+        modeledEntity.updateBedrockAnimation(anim.getAnimationBlueprint().getAnimationName());
         boolean loop = current.isLoop();
         int duration = anim.getAnimationBlueprint().getDuration();
         long counter = anim.getCounter();

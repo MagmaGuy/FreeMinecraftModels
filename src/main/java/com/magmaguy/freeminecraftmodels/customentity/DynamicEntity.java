@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.customentity;
 import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityInterface;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import lombok.Getter;
@@ -76,6 +77,10 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         if (fileModelConverter == null) return null;
         DynamicEntity dynamicEntity = new DynamicEntity(entityID, livingEntity.getLocation());
         dynamicEntity.spawn(livingEntity);
+        boolean bedrockUsesUnderlyingEntity = DefaultConfig.sendCustomModelsToBedrockClientsV2
+                && dynamicEntity.getBedrockModeledEntity() != null
+                && dynamicEntity.getBedrockModeledEntity().isAvailable()
+                && dynamicEntity.getBedrockModeledEntity().isUsingUnderlyingEntity();
         // Paper-only per-viewer suppression. Java clients honour this; Geyser does NOT
         // reliably honour it at the NMS fetch level, so on its own it leaves the mob
         // visible to Bedrock viewers underneath the FMM bone attachables.
@@ -84,7 +89,7 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         // does translate this one — Bedrock viewers see the underlying mob as
         // invisible, so only the bone packet armor stands render. Required for FMM
         // disguises on EliteMobs custom bosses to appear correctly on Bedrock.
-        livingEntity.setInvisible(true);
+        livingEntity.setInvisible(!bedrockUsesUnderlyingEntity);
         Bukkit.getOnlinePlayers().forEach(player -> {
             if (player.getLocation().getWorld().equals(dynamicEntity.getLocation().getWorld())) {
                 player.hideEntity(MetadataHandler.PLUGIN, livingEntity);
@@ -119,6 +124,9 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
 
     public void spawn(LivingEntity entity) {
         super.spawn(entity);
+        if (getBedrockModeledEntity() != null) {
+            getBedrockModeledEntity().bindToUnderlyingEntity(entity);
+        }
         dynamicEntities.put(entity.getUniqueId(), this);
         syncSkeletonWithEntity();
     }

@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.config;
 
 import com.magmaguy.magmacore.config.ConfigurationEngine;
 import com.magmaguy.magmacore.config.ConfigurationFile;
+import com.magmaguy.magmacore.nightbreak.NightbreakPluginUpdater;
 
 import java.util.List;
 
@@ -15,6 +16,7 @@ public class DefaultConfig extends ConfigurationFile {
     public static boolean preventPropPlacementInProtectedRegions;
     private static DefaultConfig instance;
     public static boolean setupDone;
+    public static boolean autoDownloadPluginUpdates;
 
     public DefaultConfig() {
         super("config.yml");
@@ -35,6 +37,7 @@ public class DefaultConfig extends ConfigurationFile {
         setupDone = ConfigurationEngine.setBoolean(
                 List.of("Tracks whether the first-time setup guidance has been completed."),
                 fileConfiguration, "setupDone", false);
+        autoDownloadPluginUpdates = NightbreakPluginUpdater.setAutoDownloadConfigDefault(fileConfiguration);
         useDisplayEntitiesWhenPossible = ConfigurationEngine.setBoolean(
                 List.of("Sets whether display entities will be used over armor stands.",
                         "It is not always possible to use display entities as they do not exist for bedrock, nor do they exist for servers older than 1.19.4.",

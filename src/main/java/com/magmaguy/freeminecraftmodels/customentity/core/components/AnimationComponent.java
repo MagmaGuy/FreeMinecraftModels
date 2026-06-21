@@ -40,6 +40,9 @@ public class AnimationComponent {
      */
     public void stopCurrentAnimations() {
         if (animationManager != null) animationManager.stop();
+        if (modeledEntity.getBedrockModeledEntity() != null) {
+            modeledEntity.getBedrockModeledEntity().stopAnimations();
+        }
     }
 
     /**
@@ -55,7 +58,11 @@ public class AnimationComponent {
             warnMissingAnimationManagerOnce(animationName);
             return false;
         }
-        return animationManager.play(animationName, blendAnimation, loop);
+        boolean played = animationManager.play(animationName, blendAnimation, loop);
+        if (played && modeledEntity.getBedrockModeledEntity() != null) {
+            modeledEntity.getBedrockModeledEntity().playAnimation(animationName);
+        }
+        return played;
     }
 
     /**
@@ -77,7 +84,11 @@ public class AnimationComponent {
      */
     public boolean playDeathAnimation() {
         if (animationManager == null) return false;
-        return animationManager.play("death", false, false);
+        boolean played = animationManager.play("death", false, false);
+        if (played && modeledEntity.getBedrockModeledEntity() != null) {
+            modeledEntity.getBedrockModeledEntity().playAnimation("death");
+        }
+        return played;
     }
 
     /**

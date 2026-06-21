@@ -10,8 +10,8 @@ import com.magmaguy.magmacore.command.SenderType;
 import com.magmaguy.magmacore.command.arguments.ListStringCommandArgument;
 import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.Location;
-import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Pig;
 import org.bukkit.entity.Player;
 import org.bukkit.util.RayTraceResult;
 
@@ -66,7 +66,8 @@ public class SpawnCommand extends AdvancedCommand {
         if (type.equals("static")) {
             StaticEntity.create(modelID, location);
         } else if (type.equals("dynamic")) {
-            DynamicEntity.create(modelID, (LivingEntity) location.getWorld().spawnEntity(location, EntityType.PIG));
+            LivingEntity carrier = location.getWorld().spawn(location, Pig.class, pig -> pig.setVisibleByDefault(false));
+            DynamicEntity.create(modelID, carrier);
         }
     }
 
