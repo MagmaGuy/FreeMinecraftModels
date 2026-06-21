@@ -2,6 +2,7 @@
 build/
 target/
 .idea/
+.run/
 *.iml
 testbed/
 .DS_Store
@@ -13,3 +14,10 @@ dependency-reduced-pom.xml
 docs/
 # Build/IDE artifacts - not tracked
 .idea/
+
+# Local IDE/tooling and generated debris
+.vscode/
+.classpath
+.project
+.settings/
+out/

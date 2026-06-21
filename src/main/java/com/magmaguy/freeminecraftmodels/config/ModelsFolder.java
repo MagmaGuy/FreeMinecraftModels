@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.bedrock.BedrockEntityBundleExporter;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.ParsedTexture;
@@ -70,6 +71,7 @@ public class ModelsFolder {
         leatherHorseArmor.put("textures", Collections.singletonMap("layer0", "minecraft:item/leather_horse_armor"));
 
         processFolders(file, bbModelConverterList, leatherHorseArmor, true);
+        bbModelConverterList.forEach(BedrockEntityBundleExporter::export);
         leatherHorseArmor.put("data", counter - 1 + folderCounter * 1000);
 
         try {
@@ -106,6 +108,7 @@ public class ModelsFolder {
         List<FileModelConverter> bbModelConverterList = new ArrayList<>();
         HashMap<String, Object> jsonConfig = new HashMap<>();
         processFolders(file, bbModelConverterList, jsonConfig, true);
+        bbModelConverterList.forEach(BedrockEntityBundleExporter::export);
 
         HashMap<String, List<FileModelConverter>> mappedModels = new HashMap<>();
         for (FileModelConverter model : bbModelConverterList) {

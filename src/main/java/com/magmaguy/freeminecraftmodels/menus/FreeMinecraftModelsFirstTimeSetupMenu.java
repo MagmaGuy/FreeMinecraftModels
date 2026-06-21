@@ -24,7 +24,7 @@ public class FreeMinecraftModelsFirstTimeSetupMenu {
                 (JavaPlugin) MetadataHandler.PLUGIN,
                 player,
                 "&2FreeMinecraftModels",
-                "&6Nightbreak content setup",
+                "&6Guided content setup",
                 createInfoItem(),
                 List.of(createRecommendedItem(), createManualItem(), createSkipItem()));
     }
@@ -33,7 +33,7 @@ public class FreeMinecraftModelsFirstTimeSetupMenu {
         return new MenuButton(ItemStackGenerator.generateSkullItemStack(
                 "magmaguy",
                 "&2Welcome to FreeMinecraftModels!",
-                List.of("&7Link Nightbreak, install model packs, and let FMM rebuild the pack output."))) {
+                List.of("&7Connect this server, manage model packs, and let FMM rebuild the pack output."))) {
             @Override
             public void onClick(Player player) {
                 player.closeInventory();
@@ -46,7 +46,7 @@ public class FreeMinecraftModelsFirstTimeSetupMenu {
         return new MenuButton(ItemStackGenerator.generateItemStack(
                 Material.GREEN_STAINED_GLASS_PANE,
                 "&2Recommended Setup",
-                List.of("&aMarks setup complete and points you to Nightbreak-managed model packs."))) {
+                List.of("&aMarks setup complete and points you to model packs and useful plugins."))) {
             @Override
             public void onClick(Player player) {
                 player.closeInventory();

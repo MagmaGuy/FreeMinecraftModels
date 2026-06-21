@@ -9,12 +9,15 @@ import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 public class CubeBlueprint {
     @Getter
     private final Map<String, Object> cubeJSON;
+    @Getter
+    private final Map<String, Object> originalCubeJSON;
     @Getter
     private Vector3f to;
     @Getter
@@ -32,6 +35,7 @@ public class CubeBlueprint {
     private double resolutionHeight;
 
     public CubeBlueprint(List<ParsedTexture> parsedTextures, Map<String, Object> cubeJSON, String modelName, double resolutionWidth, double resolutionHeight) {
+        this.originalCubeJSON = deepCopyMap(cubeJSON);
         this.cubeJSON = cubeJSON;
         this.modelName = modelName;
         this.resolutionWidth = resolutionWidth;
@@ -82,6 +86,32 @@ public class CubeBlueprint {
         applyInflate();
 
         validatedData = true;
+    }
+
+    private static Map<String, Object> deepCopyMap(Map<String, Object> source) {
+        Map<String, Object> copy = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            copy.put(entry.getKey(), deepCopy(entry.getValue()));
+        }
+        return copy;
+    }
+
+    private static Object deepCopy(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> copy = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                copy.put(String.valueOf(entry.getKey()), deepCopy(entry.getValue()));
+            }
+            return copy;
+        }
+        if (value instanceof List<?> list) {
+            List<Object> copy = new ArrayList<>();
+            for (Object element : list) {
+                copy.add(deepCopy(element));
+            }
+            return copy;
+        }
+        return value;
     }
 
     /**

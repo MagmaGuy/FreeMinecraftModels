@@ -54,6 +54,7 @@ public class BoneBlueprint {
     //Pivot point relative to the model center
     private Vector3f blueprintModelPivot;
     private Vector3f blueprintOriginalBoneRotation = new Vector3f();
+    private Vector3f originalOrigin = new Vector3f();
     @Getter
     private boolean isHead = false;
     @Getter
@@ -153,6 +154,10 @@ public class BoneBlueprint {
 
     public Vector3f getBlueprintOriginalBoneRotation() {
         return new Vector3f(blueprintOriginalBoneRotation);
+    }
+
+    public Vector3f getOriginalOrigin() {
+        return new Vector3f(originalOrigin);
     }
 
     public boolean isDisplayModel() {
@@ -322,6 +327,10 @@ public class BoneBlueprint {
         Object obj = boneJSON.get("origin");
         if (obj == null) return;
         List<Double> origins = (List<Double>) obj;
+        originalOrigin = new Vector3f(
+                origins.get(0).floatValue(),
+                origins.get(1).floatValue(),
+                origins.get(2).floatValue());
         //This is the origin in "real space", meaning it is adjusted to the in-game unit size (16x larger than model space)
         blueprintModelPivot = getModelCenter().sub(new Vector3f(
                 origins.get(0).floatValue(),

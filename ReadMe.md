@@ -34,7 +34,7 @@ Optional soft dependencies (auto-detected at runtime): **WorldGuard**, **WorldEd
 3. Distribute the generated resource pack from `plugins/FreeMinecraftModels/output/FreeMinecraftModels.zip`, or install [Resource Pack Manager](https://www.spigotmc.org/resources/resource-pack-manager.118574/) to host and serve it automatically.
 4. Spawn models in-game, e.g. `/fmm spawn static <id>`, `/fmm spawn dynamic <id>`, or `/fmm spawn prop <id>`.
 
-The data folder also exposes `/fmm setup`, `/fmm initialize`, and `/fmm downloadall` for browsing and installing Nightbreak-managed model packs.
+The data folder also exposes `/fmm setup`, `/fmm initialize`, and `/fmm downloadallcontent` for browsing and installing Nightbreak-managed model packs.
 
 ## Commands
 
@@ -55,7 +55,8 @@ All commands are under `/freeminecraftmodels` (alias `/fmm`).
 | `/fmm admin` | Opens the admin content browser |
 | `/fmm stats` | Shows loaded-model and dynamic-entity counts |
 | `/fmm version` | Shows the plugin version |
-| `/fmm setup` / `/fmm initialize` / `/fmm downloadall` | Browse / install Nightbreak-managed content |
+| `/fmm setup` / `/fmm initialize` / `/fmm downloadallcontent` | Browse / install Nightbreak-managed content |
+| `/fmm downloadall` / `/fmm downloadpluginupdate` | Check plugin updates through Nightbreak |
 
 Debug commands also exist (`hitboxdebug`, `locationdebug`, `bedrockdebug`, `deleteall`).
 

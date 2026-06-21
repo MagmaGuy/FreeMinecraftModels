@@ -15,7 +15,7 @@ public class FreeMinecraftModelsCommand extends AdvancedCommand {
     public FreeMinecraftModelsCommand() {
         super(List.of());
         addArgument("action", new ListStringCommandArgument(
-                List.of("visualize", "setup", "initialize", "downloadall", "updatecontent"),
+                List.of("visualize", "setup", "initialize", "recommendedplugins", "downloadall", "downloadallcontent", "downloadpluginupdate", "updatecontent"),
                 "<action>"));
         setPermission("freeminecraftmodels.menu");
         setDescription("Shares basic info about FreeMinecraftModels and points to the setup flow.");
@@ -32,8 +32,9 @@ public class FreeMinecraftModelsCommand extends AdvancedCommand {
             }
         }
         Logger.sendMessage(commandData.getCommandSender(), "FreeMinecraftModels is a plugin that allows you to use Minecraft models in your world.");
-        Logger.sendMessage(commandData.getCommandSender(), "Use &2/fmm setup &fto browse Nightbreak-managed model packs.");
-        Logger.sendMessage(commandData.getCommandSender(), "Use &2/fmm initialize &ffor the first-time setup flow, or &2/fmm downloadall &fto install all available content.");
+        Logger.sendMessage(commandData.getCommandSender(), "Use &2/fmm setup &fto manage model packs, plugin updates, and update settings.");
+        Logger.sendMessage(commandData.getCommandSender(), "Use &2/fmm recommendedplugins &fto see plugins that work well with FreeMinecraftModels.");
+        Logger.sendMessage(commandData.getCommandSender(), "Use &2/fmm initialize &ffor the first-time setup flow, or &2/fmm downloadall &fto check plugin and content updates.");
         Logger.sendMessage(commandData.getCommandSender(), "FreeMinecraftModels works especially well alongside ResourcePackManager, which can distribute the generated pack automatically.");
     }
 
