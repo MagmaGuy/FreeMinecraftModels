@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.commands;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.listeners.CraftifyListener;
+import com.magmaguy.freeminecraftmodels.menus.ModelMenuHelper;
 import com.magmaguy.magmacore.command.AdvancedCommand;
 import com.magmaguy.magmacore.command.CommandData;
 import com.magmaguy.magmacore.command.SenderType;
@@ -18,7 +19,10 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class CraftifyCommand extends AdvancedCommand {
 
@@ -35,8 +39,11 @@ public class CraftifyCommand extends AdvancedCommand {
 
     public CraftifyCommand() {
         super(List.of("craftify"));
-        List<String> entityIDs = new ArrayList<>();
-        FileModelConverter.getConvertedFileModels().values().forEach(f -> entityIDs.add(f.getID()));
+        List<String> entityIDs = FileModelConverter.getConvertedFileModels().values().stream()
+                .filter(ModelMenuHelper::isMenuModel)
+                .map(ModelMenuHelper::getMenuModelId)
+                .sorted(Comparator.naturalOrder())
+                .collect(Collectors.collectingAndThen(Collectors.toCollection(LinkedHashSet::new), ArrayList::new));
         addArgument("model", new ListStringCommandArgument(entityIDs, "<model>"));
         setDescription("Opens an interactive recipe builder for a model prop");
         setPermission("freeminecraftmodels.*");
@@ -49,7 +56,7 @@ public class CraftifyCommand extends AdvancedCommand {
         Player player = commandData.getPlayerSender();
         String modelID = commandData.getStringArgument("model");
 
-        if (!FileModelConverter.getConvertedFileModels().containsKey(modelID)) {
+        if (!isKnownMenuModel(modelID)) {
             Logger.sendMessage(player, "\u00a7cModel '" + modelID + "' not found!");
             return;
         }
@@ -119,5 +126,13 @@ public class CraftifyCommand extends AdvancedCommand {
 
         CraftifyListener.startSession(player, modelID);
         player.openInventory(inv);
+    }
+
+    private static boolean isKnownMenuModel(String modelID) {
+        for (FileModelConverter converter : FileModelConverter.getConvertedFileModels().values()) {
+            if (!ModelMenuHelper.isMenuModel(converter)) continue;
+            if (ModelMenuHelper.getMenuModelId(converter).equals(modelID)) return true;
+        }
+        return false;
     }
 }

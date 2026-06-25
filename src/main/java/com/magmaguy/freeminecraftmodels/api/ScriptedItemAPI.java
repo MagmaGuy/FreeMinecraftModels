@@ -60,16 +60,11 @@ public final class ScriptedItemAPI {
                 itemId
         );
 
-        // Set the item model if available (1.21.4+)
-        // For bow/crossbow items, the display model is registered as {itemId}_idle
+        // Set the item model if available (1.21.4+). Bow/crossbow draw states
+        // are internal to the base item-model definition.
         if (!VersionChecker.serverVersionOlderThan(21, 4)) {
-            String displayModelId = itemId;
-            if (!DisplayModelRegistry.hasDisplayModel(displayModelId)
-                    && DisplayModelRegistry.hasDisplayModel(displayModelId + "_idle")) {
-                displayModelId = displayModelId + "_idle";
-            }
-            if (DisplayModelRegistry.hasDisplayModel(displayModelId)) {
-                meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + displayModelId));
+            if (DisplayModelRegistry.hasDisplayModel(itemId)) {
+                meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + itemId));
             }
         }
 

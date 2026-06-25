@@ -29,7 +29,7 @@ public class HitboxBlueprint {
             Logger.warn("Model " + modelName + " has more than one value defining a hitbox! Only the first cube will be used to define the hitbox.");
         }
         if (childrenValues.isEmpty()) {
-            Logger.warn("Model " + modelName + " has a hitbox bone but no hitbox cube! This means the hitbox won't be able to generate correctly!");
+            Logger.info("Model " + modelName + " has a hitbox bone but no hitbox cube! This means the hitbox won't be able to generate correctly!");
             return;
         }
         if (childrenValues.get(0) instanceof String) {

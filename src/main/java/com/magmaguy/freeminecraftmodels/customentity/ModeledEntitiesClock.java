@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
+import com.magmaguy.easyminecraftgoals.NMSAdapter;
 import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
@@ -13,6 +14,7 @@ public class ModeledEntitiesClock {
     }
 
     public static void start() {
+        shutdown();
         clock = new BukkitRunnable() {
             @Override
             public void run() {
@@ -29,7 +31,10 @@ public class ModeledEntitiesClock {
     }
 
     public static void tick() {
-        AbstractPacketBundle abstractPacketBundle = NMSManager.getAdapter().createPacketBundle();
+        NMSAdapter adapter = NMSManager.getAdapter();
+        if (!NMSManager.isEnabled() || adapter == null) return;
+
+        AbstractPacketBundle abstractPacketBundle = adapter.createPacketBundle();
         ModeledEntity.getLoadedModeledEntities().forEach(modeledEntity -> modeledEntity.tick(abstractPacketBundle));
         abstractPacketBundle.send();
     }

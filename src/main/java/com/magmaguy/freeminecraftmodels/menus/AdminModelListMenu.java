@@ -56,7 +56,8 @@ public class AdminModelListMenu {
         Set<String> itemIds = new HashSet<>(customItemIds);
         this.entries = new ArrayList<>();
         for (FileModelConverter model : models) {
-            if (!itemIds.contains(model.getID())) {
+            if (!ModelMenuHelper.isMenuModel(model)) continue;
+            if (!itemIds.contains(ModelMenuHelper.getMenuModelId(model))) {
                 entries.add(new ModelEntry(model));
             }
         }
@@ -178,7 +179,8 @@ public class AdminModelListMenu {
 
         @Override
         public void onClick(Player player) {
-            player.getInventory().addItem(ModelItemFactory.createModelItem(model.getID(), Material.PAPER));
+            player.getInventory().addItem(ModelItemFactory.createModelItem(
+                    ModelMenuHelper.getMenuModelId(model), Material.PAPER));
         }
     }
 
