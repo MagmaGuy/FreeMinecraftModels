@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.menus;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.config.BowStateDetector;
 import com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields;
 import com.magmaguy.freeminecraftmodels.config.recipes.PropRecipeConfig;
 import com.magmaguy.freeminecraftmodels.config.recipes.PropRecipeManager;
@@ -78,7 +79,13 @@ public final class ModelMenuHelper {
                     }
                     return false;
                 })
+                .filter(ModelMenuHelper::isMenuModel)
                 .sorted(Comparator.comparing(FileModelConverter::getID))
+                .collect(Collectors.collectingAndThen(
+                        Collectors.toMap(ModelMenuHelper::getMenuModelId, converter -> converter,
+                                (first, second) -> first, LinkedHashMap::new),
+                        map -> new ArrayList<>(map.values())))
+                .stream()
                 .collect(Collectors.toList());
     }
 
@@ -120,6 +127,7 @@ public final class ModelMenuHelper {
         if (dotIndex > 0) {
             baseName = baseName.substring(0, dotIndex);
         }
+        baseName = BowStateDetector.stripStateSuffix(baseName);
 
         File ymlFile = new File(source.getParentFile(), baseName + ".yml");
         if (!ymlFile.exists()) return Collections.emptyList();
@@ -148,7 +156,7 @@ public final class ModelMenuHelper {
      * @return the display item
      */
     public static ItemStack buildModelItem(FileModelConverter converter, boolean adminMode) {
-        String modelId = converter.getID();
+        String modelId = getMenuModelId(converter);
         String formattedName = ModelItemFactory.formatModelName(modelId);
         String displayName = "&e\u2726 &6" + formattedName + " &e\u2726";
 
@@ -361,7 +369,15 @@ public final class ModelMenuHelper {
         lore.add("");
         lore.add("&8ID: " + itemId);
 
-        return ItemStackGenerator.generateItemStack(material, displayName, lore);
+        ItemStack item = ItemStackGenerator.generateItemStack(material, displayName, lore);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null
+                && !com.magmaguy.magmacore.util.VersionChecker.serverVersionOlderThan(21, 4)
+                && com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry.hasDisplayModel(itemId)) {
+            meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + itemId));
+            item.setItemMeta(meta);
+        }
+        return item;
     }
 
     // ---------------------------------------------------------------
@@ -383,5 +399,23 @@ public final class ModelMenuHelper {
             }
         }
         return sb.toString();
+    }
+
+    public static boolean isMenuModel(FileModelConverter converter) {
+        String modelId = converter.getID();
+        if (!BowStateDetector.isDrawStateSuffix(modelId)) return true;
+        String baseId = BowStateDetector.stripStateSuffix(modelId);
+        if (!com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry.hasDisplayModel(baseId)) return true;
+        return modelId.equals(baseId + "_idle");
+    }
+
+    public static String getMenuModelId(FileModelConverter converter) {
+        String modelId = converter.getID();
+        String baseId = BowStateDetector.stripStateSuffix(modelId);
+        if (!modelId.equals(baseId)
+                && com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry.hasDisplayModel(baseId)) {
+            return baseId;
+        }
+        return modelId;
     }
 }

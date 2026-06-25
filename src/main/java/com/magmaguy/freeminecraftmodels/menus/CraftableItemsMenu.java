@@ -34,8 +34,14 @@ public class CraftableItemsMenu {
 
         Set<String> recipeIds = PropRecipeManager.getLoadedRecipes().keySet();
         this.craftableModels = FileModelConverter.getConvertedFileModels().values().stream()
-                .filter(converter -> recipeIds.contains(converter.getID()))
-                .sorted(Comparator.comparing(FileModelConverter::getID))
+                .filter(ModelMenuHelper::isMenuModel)
+                .filter(converter -> recipeIds.contains(ModelMenuHelper.getMenuModelId(converter)))
+                .sorted(Comparator.comparing(ModelMenuHelper::getMenuModelId))
+                .collect(Collectors.collectingAndThen(
+                        Collectors.toMap(ModelMenuHelper::getMenuModelId, converter -> converter,
+                                (first, second) -> first, LinkedHashMap::new),
+                        map -> new ArrayList<>(map.values())))
+                .stream()
                 .collect(Collectors.toList());
 
         open();
@@ -115,7 +121,7 @@ public class CraftableItemsMenu {
                         if (modelIndex < menu.craftableModels.size()) {
                             openMenus.remove(inventory);
                             new RecipeDetailMenu((Player) event.getWhoClicked(),
-                                    menu.craftableModels.get(modelIndex).getID());
+                                    ModelMenuHelper.getMenuModelId(menu.craftableModels.get(modelIndex)));
                         }
                         return;
                     }

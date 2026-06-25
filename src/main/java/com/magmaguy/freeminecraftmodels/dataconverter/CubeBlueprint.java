@@ -338,7 +338,7 @@ public class CubeBlueprint {
 
         // If no valid decomposition found, just use the angle as-is
         // (this shouldn't happen for valid 22.5 degree increments)
-        Logger.warn("Could not decompose rotation angle " + angle + " into base + allowed remainder for model name " + modelName);
+        Logger.info("Could not decompose rotation angle " + angle + " into base + allowed remainder for model name " + modelName);
         result.baseRotation = 0;
         result.remainder = angle;
         return result;

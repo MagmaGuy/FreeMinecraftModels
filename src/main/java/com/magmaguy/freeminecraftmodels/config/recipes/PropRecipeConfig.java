@@ -1,6 +1,8 @@
 package com.magmaguy.freeminecraftmodels.config.recipes;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.config.BowStateDetector;
+import com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry;
 import com.magmaguy.freeminecraftmodels.config.ShopConfig;
 import com.magmaguy.freeminecraftmodels.utils.ModelItemFactory;
 import com.magmaguy.magmacore.config.CustomConfigFields;
@@ -59,6 +61,10 @@ public class PropRecipeConfig extends CustomConfigFields {
     public void processConfigFields() {
         this.isEnabled = processBoolean("isEnabled", isEnabled, true, true);
         this.modelId = processString("model_id", modelId, "", true);
+        String baseModelId = BowStateDetector.stripStateSuffix(this.modelId);
+        if (!baseModelId.equals(this.modelId) && DisplayModelRegistry.hasDisplayModel(baseModelId)) {
+            this.modelId = baseModelId;
+        }
         this.shape = processStringList("shape", shape, new ArrayList<>(), true);
 
         // Ingredients are a map section — process manually since CustomConfigFields

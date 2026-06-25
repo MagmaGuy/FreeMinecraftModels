@@ -71,6 +71,10 @@ public class OBBHitDetection implements Listener {
             applyDamage = false;
             return;
         }
+        if (event.getDamager() instanceof Player player) {
+            ModeledEntity modeledEntity = ModeledEntity.getLoadedModeledEntitiesWithUnderlyingEntities().get(event.getEntity());
+            if (modeledEntity != null) modeledEntity.getInteractionComponent().callLeftClickEvent(player);
+        }
         event.setCancelled(true);
     }
 
@@ -101,6 +105,7 @@ public class OBBHitDetection implements Listener {
         // Only cancel if the entity is closer than or at the same distance as the block
         if (entityDistance <= blockDistance) {
             event.setCancelled(true);
+            hitEntity.getInteractionComponent().callLeftClickEvent(event.getPlayer());
         }
     }
 

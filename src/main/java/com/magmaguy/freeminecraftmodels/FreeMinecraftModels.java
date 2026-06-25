@@ -138,8 +138,10 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
     @Override
     public void onDisable() {
         MagmaCore.requestInitializationShutdown(this);
+        ModeledEntitiesClock.shutdown();
+        OBBHitDetection.shutdown();
+        Bukkit.getServer().getScheduler().cancelTasks(MetadataHandler.PLUGIN);
         if (MagmaCore.getInitializationState(this.getName()) == PluginInitializationState.INITIALIZING) {
-            Bukkit.getServer().getScheduler().cancelTasks(MetadataHandler.PLUGIN);
             MagmaCore.shutdown(this);
             return;
         }
@@ -157,12 +159,9 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         PropCleanupRegistry.shutdown();
         DisguiseManager.shutdown();
         ModeledEntity.shutdown();
-        ModeledEntitiesClock.shutdown();
-        OBBHitDetection.shutdown();
         PropEntity.shutdown();
         DynamicEntity.shutdown();
         ConfigurationLocation.shutdown();
-        Bukkit.getServer().getScheduler().cancelTasks(MetadataHandler.PLUGIN);
         HandlerList.unregisterAll(MetadataHandler.PLUGIN);
     }
 

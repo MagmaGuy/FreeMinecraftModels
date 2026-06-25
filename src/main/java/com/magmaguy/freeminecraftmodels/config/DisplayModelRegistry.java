@@ -7,6 +7,7 @@ public final class DisplayModelRegistry {
     private static final Set<String> displayModels = new HashSet<>();
     private DisplayModelRegistry() {}
     public static void register(String modelId) { displayModels.add(modelId); }
+    public static void unregister(String modelId) { displayModels.remove(modelId); }
     public static boolean hasDisplayModel(String modelId) { return displayModels.contains(modelId); }
 
     public static Set<String> getRegisteredModels() {

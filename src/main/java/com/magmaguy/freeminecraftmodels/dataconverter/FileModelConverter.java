@@ -150,13 +150,13 @@ public class FileModelConverter {
         try {
             Map<?, ?> meta = (Map<?, ?>) map.get("meta");
             if (meta == null) {
-                Logger.warn("Missing 'meta' field in model: " + modelName + ". Defaulting to version 4.");
+                Logger.info("Missing 'meta' field in model: " + modelName + ". Defaulting to version 4.");
                 return 4;
             }
 
             Object versionObj = meta.get("format_version");
             if (versionObj == null) {
-                Logger.warn("Missing 'format_version' in meta for model: " + modelName + ". Defaulting to version 4.");
+                Logger.info("Missing 'format_version' in meta for model: " + modelName + ". Defaulting to version 4.");
                 return 4;
             }
 

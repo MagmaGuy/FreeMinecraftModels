@@ -272,27 +272,27 @@ public class ModelsFolder {
         // conditional item definitions (replacing the simple ones generated above).
         Set<String> allDisplayModelIds = new HashSet<>(DisplayModelRegistry.getRegisteredModels());
         List<BowStateDetector.StateGroup> stateGroups = BowStateDetector.detectStateGroups(allDisplayModelIds);
-        Set<String> stateModelIds = new HashSet<>(); // track which IDs are part of a group
 
         for (BowStateDetector.StateGroup group : stateGroups) {
             String base = group.baseName();
 
             // Collect all state model IDs so we can suppress their individual item defs
+            Set<String> stateModelIds = new HashSet<>();
             stateModelIds.add(base + "_idle");
             stateModelIds.add(base + "_draw_start");
             stateModelIds.add(base + "_draw_half");
             stateModelIds.add(base + "_draw_full");
             if (group.isCrossbow()) stateModelIds.add(base + "_charged");
 
-            // Generate conditional item definition for the _idle model only
+            // Generate one public item definition for the base model ID. The
+            // state-specific models remain internal render states for drawing.
             String itemJson = group.isCrossbow()
                     ? BowStateDetector.generateCrossbowItemJson(base, "freeminecraftmodels")
                     : BowStateDetector.generateBowItemJson(base, "freeminecraftmodels");
 
             try {
-                // Write as the base name (without _idle) so the item references the base
                 FileUtils.writeStringToFile(
-                        new File(displayItemsFolder, base + "_idle.json"),
+                        new File(displayItemsFolder, base + ".json"),
                         itemJson, StandardCharsets.UTF_8);
                 Logger.info("Generated " + (group.isCrossbow() ? "crossbow" : "bow")
                         + " state item definition for: " + base);
@@ -300,14 +300,18 @@ public class ModelsFolder {
                 Logger.warn("Failed to write bow/crossbow item definition for " + base + ": " + e.getMessage());
             }
 
-            // Remove individual item definitions for draw/charged states (they shouldn't have their own)
+            // Remove individual item definitions for render states (they should
+            // never appear as standalone selectable/menu item models).
+            new File(displayItemsFolder, base + "_idle.json").delete();
             new File(displayItemsFolder, base + "_draw_start.json").delete();
             new File(displayItemsFolder, base + "_draw_half.json").delete();
             new File(displayItemsFolder, base + "_draw_full.json").delete();
             if (group.isCrossbow()) new File(displayItemsFolder, base + "_charged.json").delete();
 
-            // Only register the _idle model ID (draw states are only referenced, not standalone)
-            // The draw state models keep their display JSONs but lose their item definitions
+            for (String stateModelId : stateModelIds) {
+                DisplayModelRegistry.unregister(stateModelId);
+            }
+            DisplayModelRegistry.register(base);
         }
 
         // Scan for lone .json files that define custom items
