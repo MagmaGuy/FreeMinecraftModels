@@ -105,10 +105,17 @@ public class ModeledEntity {
         }
 
         animationComponent.initializeAnimationManager(fileModelConverter);
-        try {
-            bedrockModeledEntity = new BedrockModeledEntity(this, fileModelConverter);
-        } catch (Throwable throwable) {
-            Logger.warn("Failed to initialize Bedrock custom entity backend for " + entityID + ": " + throwable.getMessage());
+        // Only build the per-model Bedrock backend when a Bedrock proxy (Geyser/Floodgate) is
+        // actually installed. Without one there can be no Bedrock viewers, so constructing and
+        // ticking a BedrockModeledEntity (a fake carrier entity + exported bundle) for every
+        // model is pure RAM/CPU waste on a Java-only server. Bones still serve Java players;
+        // every Bedrock call site already null-checks getBedrockModeledEntity().
+        if (com.magmaguy.freeminecraftmodels.thirdparty.BedrockChecker.isBedrockSupportPresent()) {
+            try {
+                bedrockModeledEntity = new BedrockModeledEntity(this, fileModelConverter);
+            } catch (Throwable throwable) {
+                Logger.warn("Failed to initialize Bedrock custom entity backend for " + entityID + ": " + throwable.getMessage());
+            }
         }
 
         loadedModeledEntities.add(this);
@@ -193,7 +200,7 @@ public class ModeledEntity {
         if (isRemoved || getLocation() == null) return;
         getSkeleton().tick(abstractPacketBundle);
         if (bedrockModeledEntity != null) bedrockModeledEntity.tick();
-        hitboxComponent.tick(tickCounter);
+        hitboxComponent.tick(tickCounter, abstractPacketBundle);
         animationComponent.tick();
         tickCounter++;
         if (underlyingEntity != null && underlyingEntity.isValid() && underlyingEntity instanceof LivingEntity livingEntity && livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")) != null)

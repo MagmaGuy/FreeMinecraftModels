@@ -39,11 +39,15 @@ public class BoneTransforms {
     public void setTextDisplayText(String text) {
         if (packetTextDisplayArmorStandEntity == null) return;
         packetTextDisplayArmorStandEntity.setText(text);
+        // Text changes ride the per-tick metadata packet; force it out next tick
+        // even if the bone didn't move (see sendUpdatePacket dirty-checking).
+        markDirty();
     }
 
     public void setTextDisplayVisible(boolean visible) {
         if (packetTextDisplayArmorStandEntity == null) return;
         packetTextDisplayArmorStandEntity.setTextVisible(visible);
+        markDirty();
     }
 
     public void transform() {
@@ -261,49 +265,134 @@ public class BoneTransforms {
         return new EulerAngle(-rotation[0], -rotation[1], rotation[2]);
     }
 
+    // ---- per-tick change detection ----------------------------------------
+    // The model clock asks every visible bone to resend its move + metadata
+    // packets every tick. Historically that happened unconditionally, so a
+    // perfectly still NPC still blasted 2 packets per bone per viewer per tick.
+    // We now cache the last-sent target transform per packet entity and skip the
+    // resend when nothing moved. forceNextUpdate guarantees the first tick after
+    // (re)display, and any non-transform change (tint, text) that still needs a
+    // metadata packet, always goes out. See DefaultConfig.skipUnchangedBoneUpdates.
+    private static final double TRANSFORM_EPSILON = 1.0E-4;
+    // volatile: markDirty() is called from the main thread (damage flash, tint, text
+    // changes) while sendUpdatePacket reads it on the async model-clock thread.
+    private volatile boolean forceNextUpdate = true;
+    private boolean armorStandStateValid = false;
+    private double asLx, asLy, asLz, asRx, asRy, asRz;
+    private boolean displayStateValid = false;
+    private double deLx, deLy, deLz, deRx, deRy, deRz, deSx, deSy, deSz;
+    private boolean textStateValid = false;
+    private double txLx, txLy, txLz;
+
+    /**
+     * Forces this bone to resend its packets on the next tick regardless of whether
+     * its transform changed. Call after any non-transform mutation that relies on the
+     * per-tick metadata packet to reach clients (tint/leather-armor color, text).
+     */
+    public void markDirty() {
+        forceNextUpdate = true;
+    }
+
     public void sendUpdatePacket(AbstractPacketBundle packetBundle) {
+        boolean force = forceNextUpdate || !DefaultConfig.skipUnchangedBoneUpdates;
+        forceNextUpdate = false;
+
         if (packetArmorStandEntity != null && packetArmorStandEntity.hasViewers()) {
-            if (packetBundle == null) packetBundle = packetArmorStandEntity.createPacketBundle();
-            sendArmorStandUpdatePacket(packetBundle);
+            Location loc = getArmorStandTargetLocation();
+            EulerAngle rot = getArmorStandEntityRotation();
+            if (force || armorStandChanged(loc, rot)) {
+                if (packetBundle == null) packetBundle = packetArmorStandEntity.createPacketBundle();
+                sendArmorStandUpdatePacket(packetBundle, loc, rot);
+            }
         }
         if (packetDisplayEntity != null && packetDisplayEntity.hasViewers()) {
-            if (packetBundle == null) packetBundle = packetDisplayEntity.createPacketBundle();
-            sendDisplayEntityUpdatePacket(packetBundle);
+            Location loc = getDisplayEntityTargetLocation();
+            EulerAngle rot = getDisplayEntityRotation();
+            double[] scale = globalMatrix.getScale();
+            if (force || displayChanged(loc, rot, scale)) {
+                if (packetBundle == null) packetBundle = packetDisplayEntity.createPacketBundle();
+                sendDisplayEntityUpdatePacket(packetBundle, loc, rot, scale);
+            }
         }
         if (packetTextDisplayArmorStandEntity != null && packetTextDisplayArmorStandEntity.hasViewers()) {
-            if (packetBundle == null) packetBundle = packetTextDisplayArmorStandEntity.createPacketBundle();
-            sendTextDisplayUpdatePacket(packetBundle);
+            Location loc = getArmorStandTargetLocation();
+            if (force || textChanged(loc)) {
+                if (packetBundle == null) packetBundle = packetTextDisplayArmorStandEntity.createPacketBundle();
+                sendTextDisplayUpdatePacket(packetBundle, loc);
+            }
         }
     }
 
-    private void sendTextDisplayUpdatePacket(AbstractPacketBundle packetBundle) {
-        packetTextDisplayArmorStandEntity.generateLocationAndRotationAndScalePackets(
-                packetBundle,
-                getArmorStandTargetLocation(),
-                new EulerAngle(0, 0, 0),
-                1f);
+    private boolean armorStandChanged(Location loc, EulerAngle rot) {
+        if (!armorStandStateValid) return true;
+        return !same(asLx, loc.getX()) || !same(asLy, loc.getY()) || !same(asLz, loc.getZ())
+                || !same(asRx, rot.getX()) || !same(asRy, rot.getY()) || !same(asRz, rot.getZ());
     }
 
-    private void sendArmorStandUpdatePacket(AbstractPacketBundle packetBundle) {
+    private boolean displayChanged(Location loc, EulerAngle rot, double[] scale) {
+        if (!displayStateValid) return true;
+        return !same(deLx, loc.getX()) || !same(deLy, loc.getY()) || !same(deLz, loc.getZ())
+                || !same(deRx, rot.getX()) || !same(deRy, rot.getY()) || !same(deRz, rot.getZ())
+                || !same(deSx, scale[0]) || !same(deSy, scale[1]) || !same(deSz, scale[2]);
+    }
+
+    private boolean textChanged(Location loc) {
+        if (!textStateValid) return true;
+        return !same(txLx, loc.getX()) || !same(txLy, loc.getY()) || !same(txLz, loc.getZ());
+    }
+
+    private static boolean same(double a, double b) {
+        return Math.abs(a - b) < TRANSFORM_EPSILON;
+    }
+
+    private void sendTextDisplayUpdatePacket(AbstractPacketBundle packetBundle, Location loc) {
+        packetTextDisplayArmorStandEntity.generateLocationAndRotationAndScalePackets(
+                packetBundle,
+                loc,
+                new EulerAngle(0, 0, 0),
+                1f);
+        txLx = loc.getX();
+        txLy = loc.getY();
+        txLz = loc.getZ();
+        textStateValid = true;
+    }
+
+    private void sendArmorStandUpdatePacket(AbstractPacketBundle packetBundle, Location loc, EulerAngle rot) {
         if (packetArmorStandEntity != null) {
             packetArmorStandEntity.generateLocationAndRotationAndScalePackets(
                     packetBundle,
-                    getArmorStandTargetLocation(),
-                    getArmorStandEntityRotation(),
+                    loc,
+                    rot,
                     1f);
+            asLx = loc.getX();
+            asLy = loc.getY();
+            asLz = loc.getZ();
+            asRx = rot.getX();
+            asRy = rot.getY();
+            asRz = rot.getZ();
+            armorStandStateValid = true;
         }
     }
 
-    private void sendDisplayEntityUpdatePacket(AbstractPacketBundle packetBundle) {
+    private void sendDisplayEntityUpdatePacket(AbstractPacketBundle packetBundle, Location loc, EulerAngle rot, double[] scale) {
         if (packetDisplayEntity != null) {
-            double[] scale = globalMatrix.getScale();
             packetDisplayEntity.generateLocationAndRotationAndScalePackets(
                     packetBundle,
-                    getDisplayEntityTargetLocation(),
-                    getDisplayEntityRotation(),
+                    loc,
+                    rot,
                     (float) scale[0] * 2.5f,
                     (float) scale[1] * 2.5f,
                     (float) scale[2] * 2.5f);
+            deLx = loc.getX();
+            deLy = loc.getY();
+            deLz = loc.getZ();
+            deRx = rot.getX();
+            deRy = rot.getY();
+            deRz = rot.getZ();
+            deSx = scale[0];
+            deSy = scale[1];
+            deSz = scale[2];
+            displayStateValid = true;
         }
     }
 

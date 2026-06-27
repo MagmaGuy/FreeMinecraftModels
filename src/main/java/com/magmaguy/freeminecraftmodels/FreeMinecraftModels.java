@@ -214,6 +214,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         manager.registerCommand(new MountCommand());
         manager.registerCommand(new HitboxDebugCommand());
         manager.registerCommand(new BedrockDebugCommand());
+        manager.registerCommand(new com.magmaguy.freeminecraftmodels.commands.PacketDebugCommand());
         manager.registerCommand(new com.magmaguy.freeminecraftmodels.commands.LocationDebugCommand());
         manager.registerCommand(new DeleteAllCommand());
         manager.registerCommand(new ReloadCommand());

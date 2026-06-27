@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.customentity.core.components;
 
 import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.PacketInteractionEntity;
+import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.OrientedBoundingBox;
@@ -51,13 +52,14 @@ public class HitboxComponent {
      *
      * @param tickCounter
      */
-    public void tick(int tickCounter) {
+    public void tick(int tickCounter, com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle packetBundle) {
         // Always update the OBB hitbox position, even if no blueprint hitbox is configured
-        // (getObbHitbox() creates a default 1x2x1 hitbox when blueprint hitbox is null)
+        // (getObbHitbox() creates a default 1x2x1 hitbox when blueprint hitbox is null).
+        // This is the server-side click-detection box and is cheap (no packets), so it always runs.
         getObbHitbox().update(modeledEntity.getLocation());
 
-        // Update the packet interaction entity position
-        updatePacketInteractionEntityPosition();
+        // Update the client-side interaction entity position (sends packets) — only when moved.
+        updatePacketInteractionEntityPosition(packetBundle);
 
         if (modeledEntity.getInteractionComponent().getHitboxContactCallback() == null) return;
         if (tickCounter % 2 == 0) {
@@ -171,14 +173,33 @@ public class HitboxComponent {
      * Updates the packet interaction entity's position.
      * Should be called during tick.
      */
-    private void updatePacketInteractionEntityPosition() {
+    private Location lastInteractionLocation = null;
+
+    private void updatePacketInteractionEntityPosition(com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle packetBundle) {
         // Snapshot the field: tick() runs async, removePacketInteractionEntity()
         // on the main thread can null this between the check and the teleport.
         PacketInteractionEntity entity = packetInteractionEntity;
         if (entity == null) return;
         Location location = modeledEntity.getLocation();
         if (location == null) return;
-        entity.teleport(location);
+
+        // Change detection: this used to teleport the interaction entity EVERY tick, unbundled,
+        // even for a perfectly still model — a hidden per-model packet per tick that bypassed the
+        // bundler. Skip when the position/rotation hasn't changed (gated by the same toggle as the
+        // bone dirty-check so it can be A/B compared / rolled back).
+        if (DefaultConfig.skipUnchangedBoneUpdates
+                && lastInteractionLocation != null
+                && lastInteractionLocation.getWorld() == location.getWorld()
+                && lastInteractionLocation.distanceSquared(location) < 1.0E-8
+                && lastInteractionLocation.getYaw() == location.getYaw()
+                && lastInteractionLocation.getPitch() == location.getPitch()) {
+            return;
+        }
+
+        // Bundled teleport (rides the clock bundle instead of a direct unbundled send). Falls back
+        // to a direct send when packetBundle is null (non-tick callers).
+        entity.teleport(location, packetBundle);
+        lastInteractionLocation = location.clone();
     }
 
     /**
@@ -186,8 +207,12 @@ public class HitboxComponent {
      * Should be called when a player starts viewing the model.
      */
     public void showPacketInteractionEntityTo(Player player) {
+        showPacketInteractionEntityTo(player, null);
+    }
+
+    public void showPacketInteractionEntityTo(Player player, com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle packetBundle) {
         if (packetInteractionEntity == null) return;
-        PacketEntityDisplayHelper.displayToPlayer(packetInteractionEntity, player);
+        PacketEntityDisplayHelper.displayToPlayer(packetInteractionEntity, player, packetBundle);
     }
 
     /**

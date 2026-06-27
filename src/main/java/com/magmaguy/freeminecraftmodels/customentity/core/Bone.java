@@ -135,6 +135,10 @@ public class Bone {
     }
 
     public void displayTo(Player player) {
+        displayTo(player, null);
+    }
+
+    public void displayTo(Player player, AbstractPacketBundle packetBundle) {
         if (player == null || !player.isValid() || !player.isOnline()) return;
         // Mount-point bones have a packet armor stand created in
         // BoneTransforms.initializeMountPointBone for position tracking, but it has
@@ -163,7 +167,7 @@ public class Bone {
                     "Bone.displayTo branch=TEXT bedrock=" + isBedrock
                             + " player=" + player.getName()
                             + " bone=" + boneBlueprint.getBoneName());
-            PacketEntityDisplayHelper.displayToPlayer(boneTransforms.getPacketTextDisplayArmorStandEntity(), player);
+            PacketEntityDisplayHelper.displayToPlayer(boneTransforms.getPacketTextDisplayArmorStandEntity(), player, packetBundle);
         } else if (boneTransforms.getPacketArmorStandEntity() != null &&
                 (!DefaultConfig.useDisplayEntitiesWhenPossible ||
                         isBedrock ||
@@ -174,14 +178,14 @@ public class Bone {
                             + " bone=" + boneBlueprint.getBoneName()
                             + " modelID=" + boneBlueprint.getModelID()
                             + " packetClass=" + boneTransforms.getPacketArmorStandEntity().getClass().getSimpleName());
-            PacketEntityDisplayHelper.displayToPlayer(boneTransforms.getPacketArmorStandEntity(), player);
+            PacketEntityDisplayHelper.displayToPlayer(boneTransforms.getPacketArmorStandEntity(), player, packetBundle);
         } else if (boneTransforms.getPacketDisplayEntity() != null) {
             com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
                     "Bone.displayTo branch=DISPLAY_ENTITY bedrock=" + isBedrock
                             + " player=" + player.getName()
                             + " bone=" + boneBlueprint.getBoneName()
                             + " modelID=" + boneBlueprint.getModelID());
-            PacketEntityDisplayHelper.displayToPlayer(boneTransforms.getPacketDisplayEntity(), player);
+            PacketEntityDisplayHelper.displayToPlayer(boneTransforms.getPacketDisplayEntity(), player, packetBundle);
         } else {
             com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
                     "Bone.displayTo branch=NONE — no packet entity initialized! bedrock=" + isBedrock
@@ -206,6 +210,10 @@ public class Bone {
             boneTransforms.getPacketArmorStandEntity().setHorseLeatherArmorColor(color);
         if (boneTransforms.getPacketDisplayEntity() != null)
             boneTransforms.getPacketDisplayEntity().setHorseLeatherArmorColor(color);
+        // Tint lives in the entity-data (metadata) packet, which is now only resent
+        // when the bone's transform changes. Force the next tick to push it so the
+        // damage flash / persistent tint actually reaches clients on still bones.
+        boneTransforms.markDirty();
     }
 
     public void spawnParticles(Particle particle, double speed) {
