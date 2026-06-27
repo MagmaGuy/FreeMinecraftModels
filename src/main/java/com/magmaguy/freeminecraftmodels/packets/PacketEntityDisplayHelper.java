@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.packets;
 
+import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.easyminecraftgoals.internal.PacketEntityInterface;
 import org.bukkit.entity.Player;
 
@@ -10,7 +11,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class PacketEntityDisplayHelper {
     private static final Map<Class<?>, Method> playerDisplayMethodCache = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, Method> playerBundledDisplayMethodCache = new ConcurrentHashMap<>();
     private static final Method NO_PLAYER_DISPLAY_METHOD = getNoPlayerDisplayMethod();
+    private static final Method NO_PLAYER_BUNDLED_DISPLAY_METHOD = getNoPlayerBundledDisplayMethod();
 
     private PacketEntityDisplayHelper() {
     }
@@ -55,11 +58,43 @@ public class PacketEntityDisplayHelper {
         packetEntity.displayTo(player.getUniqueId());
     }
 
+    public static void displayToPlayer(PacketEntityInterface packetEntity, Player player, AbstractPacketBundle packetBundle) {
+        if (packetBundle == null) {
+            displayToPlayer(packetEntity, player);
+            return;
+        }
+        if (packetEntity == null || player == null || !player.isValid() || !player.isOnline()) return;
+
+        Method displayMethod = playerBundledDisplayMethodCache.computeIfAbsent(
+                packetEntity.getClass(),
+                PacketEntityDisplayHelper::findPlayerBundledDisplayMethod
+        );
+
+        if (displayMethod != NO_PLAYER_BUNDLED_DISPLAY_METHOD) {
+            try {
+                displayMethod.invoke(packetEntity, player, packetBundle);
+                return;
+            } catch (IllegalAccessException | InvocationTargetException ignored) {
+                // Fall back to the non-bundled per-viewer path if a concrete implementation rejects the bundled overload.
+            }
+        }
+
+        displayToPlayer(packetEntity, player);
+    }
+
     private static Method findPlayerDisplayMethod(Class<?> packetEntityClass) {
         try {
             return packetEntityClass.getMethod("displayTo", Player.class);
         } catch (NoSuchMethodException e) {
             return NO_PLAYER_DISPLAY_METHOD;
+        }
+    }
+
+    private static Method findPlayerBundledDisplayMethod(Class<?> packetEntityClass) {
+        try {
+            return packetEntityClass.getMethod("displayTo", Player.class, AbstractPacketBundle.class);
+        } catch (NoSuchMethodException e) {
+            return NO_PLAYER_BUNDLED_DISPLAY_METHOD;
         }
     }
 
@@ -71,7 +106,19 @@ public class PacketEntityDisplayHelper {
         }
     }
 
+    private static Method getNoPlayerBundledDisplayMethod() {
+        try {
+            return PacketEntityDisplayHelper.class.getDeclaredMethod("missingDisplayToPlayerBundled", Player.class, AbstractPacketBundle.class);
+        } catch (NoSuchMethodException e) {
+            throw new IllegalStateException("Failed to initialize bundled display helper sentinel.", e);
+        }
+    }
+
     @SuppressWarnings("unused")
     private static void missingDisplayToPlayer(Player player) {
+    }
+
+    @SuppressWarnings("unused")
+    private static void missingDisplayToPlayerBundled(Player player, AbstractPacketBundle packetBundle) {
     }
 }

@@ -1,5 +1,7 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
+import com.magmaguy.easyminecraftgoals.NMSAdapter;
+import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
@@ -124,11 +126,18 @@ public class SkeletonWatchers implements Listener {
                 : DefaultConfig.maxModelViewDistance;
         double maxViewDistanceSquared = (double) effectiveViewDistance * effectiveViewDistance;
 
+        // Pseudo load balancer: only honor the close-range proximity override (always-show
+        // within MIN_VIEW_DISTANCE, skipping the raytrace) when this world isn't crowded.
+        // In a dense multi-floor hub the override would make every nearby model a viewer even
+        // when occluded by floors/walls; disabling it lets isModelInSight() cull them.
+        boolean proximityOverride = ModelDensity.proximityOverrideActive(
+                skeleton.getCurrentLocation().getWorld());
+
         for (Player player : skeleton.getCurrentLocation().getWorld().getPlayers()) {
             double distance = player.getLocation().distanceSquared(skeleton.getCurrentLocation());
 
-            if (distance < MIN_VIEW_DISTANCE_SQUARED ||
-                    distance < maxViewDistanceSquared && isModelInSight(player)) {
+            if ((proximityOverride && distance < MIN_VIEW_DISTANCE_SQUARED) ||
+                    (distance < maxViewDistanceSquared && isModelInSight(player))) {
                 newPlayers.add(player.getUniqueId());
                 if (!viewers.contains(player.getUniqueId())) displayTo(player);
             }
@@ -295,12 +304,14 @@ public class SkeletonWatchers implements Listener {
                             + " for " + player.getName());
         }
         // Only show bones if the underlying entity is not invisible
+        AbstractPacketBundle initialDisplayBundle = createInitialDisplayBundle();
         if (!isUnderlyingEntityInvisible())
-            skeleton.getBones().forEach(bone -> bone.displayTo(player));
+            skeleton.getBones().forEach(bone -> bone.displayTo(player, initialDisplayBundle));
         if (skeleton.getModeledEntity() instanceof PropEntity propEntity)
             propEntity.showFakePropBlocksToPlayer(player);
         // Show the packet interaction entity for click detection (always, even when invisible)
-        skeleton.getModeledEntity().getHitboxComponent().showPacketInteractionEntityTo(player);
+        skeleton.getModeledEntity().getHitboxComponent().showPacketInteractionEntityTo(player, initialDisplayBundle);
+        if (initialDisplayBundle != null) initialDisplayBundle.send();
         // Bedrock-only: the initial AddEntity → EntityData → Equipment → HeadPose
         // sequence races against Geyser's per-session entity-registration state.
         // When it loses the race, Bedrock binds the attachable to the wrong rotation
@@ -313,6 +324,12 @@ public class SkeletonWatchers implements Listener {
         // branch is suppressed, otherwise every resync fires another resync 10
         // ticks later and the model visibly flickers/resets twice per second.
         if (allowBedrockResyncSchedule && isBedrock && !wasAlreadyViewing) scheduleBedrockInitialResync(player);
+    }
+
+    private AbstractPacketBundle createInitialDisplayBundle() {
+        NMSAdapter adapter = NMSManager.getAdapter();
+        if (!NMSManager.isEnabled() || adapter == null) return null;
+        return adapter.createPacketBundle();
     }
 
     private void hideUnderlyingEntityFromJavaViewer(Player player) {
