@@ -9,6 +9,7 @@ import com.magmaguy.freeminecraftmodels.listeners.ArmorStandListener;
 import com.magmaguy.freeminecraftmodels.scripting.LuaPropTable;
 import com.magmaguy.freeminecraftmodels.scripting.PropScriptManager;
 import com.magmaguy.magmacore.util.ChunkLocationChecker;
+import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import org.bukkit.*;
 import org.bukkit.entity.ArmorStand;
@@ -113,13 +114,13 @@ public class PropEntity extends StaticEntity {
         displayInitializer();
         chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
         propEntities.put(armorStand.getUniqueId(), this);
-        PropCleanupRegistry.register(this);
         PropScriptManager.onPropSpawn(this);
     }
 
     public static void onStartup() {
         for (World world : Bukkit.getWorlds()) {
             for (Chunk loadedChunk : world.getLoadedChunks()) {
+                removeDuplicatePropsInChunk(loadedChunk);
                 for (Entity entity : loadedChunk.getEntities()) {
                     if (entity instanceof ArmorStand armorStand) {
                         String propEntityID = getPropEntityID(armorStand);
@@ -136,12 +137,21 @@ public class PropEntity extends StaticEntity {
     }
 
     public static PropEntity spawnPropEntity(String entityID, Location spawnLocation) {
+        if (spawnLocation != null && spawnLocation.getWorld() != null) {
+            removeDuplicatePropsInChunk(spawnLocation.getChunk());
+        }
+        if (hasLoadedPropOnSameBlock(entityID, spawnLocation)) {
+            Logger.warn("[FMM Props] Prevented duplicate prop spawn for model '" + entityID + "' at "
+                    + formatBlockLocation(spawnLocation) + ".");
+            return null;
+        }
         PropEntity propEntity = new PropEntity(entityID, spawnLocation);
         propEntity.spawn();
         return propEntity;
     }
 
     public static PropEntity respawnPropEntityFromArmorStand(String entityID, ArmorStand armorStand) {
+        if (removeIfDuplicateProp(entityID, armorStand)) return null;
         FileModelConverter fileModelConverter = FileModelConverter.getConvertedFileModels().get(entityID);
         if (fileModelConverter == null) return null;
         if (propEntities.containsKey(armorStand.getUniqueId())) {
@@ -157,6 +167,127 @@ public class PropEntity extends StaticEntity {
 
     public static String getPropEntityID(ArmorStand armorStand) {
         return armorStand.getPersistentDataContainer().get(propNamespacedKey, PersistentDataType.STRING);
+    }
+
+    public static boolean hasLoadedPropOnSameBlock(String entityID, Location location) {
+        return findLoadedPropOnSameBlock(entityID, location, null) != null;
+    }
+
+    static int removeDuplicatePropsInChunk(Chunk chunk) {
+        Map<PropBlockKey, List<ArmorStand>> propsByBlock = new HashMap<>();
+
+        for (Entity entity : chunk.getEntities()) {
+            if (!(entity instanceof ArmorStand armorStand) || !armorStand.isValid()) continue;
+
+            String propEntityID = getPropEntityID(armorStand);
+            if (propEntityID == null) continue;
+
+            PropBlockKey key = PropBlockKey.from(propEntityID, armorStand.getLocation());
+            if (key == null) continue;
+
+            propsByBlock.computeIfAbsent(key, unused -> new ArrayList<>()).add(armorStand);
+        }
+
+        int removed = 0;
+        for (Map.Entry<PropBlockKey, List<ArmorStand>> entry : propsByBlock.entrySet()) {
+            List<ArmorStand> props = entry.getValue();
+            if (props.size() < 2) continue;
+
+            ArmorStand kept = choosePropToKeep(props);
+            int removedForBlock = 0;
+            for (ArmorStand armorStand : props) {
+                if (armorStand.getUniqueId().equals(kept.getUniqueId())) continue;
+                removeDuplicatePropArmorStand(armorStand);
+                removedForBlock++;
+            }
+
+            removed += removedForBlock;
+            alertDuplicatePropsRemoved(entry.getKey(), kept.getUniqueId(), removedForBlock);
+        }
+
+        return removed;
+    }
+
+    private static boolean removeIfDuplicateProp(String entityID, ArmorStand armorStand) {
+        if (armorStand == null || !armorStand.isValid()) return true;
+
+        ArmorStand existing = findLoadedPropOnSameBlock(entityID, armorStand.getLocation(), armorStand.getUniqueId());
+        if (existing == null) return false;
+
+        PropBlockKey key = PropBlockKey.from(entityID, armorStand.getLocation());
+        removeDuplicatePropArmorStand(armorStand);
+        if (key != null) alertDuplicatePropsRemoved(key, existing.getUniqueId(), 1);
+        return true;
+    }
+
+    private static ArmorStand findLoadedPropOnSameBlock(String entityID, Location location, UUID ignoredUuid) {
+        if (entityID == null || location == null || location.getWorld() == null) return null;
+
+        for (Entity entity : location.getChunk().getEntities()) {
+            if (!(entity instanceof ArmorStand armorStand) || !armorStand.isValid()) continue;
+            if (ignoredUuid != null && ignoredUuid.equals(armorStand.getUniqueId())) continue;
+            if (!entityID.equals(getPropEntityID(armorStand))) continue;
+            if (!isSameBlock(location, armorStand.getLocation())) continue;
+            return armorStand;
+        }
+
+        return null;
+    }
+
+    private static boolean isSameBlock(Location first, Location second) {
+        if (first == null || second == null || first.getWorld() == null || second.getWorld() == null) return false;
+        return first.getWorld().getUID().equals(second.getWorld().getUID())
+                && first.getBlockX() == second.getBlockX()
+                && first.getBlockY() == second.getBlockY()
+                && first.getBlockZ() == second.getBlockZ();
+    }
+
+    private static ArmorStand choosePropToKeep(List<ArmorStand> props) {
+        for (ArmorStand armorStand : props) {
+            if (propEntities.containsKey(armorStand.getUniqueId())) return armorStand;
+        }
+        return props.get(0);
+    }
+
+    private static void removeDuplicatePropArmorStand(ArmorStand armorStand) {
+        UUID duplicateUuid = armorStand.getUniqueId();
+        PropEntity wrappedDuplicate = propEntities.get(duplicateUuid);
+        if (wrappedDuplicate != null) {
+            wrappedDuplicate.remove(false);
+        } else {
+            propEntities.remove(duplicateUuid);
+            LuaPropTable.invalidate(duplicateUuid);
+        }
+        armorStand.remove();
+    }
+
+    private static void alertDuplicatePropsRemoved(PropBlockKey key, UUID keptUuid, int removed) {
+        Logger.warn("[FMM Props] Removed " + removed + " duplicate prop armor stand(s) for model '"
+                + key.entityID() + "' at " + key.formatLocation() + ". Kept " + keptUuid + ".");
+    }
+
+    private static String formatBlockLocation(Location location) {
+        if (location == null || location.getWorld() == null) return "unknown location";
+        return location.getWorld().getName() + " "
+                + location.getBlockX() + "," + location.getBlockY() + "," + location.getBlockZ();
+    }
+
+    private record PropBlockKey(String entityID, UUID worldId, String worldName, int blockX, int blockY, int blockZ) {
+        static PropBlockKey from(String entityID, Location location) {
+            if (entityID == null || location == null || location.getWorld() == null) return null;
+            return new PropBlockKey(
+                    entityID,
+                    location.getWorld().getUID(),
+                    location.getWorld().getName(),
+                    location.getBlockX(),
+                    location.getBlockY(),
+                    location.getBlockZ()
+            );
+        }
+
+        String formatLocation() {
+            return worldName + " " + blockX + "," + blockY + "," + blockZ;
+        }
     }
 
     private void initializePropEntity() {
@@ -195,11 +326,6 @@ public class PropEntity extends StaticEntity {
     public void setPersistent(boolean persistent) {
         this.persistent = persistent;
         underlyingEntity.setPersistent(persistent);
-        if (persistent) {
-            PropCleanupRegistry.register(this);
-        } else {
-            PropCleanupRegistry.unregister(underlyingEntity.getUniqueId());
-        }
     }
 
     @Override
@@ -221,7 +347,6 @@ public class PropEntity extends StaticEntity {
         }));
         chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
         propEntities.put(underlyingEntity.getUniqueId(), this);
-        PropCleanupRegistry.register(this);
         ArmorStandListener.bypass = false;
         PropScriptManager.onPropSpawn(this);
     }
@@ -242,7 +367,6 @@ public class PropEntity extends StaticEntity {
     public void remove(boolean showRealBlocks) {
         UUID underlyingUuid = underlyingEntity != null ? underlyingEntity.getUniqueId() : null;
         boolean removePersistentBackingEntity = persistent && isDying() && underlyingUuid != null;
-        if (removePersistentBackingEntity) PropCleanupRegistry.unregister(underlyingUuid);
 
         PropScriptManager.onPropRemove(this);
         LuaPropTable.invalidate(this);
@@ -261,7 +385,6 @@ public class PropEntity extends StaticEntity {
     }
 
     public void permanentlyRemove() {
-        if (underlyingEntity != null) PropCleanupRegistry.unregister(underlyingEntity.getUniqueId());
         remove();
         if (underlyingEntity != null)
             new BukkitRunnable() {
@@ -328,6 +451,7 @@ public class PropEntity extends StaticEntity {
 
         @EventHandler(priority = EventPriority.LOWEST)
         public void onChunkLoadEvent(ChunkLoadEvent event) {
+            removeDuplicatePropsInChunk(event.getChunk());
             for (Entity entity : event.getChunk().getEntities()) {
                 if (entity instanceof ArmorStand armorStand) {
                     String propEntityID = getPropEntityID(armorStand);
