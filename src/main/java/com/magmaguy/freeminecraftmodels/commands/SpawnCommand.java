@@ -72,7 +72,11 @@ public class SpawnCommand extends AdvancedCommand {
     }
 
     private void createProp(Player player, String propFilename) {
-        PropEntity.spawnPropEntity(propFilename, player.getLocation());
+        PropEntity propEntity = PropEntity.spawnPropEntity(propFilename, player.getLocation());
+        if (propEntity == null) {
+            Logger.sendMessage(player, "A prop of that model already exists on this block.");
+            return;
+        }
         Logger.sendMessage(player, "Successfully added prop!");
     }
 }

@@ -2,7 +2,6 @@ package com.magmaguy.freeminecraftmodels.commands;
 
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityManager;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
-import com.magmaguy.freeminecraftmodels.customentity.PropCleanupRegistry;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.magmacore.command.AdvancedCommand;
 import com.magmaguy.magmacore.command.CommandData;
@@ -10,13 +9,9 @@ import com.magmaguy.magmacore.command.arguments.IntegerCommandArgument;
 import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
-import java.util.UUID;
 
 /**
  * Command to delete all modeled entities in the current world.
@@ -47,24 +42,16 @@ public class DeleteAllCommand extends AdvancedCommand {
         final Location center = player != null && radius != null ? player.getLocation() : null;
         final double radiusSquared = radius != null ? radius * radius : 0;
         int removedCount = 0;
-        Set<UUID> removedUnderlyingEntities = new HashSet<>();
 
         for (ModeledEntity allEntity : ModeledEntityManager.getAllEntities()) {
             if (!isWithinRadius(allEntity, center, radiusSquared)) continue;
             if (allEntity instanceof PropEntity propEntity) {
-                if (propEntity.getUnderlyingEntity() != null) {
-                    removedUnderlyingEntities.add(propEntity.getUnderlyingEntity().getUniqueId());
-                }
                 propEntity.permanentlyRemove();
             } else {
                 allEntity.remove();
             }
             removedCount++;
         }
-
-        removedCount += PropCleanupRegistry.clearRegisteredProps(entity -> isWithinRadius(entity, center, radiusSquared));
-        removedCount += PropCleanupRegistry.clearLoadedUnregisteredProps(removedUnderlyingEntities,
-                armorStand -> isWithinRadius(armorStand, center, radiusSquared));
 
         if (removedCount > 0) {
             String radiusDescription = radius != null ? " within " + radius + " blocks" : "";
@@ -80,12 +67,5 @@ public class DeleteAllCommand extends AdvancedCommand {
         if (modeledEntity.getWorld() == null || modeledEntity.getLocation() == null) return false;
         if (!modeledEntity.getWorld().equals(center.getWorld())) return false;
         return modeledEntity.getLocation().distanceSquared(center) <= radiusSquared;
-    }
-
-    private boolean isWithinRadius(Entity entity, Location center, double radiusSquared) {
-        if (center == null) return true;
-        if (entity.getWorld() == null || entity.getLocation() == null) return false;
-        if (!entity.getWorld().equals(center.getWorld())) return false;
-        return entity.getLocation().distanceSquared(center) <= radiusSquared;
     }
 }

@@ -156,7 +156,6 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         PropScriptManager.shutdown();
         ItemScriptManager.shutdown();
         PropRecipeManager.shutdown();
-        PropCleanupRegistry.shutdown();
         DisguiseManager.shutdown();
         ModeledEntity.shutdown();
         PropEntity.shutdown();
@@ -249,7 +248,6 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         OBBHitDetection.startProjectileDetection();
 
         initializationContext.step("Prop Scripting");
-        PropCleanupRegistry.initialize();
         new PropScriptLuaConfig(new File(getDataFolder(), "scripts"));
         PropScriptManager.initialize();
         if (PropScriptManager.getListener() != null) {

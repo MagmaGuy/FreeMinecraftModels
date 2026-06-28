@@ -21,6 +21,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.RayTraceResult;
@@ -37,6 +38,8 @@ public class ModelItemListener implements Listener {
 
     @EventHandler(priority = EventPriority.LOWEST)
     public void onPlayerInteract(PlayerInteractEvent event) {
+        if (event.getHand() != EquipmentSlot.HAND) return;
+
         Player player = event.getPlayer();
         ItemStack item = event.getItem();
 
@@ -136,7 +139,7 @@ public class ModelItemListener implements Listener {
                     item.setAmount(item.getAmount() - 1);
                 }
             } else {
-                Logger.sendMessage(player, ChatColorConverter.convert("&cFailed to place model " + modelID + "!"));
+                Logger.sendMessage(player, ChatColorConverter.convert("&cA prop of that model already exists on this block."));
             }
         } else {
             // --- Free-form placement (original behavior) ---
@@ -153,7 +156,7 @@ public class ModelItemListener implements Listener {
                     item.setAmount(item.getAmount() - 1);
                 }
             } else {
-                Logger.sendMessage(player, ChatColorConverter.convert("&cFailed to place model " + modelID + "!"));
+                Logger.sendMessage(player, ChatColorConverter.convert("&cA prop of that model already exists on this block."));
             }
         }
     }
