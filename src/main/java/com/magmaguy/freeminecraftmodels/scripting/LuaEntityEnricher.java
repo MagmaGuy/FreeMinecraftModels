@@ -13,8 +13,6 @@ import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
-import java.util.Map;
-
 /**
  * Installed on plugin enable to contribute FMM-specific fields (is_modeled, is_prop,
  * and the nested {@code model} sub-table) to every Lua entity table built by the
@@ -53,8 +51,7 @@ public final class LuaEntityEnricher {
             table.set("is_op", LuaValue.valueOf(player.isOp()));
         }
 
-        Map<Entity, ModeledEntity> loaded = ModeledEntity.getLoadedModeledEntitiesWithUnderlyingEntities();
-        ModeledEntity modeledEntity = loaded != null ? loaded.get(entity) : null;
+        ModeledEntity modeledEntity = ModeledEntity.getModeledEntity(entity);
         boolean isModeled = modeledEntity != null;
         table.set("is_modeled", LuaValue.valueOf(isModeled));
 

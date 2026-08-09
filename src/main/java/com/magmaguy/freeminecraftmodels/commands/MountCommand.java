@@ -42,7 +42,7 @@ public class MountCommand extends AdvancedCommand {
         Player player = commandData.getPlayerSender();
         String modelID = commandData.getStringArgument("model");
 
-        if (!FileModelConverter.getConvertedFileModels().containsKey(modelID)) {
+        if (!FileModelConverter.containsModel(modelID)) {
             Logger.sendMessage(player, "\u00a7cModel '" + modelID + "' not found!");
             return;
         }

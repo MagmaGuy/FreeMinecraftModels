@@ -1,6 +1,6 @@
 package com.magmaguy.freeminecraftmodels.menus;
 
-import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.config.ModelsFolder;
 import com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields;
 import com.magmaguy.freeminecraftmodels.content.FMMPackage;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
@@ -76,7 +76,7 @@ public class AdminContentMenu {
         Set<String> itemModelIds = ItemScriptManager.getItemDefinitions().keySet();
 
         // 2. Find unclaimed models and group by parent folder (excluding models that are custom items)
-        File modelsRoot = new File(MetadataHandler.PLUGIN.getDataFolder(), "Models");
+        File modelsRoot = ModelsFolder.resolveModelsFolder();
         Map<String, List<FileModelConverter>> folderGroups = new LinkedHashMap<>();
         List<FileModelConverter> rootModels = new ArrayList<>();
 

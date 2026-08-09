@@ -43,9 +43,12 @@ public class AnimationManager {
 
     private void transitionTo(IAnimState target) {
         if (target == null || target == current) return;
-        if (current != null) current.exit();
-        if (current != null && !(current instanceof CustomAnimationState)) {
-            lastCommitted = current.getType();
+        IAnimState previous = current;
+        if (previous != null) {
+            previous.exit();
+            if (!(previous instanceof CustomAnimationState)) {
+                lastCommitted = previous.getType();
+            }
         }
         current = target;
         current.enter();
@@ -102,8 +105,14 @@ public class AnimationManager {
 
 
     public void stop() {
-        current.exit();
-        transitionTo(states.get(AnimationStateType.IDLE));
+        nextQueued = null;
+        IAnimState idle = states.get(AnimationStateType.IDLE);
+        if (idle != null) {
+            transitionTo(idle);
+            return;
+        }
+        if (current != null) current.exit();
+        current = null;
     }
 
     public void tick() {
@@ -129,6 +138,9 @@ public class AnimationManager {
 
     private void renderCurrentFrame() {
         Animation anim = current.getAnimation();
+        // Called every tick with the (usually unchanged) current animation name;
+        // BedrockModeledEntity.playAnimation is responsible for deduping repeat
+        // sends of the same animation downstream.
         modeledEntity.updateBedrockAnimation(anim.getAnimationBlueprint().getAnimationName());
         boolean loop = current.isLoop();
         int duration = anim.getAnimationBlueprint().getDuration();

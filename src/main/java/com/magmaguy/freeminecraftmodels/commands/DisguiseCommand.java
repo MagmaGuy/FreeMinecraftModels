@@ -58,7 +58,7 @@ public class DisguiseCommand extends AdvancedCommand {
         }
 
         String modelID = commandData.getStringArgument("models");
-        if (modelID == null || !FileModelConverter.getConvertedFileModels().containsKey(modelID)) {
+        if (modelID == null || !FileModelConverter.containsModel(modelID)) {
             Logger.sendMessage(commandData.getCommandSender(), "Invalid entity ID!");
             return;
         }

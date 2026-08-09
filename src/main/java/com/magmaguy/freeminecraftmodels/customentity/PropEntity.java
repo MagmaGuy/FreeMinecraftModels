@@ -8,6 +8,7 @@ import com.magmaguy.freeminecraftmodels.dataconverter.HitboxBlueprint;
 import com.magmaguy.freeminecraftmodels.listeners.ArmorStandListener;
 import com.magmaguy.freeminecraftmodels.scripting.LuaPropTable;
 import com.magmaguy.freeminecraftmodels.scripting.PropScriptManager;
+import com.magmaguy.freeminecraftmodels.utils.ImmutableMapSnapshots;
 import com.magmaguy.magmacore.util.ChunkLocationChecker;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
@@ -20,8 +21,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
-import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
+import org.bukkit.event.world.EntitiesLoadEvent;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -29,11 +30,11 @@ import java.util.*;
 
 public class PropEntity extends StaticEntity {
     public static final NamespacedKey propNamespacedKey = new NamespacedKey(MetadataHandler.PLUGIN, "prop");
-    @Getter
-    public static HashMap<UUID, PropEntity> propEntities = new HashMap<>();
+    // ConcurrentHashMap like the sibling registries (DynamicEntity, ModeledEntity):
+    // remove() can run off the async model clock while the main thread iterates.
+    private static final Map<UUID, PropEntity> propEntities = new java.util.concurrent.ConcurrentHashMap<>();
     // Props ignore click callbacks for this long after spawn so the placement click can't trigger them.
     private static final long POST_SPAWN_INTERACTION_GRACE_MS = 500L;
-    private final String entityID;
     @Getter
     private final PropBlockComponent propBlockComponent = new PropBlockComponent(this);
     @Getter
@@ -53,7 +54,7 @@ public class PropEntity extends StaticEntity {
     public void applySolidify() {
         if (!solidify || !voxelize) return;
 
-        FileModelConverter converter = FileModelConverter.getConvertedFileModels().get(getEntityID());
+        FileModelConverter converter = FileModelConverter.getModel(getEntityID());
         if (converter == null) return;
 
         HitboxBlueprint hitbox = converter.getSkeletonBlueprint().getHitbox();
@@ -99,22 +100,26 @@ public class PropEntity extends StaticEntity {
     }
 
     public PropEntity(String entityID, Location spawnLocation) {
-        super(entityID, spawnLocation);
-        this.entityID = entityID;
+        super(requireValidModelId(entityID), spawnLocation);
         initializePropEntity();
     }
 
     public PropEntity(String entityID, ArmorStand armorStand) {
-        super(entityID, armorStand.getLocation());
-        this.entityID = entityID;
+        super(requireValidModelId(entityID), armorStand.getLocation());
         initializePropEntity();
 
-        setUnderlyingEntity(armorStand);
-        super.spawnLocation = armorStand.getLocation();
-        displayInitializer();
-        chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
-        propEntities.put(armorStand.getUniqueId(), this);
+        // Use the normal activation path so this restored prop is not exposed
+        // to the asynchronous model clock until its entity and displays are
+        // completely initialized.
+        super.spawn(armorStand);
         PropScriptManager.onPropSpawn(this);
+    }
+
+    @Override
+    protected void onSpawnComplete() {
+        if (underlyingEntity == null) return;
+        chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
+        propEntities.put(underlyingEntity.getUniqueId(), this);
     }
 
     public static void onStartup() {
@@ -137,6 +142,10 @@ public class PropEntity extends StaticEntity {
     }
 
     public static PropEntity spawnPropEntity(String entityID, Location spawnLocation) {
+        if (!isValidModelId(entityID)) {
+            Logger.warn("[FMM Props] Refused to spawn prop with unknown model ID '" + entityID + "'.");
+            return null;
+        }
         if (spawnLocation != null && spawnLocation.getWorld() != null) {
             removeDuplicatePropsInChunk(spawnLocation.getChunk());
         }
@@ -151,14 +160,42 @@ public class PropEntity extends StaticEntity {
     }
 
     public static PropEntity respawnPropEntityFromArmorStand(String entityID, ArmorStand armorStand) {
-        if (removeIfDuplicateProp(entityID, armorStand)) return null;
-        FileModelConverter fileModelConverter = FileModelConverter.getConvertedFileModels().get(entityID);
-        if (fileModelConverter == null) return null;
+        return respawnPropEntityFromArmorStand(entityID, armorStand, null);
+    }
+
+    /**
+     * @param knownChunkEntities entities the caller already holds for this chunk, or
+     *                           {@code null} to look them up on demand.
+     */
+    static PropEntity respawnPropEntityFromArmorStand(String entityID, ArmorStand armorStand, Collection<? extends Entity> knownChunkEntities) {
+        FileModelConverter fileModelConverter = FileModelConverter.getModel(entityID);
+        if (fileModelConverter == null || fileModelConverter.getSkeletonBlueprint() == null) {
+            Logger.warn("[FMM Props] Refused to restore prop with unknown model ID '" + entityID + "'.");
+            return null;
+        }
+        if (removeIfDuplicateProp(entityID, armorStand, knownChunkEntities)) return null;
         if (propEntities.containsKey(armorStand.getUniqueId())) {
             return propEntities.get(armorStand.getUniqueId());
         }
         PropEntity propEntity = new PropEntity(entityID, armorStand);
         return propEntity;
+    }
+
+    private static String requireValidModelId(String entityID) {
+        if (!isValidModelId(entityID)) {
+            throw new IllegalArgumentException("Unknown or invalid FreeMinecraftModels prop model ID: " + entityID);
+        }
+        return entityID;
+    }
+
+    static boolean isValidModelId(String entityID) {
+        if (entityID == null || entityID.isBlank()) return false;
+        FileModelConverter converter = FileModelConverter.getModel(entityID);
+        return converter != null && converter.getSkeletonBlueprint() != null;
+    }
+
+    public static HashMap<UUID, PropEntity> getPropEntities() {
+        return ImmutableMapSnapshots.hashMapCopyOf(propEntities);
     }
 
     public static boolean isPropEntity(ArmorStand armorStand) {
@@ -170,13 +207,22 @@ public class PropEntity extends StaticEntity {
     }
 
     public static boolean hasLoadedPropOnSameBlock(String entityID, Location location) {
-        return findLoadedPropOnSameBlock(entityID, location, null) != null;
+        return findLoadedPropOnSameBlock(entityID, location, null, null) != null;
     }
 
+    /**
+     * Convenience overload for callers that are not inside a chunk-load callback
+     * (startup sweep, tests). Do not call this from a chunk-load listener; see
+     * {@link PropEntityEvents#onEntitiesLoadEvent(EntitiesLoadEvent)}.
+     */
     static int removeDuplicatePropsInChunk(Chunk chunk) {
+        return removeDuplicateProps(Arrays.asList(chunk.getEntities()));
+    }
+
+    static int removeDuplicateProps(Collection<? extends Entity> entities) {
         Map<PropBlockKey, List<ArmorStand>> propsByBlock = new HashMap<>();
 
-        for (Entity entity : chunk.getEntities()) {
+        for (Entity entity : entities) {
             if (!(entity instanceof ArmorStand armorStand) || !armorStand.isValid()) continue;
 
             String propEntityID = getPropEntityID(armorStand);
@@ -208,10 +254,10 @@ public class PropEntity extends StaticEntity {
         return removed;
     }
 
-    private static boolean removeIfDuplicateProp(String entityID, ArmorStand armorStand) {
+    private static boolean removeIfDuplicateProp(String entityID, ArmorStand armorStand, Collection<? extends Entity> knownChunkEntities) {
         if (armorStand == null || !armorStand.isValid()) return true;
 
-        ArmorStand existing = findLoadedPropOnSameBlock(entityID, armorStand.getLocation(), armorStand.getUniqueId());
+        ArmorStand existing = findLoadedPropOnSameBlock(entityID, armorStand.getLocation(), armorStand.getUniqueId(), knownChunkEntities);
         if (existing == null) return false;
 
         PropBlockKey key = PropBlockKey.from(entityID, armorStand.getLocation());
@@ -220,10 +266,21 @@ public class PropEntity extends StaticEntity {
         return true;
     }
 
-    private static ArmorStand findLoadedPropOnSameBlock(String entityID, Location location, UUID ignoredUuid) {
+    /**
+     * @param knownChunkEntities entities the caller already holds for this chunk, or
+     *                           {@code null} to look them up. Callers running inside a
+     *                           chunk-load callback must supply the list: looking it up
+     *                           there forces a re-entrant entity-manager tick that
+     *                           corrupts the server's chunk-unload iteration.
+     */
+    private static ArmorStand findLoadedPropOnSameBlock(String entityID, Location location, UUID ignoredUuid, Collection<? extends Entity> knownChunkEntities) {
         if (entityID == null || location == null || location.getWorld() == null) return null;
 
-        for (Entity entity : location.getChunk().getEntities()) {
+        Collection<? extends Entity> candidates = knownChunkEntities != null
+                ? knownChunkEntities
+                : Arrays.asList(location.getChunk().getEntities());
+
+        for (Entity entity : candidates) {
             if (!(entity instanceof ArmorStand armorStand) || !armorStand.isValid()) continue;
             if (ignoredUuid != null && ignoredUuid.equals(armorStand.getUniqueId())) continue;
             if (!entityID.equals(getPropEntityID(armorStand))) continue;
@@ -308,7 +365,8 @@ public class PropEntity extends StaticEntity {
             }
             resendFakeBlocks(player);
         });
-        propBlockComponent.showFakePropBlocksToAllPlayers();
+        // No showFakePropBlocksToAllPlayers() here: at construction time the skeleton
+        // has zero viewers and propBlocks is empty, so the call was a guaranteed no-op.
     }
 
     private boolean isWithinPostSpawnGrace() {
@@ -316,7 +374,7 @@ public class PropEntity extends StaticEntity {
     }
 
     private void resendFakeBlocks(org.bukkit.entity.Player player) {
-        if (propBlockComponent.propBlocks.isEmpty()) return;
+        if (propBlockComponent.getPropBlocks().isEmpty()) return;
         Bukkit.getScheduler().runTaskLater(MetadataHandler.PLUGIN, () -> {
             if (isRemoved()) return;
             propBlockComponent.showFakePropBlocksToPlayer(player);
@@ -331,23 +389,28 @@ public class PropEntity extends StaticEntity {
     @Override
     public void spawn() {
         ArmorStandListener.bypass = true;
-        super.spawn(getSpawnLocation().getWorld().spawn(getSpawnLocation(), EntityType.ARMOR_STAND.getEntityClass(), entity -> {
-            ArmorStand armorStand = (ArmorStand) entity;
-            armorStand.setVisibleByDefault(false);
-            armorStand.setVisible(false);
-            armorStand.setMarker(true);
-            armorStand.setSmall(true);
-            // Base-entity INVISIBLE flag — required for Bedrock/Geyser, which does not honour
-            // setVisibleByDefault for entities it fetches at NMS level.
-            armorStand.setInvisible(true);
-            armorStand.setGravity(false);
-            armorStand.setInvulnerable(true);
-            armorStand.setPersistent(true);
-            armorStand.getPersistentDataContainer().set(propNamespacedKey, PersistentDataType.STRING, entityID);
-        }));
-        chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
-        propEntities.put(underlyingEntity.getUniqueId(), this);
-        ArmorStandListener.bypass = false;
+        try {
+            super.spawn(getSpawnLocation().getWorld().spawn(getSpawnLocation(), EntityType.ARMOR_STAND.getEntityClass(), entity -> {
+                ArmorStand armorStand = (ArmorStand) entity;
+                armorStand.setVisibleByDefault(false);
+                armorStand.setVisible(false);
+                armorStand.setMarker(true);
+                armorStand.setSmall(true);
+                // Base-entity INVISIBLE flag — required for Bedrock/Geyser, which does not honour
+                // setVisibleByDefault for entities it fetches at NMS level.
+                armorStand.setInvisible(true);
+                armorStand.setGravity(false);
+                armorStand.setInvulnerable(true);
+                armorStand.setPersistent(true);
+                armorStand.getPersistentDataContainer().set(propNamespacedKey, PersistentDataType.STRING, getEntityID());
+            }));
+        } finally {
+            // This flag suppresses ArmorStandListener while the persistent
+            // backing stand is being constructed. A failed World#spawn or
+            // display initialization must never leave every later armor-stand
+            // event bypassed for the lifetime of the server.
+            ArmorStandListener.bypass = false;
+        }
         PropScriptManager.onPropSpawn(this);
     }
 
@@ -373,7 +436,9 @@ public class PropEntity extends StaticEntity {
         super.remove();
         if (showRealBlocks) showRealBlocksToAllPlayers();
         if (underlyingUuid != null) propEntities.remove(underlyingUuid);
-        if (!persistent && underlyingEntity != null) underlyingEntity.remove();
+        // Non-persistent props: ModeledEntity.remove() already despawns the underlying
+        // entity (thread-safely, via the primary thread when needed) — no duplicate
+        // remove() call needed here.
         if (removePersistentBackingEntity) {
             new BukkitRunnable() {
                 @Override
@@ -449,21 +514,40 @@ public class PropEntity extends StaticEntity {
                 event.setCancelled(true);
         }
 
+        /**
+         * Restores props from their armor stands once the server has actually
+         * finished loading a chunk's entities.
+         * <p>
+         * This deliberately listens to {@link EntitiesLoadEvent} rather than
+         * {@code ChunkLoadEvent}. {@code ChunkLoadEvent} is fired from
+         * {@code LevelChunk#loadCallback} while the chunk map's callback executor is
+         * still mid-update, and at that point the chunk's entities are not loaded yet,
+         * so {@code Chunk#getEntities()} forces a re-entrant
+         * {@code PersistentEntitySectionManager#tick()}. That re-entrant tick runs
+         * {@code processUnloads()}'s {@code chunksToUnload.removeIf(...)} on top of the
+         * in-progress chunk load, which corrupts the server's own fastutil
+         * {@code LongOpenHashSet} iterator and eventually kills the world tick.
+         * {@link EntitiesLoadEvent#getEntities()} hands us the already-materialized
+         * list instead, so no forced tick is needed.
+         */
         @EventHandler(priority = EventPriority.LOWEST)
-        public void onChunkLoadEvent(ChunkLoadEvent event) {
-            removeDuplicatePropsInChunk(event.getChunk());
-            for (Entity entity : event.getChunk().getEntities()) {
+        public void onEntitiesLoadEvent(EntitiesLoadEvent event) {
+            // Copied because the dedupe pass removes armor stands as it goes.
+            List<Entity> loadedEntities = new ArrayList<>(event.getEntities());
+            removeDuplicateProps(loadedEntities);
+            for (Entity entity : loadedEntities) {
                 if (entity instanceof ArmorStand armorStand) {
+                    if (!armorStand.isValid()) continue;
                     String propEntityID = getPropEntityID(armorStand);
                     if (propEntityID == null) continue;
-                    respawnPropEntityFromArmorStand(propEntityID, armorStand);
+                    respawnPropEntityFromArmorStand(propEntityID, armorStand, loadedEntities);
                 }
             }
         }
 
         //todo: well this isn't going to scale well
         @EventHandler
-        private void onChunkUnloadEvent(ChunkUnloadEvent event) {
+        public void onChunkUnloadEvent(ChunkUnloadEvent event) {
             String chunkHash = ChunkLocationChecker.chunkToString(event.getChunk());
             Collection<PropEntity> propEntitiesClone = new ArrayList<>(PropEntity.propEntities.values());
             for (PropEntity value : propEntitiesClone) {

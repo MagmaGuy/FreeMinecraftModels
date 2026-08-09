@@ -19,14 +19,6 @@ public class DamageableComponent {
 
     private final ModeledEntity modeledEntity;
     /**
-     * Indicates whether the entity represented by this component is internally considered immortal.
-     * When set to {@code true}, the entity will not experience health reduction or death through the
-     * internal mechanics, regardless of damage dealt programmatically. This is typically used for
-     * entities that should not be affected by players trying to punch it
-     */
-    @Getter
-    private final boolean internallyImmortal = false;
-    /**
      * Represents the internal health of an entity. This value is used to track the entity's health
      * internally when the entity is either not natively managed by the underlying system or is
      * marked as internally mortal. It serves as a fallback health mechanic
@@ -39,21 +31,23 @@ public class DamageableComponent {
         this.modeledEntity = modeledEntity;
     }
 
+    // Deliberately does not tint: every public damage entry point tints exactly once
+    // itself, so tinting here double-fired the flash for non-living entities.
     private void handleNonLivingEntityDamage(double amount) {
-        if (!internallyImmortal) {
-            internalHealth -= amount;
-            if (internalHealth <= 0) {
-                modeledEntity.removeWithDeathAnimation();
-            }
+        internalHealth -= amount;
+        if (internalHealth <= 0) {
+            modeledEntity.removeWithDeathAnimation();
         }
-        modeledEntity.getSkeleton().tint();
     }
 
     public void damage(double amount) {
         if (modeledEntity.getUnderlyingEntity() instanceof LivingEntity livingEntity) {
             OBBHitDetection.applyDamage = true;
-            livingEntity.damage(amount);
-            OBBHitDetection.applyDamage = false;
+            try {
+                livingEntity.damage(amount);
+            } finally {
+                OBBHitDetection.applyDamage = false;
+            }
         } else {
             handleNonLivingEntityDamage(amount);
         }
@@ -73,19 +67,17 @@ public class DamageableComponent {
         if (modeledEntity.getUnderlyingEntity() instanceof LivingEntity livingEntity &&
                 !livingEntity.getType().equals(EntityType.ARMOR_STAND) &&
                 damager instanceof LivingEntity damagerLivingEntity) {
-            damagerLivingEntity.attack(livingEntity);
+            OBBHitDetection.applyDamage = true;
+            try {
+                damagerLivingEntity.attack(livingEntity);
+            } finally {
+                OBBHitDetection.applyDamage = false;
+            }
         } else {
             handleNonLivingEntityDamage(1);
         }
         modeledEntity.getSkeleton().tint();
     }
-
-    // Dedup: an arrow can reach here from both the OBB sweep and the vanilla-hitbox
-    // redirect in the same tick (before arrow.remove() lands). Apply each projectile to
-    // a modeled entity at most once, wiped after 1s — a live arrow shouldn't still be
-    // colliding past that, and a returning trident re-thrown later still registers.
-    private static final java.util.Set<java.util.UUID> recentProjectileHits =
-            java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public boolean damage(Projectile projectile) {
         if (projectile.getShooter() != null && projectile.getShooter().equals(modeledEntity.getUnderlyingEntity()))
@@ -93,16 +85,8 @@ public class DamageableComponent {
 
         if (!(projectile instanceof AbstractArrow arrow)) return false;
 
-        if (!recentProjectileHits.add(projectile.getUniqueId())) return false;
-        final java.util.UUID dedupId = projectile.getUniqueId();
-        org.bukkit.Bukkit.getScheduler().runTaskLater(
-                com.magmaguy.freeminecraftmodels.MetadataHandler.PLUGIN,
-                () -> recentProjectileHits.remove(dedupId), 20L);
-
         double speed = arrow.getVelocity().length();
         double damage = Math.max(1.0, Math.ceil(speed * arrow.getDamage()));
-
-        boolean piercing = false;
 
         if (arrow.getShooter() instanceof LivingEntity shooter) {
             ItemStack bow = null;
@@ -118,20 +102,7 @@ public class DamageableComponent {
                 damage += bonus;
             }
 
-            if (bow != null && bow.containsEnchantment(Enchantment.PIERCING)) {
-                piercing = true;
-            }
         }
-
-        double hpBefore = modeledEntity.getUnderlyingEntity() instanceof LivingEntity le ? le.getHealth() : -1;
-        if (OBBHitDetection.DEBUG_PROJECTILE_HITS)
-            com.magmaguy.magmacore.util.Logger.warn("[FMM-ProjTrace] DamageableComponent.damage(Projectile)"
-                    + " arrow=" + projectile.getUniqueId()
-                    + " speed=" + String.format("%.4f", speed)
-                    + " fmmDamageInput=" + String.format("%.2f", damage)
-                    + " dealingAs=ARROW(cause=PROJECTILE) shooter="
-                    + (projectile.getShooter() instanceof Entity e ? e.getType() : "null")
-                    + " hpBefore=" + String.format("%.2f", hpBefore));
 
         // Deal the hit AS the arrow, not its shooter, so the resulting
         // EntityDamageByEntityEvent carries cause=PROJECTILE. Passing the shooter (a
@@ -150,22 +121,11 @@ public class DamageableComponent {
         OBBHitDetection.applyDamage = true;
         OBBHitDetection.bypassProjectileRedirect = true;
         try {
+            // damage(Entity, double) already tints once — no extra tint here.
             damage((Entity) projectile, damage);
         } finally {
             OBBHitDetection.applyDamage = false;
             OBBHitDetection.bypassProjectileRedirect = false;
-        }
-        modeledEntity.getSkeleton().tint();
-
-        if (OBBHitDetection.DEBUG_PROJECTILE_HITS && hpBefore >= 0
-                && modeledEntity.getUnderlyingEntity() instanceof LivingEntity le2)
-            com.magmaguy.magmacore.util.Logger.warn("[FMM-ProjTrace] APPLIED hpBefore="
-                    + String.format("%.2f", hpBefore) + " hpAfter=" + String.format("%.2f", le2.getHealth())
-                    + " actualApplied=" + String.format("%.4f", hpBefore - le2.getHealth())
-                    + " §8(real HP lost after EliteMobs' formula override)");
-
-        if (!piercing) {
-            arrow.remove();
         }
 
         return true;
@@ -182,12 +142,18 @@ public class DamageableComponent {
                 attribute != null &&
                 underlyingLivingEntity.getAttribute(attribute) != null) {
             OBBHitDetection.applyDamage = true;
-            underlyingLivingEntity.attack(target);
-            OBBHitDetection.applyDamage = false;
+            try {
+                underlyingLivingEntity.attack(target);
+            } finally {
+                OBBHitDetection.applyDamage = false;
+            }
         } else {
             OBBHitDetection.applyDamage = true;
-            target.damage(2, modeledEntity.getUnderlyingEntity());
-            OBBHitDetection.applyDamage = false;
+            try {
+                target.damage(2, modeledEntity.getUnderlyingEntity());
+            } finally {
+                OBBHitDetection.applyDamage = false;
+            }
         }
     }
 
@@ -201,9 +167,11 @@ public class DamageableComponent {
      */
     public void attack(LivingEntity target, double damage) {
         OBBHitDetection.applyDamage = true;
-        target.damage(damage, modeledEntity.getUnderlyingEntity());
-        OBBHitDetection.applyDamage = false;
+        try {
+            target.damage(damage, modeledEntity.getUnderlyingEntity());
+        } finally {
+            OBBHitDetection.applyDamage = false;
+        }
     }
-
 
 }

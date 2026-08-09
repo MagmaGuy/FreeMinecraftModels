@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.menus;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.BowStateDetector;
+import com.magmaguy.freeminecraftmodels.config.ModelsFolder;
 import com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields;
 import com.magmaguy.freeminecraftmodels.config.recipes.PropRecipeConfig;
 import com.magmaguy.freeminecraftmodels.config.recipes.PropRecipeManager;
@@ -66,7 +67,7 @@ public final class ModelMenuHelper {
     public static List<FileModelConverter> getModelsForPack(FMMPackage pack) {
         String folderName = pack.getContentPackageConfigFields().getFolderName();
 
-        File modelsRoot = new File(MetadataHandler.PLUGIN.getDataFolder(), "Models");
+        File modelsRoot = ModelsFolder.resolveModelsFolder();
 
         return FileModelConverter.getConvertedFileModels().values().stream()
                 .filter(converter -> {
@@ -96,7 +97,7 @@ public final class ModelMenuHelper {
     public static List<String> getItemsForPack(FMMPackage pack) {
         String folderName = pack.getContentPackageConfigFields().getFolderName();
 
-        File modelsRoot = new File(MetadataHandler.PLUGIN.getDataFolder(), "Models");
+        File modelsRoot = ModelsFolder.resolveModelsFolder();
 
         return com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager.getItemSourceFiles().entrySet().stream()
                 .filter(entry -> {

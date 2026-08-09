@@ -14,6 +14,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.event.HandlerList;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
@@ -56,7 +57,6 @@ public final class ItemScriptManager {
 
     @Getter
     private static ItemScriptListener listener;
-    private static ItemScriptProvider provider;
     private static boolean initialized = false;
 
     private ItemScriptManager() {}
@@ -270,8 +270,6 @@ public final class ItemScriptManager {
      * and unregisters the script provider from the Lua engine.
      */
     public static void shutdown() {
-        if (!initialized) return;
-
         // Shutdown all player script instances
         for (Map.Entry<UUID, Map<String, ScriptInstance>> playerEntry : activeScripts.entrySet()) {
             for (ScriptInstance instance : playerEntry.getValue().values()) {
@@ -283,8 +281,12 @@ public final class ItemScriptManager {
         activeScripts.clear();
         itemDefinitions.clear();
         itemSourceFiles.clear();
+        ScriptableItem.clearAllCooldowns();
 
         // Don't unregister script provider — shared "fmm" namespace managed by PropScriptManager
+        if (listener != null) {
+            HandlerList.unregisterAll(listener);
+        }
         listener = null;
         initialized = false;
     }

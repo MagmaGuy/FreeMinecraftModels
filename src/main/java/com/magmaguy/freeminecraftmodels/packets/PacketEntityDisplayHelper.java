@@ -29,10 +29,11 @@ public class PacketEntityDisplayHelper {
         if (displayMethod != NO_PLAYER_DISPLAY_METHOD) {
             try {
                 displayMethod.invoke(packetEntity, player);
-                com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
-                        "PacketEntityDisplayHelper: invoked per-viewer displayTo(Player) on "
-                                + packetEntity.getClass().getSimpleName()
-                                + " for " + player.getName());
+                if (com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.enabled())
+                    com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                            "PacketEntityDisplayHelper: invoked per-viewer displayTo(Player) on "
+                                    + packetEntity.getClass().getSimpleName()
+                                    + " for " + player.getName());
                 return;
             } catch (IllegalAccessException | InvocationTargetException ignored) {
                 // Fall back to the UUID overload if a concrete implementation rejects the Player overload.
@@ -48,13 +49,14 @@ public class PacketEntityDisplayHelper {
         // player and models don't render, EMG's per-viewer overload is
         // either missing on that packet class or the cache populated from
         // an older EMG build — check getMethod search below.
-        com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
-                "PacketEntityDisplayHelper: FALLBACK to UUID-broadcast displayTo on "
-                        + packetEntity.getClass().getSimpleName()
-                        + " for " + player.getName()
-                        + " (per-viewer overload "
-                        + (displayMethod == NO_PLAYER_DISPLAY_METHOD ? "NOT FOUND" : "threw on invoke")
-                        + " — Bedrock-specific packet tweaks will not apply)");
+        if (com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.enabled())
+            com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                    "PacketEntityDisplayHelper: FALLBACK to UUID-broadcast displayTo on "
+                            + packetEntity.getClass().getSimpleName()
+                            + " for " + player.getName()
+                            + " (per-viewer overload "
+                            + (displayMethod == NO_PLAYER_DISPLAY_METHOD ? "NOT FOUND" : "threw on invoke")
+                            + " — Bedrock-specific packet tweaks will not apply)");
         packetEntity.displayTo(player.getUniqueId());
     }
 

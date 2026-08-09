@@ -88,4 +88,8 @@ public class ScriptableProp extends ScriptableEntity {
     public static void clearGlobalCooldowns(PropEntity prop) {
         propGlobalCooldowns.remove(prop);
     }
+
+    public static void clearAllGlobalCooldowns() {
+        propGlobalCooldowns.clear();
+    }
 }

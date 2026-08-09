@@ -26,9 +26,12 @@ public class AnimationBlueprint {
     private SkeletonBlueprint skeletonBlueprint;
     @Getter
     private int duration;
+    private String modelName;
+    private boolean warnedMalformedTimeline;
 
     public AnimationBlueprint(Object data, String modelName, SkeletonBlueprint skeletonBlueprint, int blockBenchVersion) {
         this.blockBenchVersion = blockBenchVersion;
+        this.modelName = modelName;
         Map<String, Object> animationData;
         try {
             animationData = (Map<String, Object>) data;
@@ -40,10 +43,21 @@ public class AnimationBlueprint {
 
         this.skeletonBlueprint = skeletonBlueprint;
         initializeGlobalValues(animationData);
+        if (duration <= 0) {
+            warnMalformedTimeline("animation duration is " + duration + " tick(s); the animation was skipped");
+            return;
+        }
 
         if (animationData.get("animators") == null) return;
         //In BBModel files, each bone holds the data for their transformations, so data is stored from the bone's perspective
-        ((Map<String, Object>) animationData.get("animators")).entrySet().forEach(pair -> initializeBones((Map<String, Object>) pair.getValue(), modelName, animationName));
+        for (Map.Entry<String, Object> pair : ((Map<String, Object>) animationData.get("animators")).entrySet()) {
+            try {
+                initializeBones((Map<String, Object>) pair.getValue(), modelName, animationName);
+            } catch (RuntimeException exception) {
+                warnMalformedTimeline("animator " + pair.getKey() + " could not be read: "
+                        + exception.getClass().getSimpleName());
+            }
+        }
 
         //Process the keyframes
         try {
@@ -158,11 +172,18 @@ public class AnimationBlueprint {
      * This assumes your Keyframe class has appropriate constructors or setters.
      */
     private Keyframe cloneKeyframeAtTime(Keyframe original, int newTime) {
-        return new Keyframe(original.getTransformationType(), original.getTimeInTicks(), original.getInterpolationType(), original.getDataX(), original.getDataY(), original.getDataZ());
+        return new Keyframe(original.getTransformationType(), newTime, original.getInterpolationType(), original.getDataX(), original.getDataY(), original.getDataZ());
     }
 
     private void interpolateKeyframes() {
-        boneKeyframes.forEach(this::interpolateBoneKeyframes);
+        boneKeyframes.forEach((bone, keyframes) -> {
+            try {
+                interpolateBoneKeyframes(bone, keyframes);
+            } catch (RuntimeException exception) {
+                warnMalformedTimeline("bone " + bone.getOriginalBoneName() + " could not be interpolated: "
+                        + exception.getClass().getSimpleName());
+            }
+        });
     }
 
     private void interpolateBoneKeyframes(BoneBlueprint boneBlueprint, List<Keyframe> keyframes) {
@@ -213,6 +234,37 @@ public class AnimationBlueprint {
         }
     }
 
+    private FrameRange boundedFrameRange(int sourceStart, int sourceEnd, int frameCount, String track) {
+        if (sourceEnd <= sourceStart) {
+            warnMalformedTimeline(track + " has a non-increasing keyframe range "
+                    + sourceStart + ".." + sourceEnd + "; the range was skipped");
+            return null;
+        }
+        if (frameCount <= 0 || sourceEnd <= 0 || sourceStart >= frameCount) {
+            warnMalformedTimeline(track + " range " + sourceStart + ".." + sourceEnd
+                    + " is outside 0.." + Math.max(0, frameCount - 1) + "; the range was skipped");
+            return null;
+        }
+
+        int boundedStart = Math.max(0, sourceStart);
+        int boundedEnd = Math.min(frameCount, sourceEnd);
+        if (boundedStart != sourceStart || boundedEnd != sourceEnd) {
+            warnMalformedTimeline(track + " range " + sourceStart + ".." + sourceEnd
+                    + " exceeded 0.." + (frameCount - 1) + " and was bounded");
+        }
+        return new FrameRange(boundedStart, boundedEnd, sourceStart, sourceEnd - sourceStart);
+    }
+
+    private void warnMalformedTimeline(String detail) {
+        if (warnedMalformedTimeline) return;
+        warnedMalformedTimeline = true;
+        Logger.warn("Malformed animation timeline for model " + modelName + ", animation "
+                + animationName + ": " + detail + ". Other model animations will continue converting.");
+    }
+
+    private record FrameRange(int startInclusive, int endExclusive, int sourceStart, int sourceLength) {
+    }
+
     private void interpolateRotations(AnimationFrame[] animationFramesArray, List<Keyframe> rotationKeyframes) {
         Keyframe firstFrame = null;
         Keyframe previousFrame = null;
@@ -225,16 +277,17 @@ public class AnimationBlueprint {
                 lastFrame = animationFrame;
                 continue;
             }
-            //It is possible for frames to go beyond the animation's duration, so we need to clamp that
-            if (previousFrame.getTimeInTicks() >= duration) return;
-            int durationBetweenKeyframes = Math.min(animationFrame.getTimeInTicks(), duration) - previousFrame.getTimeInTicks();
+            FrameRange range = boundedFrameRange(previousFrame.getTimeInTicks(),
+                    animationFrame.getTimeInTicks(), animationFramesArray.length, "rotation");
 
             // Use the interpolation type from the current keyframe
             InterpolationType interpType = animationFrame.getInterpolationType();
 
-            for (int j = 0; j < durationBetweenKeyframes; j++) {
-                int currentFrame = j + previousFrame.getTimeInTicks();
-                float t = durationBetweenKeyframes > 1 ? j / (float) (durationBetweenKeyframes - 1) : 0f;
+            if (range != null) for (int currentFrame = range.startInclusive();
+                                    currentFrame < range.endExclusive(); currentFrame++) {
+                int sourceOffset = currentFrame - range.sourceStart();
+                float t = range.sourceLength() > 1
+                        ? sourceOffset / (float) (range.sourceLength() - 1) : 0f;
 
                 // Pre-convert degrees to radians once at load time so the per-tick
                 // animation path can use the value directly without per-frame Math.toRadians().
@@ -253,9 +306,10 @@ public class AnimationBlueprint {
             if (animationFrame.getTimeInTicks() < firstFrame.getTimeInTicks()) firstFrame = animationFrame;
         }
         if (lastFrame != null && lastFrame.getTimeInTicks() < duration - 1) {
-            int durationBetweenKeyframes = duration - lastFrame.getTimeInTicks();
-            for (int j = 0; j < durationBetweenKeyframes; j++) {
-                int currentFrame = j + previousFrame.getTimeInTicks();
+            FrameRange range = boundedFrameRange(lastFrame.getTimeInTicks(), duration,
+                    animationFramesArray.length, "rotation tail");
+            if (range != null) for (int currentFrame = range.startInclusive();
+                                    currentFrame < range.endExclusive(); currentFrame++) {
                 if (blockBenchVersion < 5) {
                     animationFramesArray[currentFrame].xRotation = (float) Math.toRadians(lastFrame.getDataX());
                     animationFramesArray[currentFrame].yRotation = (float) Math.toRadians(lastFrame.getDataY());
@@ -268,9 +322,9 @@ public class AnimationBlueprint {
             }
         }
         if (firstFrame != null && firstFrame.getTimeInTicks() > 0) {
-            int durationBetweenKeyframes = firstFrame.getTimeInTicks();
-            durationBetweenKeyframes = Math.min(durationBetweenKeyframes, duration - 1);
-            for (int j = 0; j < durationBetweenKeyframes; j++) {
+            FrameRange range = boundedFrameRange(0, firstFrame.getTimeInTicks(),
+                    animationFramesArray.length, "rotation prefix");
+            if (range != null) for (int j = range.startInclusive(); j < range.endExclusive(); j++) {
                 if (blockBenchVersion < 5) {
                     animationFramesArray[j].xRotation = (float) Math.toRadians(firstFrame.getDataX());
                     animationFramesArray[j].yRotation = (float) Math.toRadians(firstFrame.getDataY());
@@ -296,14 +350,17 @@ public class AnimationBlueprint {
                 lastFrame = animationFrame;
                 continue;
             }
-            int durationBetweenKeyframes = animationFrame.getTimeInTicks() - previousFrame.getTimeInTicks();
+            FrameRange range = boundedFrameRange(previousFrame.getTimeInTicks(),
+                    animationFrame.getTimeInTicks(), animationFramesArray.length, "translation");
 
             // Use the interpolation type from the current keyframe
             InterpolationType interpType = animationFrame.getInterpolationType();
 
-            for (int j = 0; j < durationBetweenKeyframes; j++) {
-                int currentFrame = j + previousFrame.getTimeInTicks();
-                float t = durationBetweenKeyframes > 1 ? j / (float) (durationBetweenKeyframes - 1) : 0f;
+            if (range != null) for (int currentFrame = range.startInclusive();
+                                    currentFrame < range.endExclusive(); currentFrame++) {
+                int sourceOffset = currentFrame - range.sourceStart();
+                float t = range.sourceLength() > 1
+                        ? sourceOffset / (float) (range.sourceLength() - 1) : 0f;
                 if (blockBenchVersion < 5) {
                     animationFramesArray[currentFrame].xPosition = interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t) / 16f;
                     animationFramesArray[currentFrame].yPosition = interpolateWithType(interpType, previousFrame.getDataY(), animationFrame.getDataY(), t) / 16f;
@@ -319,9 +376,10 @@ public class AnimationBlueprint {
             if (animationFrame.getTimeInTicks() < firstFrame.getTimeInTicks()) firstFrame = animationFrame;
         }
         if (lastFrame != null && lastFrame.getTimeInTicks() < duration - 1) {
-            int durationBetweenKeyframes = duration - lastFrame.getTimeInTicks();
-            for (int j = 0; j < durationBetweenKeyframes; j++) {
-                int currentFrame = j + previousFrame.getTimeInTicks();
+            FrameRange range = boundedFrameRange(lastFrame.getTimeInTicks(), duration,
+                    animationFramesArray.length, "translation tail");
+            if (range != null) for (int currentFrame = range.startInclusive();
+                                    currentFrame < range.endExclusive(); currentFrame++) {
                 if (blockBenchVersion < 5) {
                 animationFramesArray[currentFrame].xPosition = lastFrame.getDataX() / 16f;
                 animationFramesArray[currentFrame].yPosition = lastFrame.getDataY() / 16f;
@@ -334,9 +392,9 @@ public class AnimationBlueprint {
             }
         }
         if (firstFrame != null && firstFrame.getTimeInTicks() > 0) {
-            int durationBetweenKeyframes = firstFrame.getTimeInTicks();
-            durationBetweenKeyframes = Math.min(durationBetweenKeyframes, duration - 1);
-            for (int j = 0; j < durationBetweenKeyframes; j++) {
+            FrameRange range = boundedFrameRange(0, firstFrame.getTimeInTicks(),
+                    animationFramesArray.length, "translation prefix");
+            if (range != null) for (int j = range.startInclusive(); j < range.endExclusive(); j++) {
                 if (blockBenchVersion < 5) {
 
                 animationFramesArray[j].xPosition = firstFrame.getDataX() / 16f;
@@ -359,14 +417,17 @@ public class AnimationBlueprint {
                 previousFrame = animationFrame;
                 continue;
             }
-            int durationBetweenKeyframes = animationFrame.getTimeInTicks() - previousFrame.getTimeInTicks();
+            FrameRange range = boundedFrameRange(previousFrame.getTimeInTicks(),
+                    animationFrame.getTimeInTicks(), animationFramesArray.length, "scale");
 
             // Use the interpolation type from the current keyframe
             InterpolationType interpType = animationFrame.getInterpolationType();
 
-            for (int j = 0; j < durationBetweenKeyframes; j++) {
-                int currentFrame = j + previousFrame.getTimeInTicks();
-                float t = durationBetweenKeyframes > 1 ? j / (float) (durationBetweenKeyframes - 1) : 0f;
+            if (range != null) for (int currentFrame = range.startInclusive();
+                                    currentFrame < range.endExclusive(); currentFrame++) {
+                int sourceOffset = currentFrame - range.sourceStart();
+                float t = range.sourceLength() > 1
+                        ? sourceOffset / (float) (range.sourceLength() - 1) : 0f;
 
                 animationFramesArray[currentFrame].scaleX = interpolateWithType(interpType, previousFrame.getDataX(), animationFrame.getDataX(), t);
                 animationFramesArray[currentFrame].scaleY = interpolateWithType(interpType, previousFrame.getDataY(), animationFrame.getDataY(), t);
@@ -380,7 +441,14 @@ public class AnimationBlueprint {
      * Interpolates IK keyframes for all IK controllers.
      */
     private void interpolateIKKeyframes() {
-        ikKeyframes.forEach(this::interpolateIKControllerKeyframes);
+        ikKeyframes.forEach((controller, keyframes) -> {
+            try {
+                interpolateIKControllerKeyframes(controller, keyframes);
+            } catch (RuntimeException exception) {
+                warnMalformedTimeline("IK controller " + controller + " could not be interpolated: "
+                        + exception.getClass().getSimpleName());
+            }
+        });
     }
 
     /**
@@ -407,13 +475,15 @@ public class AnimationBlueprint {
                 continue;
             }
 
-            if (previousFrame.getTimeInTicks() >= duration) break;
-            int durationBetweenKeyframes = Math.min(keyframe.getTimeInTicks(), duration) - previousFrame.getTimeInTicks();
+            FrameRange range = boundedFrameRange(previousFrame.getTimeInTicks(),
+                    keyframe.getTimeInTicks(), frames.length, "IK " + controllerName);
             InterpolationType interpType = keyframe.getInterpolationType();
 
-            for (int j = 0; j < durationBetweenKeyframes; j++) {
-                int currentFrame = j + previousFrame.getTimeInTicks();
-                float t = durationBetweenKeyframes > 1 ? j / (float) (durationBetweenKeyframes - 1) : 0f;
+            if (range != null) for (int currentFrame = range.startInclusive();
+                                    currentFrame < range.endExclusive(); currentFrame++) {
+                int sourceOffset = currentFrame - range.sourceStart();
+                float t = range.sourceLength() > 1
+                        ? sourceOffset / (float) (range.sourceLength() - 1) : 0f;
 
                 // Interpolate position (IK goal offset)
                 // Apply coordinate system conversion similar to bone positions
@@ -435,9 +505,10 @@ public class AnimationBlueprint {
 
         // Fill remaining frames with last keyframe values
         if (lastFrame != null && lastFrame.getTimeInTicks() < duration - 1) {
-            int durationBetweenKeyframes = duration - lastFrame.getTimeInTicks();
-            for (int j = 0; j < durationBetweenKeyframes; j++) {
-                int currentFrame = j + lastFrame.getTimeInTicks();
+            FrameRange range = boundedFrameRange(lastFrame.getTimeInTicks(), duration,
+                    frames.length, "IK tail " + controllerName);
+            if (range != null) for (int currentFrame = range.startInclusive();
+                                    currentFrame < range.endExclusive(); currentFrame++) {
                 if (blockBenchVersion < 5) {
                     frames[currentFrame].goalX = lastFrame.getDataX() / 16f;
                     frames[currentFrame].goalY = lastFrame.getDataY() / 16f;
@@ -452,8 +523,9 @@ public class AnimationBlueprint {
 
         // Fill frames before first keyframe
         if (firstFrame != null && firstFrame.getTimeInTicks() > 0) {
-            int durationBetweenKeyframes = Math.min(firstFrame.getTimeInTicks(), duration - 1);
-            for (int j = 0; j < durationBetweenKeyframes; j++) {
+            FrameRange range = boundedFrameRange(0, firstFrame.getTimeInTicks(),
+                    frames.length, "IK prefix " + controllerName);
+            if (range != null) for (int j = range.startInclusive(); j < range.endExclusive(); j++) {
                 if (blockBenchVersion < 5) {
                     frames[j].goalX = firstFrame.getDataX() / 16f;
                     frames[j].goalY = firstFrame.getDataY() / 16f;

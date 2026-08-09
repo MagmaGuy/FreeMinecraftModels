@@ -1,17 +1,14 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
-import com.magmaguy.freeminecraftmodels.api.ModeledEntityManager;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
-import com.magmaguy.magmacore.util.AttributeManager;
 import lombok.Getter;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
 import org.bukkit.Particle;
-import org.bukkit.attribute.Attribute;
-import org.bukkit.entity.LivingEntity;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.BoundingBox;
@@ -20,8 +17,8 @@ import org.bukkit.util.Vector;
 import org.joml.Matrix3d;
 import org.joml.Vector3d;
 
-import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Represents a bounding box that can be rotated in any direction.
@@ -58,18 +55,13 @@ public class OrientedBoundingBox {
     // Reusable vectors for ray intersection
     private final Vector3d localOriginCache = new Vector3d();
     private final Vector3d localDirCache = new Vector3d();
-    private final double height;
     // Current scale modifier
     @Getter
     private double scaleModifier = 1.0;
-    private boolean inverseRotationDirty = true;
     // Cached axis vectors (the 3 principal axes of the OBB)
     private Vector3d[] axes;
     private boolean cornersDirty = true;
     private boolean scaleDirty = true;
-    // Current rotation values for change detection
-    private double currentYaw = 0d;
-    private Location lastLocation = null;
     // Cached primitives from the last update(). Used to short-circuit the
     // common case where an entity is stationary or barely moving — avoids
     // even constructing an equals comparison against the last Location.
@@ -91,7 +83,6 @@ public class OrientedBoundingBox {
      * @param depth  Depth of the box (Z axis)
      */
     public OrientedBoundingBox(Vector3d center, double width, double height, double depth) {
-        this.height = height;
         this.center.set(center);
         this.baseHalfExtents.set(width / 2d, height / 2d, depth / 2d);
         this.halfExtents.set(baseHalfExtents);
@@ -156,7 +147,7 @@ public class OrientedBoundingBox {
      */
     public static Optional<ModeledEntity> raytraceFromPlayer(Player player) {
         float maxDist = Math.max(DefaultConfig.maxInteractionAndAttackDistanceForLivingEntities, DefaultConfig.maxInteractionAndAttackDistanceForProps);
-        return raytraceFromPoint(player.getWorld().getName(), player.getEyeLocation(), maxDist);
+        return raytraceFromPoint(player.getWorld(), player.getEyeLocation(), maxDist);
     }
 
     public static void visualizeOBB(ModeledEntity entity, int durationTicks, Player player) {
@@ -171,7 +162,7 @@ public class OrientedBoundingBox {
                     return;
                 }
 
-                // Get a fresh OBB every time
+                // Get the entity's cached OBB (updated in place each tick)
                 OrientedBoundingBox obb = entity.getHitboxComponent().getObbHitbox();
 
                 // Get the corners of the OBB
@@ -214,20 +205,11 @@ public class OrientedBoundingBox {
      * @return The first modeled entity hit by the ray, if any
      */
     public static Optional<ModeledEntity> raytraceFromPoint(
-            String worldName, Location location, float maxDistance) {
+            World world, Location location, float maxDistance) {
 
-        // Get all modeled entities
-        HashSet<ModeledEntity> entities = ModeledEntityManager.getAllEntities();
-
-        // Filter entities to only include those in the same world.
-        // We do NOT exclude entities with packet-interaction here, even though
-        // it means static/prop clicks can fire from both paths — the
-        // InteractionComponent's per-player left/right-click cooldown dedupes
-        // any duplicate dispatches. Excluding them here would silently break
-        // clicks whenever the packet path isn't delivering (e.g. visibility
-        // races, version-incompatible NMS adapter, or pipeline conflicts).
-        entities.removeIf(entity -> entity.getWorld() == null ||
-                !entity.getWorld().getName().equals(worldName));
+        // Iterate the live registry directly (concurrent set, weakly consistent
+        // iteration; nothing in this loop mutates it) instead of copying it per call.
+        Set<ModeledEntity> entities = ModeledEntity.getLoadedModeledEntities();
 
         if (entities.isEmpty()) {
             return Optional.empty();
@@ -245,8 +227,28 @@ public class OrientedBoundingBox {
 
         // Check each entity for intersection
         for (ModeledEntity entity : entities) {
-            // Get a fresh OBB for the entity every time
+            // Only consider entities in the same world.
+            // We do NOT exclude entities with packet-interaction here, even though
+            // it means static/prop clicks can fire from both paths — the
+            // InteractionComponent's per-player left/right-click cooldown dedupes
+            // any duplicate dispatches. Excluding them here would silently break
+            // clicks whenever the packet path isn't delivering (e.g. visibility
+            // races, version-incompatible NMS adapter, or pipeline conflicts).
+            World entityWorld = entity.getWorld();
+            if (entityWorld == null || !entityWorld.equals(world)) continue;
+
+            // Get the entity's cached OBB (updated in place each tick)
             OrientedBoundingBox obb = entity.getHitboxComponent().getObbHitbox();
+
+            // Squared-distance prefilter against the OBB's own cached center and
+            // extents (the exact geometry rayIntersection tests): if the whole box
+            // lies beyond maxDistance from the ray origin, no in-range intersection
+            // is possible and the slab math can be skipped.
+            double reach = maxDistance + obb.getHalfExtents().length();
+            double dx = obb.getCenter().x - location.getX();
+            double dy = obb.getCenter().y - location.getY();
+            double dz = obb.getCenter().z - location.getZ();
+            if (dx * dx + dy * dy + dz * dz > reach * reach) continue;
 
             // Check for ray intersection
             double distance = obb.rayIntersection(location, maxDistance);
@@ -282,17 +284,11 @@ public class OrientedBoundingBox {
             return;
         }
 
+        // ModeledEntity.tick() already refreshes scaleModifier from the underlying
+        // LivingEntity's generic_scale attribute every tick, and the visual path
+        // (BoneTransforms.getDisplayEntityScale) uses that value directly. Multiplying
+        // the attribute in again here squared the hitbox scale for scaled entities.
         double newScaleModifier = associatedEntity.getScaleModifier();
-
-        Attribute scaleAttribute = AttributeManager.getAttribute("generic_scale");
-
-        // Check for generic_scale attribute if entity has a living entity
-        if (associatedEntity.getUnderlyingEntity() != null &&
-                associatedEntity.getUnderlyingEntity() instanceof LivingEntity livingEntity &&
-                scaleAttribute != null &&
-                livingEntity.getAttribute(scaleAttribute) != null) {
-            newScaleModifier *= livingEntity.getAttribute(scaleAttribute).getValue();
-        }
 
         if (Math.abs(newScaleModifier - scaleModifier) > 0.001) {
             scaleModifier = newScaleModifier;
@@ -341,11 +337,16 @@ public class OrientedBoundingBox {
         if (positionUnchanged && yawUnchanged) {
             // Still check for scale updates even if pose hasn't changed
             updateScale();
-            updateHalfExtents();
+            if (scaleDirty) {
+                // The cached center embeds halfExtents.y, so a scale change while
+                // stationary must recompute both — otherwise the box keeps the old
+                // height offset until the entity next moves past the epsilon.
+                updateHalfExtents();
+                center.set(x, y + halfExtents.y, z);
+            }
             return this;
         }
 
-        lastLocation = location;
         lastX = x;
         lastY = y;
         lastZ = z;
@@ -363,14 +364,12 @@ public class OrientedBoundingBox {
 
         // Only update rotation if it has changed significantly
         if (!yawUnchanged) {
-            currentYaw = yaw;
             lastYawRadians = yaw;
             rotation.identity().rotateY(yaw);
             // rotation is a pure rotation matrix → inverse is the transpose.
-            // Without this, rayIntersection/containsPoint silently use a stale
-            // identity inverse, breaking click hit-detection on rotated entities.
+            // Without this, rayIntersection silently uses a stale identity
+            // inverse, breaking click hit-detection on rotated entities.
             rotation.transpose(inverseRotation);
-            inverseRotationDirty = false;
             updateAxes();
         }
 
@@ -651,22 +650,5 @@ public class OrientedBoundingBox {
         }
 
         return true;
-    }
-
-    /**
-     * Tests whether a world‐space point lies inside this OBB.
-     */
-    public boolean containsPoint(Location loc) {
-        //ticking should ensure that no updates are necessary
-
-        // move point into OBB's local space
-        Vector3d local = new Vector3d(loc.getX(), loc.getY(), loc.getZ());
-        local.sub(center);              // translate
-        local.mul(inverseRotation);     // rotate
-
-        // AABB‐style test in local coords using scaled half extents
-        return Math.abs(local.x) <= halfExtents.x &&
-                Math.abs(local.y) <= halfExtents.y &&
-                Math.abs(local.z) <= halfExtents.z;
     }
 }

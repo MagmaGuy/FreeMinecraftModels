@@ -11,10 +11,10 @@ import com.magmaguy.easyminecraftgoals.thirdparty.BedrockChecker;
 import org.bukkit.Bukkit;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
-import org.bukkit.event.Listener;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
 import org.joml.Vector3d;
@@ -23,10 +23,10 @@ import java.util.*;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ThreadLocalRandom;
 
-public class SkeletonWatchers implements Listener {
+public class SkeletonWatchers {
     private final Skeleton skeleton;
     private final Set<UUID> viewers = new CopyOnWriteArraySet<>();
-    private boolean wasInvisible = false;
+    private volatile boolean wasInvisible = false;
 
     public HashSet<UUID> getViewers() {
         return new HashSet<>(viewers);
@@ -35,9 +35,11 @@ public class SkeletonWatchers implements Listener {
     private final int resetTimer = 20 * 60;
     private int counter = ThreadLocalRandom.current().nextInt(20 * 60);
 
+    // Cadence at which ModeledEntitiesClock invokes tickPrimaryThread().
+    private static final int VIEWER_STATE_INTERVAL_TICKS = 4;
+
     public SkeletonWatchers(Skeleton skeleton) {
         this.skeleton = skeleton;
-        tick();
     }
 
     public boolean hasObservers() {
@@ -55,15 +57,16 @@ public class SkeletonWatchers implements Listener {
         return false;
     }
 
-    private int watcherUpdateCounter = 0;
-    private static final int UPDATE_INTERVAL = 4;
-
-    public void tick() {
-        watcherUpdateCounter++;
-        if (watcherUpdateCounter >= UPDATE_INTERVAL) {
-            updateWatcherList();
-            watcherUpdateCounter = 0;
+    /**
+     * Refreshes all state that touches Bukkit worlds, players, entities, potion
+     * effects, or block ray tracing. ModeledEntitiesClock invokes this on the
+     * primary thread; the one-tick packet/animation path remains asynchronous.
+     */
+    public void tickPrimaryThread() {
+        if (!Bukkit.isPrimaryThread()) {
+            throw new IllegalStateException("Skeleton watcher state must be refreshed on the primary thread");
         }
+        updateWatcherList();
         boolean isInvisible = isUnderlyingEntityInvisible();
         if (isInvisible != wasInvisible) {
             wasInvisible = isInvisible;
@@ -79,29 +82,29 @@ public class SkeletonWatchers implements Listener {
                 });
             }
         }
-        resync(false);
+        resync(VIEWER_STATE_INTERVAL_TICKS);
     }
 
     private volatile long lastResyncTime = 0L;
 
     // Clients gets a bit of drift due to some inaccuracies, this resyncs the skeleton
-    public void resync(boolean force) {
+    private void resync(int elapsedTicks) {
         long now = System.currentTimeMillis();
 
-        // throttle: if not forced and we ran <1s ago, skip entirely
-        if (!force && now - lastResyncTime < 1_000) {
+        // throttle: if we ran <1s ago, skip entirely
+        if (now - lastResyncTime < 1_000) {
             return;
         }
 
-        counter++;
+        counter += elapsedTicks;
         // your existing random / timer logic
-        if (force || (counter > resetTimer && ThreadLocalRandom.current().nextBoolean())) {
+        if (counter > resetTimer && ThreadLocalRandom.current().nextBoolean()) {
             // update timestamp and reset counter
             lastResyncTime = now;
             counter = 0;
 
             // do the actual hide/display (displayTo already respects invisibility)
-            Set<UUID> tempViewers = Collections.synchronizedSet(new HashSet<>(viewers));
+            Set<UUID> tempViewers = new HashSet<>(viewers);
             tempViewers.forEach(viewer -> {
                 hideFrom(viewer);
                 Player p = Bukkit.getPlayer(viewer);
@@ -116,9 +119,13 @@ public class SkeletonWatchers implements Listener {
     private static final double MIN_VIEW_DISTANCE_SQUARED = MIN_VIEW_DISTANCE * (double) MIN_VIEW_DISTANCE;
 
     private void updateWatcherList() {
-        if (skeleton.getCurrentLocation() == null) return;
+        // Hoisted: getCurrentLocation() is not a plain getter — it rebuilds a
+        // Location (NMS body-rotation lookup + clone for dynamic entities), so
+        // one snapshot per pass instead of one per player matters.
+        Location currentLocation = skeleton.getCurrentLocation();
+        if (currentLocation == null) return;
 
-        List<UUID> newPlayers = new ArrayList<>();
+        Set<UUID> newPlayers = new HashSet<>();
         List<UUID> toRemove = new ArrayList<>();
 
         int effectiveViewDistance = skeleton.getModeledEntity() != null
@@ -131,13 +138,13 @@ public class SkeletonWatchers implements Listener {
         // In a dense multi-floor hub the override would make every nearby model a viewer even
         // when occluded by floors/walls; disabling it lets isModelInSight() cull them.
         boolean proximityOverride = ModelDensity.proximityOverrideActive(
-                skeleton.getCurrentLocation().getWorld());
+                currentLocation.getWorld());
 
-        for (Player player : skeleton.getCurrentLocation().getWorld().getPlayers()) {
-            double distance = player.getLocation().distanceSquared(skeleton.getCurrentLocation());
+        for (Player player : currentLocation.getWorld().getPlayers()) {
+            double distance = player.getLocation().distanceSquared(currentLocation);
 
             if ((proximityOverride && distance < MIN_VIEW_DISTANCE_SQUARED) ||
-                    (distance < maxViewDistanceSquared && isModelInSight(player))) {
+                    (distance < maxViewDistanceSquared && isModelInSight(player, currentLocation))) {
                 newPlayers.add(player.getUniqueId());
                 if (!viewers.contains(player.getUniqueId())) displayTo(player);
             }
@@ -157,10 +164,12 @@ public class SkeletonWatchers implements Listener {
      * Checks if any part of the skeleton model is in the player's line of sight.
      * Tests the center and strategic corners of the bounding box, going from top to bottom.
      *
-     * @param player the player to check for
+     * @param player          the player to check for
+     * @param currentLocation the skeleton's location, hoisted by the caller so the
+     *                        per-player loop doesn't recompute it
      * @return true if any part of the entity is visible
      */
-    private boolean isModelInSight(Player player) {
+    private boolean isModelInSight(Player player, Location currentLocation) {
         // Quick sanity checks
         if (skeleton.getModeledEntity() == null) return true;
 
@@ -169,7 +178,7 @@ public class SkeletonWatchers implements Listener {
         if (hitbox == null) return true;
 
         // First try the center point (most efficient check)
-        Vector centerPoint = skeleton.getCurrentLocation().toVector();
+        Vector centerPoint = currentLocation.toVector();
         if (isPointVisible(player, centerPoint)) {
             return true;
         }
@@ -203,60 +212,45 @@ public class SkeletonWatchers implements Listener {
 
     /**
      * Helper method to check if a specific point is visible to the player,
-     * with recursive handling of non-occluding blocks
+     * with bounded traversal through non-occluding blocks.
      */
     private boolean isPointVisible(Player player, Vector point) {
-        return isPointVisibleRecursive(player.getEyeLocation(), point, 5); // Max 5 passes through non-occluding blocks
-    }
+        Location eyeLocation = player.getEyeLocation();
+        return BlockVisibilityRay.isVisible(
+                eyeLocation.toVector(),
+                point,
+                5,
+                (origin, direction, distance) -> {
+                    var result = eyeLocation.getWorld().rayTraceBlocks(
+                            origin.toLocation(eyeLocation.getWorld()),
+                            direction,
+                            distance,
+                            FluidCollisionMode.NEVER,
+                            true
+                    );
+                    if (result == null) return null;
 
-    private boolean isPointVisibleRecursive(Location eyeLocation, Vector targetPoint, int remainingPasses) {
-        if (remainingPasses <= 0) {
-            return false; // Prevent infinite recursion
-        }
+                    Block hitBlock = result.getHitBlock();
+                    if (hitBlock == null) {
+                        Vector hitPosition = result.getHitPosition();
+                        return new BlockVisibilityRay.Hit(
+                                hitPosition,
+                                hitPosition.getBlockX(),
+                                hitPosition.getBlockY(),
+                                hitPosition.getBlockZ(),
+                                true
+                        );
+                    }
 
-        Vector toPoint = targetPoint.clone().subtract(eyeLocation.toVector());
-        double distance = toPoint.length();
-        toPoint.normalize();
-
-        var result = eyeLocation.getWorld().rayTraceBlocks(
-                eyeLocation,
-                toPoint,
-                distance,
-                FluidCollisionMode.NEVER,
-                true
+                    return new BlockVisibilityRay.Hit(
+                            result.getHitPosition(),
+                            hitBlock.getX(),
+                            hitBlock.getY(),
+                            hitBlock.getZ(),
+                            hitBlock.getType().isOccluding()
+                    );
+                }
         );
-
-        // No block was hit, clear line of sight
-        if (result == null) {
-            return true;
-        }
-
-        // A block was hit, check if it's occluding or non-occluding
-        if (result.getHitBlock() != null) {
-            if (result.getHitBlock().getType().isOccluding()) {
-                // Occluding block (like stone) blocks vision
-                return false;
-            } else {
-                // Non-occluding block (like glass), continue tracing through it
-                // Create a new starting point past this block
-
-                // Get hit position and normalize our direction vector
-                Location hitPos = result.getHitPosition().toLocation(eyeLocation.getWorld());
-                Vector normalizedDirection = toPoint.clone().normalize();
-
-                // Use a larger offset to ensure we move past the block
-                // 0.1 blocks (1/10th of a block) should be sufficient
-                Location nextLocation = hitPos.clone().add(
-                        normalizedDirection.clone().multiply(2)
-                );
-
-                // Continue the ray trace
-                return isPointVisibleRecursive(nextLocation, targetPoint, remainingPasses - 1);
-            }
-        }
-
-        // Something else was hit (should rarely happen)
-        return false;
     }
 
     private void displayTo(Player player) {
@@ -266,7 +260,7 @@ public class SkeletonWatchers implements Listener {
     private void displayTo(Player player, boolean allowBedrockResyncSchedule) {
         if (player == null || !player.isValid()) return;
         boolean isBedrock = BedrockChecker.isBedrock(player);
-        if (isBedrock) {
+        if (isBedrock && com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.enabled()) {
             com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
                     "SkeletonWatchers.displayTo entry — player=" + player.getName()
                             + " v2=" + DefaultConfig.sendCustomModelsToBedrockClientsV2
@@ -277,9 +271,10 @@ public class SkeletonWatchers implements Listener {
                             + " underlyingInvisible=" + isUnderlyingEntityInvisible());
         }
         if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClientsV2 && skeleton.getModeledEntity().getUnderlyingEntity() != null) {
-            com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
-                    "SkeletonWatchers.displayTo: V2=false fallback — showing native underlying entity to "
-                            + player.getName() + " instead of bones");
+            if (com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.enabled())
+                com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                        "SkeletonWatchers.displayTo: V2=false fallback — showing native underlying entity to "
+                                + player.getName() + " instead of bones");
             Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () ->
                     player.showEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getUnderlyingEntity())
             );
@@ -298,7 +293,7 @@ public class SkeletonWatchers implements Listener {
             skeleton.getModeledEntity().getHitboxComponent().showPacketInteractionEntityTo(player);
             return;
         }
-        if (isBedrock) {
+        if (isBedrock && com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.enabled()) {
             com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
                     "SkeletonWatchers.displayTo: wasAlreadyViewing=" + wasAlreadyViewing
                             + " for " + player.getName());
@@ -360,9 +355,10 @@ public class SkeletonWatchers implements Listener {
      */
     private void scheduleBedrockInitialResync(Player player) {
         final UUID uuid = player.getUniqueId();
-        com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
-                "SkeletonWatchers.scheduleBedrockInitialResync: queued 10-tick hide+show for "
-                        + player.getName() + " (Geyser attachable rebind dance)");
+        if (com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.enabled())
+            com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                    "SkeletonWatchers.scheduleBedrockInitialResync: queued 10-tick hide+show for "
+                            + player.getName() + " (Geyser attachable rebind dance)");
         Bukkit.getScheduler().runTaskLater(MetadataHandler.PLUGIN, () -> {
             // Abort if the entity was removed in the meantime. Without this
             // check, if the entity was destroyed (e.g. /fmm disguise twice in
@@ -377,9 +373,10 @@ public class SkeletonWatchers implements Listener {
             if (!viewers.contains(uuid)) return; // player left or got hideFrom'd in the meantime
             Player p = Bukkit.getPlayer(uuid);
             if (p == null || !p.isOnline()) return;
-            com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
-                    "SkeletonWatchers.scheduleBedrockInitialResync: FIRING hide+show now for "
-                            + p.getName());
+            if (com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.enabled())
+                com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                        "SkeletonWatchers.scheduleBedrockInitialResync: FIRING hide+show now for "
+                                + p.getName());
             hideFrom(uuid);
             displayTo(p, false);
         }, 10L);
@@ -388,24 +385,28 @@ public class SkeletonWatchers implements Listener {
     private void hideFrom(UUID uuid) {
         // Always clean up viewer state, even if player is offline
         viewers.remove(uuid);
-        if (skeleton.getModeledEntity().getBedrockModeledEntity() != null) {
-            skeleton.getModeledEntity().getBedrockModeledEntity().hideFrom(uuid);
+        // Same null guard the other methods in this class use — the skeleton's
+        // modeled entity can be null during construction/teardown windows.
+        var modeledEntity = skeleton.getModeledEntity();
+        if (modeledEntity != null && modeledEntity.getBedrockModeledEntity() != null) {
+            modeledEntity.getBedrockModeledEntity().hideFrom(uuid);
         }
         skeleton.getBones().forEach(bone -> bone.hideFrom(uuid));
         // Hide the packet interaction entity (uses UUID, works even if player is offline)
-        skeleton.getModeledEntity().getHitboxComponent().hidePacketInteractionEntityFrom(uuid);
+        if (modeledEntity != null)
+            modeledEntity.getHitboxComponent().hidePacketInteractionEntityFrom(uuid);
 
         // Player-specific cleanup only if player is online
         Player player = Bukkit.getPlayer(uuid);
-        if (player == null || !player.isValid()) return;
+        if (player == null || !player.isValid() || modeledEntity == null) return;
 
         boolean isBedrock = BedrockChecker.isBedrock(player);
-        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClientsV2 && skeleton.getModeledEntity().getUnderlyingEntity() != null) {
+        if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClientsV2 && modeledEntity.getUnderlyingEntity() != null) {
             Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () ->
-                    player.hideEntity(MetadataHandler.PLUGIN, skeleton.getModeledEntity().getUnderlyingEntity())
+                    player.hideEntity(MetadataHandler.PLUGIN, modeledEntity.getUnderlyingEntity())
             );
         }
-        if (skeleton.getModeledEntity() instanceof PropEntity propEntity)
+        if (modeledEntity instanceof PropEntity propEntity)
             propEntity.showRealBlocksToPlayer(player);
     }
 

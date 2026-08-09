@@ -51,18 +51,6 @@ public class InteractionComponent {
     private final Map<UUID, Long> rightClickCooldowns = new HashMap<>();
     private final Map<UUID, Long> leftClickCooldowns = new HashMap<>();
 
-    // Guards a single projectile against hitting an elite more than once. A projectile
-    // can reach the projectile-hit chokepoint from more than one detection path within a
-    // tick or two (the per-tick OBB sweep and the vanilla-hitbox EntityDamageByEntityEvent
-    // redirect); on a model whose vanilla hitbox also catches the arrow that means two
-    // damage applications. Wiped 1 second after the hit — there is no reason a projectile
-    // that has already struck an entity should still be live and re-colliding beyond that,
-    // and the window is long enough that a returning Loyalty trident re-thrown later still
-    // registers as a fresh hit.
-    private static final java.util.Set<UUID> recentlyHitProjectiles =
-            java.util.concurrent.ConcurrentHashMap.newKeySet();
-    private static final long PROJECTILE_HIT_DEDUP_TICKS = 20L;
-
     public InteractionComponent(ModeledEntity modeledEntity) {
         this.modeledEntity = modeledEntity;
     }
@@ -72,6 +60,7 @@ public class InteractionComponent {
         long now = System.currentTimeMillis();
         Long last = leftClickCooldowns.get(player.getUniqueId());
         if (last != null && (now - last) < LEFT_CLICK_COOLDOWN_MS) return;
+        pruneExpired(leftClickCooldowns, now, LEFT_CLICK_COOLDOWN_MS);
         leftClickCooldowns.put(player.getUniqueId(), now);
         ModeledEntityLeftClickEvent event = new ModeledEntityLeftClickEvent(player, modeledEntity);
         Bukkit.getPluginManager().callEvent(event);
@@ -82,30 +71,45 @@ public class InteractionComponent {
         long now = System.currentTimeMillis();
         Long last = rightClickCooldowns.get(player.getUniqueId());
         if (last != null && (now - last) < RIGHT_CLICK_COOLDOWN_MS) return;
+        pruneExpired(rightClickCooldowns, now, RIGHT_CLICK_COOLDOWN_MS);
         rightClickCooldowns.put(player.getUniqueId(), now);
         ModeledEntityRightClickEvent event = new ModeledEntityRightClickEvent(player, modeledEntity);
         Bukkit.getPluginManager().callEvent(event);
     }
 
     /**
-     * Triggers the appropriate hitbox contact event based on entity type
-     * This method should be overridden by subclasses to fire their specific event types
+     * Drops entries whose cooldown window has already elapsed — they can no
+     * longer suppress a click, so removing them is behavior-neutral and keeps
+     * these per-instance maps from accumulating one entry per player that ever
+     * clicked this entity.
      */
-    protected void callHitboxContactEvent(Player player) {
-        if (modeledEntity.isDying()) return;
-        //Pass back to synchronous
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                ModeledEntityHitboxContactEvent event = new ModeledEntityHitboxContactEvent(player, modeledEntity);
-                Bukkit.getPluginManager().callEvent(event);
-            }
-        }.runTask(MetadataHandler.PLUGIN);
+    private static void pruneExpired(Map<UUID, Long> cooldowns, long now, long windowMs) {
+        cooldowns.values().removeIf(timestamp -> (now - timestamp) >= windowMs);
     }
 
     /**
-     * Triggers the appropriate hitbox contact event based on entity type
-     * This method should be overridden by subclasses to fire their specific event types
+     * Fires the {@link ModeledEntityHitboxContactEvent} for this entity on the
+     * primary thread. When already on the primary thread (the hitbox contact
+     * scan is), dispatches synchronously; off-thread callers bounce through the
+     * scheduler.
+     */
+    protected void callHitboxContactEvent(Player player) {
+        if (modeledEntity.isDying()) return;
+        if (Bukkit.isPrimaryThread()) {
+            Bukkit.getPluginManager().callEvent(new ModeledEntityHitboxContactEvent(player, modeledEntity));
+        } else {
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    Bukkit.getPluginManager().callEvent(new ModeledEntityHitboxContactEvent(player, modeledEntity));
+                }
+            }.runTask(MetadataHandler.PLUGIN);
+        }
+    }
+
+    /**
+     * Fires the {@link ModeledEntityHitByProjectileEvent} for this entity on the
+     * primary thread.
      */
     public void callModeledEntityHitByProjectileEvent(Projectile projectile) {
         if (modeledEntity.isDying()) return;
@@ -190,44 +194,10 @@ public class InteractionComponent {
         if (modeledEntity instanceof PropEntity) return;
         if (!(modeledEntity.getUnderlyingEntity() instanceof LivingEntity underlying)) return;
 
-        // TEMP DIAGNOSTIC: trace EVERY dispatch (including ones the dedup will drop),
-        // with the full call stack so we can see which detection path fired and how
-        // many times, the velocity at this instant, the thread, and below the HP delta
-        // (the damage that ACTUALLY landed after EliteMobs' formula overrides it).
-        boolean willDedup = recentlyHitProjectiles.contains(projectile.getUniqueId());
-        if (OBBHitDetection.DEBUG_PROJECTILE_HITS) {
-            StringBuilder sb = new StringBuilder();
-            sb.append("[FMM-ProjTrace] handleModeledEntityHitByProjectileEvent");
-            sb.append("\n  proj=").append(projectile.getType()).append(" uuid=").append(projectile.getUniqueId());
-            sb.append("\n  primaryThread=").append(Bukkit.isPrimaryThread());
-            sb.append("\n  projVelocity=").append(String.format("%.4f", projectile.getVelocity().length()));
-            if (projectile instanceof AbstractArrow a)
-                sb.append(" arrow.getDamage()=").append(String.format("%.4f", a.getDamage()));
-            sb.append("\n  underlying=").append(underlying.getType())
-                    .append(" hpNow=").append(String.format("%.2f", underlying.getHealth()));
-            sb.append("\n  willBeDeduped=").append(willDedup)
-                    .append(willDedup ? " (DROPPED — already hit within 1s window)" : " (proceeds)");
-            sb.append("\n  --- call stack ---");
-            StackTraceElement[] st = Thread.currentThread().getStackTrace();
-            for (int i = 2; i < Math.min(st.length, 26); i++) sb.append("\n    at ").append(st[i]);
-            com.magmaguy.magmacore.util.Logger.warn(sb.toString());
-        }
-
-        // Dedup: only apply a given projectile once per short window (see field doc).
-        // Drops the second of a double-dispatch instead of damaging the entity twice.
-        if (!recentlyHitProjectiles.add(projectile.getUniqueId())) return;
-        final UUID dedupId = projectile.getUniqueId();
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                recentlyHitProjectiles.remove(dedupId);
-            }
-        }.runTaskLater(MetadataHandler.PLUGIN, PROJECTILE_HIT_DEDUP_TICKS);
         double damage = 1.0;
         if (projectile instanceof AbstractArrow arrow) {
             damage = Math.max(1.0, Math.ceil(arrow.getDamage() * projectile.getVelocity().length()));
         }
-        double hpBefore = underlying.getHealth();
         OBBHitDetection.applyDamage = true;
         OBBHitDetection.bypassProjectileRedirect = true;
         try {
@@ -236,14 +206,6 @@ public class InteractionComponent {
             OBBHitDetection.applyDamage = false;
             OBBHitDetection.bypassProjectileRedirect = false;
         }
-        if (OBBHitDetection.DEBUG_PROJECTILE_HITS) {
-            com.magmaguy.magmacore.util.Logger.warn("[FMM-ProjTrace] APPLIED fmmDamageInput="
-                    + String.format("%.4f", damage)
-                    + " hpBefore=" + String.format("%.2f", hpBefore)
-                    + " hpAfter=" + String.format("%.2f", underlying.getHealth())
-                    + " actualApplied=" + String.format("%.4f", hpBefore - underlying.getHealth())
-                    + " §8(actualApplied is the real damage after EliteMobs' formula override)");
-        }
     }
 
     // Clear all callbacks
@@ -251,6 +213,7 @@ public class InteractionComponent {
         this.leftClickCallback = null;
         this.rightClickCallback = null;
         this.hitboxContactCallback = null;
+        this.projectileHitCallback = null;
     }
 
     public static class InteractionComponentEvents implements Listener {

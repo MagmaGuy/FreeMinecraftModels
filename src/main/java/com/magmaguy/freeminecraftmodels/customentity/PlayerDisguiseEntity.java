@@ -75,7 +75,7 @@ public class PlayerDisguiseEntity extends ModeledEntity {
      */
     @Nullable
     static PlayerDisguiseEntity create(String entityID, Player player) {
-        FileModelConverter converter = FileModelConverter.getConvertedFileModels().get(entityID);
+        FileModelConverter converter = FileModelConverter.getModel(entityID);
         if (converter == null) return null;
         PlayerDisguiseEntity entity = new PlayerDisguiseEntity(entityID, player);
         // Spawn at the player's location, with NO underlying entity. The
@@ -283,8 +283,16 @@ public class PlayerDisguiseEntity extends ModeledEntity {
 
     @Override
     public Location getLocation() {
-        if (disguisedPlayer.isOnline()) {
-            return disguisedPlayer.getLocation();
+        Player player = disguisedPlayer;
+        if (player == null) {
+            // Defensive constructor-time fallback. Java initializes subclass
+            // fields only after super(...) returns, so base-class collaborators
+            // must never make this override dereference the not-yet-assigned
+            // player. Normal post-construction behavior remains unchanged.
+            return super.getLocation();
+        }
+        if (player.isOnline()) {
+            return player.getLocation();
         }
         return null;
     }

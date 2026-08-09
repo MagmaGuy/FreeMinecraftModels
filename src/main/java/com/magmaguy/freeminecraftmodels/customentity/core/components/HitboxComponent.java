@@ -7,7 +7,6 @@ import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.OrientedBoundingBox;
 import com.magmaguy.freeminecraftmodels.packets.PacketEntityDisplayHelper;
-import lombok.Getter;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -19,7 +18,6 @@ import java.util.UUID;
 public class HitboxComponent {
     private static final double PLAYER_COLLISION_RANGE_SQUARED = 100.0; // 10 blocks
     private final ModeledEntity modeledEntity;
-    @Getter
     private OrientedBoundingBox obbHitbox = null;
     private PacketInteractionEntity packetInteractionEntity = null;
 
@@ -49,48 +47,50 @@ public class HitboxComponent {
 
     /**
      * Async!
-     *
-     * @param tickCounter
      */
-    public void tick(int tickCounter, com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle packetBundle) {
-        // Always update the OBB hitbox position, even if no blueprint hitbox is configured
-        // (getObbHitbox() creates a default 1x2x1 hitbox when blueprint hitbox is null).
-        // This is the server-side click-detection box and is cheap (no packets), so it always runs.
-        getObbHitbox().update(modeledEntity.getLocation());
+    public void tick(com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle packetBundle) {
+        // Models without contact callbacks keep the cheap OBB transform on the
+        // asynchronous packet clock. Contact-enabled models are refreshed by
+        // tickPrimaryThread(), because collision scans and callbacks touch
+        // Bukkit player/world state and must never run here.
+        if (modeledEntity.getInteractionComponent()
+                .getHitboxContactCallback() == null) {
+            getObbHitbox().update(modeledEntity.getLocation());
+        }
 
         // Update the client-side interaction entity position (sends packets) — only when moved.
         updatePacketInteractionEntityPosition(packetBundle);
+    }
 
-        if (modeledEntity.getInteractionComponent().getHitboxContactCallback() == null) return;
-        if (tickCounter % 2 == 0) {
-            checkPlayerCollisions();
+    /**
+     * Refreshes contact-enabled hitboxes and fires contact callbacks on the
+     * primary thread. Invoked every two ticks by ModeledEntitiesClock.
+     */
+    public void tickPrimaryThread() {
+        if (!Bukkit.isPrimaryThread()) {
+            throw new IllegalStateException(
+                    "Model hitbox contacts must run on the primary thread");
         }
+        if (modeledEntity.getInteractionComponent()
+                .getHitboxContactCallback() == null) return;
+        Location location = modeledEntity.getLocation();
+        if (location == null) return;
+        getObbHitbox().update(location);
+        checkPlayerCollisions();
     }
 
     /**
      * Checks for collisions with nearby players and fires appropriate events
      */
     public void checkPlayerCollisions() {
-        if (modeledEntity.getHitboxComponent().getObbHitbox() == null) return;
         if (modeledEntity.getWorld() == null) return;
 
         Location entityLocation = modeledEntity.getLocation();
-        // Local scratch — checkPlayerCollisions is invoked from the async
-        // ModeledEntitiesClock, and consecutive ticks can overlap on different
-        // async threads when a tick takes >1 server tick. An instance-level
-        // scratch list was being clear()ed under one thread's iteration on the
-        // other, producing a ConcurrentModificationException at the iteration
-        // below. Allocating per call keeps the scope thread-local.
-        List<Player> nearbyPlayers = new ArrayList<>();
+        // Single pass: range prefilter and collision check per player — no
+        // intermediate scratch list needed.
         for (Player player : modeledEntity.getWorld().getPlayers()) {
-            if (player.getLocation().distanceSquared(entityLocation) < PLAYER_COLLISION_RANGE_SQUARED) {
-                nearbyPlayers.add(player);
-            }
-        }
-
-        // For each nearby player, check collision
-        for (Player player : nearbyPlayers) {
-            if (isPlayerColliding(player)) {
+            if (player.getLocation().distanceSquared(entityLocation) < PLAYER_COLLISION_RANGE_SQUARED
+                    && isPlayerColliding(player)) {
                 // Fire the appropriate hitbox contact event
                 modeledEntity.getInteractionComponent().callHitboxContactEvent(player);
             }

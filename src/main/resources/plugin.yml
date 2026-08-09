@@ -1,5 +1,5 @@
 name: FreeMinecraftModels
-version: '2.10.1'
+version: '2.11.0'
 main: com.magmaguy.freeminecraftmodels.FreeMinecraftModels
 api-version: '1.21.4'
 prefix: FreeMinecraftModels
@@ -30,6 +30,7 @@ permissions:
       freeminecraftmodels.deleteall: true
       freeminecraftmodels.disguise.self: true
       freeminecraftmodels.disguise.others: true
+      freeminecraftmodels.bypassregionprotection: true
   freeminecraftmodels.admin:
     description: Allows access to the admin content browser
     default: op
@@ -43,7 +44,7 @@ permissions:
     description: Allows /fmm disguise / undisguise targeting other players, plus /fmm disguiselist
     default: op
   freeminecraftmodels.bypassregionprotection:
-    description: Allows placing and interacting with props inside WorldGuard regions / GriefPrevention claims
+    description: Allows placing and interacting with props where another plugin would block normal block placement
     default: op
   freeminecraftmodels.menu:
     description: Allows access to the craftable items menu

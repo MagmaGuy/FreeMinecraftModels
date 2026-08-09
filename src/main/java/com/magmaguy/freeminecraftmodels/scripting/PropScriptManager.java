@@ -59,8 +59,33 @@ public final class PropScriptManager {
         LuaEngine.registerScriptProvider(provider);
 
         listener = new PropScriptListener();
+        Bukkit.getPluginManager().registerEvents(listener, MetadataHandler.PLUGIN);
 
         initialized = true;
+    }
+
+    /**
+     * Resolves the sibling YML config file for a model: same directory, same
+     * base name (model extension stripped, bow/crossbow draw-state suffix
+     * stripped), {@code .yml} extension.
+     *
+     * @param converter the model converter, may be null
+     * @return the sibling YML file, or null if the converter or its source file is null
+     */
+    public static File resolveSiblingYml(FileModelConverter converter) {
+        if (converter == null || converter.getSourceFile() == null) return null;
+        File modelFile = converter.getSourceFile();
+        String baseName = modelFile.getName();
+        // Strip model extension (.fmmodel or .bbmodel)
+        String lowercaseBaseName =
+                baseName.toLowerCase(java.util.Locale.ROOT);
+        if (lowercaseBaseName.endsWith(".fmmodel") ||
+                lowercaseBaseName.endsWith(".bbmodel")) {
+            baseName = baseName.substring(0, baseName.length() - 8);
+        }
+        // Strip bow/crossbow draw state suffixes so only one YML is created per weapon set
+        baseName = BowStateDetector.stripStateSuffix(baseName);
+        return new File(modelFile.getParentFile(), baseName + ".yml");
     }
 
     /**
@@ -73,18 +98,11 @@ public final class PropScriptManager {
         if (!initialized) return;
 
         // 1. Find the model file via FileModelConverter
-        FileModelConverter converter = FileModelConverter.getConvertedFileModels().get(prop.getEntityID());
-        if (converter == null || converter.getSourceFile() == null) return;
+        FileModelConverter converter = FileModelConverter.getModel(prop.getEntityID());
 
         // 2. Compute the sibling YML path (same directory, same base name, .yml extension)
-        File modelFile = converter.getSourceFile();
-        String baseName = modelFile.getName();
-        // Strip model extension (.fmmodel or .bbmodel)
-        if (baseName.endsWith(".fmmodel")) baseName = baseName.substring(0, baseName.length() - 8);
-        else if (baseName.endsWith(".bbmodel")) baseName = baseName.substring(0, baseName.length() - 8);
-        // Strip bow/crossbow draw state suffixes so only one YML is created per weapon set
-        baseName = BowStateDetector.stripStateSuffix(baseName);
-        File ymlFile = new File(modelFile.getParentFile(), baseName + ".yml");
+        File ymlFile = resolveSiblingYml(converter);
+        if (ymlFile == null) return;
 
         // 3. If YML doesn't exist, create it async with defaults and return (no scripts this load)
         if (!ymlFile.exists()) {
@@ -208,6 +226,7 @@ public final class PropScriptManager {
 
         if (listener != null) {
             listener.shutdownAll();
+            HandlerList.unregisterAll(listener);
             listener = null;
         }
 

@@ -23,7 +23,7 @@ public class OutputFolder {
         } catch (Exception e) {
             Logger.warn("Failed to delete folder " + mainFolder.getAbsolutePath());
         }
-        mainFolder.mkdir();
+        generateDirectory(mainFolder.getAbsolutePath());
         generateDirectory(baseDirectory + File.separatorChar + "FreeMinecraftModels" + File.separatorChar + "assets" + File.separatorChar + "freeminecraftmodels" + File.separatorChar + "textures");
         generateDirectory(baseDirectory + File.separatorChar + "FreeMinecraftModels" + File.separatorChar + "assets" + File.separatorChar + "freeminecraftmodels" + File.separatorChar + "models");
         generateDirectory(baseDirectory + File.separatorChar + "FreeMinecraftModels" + File.separatorChar + "assets" + File.separatorChar + "minecraft" + File.separatorChar + "atlases");
@@ -39,22 +39,26 @@ public class OutputFolder {
     }
 
     private static void generateFileFromResources(String filename, String destination) {
-        try {
-            InputStream inputStream = MetadataHandler.PLUGIN.getResource(filename);
-            File newFile = new File(destination);
-            newFile.mkdirs();
-            if (!newFile.exists()) newFile.createNewFile();
-            // Copy the InputStream to the file
+        File newFile = new File(destination);
+        try (InputStream inputStream = MetadataHandler.PLUGIN.getResource(filename)) {
+            if (inputStream == null) {
+                Logger.warn("Failed to generate default resource pack element: missing resource " + filename);
+                return;
+            }
+            Files.createDirectories(newFile.toPath().getParent());
             Files.copy(inputStream, newFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
         } catch (Exception e) {
-            Logger.warn("Failed to generate default resource pack elements");
+            Logger.warn("Failed to generate default resource pack element " + newFile.getAbsolutePath());
             e.printStackTrace();
         }
     }
 
     private static void generateDirectory(String path) {
-        File file = new File(path);
-        file.mkdirs();
-        file.mkdir();
+        try {
+            Files.createDirectories(new File(path).toPath());
+        } catch (Exception e) {
+            Logger.warn("Failed to generate directory " + path);
+            e.printStackTrace();
+        }
     }
 }

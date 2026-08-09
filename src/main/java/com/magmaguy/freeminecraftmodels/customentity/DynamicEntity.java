@@ -4,8 +4,8 @@ import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
-import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityInterface;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.freeminecraftmodels.utils.ImmutableMapSnapshots;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.Bukkit;
@@ -22,14 +22,13 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.HashMap;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
-public class DynamicEntity extends ModeledEntity implements ModeledEntityInterface {
+public class DynamicEntity extends ModeledEntity {
     //Note: currently only storing these when they spawn, can't think of a reason why that might be bad for now
-    @Getter
-    private static final HashMap<UUID, DynamicEntity> dynamicEntities = new HashMap<>();
+    private static final ConcurrentHashMap<UUID, DynamicEntity>
+            dynamicEntities = new ConcurrentHashMap<>();
     private static final NamespacedKey namespacedKey = new NamespacedKey(MetadataHandler.PLUGIN, "DynamicEntity");
-    @Getter
-    private final String name = "default";
     @Getter
     @Setter
     private boolean damagesOnContact = true;
@@ -71,9 +70,13 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         return dynamicEntities.get(entity.getUniqueId());
     }
 
+    public static HashMap<UUID, DynamicEntity> getDynamicEntities() {
+        return ImmutableMapSnapshots.hashMapCopyOf(dynamicEntities);
+    }
+
     @Nullable
     public static DynamicEntity create(String entityID, LivingEntity livingEntity) {
-        FileModelConverter fileModelConverter = FileModelConverter.getConvertedFileModels().get(entityID);
+        FileModelConverter fileModelConverter = FileModelConverter.getModel(entityID);
         if (fileModelConverter == null) return null;
         DynamicEntity dynamicEntity = new DynamicEntity(entityID, livingEntity.getLocation());
         dynamicEntity.spawn(livingEntity);
@@ -91,7 +94,7 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
         // disguises on EliteMobs custom bosses to appear correctly on Bedrock.
         livingEntity.setInvisible(!bedrockUsesUnderlyingEntity);
         Bukkit.getOnlinePlayers().forEach(player -> {
-            if (player.getLocation().getWorld().equals(dynamicEntity.getLocation().getWorld())) {
+            if (player.getWorld().equals(dynamicEntity.getLocation().getWorld())) {
                 player.hideEntity(MetadataHandler.PLUGIN, livingEntity);
             }
         });
@@ -107,7 +110,7 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
      */
     @Nullable
     public static DynamicEntity createWithInvisibility(String entityID, LivingEntity livingEntity) {
-        FileModelConverter fileModelConverter = FileModelConverter.getConvertedFileModels().get(entityID);
+        FileModelConverter fileModelConverter = FileModelConverter.getModel(entityID);
         if (fileModelConverter == null) return null;
         DynamicEntity dynamicEntity = new DynamicEntity(entityID, livingEntity.getLocation());
         dynamicEntity.spawn(livingEntity);
@@ -124,10 +127,14 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
 
     public void spawn(LivingEntity entity) {
         super.spawn(entity);
+    }
+
+    @Override
+    protected void onSpawnComplete() {
         if (getBedrockModeledEntity() != null) {
-            getBedrockModeledEntity().bindToUnderlyingEntity(entity);
+            getBedrockModeledEntity().bindToUnderlyingEntity((LivingEntity) getUnderlyingEntity());
         }
-        dynamicEntities.put(entity.getUniqueId(), this);
+        dynamicEntities.put(getUnderlyingEntity().getUniqueId(), this);
         syncSkeletonWithEntity();
     }
 
@@ -135,33 +142,24 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     public void tick(AbstractPacketBundle abstractPacketBundle) {
         //todo: investigate if this is still necessary since everything now updates anyway, at least for animations
         syncSkeletonWithEntity();
-        evokerWatchdog();
         super.tick(abstractPacketBundle);
     }
 
-    private void evokerWatchdog() {
-        if (!(underlyingEntity instanceof Evoker evoker)) return;
-        if (!hasAnimation("attack")) return;
+    Evoker getEvokerForWatchdog() {
+        if (!(underlyingEntity instanceof Evoker evoker)
+                || !evoker.isValid()
+                || !hasAnimation("attack")) {
+            isEvokerAttacking = false;
+            return null;
+        }
+        return evoker;
+    }
 
-        Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
-            if (!evoker.isValid()) return;
-
-            boolean fangsNearby = evoker.getLocation().getWorld()
-                    .getNearbyEntities(evoker.getLocation(), 2, 2, 2)
-                    .stream()
-                    .anyMatch(entity -> entity instanceof EvokerFangs);
-
-            if (fangsNearby) {
-                if (!isEvokerAttacking) {
-                    playAnimation("attack", false, false);
-                    isEvokerAttacking = true;
-                }
-                // If already attacking, skip playing the animation
-            } else {
-                // No fangs nearby, reset for next attack
-                isEvokerAttacking = false;
-            }
-        });
+    void updateEvokerAttackState(boolean attacking) {
+        if (attacking && !isEvokerAttacking) {
+            playAnimation("attack", false, false);
+        }
+        isEvokerAttacking = attacking;
     }
 
     private void syncSkeletonWithEntity() {
@@ -214,7 +212,8 @@ public class DynamicEntity extends ModeledEntity implements ModeledEntityInterfa
     @Override
     public void remove() {
         super.remove();
-        dynamicEntities.remove(underlyingEntity.getUniqueId());
+        // Null guard: a DynamicEntity constructed but never spawned has no underlying entity.
+        if (underlyingEntity != null) dynamicEntities.remove(underlyingEntity.getUniqueId());
     }
 
     public static void shutdown() {

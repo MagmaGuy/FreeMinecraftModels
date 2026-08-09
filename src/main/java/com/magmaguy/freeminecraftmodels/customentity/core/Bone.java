@@ -81,15 +81,6 @@ public class Bone {
     }
 
     /**
-     * Checks if this bone currently has IK rotation applied.
-     *
-     * @return true if IK rotation is active
-     */
-    public boolean hasIKRotation() {
-        return ikRotation != null;
-    }
-
-    /**
      * Gets the effective rotation for this bone.
      * Returns IK rotation if set, otherwise returns animation rotation.
      *
@@ -109,10 +100,6 @@ public class Bone {
     public void generateDisplay() {
         boneTransforms.generateDisplay();
         boneChildren.forEach(Bone::generateDisplay);
-    }
-
-    public void setNameVisible(boolean visible) {
-        boneChildren.forEach(child -> child.setNameVisible(visible));
     }
 
     public void remove() {
@@ -150,9 +137,10 @@ public class Bone {
         if (boneBlueprint.isMountPoint()) return;
         boolean isBedrock = BedrockChecker.isBedrock(player);
         if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClientsV2) {
-            com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
-                    "Bone.displayTo SKIPPED (bedrock + V2=false) — player=" + player.getName()
-                            + " bone=" + boneBlueprint.getBoneName());
+            if (com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.enabled())
+                com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                        "Bone.displayTo SKIPPED (bedrock + V2=false) — player=" + player.getName()
+                                + " bone=" + boneBlueprint.getBoneName());
             return;
         }
         if (boneBlueprint.isNameTag()) {
@@ -163,35 +151,39 @@ public class Bone {
                 }
                 return;
             }
-            com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
-                    "Bone.displayTo branch=TEXT bedrock=" + isBedrock
-                            + " player=" + player.getName()
-                            + " bone=" + boneBlueprint.getBoneName());
+            if (com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.enabled())
+                com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                        "Bone.displayTo branch=TEXT bedrock=" + isBedrock
+                                + " player=" + player.getName()
+                                + " bone=" + boneBlueprint.getBoneName());
             PacketEntityDisplayHelper.displayToPlayer(boneTransforms.getPacketTextDisplayArmorStandEntity(), player, packetBundle);
         } else if (boneTransforms.getPacketArmorStandEntity() != null &&
                 (!DefaultConfig.useDisplayEntitiesWhenPossible ||
                         isBedrock ||
                         VersionChecker.serverVersionOlderThan(19, 4))) {
-            com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
-                    "Bone.displayTo branch=ARMOR_STAND bedrock=" + isBedrock
-                            + " player=" + player.getName()
-                            + " bone=" + boneBlueprint.getBoneName()
-                            + " modelID=" + boneBlueprint.getModelID()
-                            + " packetClass=" + boneTransforms.getPacketArmorStandEntity().getClass().getSimpleName());
+            if (com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.enabled())
+                com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                        "Bone.displayTo branch=ARMOR_STAND bedrock=" + isBedrock
+                                + " player=" + player.getName()
+                                + " bone=" + boneBlueprint.getBoneName()
+                                + " modelID=" + boneBlueprint.getModelID()
+                                + " packetClass=" + boneTransforms.getPacketArmorStandEntity().getClass().getSimpleName());
             PacketEntityDisplayHelper.displayToPlayer(boneTransforms.getPacketArmorStandEntity(), player, packetBundle);
         } else if (boneTransforms.getPacketDisplayEntity() != null) {
-            com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
-                    "Bone.displayTo branch=DISPLAY_ENTITY bedrock=" + isBedrock
-                            + " player=" + player.getName()
-                            + " bone=" + boneBlueprint.getBoneName()
-                            + " modelID=" + boneBlueprint.getModelID());
+            if (com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.enabled())
+                com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                        "Bone.displayTo branch=DISPLAY_ENTITY bedrock=" + isBedrock
+                                + " player=" + player.getName()
+                                + " bone=" + boneBlueprint.getBoneName()
+                                + " modelID=" + boneBlueprint.getModelID());
             PacketEntityDisplayHelper.displayToPlayer(boneTransforms.getPacketDisplayEntity(), player, packetBundle);
         } else {
-            com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
-                    "Bone.displayTo branch=NONE — no packet entity initialized! bedrock=" + isBedrock
-                            + " player=" + player.getName()
-                            + " bone=" + boneBlueprint.getBoneName()
-                            + " (BUG: every bone except mount-points should have ≥1 packet entity)");
+            if (com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.enabled())
+                com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
+                        "Bone.displayTo branch=NONE — no packet entity initialized! bedrock=" + isBedrock
+                                + " player=" + player.getName()
+                                + " bone=" + boneBlueprint.getBoneName()
+                                + " (BUG: every bone except mount-points should have ≥1 packet entity)");
         }
     }
 

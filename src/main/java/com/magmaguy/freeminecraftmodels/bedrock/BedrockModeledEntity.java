@@ -37,7 +37,9 @@ public final class BedrockModeledEntity {
     private String activeAnimation;
     private Map<String, Object> lastProperties = new LinkedHashMap<>();
 
-    public BedrockModeledEntity(ModeledEntity modeledEntity, FileModelConverter converter) {
+    public BedrockModeledEntity(ModeledEntity modeledEntity,
+                                FileModelConverter converter,
+                                Location initialLocation) {
         this.modeledEntity = modeledEntity;
         this.animations = BedrockEntityBundleExporter.exportedAnimationNames(converter);
         this.identifier = BedrockEntityBundleExporter.identifier(modeledEntity.getEntityID());
@@ -56,15 +58,32 @@ public final class BedrockModeledEntity {
         this.height = computedHeight;
         this.propertySchema = schema.build();
 
-        this.fakeCustomEntity = NMSManager.getAdapter().fakeCustomEntityBuilder()
-                .identifier(identifier)
-                .carrierEntityType(EntityType.PIG)
-                .dimensions(width, height)
-                .scale((float) modeledEntity.getScaleModifier())
-                .tracked(false)
-                .propertySchema(propertySchema)
-                .build(bedrockCarrierLocation(modeledEntity.getLocation()));
-        applyProperties(initialProperties());
+        try {
+            this.fakeCustomEntity = NMSManager.getAdapter().fakeCustomEntityBuilder()
+                    .identifier(identifier)
+                    .carrierEntityType(EntityType.PIG)
+                    .dimensions(width, height)
+                    .scale((float) modeledEntity.getScaleModifier())
+                    .tracked(false)
+                    .propertySchema(propertySchema)
+                    .build(bedrockCarrierLocation(initialLocation));
+            applyProperties(initialProperties());
+        } catch (RuntimeException | Error initializationFailure) {
+            // A builder can allocate/register the carrier before a later property
+            // initialization step fails. Do not strand that partially initialized
+            // entity merely because the owning ModeledEntity never receives this
+            // constructor's result.
+            if (fakeCustomEntity != null) {
+                try {
+                    fakeCustomEntity.remove();
+                } catch (Throwable cleanupFailure) {
+                    initializationFailure.addSuppressed(cleanupFailure);
+                } finally {
+                    fakeCustomEntity = null;
+                }
+            }
+            throw initializationFailure;
+        }
     }
 
     public boolean isAvailable() {
@@ -83,21 +102,45 @@ public final class BedrockModeledEntity {
         Set<UUID> previousViewers = new LinkedHashSet<>();
         if (fakeCustomEntity != null) {
             previousViewers.addAll(fakeCustomEntity.getViewers());
-            fakeCustomEntity.remove();
-            fakeCustomEntity = null;
         }
-        if (bukkitCustomEntity != null) {
-            bukkitCustomEntity.remove();
+
+        // Build and initialize the replacement before retiring the current
+        // backend. Builders register bridge definitions and can throw after
+        // allocating a handle; destroying the old carrier first made one
+        // transient failure permanently remove Bedrock rendering for this
+        // modeled entity.
+        BukkitCustomEntity replacement = null;
+        try {
+            replacement = NMSManager.getAdapter().bukkitCustomEntityBuilder()
+                    .identifier(identifier)
+                    .carrierEntityType(entity.getType())
+                    .dimensions(width, height)
+                    .scale((float) modeledEntity.getScaleModifier())
+                    .tracked(false)
+                    .propertySchema(propertySchema)
+                    .build(entity);
+            replacement.setProperties(lastProperties);
+        } catch (RuntimeException | Error bindingFailure) {
+            if (replacement != null) {
+                try {
+                    replacement.remove();
+                } catch (Throwable cleanupFailure) {
+                    bindingFailure.addSuppressed(cleanupFailure);
+                }
+            }
+            throw bindingFailure;
         }
-        bukkitCustomEntity = NMSManager.getAdapter().bukkitCustomEntityBuilder()
-                .identifier(identifier)
-                .carrierEntityType(entity.getType())
-                .dimensions(width, height)
-                .scale((float) modeledEntity.getScaleModifier())
-                .tracked(false)
-                .propertySchema(propertySchema)
-                .build(entity);
-        bukkitCustomEntity.setProperties(lastProperties);
+
+        FakeCustomEntity previousFake = fakeCustomEntity;
+        BukkitCustomEntity previousBukkit = bukkitCustomEntity;
+        fakeCustomEntity = null;
+        bukkitCustomEntity = replacement;
+        if (previousFake != null) {
+            previousFake.remove();
+        }
+        if (previousBukkit != null) {
+            previousBukkit.remove();
+        }
 
         for (UUID uuid : previousViewers) {
             Player player = Bukkit.getPlayer(uuid);
@@ -126,7 +169,9 @@ public final class BedrockModeledEntity {
             BukkitCustomEntity currentHandle = bukkitCustomEntity;
             currentHandle.forgetViewer(uuid);
             Player player = Bukkit.getPlayer(uuid);
-            if (player != null && player.isOnline() && MetadataHandler.PLUGIN != null) {
+            if (player != null && player.isOnline()
+                    && MetadataHandler.PLUGIN != null
+                    && MetadataHandler.PLUGIN.isEnabled()) {
                 Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN,
                         () -> player.hideEntity(MetadataHandler.PLUGIN, currentHandle.entity()));
             }
@@ -148,12 +193,14 @@ public final class BedrockModeledEntity {
         if (!isAvailable()) {
             return;
         }
-        Location location = bedrockCarrierLocation(modeledEntity.getLocation());
-        if (fakeCustomEntity != null && location != null
-                && (lastLocation == null || lastLocation.distanceSquared(location) > 0.0001
-                || lastLocation.getYaw() != location.getYaw() || lastLocation.getPitch() != location.getPitch())) {
-            fakeCustomEntity.teleport(location);
-            lastLocation = location.clone();
+        if (fakeCustomEntity != null) {
+            // Only compute the carrier location when there is a fake carrier to move
+            // (the bukkit-entity backend follows its underlying entity on its own).
+            Location location = bedrockCarrierLocation(modeledEntity.getLocation());
+            if (location != null && hasCarrierMoved(location)) {
+                fakeCustomEntity.teleport(location);
+                lastLocation = location.clone();
+            }
         }
         float scale = (float) modeledEntity.getScaleModifier();
         if (Float.compare(scale, lastScale) != 0) {
@@ -178,7 +225,6 @@ public final class BedrockModeledEntity {
 
     private void displayUnderlyingTo(Player player) {
         if (MetadataHandler.PLUGIN == null || !MetadataHandler.PLUGIN.isEnabled()) {
-            bukkitCustomEntity.prepareSpawnFor(player);
             return;
         }
         UUID uuid = player.getUniqueId();
@@ -216,9 +262,9 @@ public final class BedrockModeledEntity {
     }
 
     private Map<String, Object> initialProperties() {
-        Map<String, Object> properties = new LinkedHashMap<>();
-        properties.putAll(animationProperties(defaultAnimation()));
-        return properties;
+        // animationProperties already builds a fresh map; no extra copy needed
+        // (applyProperties defensively copies again anyway).
+        return animationProperties(defaultAnimation());
     }
 
     private Map<String, Object> animationProperties(String animationName) {
@@ -242,6 +288,22 @@ public final class BedrockModeledEntity {
             return "idle";
         }
         return null;
+    }
+
+    /**
+     * Whether the carrier needs a teleport to match {@code location}. A world
+     * change (or missing world) always counts as movement — this tick runs off
+     * the async model clock, and Location#distanceSquared throws on cross-world
+     * comparisons, which would otherwise kill the tick after a cross-world
+     * teleport.
+     */
+    private boolean hasCarrierMoved(Location location) {
+        if (lastLocation == null) return true;
+        if (lastLocation.getWorld() == null || location.getWorld() == null
+                || !lastLocation.getWorld().equals(location.getWorld())) return true;
+        return lastLocation.distanceSquared(location) > 0.0001
+                || lastLocation.getYaw() != location.getYaw()
+                || lastLocation.getPitch() != location.getPitch();
     }
 
     private Location bedrockCarrierLocation(Location location) {

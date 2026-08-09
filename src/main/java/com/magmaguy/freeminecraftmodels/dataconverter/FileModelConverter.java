@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.dataconverter;
 
 import com.google.gson.Gson;
 import com.magmaguy.freeminecraftmodels.utils.StringToResourcePackFilename;
+import com.magmaguy.freeminecraftmodels.utils.ImmutableMapSnapshots;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import org.bukkit.Bukkit;
@@ -9,16 +10,14 @@ import org.bukkit.Bukkit;
 import java.io.File;
 import java.io.Reader;
 import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 public class FileModelConverter {
 
-    @Getter
-    private static final HashMap<String, FileModelConverter> convertedFileModels = new HashMap<>();
-    private final HashMap<String, Object> values = new HashMap<>();
-    private final HashMap<String, Object> outliner = new HashMap<>();
+    private static final ConcurrentHashMap<String, FileModelConverter> convertedFileModels = new ConcurrentHashMap<>();
+    private static final Set<String> rejectedModelIds = new HashSet<>();
     private String modelName;
     @Getter
     private SkeletonBlueprint skeletonBlueprint;
@@ -43,9 +42,8 @@ public class FileModelConverter {
      */
     public FileModelConverter(File file) {
         this.sourceFile = file;
-        if (file.getName().contains(".bbmodel")) modelName = file.getName().replace(".bbmodel", "");
-        else if (file.getName().contains(".fmmodel")) modelName = file.getName().replace(".fmmodel", "");
-        else {
+        modelName = normalizedModelId(file);
+        if (modelName == null) {
             // Silently skip known companion files (e.g. .yml configs, .png textures)
             if (file.getName().endsWith(".yml") || file.getName().endsWith(".yaml") || file.getName().endsWith(".png") || file.getName().endsWith(".json"))
                 return;
@@ -53,27 +51,27 @@ public class FileModelConverter {
             return;
         }
 
-        modelName = StringToResourcePackFilename.convert(modelName);
+        ID = modelName;
+        if (rejectedModelIds.contains(modelName)) return;
 
-        Gson gson = new Gson();
-
-        Reader reader;
-        // create a reader
-        try {
-            reader = Files.newBufferedReader(Paths.get(file.getPath()));
-        } catch (Exception ex) {
-            Logger.warn("Failed to read file " + file.getAbsolutePath());
+        FileModelConverter existing = convertedFileModels.get(modelName);
+        if (existing != null) {
+            rejectCollision(modelName, List.of(existing.sourceFile, file));
+            existing.invalidate();
             return;
         }
 
-        // convert JSON file to map
-        Map<?, ?> map = gson.fromJson(reader, Map.class);
+        Gson gson = new Gson();
 
-        // close reader
-        try {
-            reader.close();
+        Map<?, ?> map;
+        try (Reader reader = Files.newBufferedReader(file.toPath())) {
+            map = gson.fromJson(reader, Map.class);
         } catch (Exception exception) {
-            Logger.warn("Failed to close reader for file!");
+            Logger.warn("Failed to read model file " + file.getAbsolutePath() + ": " + exception.getMessage());
+            return;
+        }
+        if (map == null) {
+            Logger.warn("Model file is empty: " + file.getAbsolutePath());
             return;
         }
 
@@ -99,6 +97,9 @@ public class FileModelConverter {
         this.parsedTextures = parsedTextures;
 
         //This parses the blocks/elements, separating them by type
+        // Local, not a field: only needed while building the skeleton blueprint —
+        // keeping it as a field retained the whole parsed cube map per model.
+        HashMap<String, Object> values = new HashMap<>();
         HashMap<String, Map<String, Object>> locators = new HashMap<>();
         HashMap<String, Map<String, Object>> nullObjects = new HashMap<>();
 
@@ -125,22 +126,104 @@ public class FileModelConverter {
         // Handle version differences in outliner/groups
         List outlinerValues = mergeGroupsAndOutliner(map);
 
-        for (int i = 0; i < outlinerValues.size(); i++) {
-            if (!(outlinerValues.get(i) instanceof Map<?, ?> element)) {
-                //I don't really know why Blockbench does this
-                continue;
-            } else {
-                outliner.put((String) element.get("uuid"), element);
-            }
-        }
-
-        ID = modelName;
         skeletonBlueprint = new SkeletonBlueprint(parsedTextures, outlinerValues, values, locators, nullObjects, generateFileTextures(parsedTextures), modelName, null, resolutionWidth, resolutionHeight);
 
         List animationList = (ArrayList) map.get("animations");
         if (animationList != null)
             animationsBlueprint = new AnimationsBlueprint(animationList, modelName, skeletonBlueprint, blockBenchVersion);
         convertedFileModels.put(modelName, this);
+    }
+
+    /**
+     * Rejects every file participating in a normalized model-ID collision before
+     * parsing starts. Parsing a model writes resource-pack assets, so detecting
+     * only the second file would still leave order-dependent output from the
+     * first file.
+     *
+     * @param modelFiles all model definition files that will be parsed
+     */
+    public static void preflightNormalizedModelIds(Collection<File> modelFiles) {
+        Map<String, List<File>> sourcesById = new TreeMap<>();
+        for (File modelFile : modelFiles) {
+            String normalizedId = normalizedModelId(modelFile);
+            if (normalizedId == null) continue;
+            sourcesById.computeIfAbsent(normalizedId, ignored -> new ArrayList<>()).add(modelFile);
+        }
+
+        for (Map.Entry<String, List<File>> entry : sourcesById.entrySet()) {
+            if (entry.getValue().size() < 2) continue;
+            entry.getValue().sort(Comparator.comparing(File::getAbsolutePath));
+            rejectCollision(entry.getKey(), entry.getValue());
+        }
+    }
+
+    private static String normalizedModelId(File file) {
+        if (file == null) return null;
+        String filename = file.getName();
+        String lowercaseFilename = filename.toLowerCase(Locale.ROOT);
+        String rawModelName;
+        if (lowercaseFilename.endsWith(".bbmodel")) {
+            rawModelName = filename.substring(0, filename.length() - ".bbmodel".length());
+        } else if (lowercaseFilename.endsWith(".fmmodel")) {
+            rawModelName = filename.substring(0, filename.length() - ".fmmodel".length());
+        } else {
+            return null;
+        }
+        return StringToResourcePackFilename.convert(rawModelName);
+    }
+
+    private static void rejectCollision(String modelId, Collection<File> sources) {
+        rejectedModelIds.add(modelId);
+        convertedFileModels.remove(modelId);
+        String sourceList = sources.stream()
+                .filter(Objects::nonNull)
+                .map(File::getAbsolutePath)
+                .sorted()
+                .collect(java.util.stream.Collectors.joining(", "));
+        Logger.warn("[FMM Models] Rejected normalized model ID collision '" + modelId
+                + "'. These files normalize to the same ID: " + sourceList
+                + ". Rename the files so every normalized model ID is unique; no colliding model was loaded.");
+    }
+
+    private void invalidate() {
+        skeletonBlueprint = null;
+        animationsBlueprint = null;
+    }
+
+    public boolean isRegisteredModel() {
+        return skeletonBlueprint != null && convertedFileModels.get(ID) == this;
+    }
+
+    /**
+     * Returns an immutable point-in-time view so API consumers cannot mutate the
+     * live model registry.
+     */
+    public static HashMap<String, FileModelConverter> getConvertedFileModels() {
+        return ImmutableMapSnapshots.hashMapCopyOf(convertedFileModels);
+    }
+
+    /**
+     * O(1) single-model lookup against the live registry. Prefer this over
+     * {@link #getConvertedFileModels()} when only one model is needed — the
+     * snapshot getter copies the whole registry per call.
+     *
+     * @param id the normalized model ID, may be null
+     * @return the registered model, or null if the ID is null or unknown
+     */
+    public static FileModelConverter getModel(String id) {
+        if (id == null) return null;
+        return convertedFileModels.get(id);
+    }
+
+    /**
+     * O(1) existence check against the live registry.
+     *
+     * @param id the normalized model ID, may be null
+     * @return whether a model is registered under the given ID
+     */
+    public static boolean containsModel(String id) {
+        if (id == null) return false;
+        return convertedFileModels.containsKey(id);
     }
 
     /**
@@ -249,11 +332,14 @@ public class FileModelConverter {
 
     public static void shutdown() {
         convertedFileModels.clear();
+        rejectedModelIds.clear();
     }
 
     private List<ParsedTexture> parseTextures(Map<?, ?> map) {
         List<ParsedTexture> parsedTextures = new ArrayList<>();
         List<Map<?, ?>> texturesValues = (ArrayList<Map<?, ?>>) map.get("textures");
+        // Texture-less bbmodels have no "textures" entry at all — nothing to parse.
+        if (texturesValues == null) return parsedTextures;
         Set<String> usedNames = new HashSet<>();
 
         for (int i = 0; i < texturesValues.size(); i++) {
@@ -295,9 +381,13 @@ public class FileModelConverter {
         Map<String, Map<String, Object>> texturesMap = new HashMap<>();
         Map<String, Object> textureContents = new HashMap<>();
         for (ParsedTexture parsedTexture : parsedTextures) {
-            textureContents.put("" + parsedTexture.getId(), "freeminecraftmodels:entity/" + modelName + "/" + parsedTexture.getFilename().replace(".png", ""));
+            textureContents.put("" + parsedTexture.getId(), "freeminecraftmodels:entity/" + modelName + "/" + stripPngExtension(parsedTexture.getFilename()));
         }
         texturesMap.put("textures", textureContents);
         return texturesMap;
+    }
+
+    private static String stripPngExtension(String filename) {
+        return filename.endsWith(".png") ? filename.substring(0, filename.length() - 4) : filename;
     }
 }

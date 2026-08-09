@@ -9,7 +9,8 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Per-world modeled-entity density snapshot, refreshed once per model-clock tick.
+ * Per-world modeled-entity density snapshot, refreshed by the primary-thread
+ * viewer-state clock.
  *
  * <p>Acts as a pseudo load balancer for the close-range proximity override in
  * {@link SkeletonWatchers}. In a sparse world a model within {@code MIN_VIEW_DISTANCE} is
@@ -32,8 +33,8 @@ public final class ModelDensity {
     private static volatile Map<UUID, Integer> countsByWorld = Map.of();
 
     /**
-     * Rebuilds the per-world counts. Called once per tick on the model-clock thread, before
-     * models tick (and thus before {@link SkeletonWatchers#tick()} reads the snapshot).
+     * Rebuilds the per-world counts on the primary thread, before
+     * {@link SkeletonWatchers#tickPrimaryThread()} reads the snapshot.
      */
     public static void refresh() {
         Map<UUID, Integer> counts = new HashMap<>();
@@ -43,6 +44,10 @@ public final class ModelDensity {
             counts.merge(world.getUID(), 1, Integer::sum);
         }
         countsByWorld = counts;
+    }
+
+    public static void clear() {
+        countsByWorld = Map.of();
     }
 
     public static int countInWorld(World world) {

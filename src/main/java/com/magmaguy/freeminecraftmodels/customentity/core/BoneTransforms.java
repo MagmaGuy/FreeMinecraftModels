@@ -7,11 +7,9 @@ import com.magmaguy.easyminecraftgoals.internal.PacketTextEntity;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.utils.TransformationMatrix;
-import com.magmaguy.magmacore.util.AttributeManager;
 import com.magmaguy.magmacore.util.VersionChecker;
 import lombok.Getter;
 import org.bukkit.Location;
-import org.bukkit.entity.LivingEntity;
 import org.bukkit.util.EulerAngle;
 import org.bukkit.util.Vector;
 import org.joml.Vector3f;
@@ -212,42 +210,43 @@ public class BoneTransforms {
      * points where the raw pivot position is needed.
      */
     protected Location getMountPointTargetLocation() {
+        // Hoisted: getCurrentLocation() rebuilds a Location per call (NMS
+        // body-rotation lookup + clone for dynamic entities) — snapshot once.
+        Location currentLocation = bone.getSkeleton().getCurrentLocation();
         double[] translatedGlobalMatrix = globalMatrix.getTranslation();
-        return new Location(bone.getSkeleton().getCurrentLocation().getWorld(),
+        return new Location(currentLocation.getWorld(),
                 translatedGlobalMatrix[0],
                 translatedGlobalMatrix[1],
                 translatedGlobalMatrix[2])
-                .add(bone.getSkeleton().getCurrentLocation());
+                .add(currentLocation);
     }
 
     protected Location getArmorStandTargetLocation() {
+        // Hoisted: see getMountPointTargetLocation().
+        Location currentLocation = bone.getSkeleton().getCurrentLocation();
         double[] translatedGlobalMatrix = globalMatrix.getTranslation();
-        Location armorStandLocation = new Location(bone.getSkeleton().getCurrentLocation().getWorld(),
+        Location armorStandLocation = new Location(currentLocation.getWorld(),
                 translatedGlobalMatrix[0],
                 translatedGlobalMatrix[1],
                 translatedGlobalMatrix[2])
-                .add(bone.getSkeleton().getCurrentLocation());
+                .add(currentLocation);
         armorStandLocation.setYaw(180);
         armorStandLocation.subtract(0, BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT(), 0);
         return armorStandLocation;
     }
 
     protected Location getDisplayEntityTargetLocation() {
+        // Hoisted: see getMountPointTargetLocation().
+        Location currentLocation = bone.getSkeleton().getCurrentLocation();
         double[] translatedGlobalMatrix = globalMatrix.getTranslation();
-        Location armorStandLocation;
+        Location armorStandLocation = new Location(currentLocation.getWorld(),
+                translatedGlobalMatrix[0],
+                translatedGlobalMatrix[1],
+                translatedGlobalMatrix[2])
+                .add(currentLocation);
         if (!VersionChecker.serverVersionOlderThan(20, 0)) {
-            armorStandLocation = new Location(bone.getSkeleton().getCurrentLocation().getWorld(),
-                    translatedGlobalMatrix[0],
-                    translatedGlobalMatrix[1],
-                    translatedGlobalMatrix[2])
-                    .add(bone.getSkeleton().getCurrentLocation());
             armorStandLocation.setYaw(180);
-        } else
-            armorStandLocation = new Location(bone.getSkeleton().getCurrentLocation().getWorld(),
-                    translatedGlobalMatrix[0],
-                    translatedGlobalMatrix[1],
-                    translatedGlobalMatrix[2])
-                    .add(bone.getSkeleton().getCurrentLocation());
+        }
         return armorStandLocation;
     }
 
@@ -403,9 +402,10 @@ public class BoneTransforms {
         float scaleZ = animScale.z == -1 ? 2.5f : animScale.z * 2.5f;
         //Only the root bone/head should be scaling up globally like this, otherwise the scale will be inherited by each bone and then become progressively larger or smaller
         if (bone.getParent() == null) {
+            // scaleModifier already tracks the underlying LivingEntity's generic_scale
+            // attribute (ModeledEntity.tick refreshes it every tick). A ModeledEntity is
+            // never itself a Bukkit LivingEntity, so no extra attribute lookup is needed.
             double scaleModifier = bone.getSkeleton().getModeledEntity().getScaleModifier();
-            if (bone.getSkeleton().getModeledEntity().getUnderlyingEntity() != null && bone.getSkeleton().getModeledEntity() instanceof LivingEntity livingEntity && livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")) != null)
-                scaleModifier *= livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")).getValue();
             scaleX *= (float) scaleModifier;
             scaleY *= (float) scaleModifier;
             scaleZ *= (float) scaleModifier;

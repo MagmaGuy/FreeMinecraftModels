@@ -143,4 +143,9 @@ public class ScriptableItem extends ScriptableEntity {
     public static void clearLocalCooldowns(UUID playerUUID) {
         playerLocalCooldowns.remove(playerUUID);
     }
+
+    public static void clearAllCooldowns() {
+        playerGlobalCooldowns.clear();
+        playerLocalCooldowns.clear();
+    }
 }

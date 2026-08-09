@@ -1,11 +1,10 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
-import com.magmaguy.freeminecraftmodels.customentity.core.ModeledEntityInterface;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import org.bukkit.Location;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-public class StaticEntity extends ModeledEntity implements ModeledEntityInterface {
+public class StaticEntity extends ModeledEntity {
     protected StaticEntity(String entityID, Location targetLocation) {
         super(entityID, targetLocation);
         setLeftClickCallback((player, entity) -> entity.damage(player, 1));
@@ -13,7 +12,7 @@ public class StaticEntity extends ModeledEntity implements ModeledEntityInterfac
 
     @Nullable
     public static StaticEntity create(String entityID, Location targetLocation) {
-        FileModelConverter fileModelConverter = FileModelConverter.getConvertedFileModels().get(entityID);
+        FileModelConverter fileModelConverter = FileModelConverter.getModel(entityID);
         if (fileModelConverter == null) return null;
         StaticEntity staticEntity = new StaticEntity(entityID, targetLocation);
         staticEntity.spawn();

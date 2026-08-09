@@ -34,10 +34,7 @@ public class ParsedTexture {
             filename = StringToResourcePackFilename.convert((String) textureObject.get("name"));
             //So while there is an ID in blockbench it is not what it uses internally, what it uses internally is the ordered list of textures. Don't ask why.
             id = imageIndex;
-            if (!filename.contains(".png")) {
-                if (!filename.contains(".")) filename += ".png";
-                else filename.split("\\.")[0] += ".png";
-            }
+            filename = normalizeTextureFilename(filename);
 
             File imageFile = generateImageFile(textureObject, modelName);
 
@@ -73,6 +70,12 @@ public class ParsedTexture {
         }
 
         isValid = true;
+    }
+
+    private static String normalizeTextureFilename(String filename) {
+        int extensionIndex = filename.lastIndexOf('.');
+        String baseName = extensionIndex >= 0 ? filename.substring(0, extensionIndex) : filename;
+        return baseName + ".png";
     }
 
     private File generateImageFile(Map<?, ?> textureObject, String modelName) {

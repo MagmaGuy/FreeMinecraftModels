@@ -2,7 +2,6 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
-import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.IKChainBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import lombok.Getter;
@@ -19,8 +18,6 @@ import java.util.List;
 
 public class Skeleton {
 
-    @Getter
-    private final List<BoneBlueprint> mainModel = new ArrayList<>();
     //In BlockBench models are referred to by name for animations, and names are unique
     @Getter
     private final HashMap<String, Bone> boneMap = new HashMap<>();
@@ -30,7 +27,6 @@ public class Skeleton {
     private final SkeletonWatchers skeletonWatchers;
     @Getter
     private final List<Bone> mountPointBones = new ArrayList<>();
-    private final List<Bone> nametags = new ArrayList<>();
     // IK chains for inverse kinematics animation
     @Getter
     private final List<IKChain> ikChains = new ArrayList<>();
@@ -82,9 +78,6 @@ public class Skeleton {
 
     public void generateDisplays() {
         rootBone.generateDisplay();
-        boneMap.values().forEach(bone -> {
-            if (bone.getBoneBlueprint().isNameTag()) nametags.add(bone);
-        });
     }
 
     public void remove() {
@@ -117,8 +110,6 @@ public class Skeleton {
      * This updates animations. The plugin runs this automatically, don't use it unless you know what you're doing!
      */
     public void tick(AbstractPacketBundle abstractPacketBundle) {
-        skeletonWatchers.tick();
-
         // handle tint animation
         if (tinting) {
             tintCounter++;
@@ -174,10 +165,6 @@ public class Skeleton {
         if (tinting) return;
         Color applied = color != null ? color : Color.WHITE;
         boneMap.values().forEach(b -> b.setHorseLeatherArmorColor(applied));
-    }
-
-    public Color getPersistentTint() {
-        return persistentTint;
     }
 
     /**

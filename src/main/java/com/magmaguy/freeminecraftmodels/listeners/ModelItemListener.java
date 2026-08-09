@@ -5,7 +5,8 @@ import com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.HitboxBlueprint;
-import com.magmaguy.magmacore.location.LocationQueryRegistry;
+import com.magmaguy.freeminecraftmodels.scripting.PropScriptManager;
+import com.magmaguy.freeminecraftmodels.utils.PlayerPlacementPermissionProbe;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.Location;
@@ -21,6 +22,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
@@ -34,6 +36,7 @@ public class ModelItemListener implements Listener {
     private static final NamespacedKey MODEL_ID_KEY = new NamespacedKey(com.magmaguy.freeminecraftmodels.MetadataHandler.PLUGIN, "model_id");
     private static final NamespacedKey ITEM_ID_KEY = new NamespacedKey(com.magmaguy.freeminecraftmodels.MetadataHandler.PLUGIN, "fmm_item_id");
     private static final java.util.Map<java.util.UUID, Long> placementCooldowns = new java.util.HashMap<>();
+    private static final java.util.Map<String, java.util.Optional<PropScriptConfigFields>> propConfigCache = new java.util.HashMap<>();
     private static final long PLACEMENT_COOLDOWN_MS = 500; // ~10 ticks
 
     @EventHandler(priority = EventPriority.LOWEST)
@@ -69,33 +72,45 @@ public class ModelItemListener implements Listener {
         String modelID = item.getItemMeta().getPersistentDataContainer().get(MODEL_ID_KEY, PersistentDataType.STRING);
 
         // Verify the model still exists
-        if (!FileModelConverter.getConvertedFileModels().containsKey(modelID)) {
+        if (!FileModelConverter.containsModel(modelID)) {
             Logger.sendMessage(player, ChatColorConverter.convert("&cError: Model " + modelID + " no longer exists!"));
             return;
         }
 
-        // Raycast to find the target block
-        RayTraceResult rayTraceResult = player.rayTraceBlocks(5.0);
-        if (rayTraceResult == null || rayTraceResult.getHitBlock() == null) {
+        Block targetBlock;
+        BlockFace hitFace;
+        if (event.getAction() == Action.RIGHT_CLICK_BLOCK) {
+            // Bukkit has already validated the interaction packet and resolved
+            // its exact target. Re-raytracing here can disagree with that
+            // packet when a player's rotation changes near the click.
+            targetBlock = event.getClickedBlock();
+            hitFace = event.getBlockFace();
+        } else {
+            // RIGHT_CLICK_AIR has no event target, so retain aimed placement.
+            RayTraceResult rayTraceResult = player.rayTraceBlocks(5.0);
+            targetBlock = rayTraceResult == null
+                    ? null
+                    : rayTraceResult.getHitBlock();
+            hitFace = rayTraceResult == null
+                    ? null
+                    : rayTraceResult.getHitBlockFace();
+        }
+
+        if (targetBlock == null) {
             Logger.sendMessage(player, ChatColorConverter.convert("&cNo block found to place the model against!"));
             return;
         }
-
-        Block targetBlock = rayTraceResult.getHitBlock();
-        BlockFace hitFace = rayTraceResult.getHitBlockFace();
 
         if (hitFace == null) {
             Logger.sendMessage(player, ChatColorConverter.convert("&cCould not determine block face!"));
             return;
         }
 
-        // Block placement inside protected regions (WorldGuard / GriefPrevention) unless the player may bypass.
-        // The prop occupies the cell adjacent to the clicked face, so that's the cell we test.
+        // Ask MagmaCore's player-aware protection providers about the cell the prop occupies.
         if (DefaultConfig.preventPropPlacementInProtectedRegions
                 && !player.hasPermission("freeminecraftmodels.bypassregionprotection")) {
-            Location protectionCheckLocation = targetBlock.getRelative(hitFace).getLocation();
-            if (LocationQueryRegistry.isInAnyProtectedRegion(protectionCheckLocation)) {
-                Logger.sendMessage(player, ChatColorConverter.convert("&cYou can't place models inside a protected region here!"));
+            if (!PlayerPlacementPermissionProbe.canPlace(player, targetBlock, hitFace)) {
+                Logger.sendMessage(player, ChatColorConverter.convert("&cYou don't have permission to place a model here!"));
                 return;
             }
         }
@@ -113,7 +128,7 @@ public class ModelItemListener implements Listener {
             float yaw = snap90(toPlayer);
 
             // Get hitbox for footprint calculation
-            HitboxBlueprint hitbox = FileModelConverter.getConvertedFileModels().get(modelID)
+            HitboxBlueprint hitbox = FileModelConverter.getModel(modelID)
                     .getSkeletonBlueprint().getHitbox();
             int[] footprint = calculateFootprint(hitbox);
 
@@ -126,6 +141,17 @@ public class ModelItemListener implements Listener {
             // Validate space
             if (!hasSpaceForPlacement(placementLocation, rotatedFootprint)) {
                 Logger.sendMessage(player, ChatColorConverter.convert("&cNot enough space to place this model!"));
+                return;
+            }
+            if (DefaultConfig.preventPropPlacementInProtectedRegions
+                    && !player.hasPermission("freeminecraftmodels.bypassregionprotection")
+                    && !PlayerPlacementPermissionProbe.canPlaceVolume(
+                            player,
+                            placementLocation,
+                            rotatedFootprint[0],
+                            rotatedFootprint[1],
+                            rotatedFootprint[2])) {
+                Logger.sendMessage(player, ChatColorConverter.convert("&cYou don't have permission to place a model here!"));
                 return;
             }
 
@@ -170,23 +196,31 @@ public class ModelItemListener implements Listener {
      * @return the loaded config, or null if no config exists
      */
     private PropScriptConfigFields loadPropConfig(String modelID) {
-        FileModelConverter converter = FileModelConverter.getConvertedFileModels().get(modelID);
-        if (converter == null || converter.getSourceFile() == null) return null;
+        return propConfigCache.computeIfAbsent(modelID, ModelItemListener::readPropConfig).orElse(null);
+    }
 
-        File modelFile = converter.getSourceFile();
-        String baseName = modelFile.getName();
-        if (baseName.endsWith(".fmmodel")) baseName = baseName.substring(0, baseName.length() - 8);
-        else if (baseName.endsWith(".bbmodel")) baseName = baseName.substring(0, baseName.length() - 8);
-        File ymlFile = new File(modelFile.getParentFile(), baseName + ".yml");
+    private static java.util.Optional<PropScriptConfigFields> readPropConfig(String modelID) {
+        FileModelConverter converter = FileModelConverter.getModel(modelID);
+        File ymlFile = PropScriptManager.resolveSiblingYml(converter);
 
-        if (!ymlFile.exists()) return null;
+        if (ymlFile == null || !ymlFile.exists()) return java.util.Optional.empty();
 
         PropScriptConfigFields configFields = new PropScriptConfigFields(ymlFile.getName(), true);
         FileConfiguration fileConfig = YamlConfiguration.loadConfiguration(ymlFile);
         configFields.setFileConfiguration(fileConfig);
         configFields.setFile(ymlFile);
         configFields.processConfigFields();
-        return configFields;
+        return java.util.Optional.of(configFields);
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        placementCooldowns.remove(event.getPlayer().getUniqueId());
+    }
+
+    public static void shutdown() {
+        placementCooldowns.clear();
+        propConfigCache.clear();
     }
 
     /**
@@ -250,27 +284,14 @@ public class ModelItemListener implements Listener {
      * @return true if all blocks in the footprint are non-solid
      */
     private boolean hasSpaceForPlacement(Location origin, int[] footprint) {
-        int startX = origin.getBlockX() - (footprint[0] / 2);
-        int startY = origin.getBlockY();
-        int startZ = origin.getBlockZ() - (footprint[2] / 2);
-
-        for (int dx = 0; dx < footprint[0]; dx++) {
-            for (int dy = 0; dy < footprint[1]; dy++) {
-                for (int dz = 0; dz < footprint[2]; dz++) {
-                    Block block = origin.getWorld().getBlockAt(startX + dx, startY + dy, startZ + dz);
-                    if (block.getType().isSolid()) return false;
-                }
-            }
-        }
-        return true;
+        return PlayerPlacementPermissionProbe.forEachFootprintCell(
+                origin,
+                footprint[0],
+                footprint[1],
+                footprint[2],
+                cell -> !cell.getBlock().getType().isSolid());
     }
 
-    /**
-     * Snaps a direction vector's yaw to the nearest 90-degree increment (0, 90, 180, 270).
-     *
-     * @param direction the direction vector to snap
-     * @return the snapped yaw in degrees
-     */
     /**
      * Rotates a footprint's X and Z dimensions based on yaw.
      * At 90° or 270°, X and Z are swapped. Y is unchanged.
@@ -286,6 +307,12 @@ public class ModelItemListener implements Listener {
         return footprint;
     }
 
+    /**
+     * Snaps a direction vector's yaw to the nearest 90-degree increment (0, 90, 180, 270).
+     *
+     * @param direction the direction vector to snap
+     * @return the snapped yaw in degrees
+     */
     private float snap90(Vector direction) {
         double yaw = Math.atan2(-direction.getX(), direction.getZ()) * 180.0 / Math.PI;
         yaw = Math.round(yaw / 90.0) * 90.0;

@@ -12,6 +12,7 @@ import com.magmaguy.freeminecraftmodels.customentity.core.components.*;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
+import com.magmaguy.freeminecraftmodels.utils.ImmutableMapSnapshots;
 import com.magmaguy.magmacore.util.AttributeManager;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
@@ -29,16 +30,17 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ModeledEntity {
     @Getter
     private static final Set<ModeledEntity> loadedModeledEntities = ConcurrentHashMap.newKeySet();
-    @Getter
-    private static final HashMap<Entity, ModeledEntity> loadedModeledEntitiesWithUnderlyingEntities = new HashMap<>();
+    private static final ConcurrentHashMap<Entity, ModeledEntity>
+            loadedModeledEntitiesWithUnderlyingEntities =
+            new ConcurrentHashMap<>();
     @Getter
     private final String entityID;
+    /**
+     * Stable identity for this logical model instance. Unlike the backing Bukkit
+     * entity UUID, this is also available for props that have no underlying entity.
+     */
     @Getter
-    private final String name = "default";
-    @Getter
-    private final List<TextDisplay> nametags = new ArrayList<>();
-    @Getter
-    private final Location lastSeenLocation;
+    private final UUID modelInstanceId = UUID.randomUUID();
     @Getter
     private final InteractionComponent interactionComponent = new InteractionComponent(this);
     @Getter
@@ -47,7 +49,6 @@ public class ModeledEntity {
     private final DamageableComponent damageableComponent = new DamageableComponent(this);
     @Getter
     private final AnimationComponent animationComponent = new AnimationComponent(this);
-    protected int tickCounter = 0;
     @Getter
     protected Entity underlyingEntity = null;
     protected Location spawnLocation = null;
@@ -67,8 +68,9 @@ public class ModeledEntity {
     private Skeleton skeleton;
     @Getter
     private BedrockModeledEntity bedrockModeledEntity;
+    private final FileModelConverter fileModelConverter;
     @Getter
-    private boolean isRemoved = false;
+    private volatile boolean isRemoved = false;
     @Getter
     @Setter
     private double scaleModifier = 1.0;
@@ -82,10 +84,9 @@ public class ModeledEntity {
     public ModeledEntity(String entityID, Location spawnLocation) {
         this.entityID = entityID;
         this.spawnLocation = spawnLocation;
-        this.lastSeenLocation = spawnLocation;
         this.currentLocation = spawnLocation;
 
-        FileModelConverter fileModelConverter = FileModelConverter.getConvertedFileModels().get(entityID);
+        fileModelConverter = FileModelConverter.getModel(entityID);
         if (fileModelConverter == null) {
             Logger.warn("Failed to initialize ModeledEntity: FileModelConverter not found for entityID: " + entityID);
             return;
@@ -105,6 +106,12 @@ public class ModeledEntity {
         }
 
         animationComponent.initializeAnimationManager(fileModelConverter);
+    }
+
+    private void initializeBedrockBackend() {
+        if (bedrockModeledEntity != null || fileModelConverter == null) {
+            return;
+        }
         // Only build the per-model Bedrock backend when a Bedrock proxy (Geyser/Floodgate) is
         // actually installed. Without one there can be no Bedrock viewers, so constructing and
         // ticking a BedrockModeledEntity (a fake carrier entity + exported bundle) for every
@@ -112,13 +119,14 @@ public class ModeledEntity {
         // every Bedrock call site already null-checks getBedrockModeledEntity().
         if (com.magmaguy.freeminecraftmodels.thirdparty.BedrockChecker.isBedrockSupportPresent()) {
             try {
-                bedrockModeledEntity = new BedrockModeledEntity(this, fileModelConverter);
+                // Use explicit, initialized base-class state rather than asking a potentially
+                // overridden getLocation(). This activation runs only after the subclass and
+                // display spawn path are complete.
+                bedrockModeledEntity = new BedrockModeledEntity(this, fileModelConverter, currentLocation);
             } catch (Throwable throwable) {
                 Logger.warn("Failed to initialize Bedrock custom entity backend for " + entityID + ": " + throwable.getMessage());
             }
         }
-
-        loadedModeledEntities.add(this);
     }
 
     private static boolean isNameTag(ArmorStand armorStand) {
@@ -137,6 +145,26 @@ public class ModeledEntity {
         // Clear the original collection
         loadedModeledEntities.clear();
         loadedModeledEntitiesWithUnderlyingEntities.clear();
+    }
+
+    public static HashMap<Entity, ModeledEntity>
+    getLoadedModeledEntitiesWithUnderlyingEntities() {
+        return ImmutableMapSnapshots.hashMapCopyOf(
+                loadedModeledEntitiesWithUnderlyingEntities);
+    }
+
+    /**
+     * O(1) single-entity lookup against the live underlying-entity registry.
+     * Prefer this over {@link #getLoadedModeledEntitiesWithUnderlyingEntities()}
+     * when only one entity is needed — the snapshot getter copies the whole
+     * registry per call.
+     *
+     * @param entity the underlying Bukkit entity, may be null
+     * @return the modeled entity bound to it, or null if none
+     */
+    public static ModeledEntity getModeledEntity(Entity entity) {
+        if (entity == null) return null;
+        return loadedModeledEntitiesWithUnderlyingEntities.get(entity);
     }
 
     public void setUnderlyingEntity(Entity underlyingEntity) {
@@ -179,16 +207,40 @@ public class ModeledEntity {
         this.spawnLocation = entity.getLocation();
         this.currentLocation = entity.getLocation();
         displayInitializer();
+        registerLoadedEntity();
     }
 
     public void spawn(Location location) {
         this.spawnLocation = location;
         this.currentLocation = location;
         displayInitializer();
+        registerLoadedEntity();
     }
 
     public void spawn() {
-        spawn(lastSeenLocation);
+        spawn(spawnLocation);
+    }
+
+    private void registerLoadedEntity() {
+        // ModeledEntitiesClock ticks asynchronously. Publishing this object from
+        // the base constructor allowed the clock to invoke subclass overrides
+        // before subclass fields were initialized (or before an underlying entity
+        // had been bound). A modeled entity only becomes tickable after its spawn
+        // path and display initialization have completed successfully.
+        if (!isRemoved) {
+            initializeBedrockBackend();
+            onSpawnComplete();
+            loadedModeledEntities.add(this);
+        }
+    }
+
+    /**
+     * Hook invoked once the spawn path and display initialization have completed
+     * successfully, immediately before this entity is published to the tickable
+     * registry. Subclasses override this to run their post-spawn wiring at a
+     * point where the underlying entity (if any) and Bedrock backend are bound.
+     */
+    protected void onSpawnComplete() {
     }
 
     protected void shutdownRemove() {
@@ -200,9 +252,8 @@ public class ModeledEntity {
         if (isRemoved || getLocation() == null) return;
         getSkeleton().tick(abstractPacketBundle);
         if (bedrockModeledEntity != null) bedrockModeledEntity.tick();
-        hitboxComponent.tick(tickCounter, abstractPacketBundle);
+        hitboxComponent.tick(abstractPacketBundle);
         animationComponent.tick();
-        tickCounter++;
         if (underlyingEntity != null && underlyingEntity.isValid() && underlyingEntity instanceof LivingEntity livingEntity && livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")) != null)
             scaleModifier = livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")).getValue();
     }
@@ -297,10 +348,6 @@ public class ModeledEntity {
         this.cachedBoneTransformLocation = location != null ? location.clone() : null;
     }
 
-    public boolean isChunkLoaded() {
-        return getWorld().isChunkLoaded(getLocation().getBlockX() >> 4, getLocation().getBlockZ() >> 4);
-    }
-
     public void showUnderlyingEntity(Player player) {
         if (underlyingEntity == null || !underlyingEntity.isValid()) return;
         player.showEntity(MetadataHandler.PLUGIN, underlyingEntity);
@@ -347,11 +394,11 @@ public class ModeledEntity {
     }
 
     /**
-     * Inflicts damage on this entity by a specified amount and logs the source of the damage.
+     * Inflicts damage on this entity by a specified amount, attributed to the given damager.
      * Delegates the damage application and handling to the associated damageable component.
      *
      * @param damager the entity causing the damage
-     * @param amount  the
+     * @param amount  the amount of damage to deal
      */
     public void damage(Entity damager, double amount) {
         damageableComponent.damage(damager, amount);
@@ -360,16 +407,19 @@ public class ModeledEntity {
     /**
      * Applies damage to this entity as inflicted by the specified damager.
      * Delegates the damage logic to the {@code damageableComponent} associated with this entity.
+     *
+     * @param damager the entity causing the damage
      */
-    public void damage(Entity entityGettingDamaged) {
-        damageableComponent.damage(entityGettingDamaged);
+    public void damage(Entity damager) {
+        damageableComponent.damage(damager);
     }
 
     /**
-     * Applies damage to the current entity based on the attributes of the provided projectile.
-     * <p>
-     * This method evaluates the projectile's properties, such as speed, damage, and any potential
-     * enchantments, to
+     * Applies damage to the current entity based on the attributes of the provided projectile
+     * (impact speed, base damage, and bow enchantments such as Power and Piercing).
+     *
+     * @return true if the projectile hit was applied, false if it was ignored
+     * (self-hit, non-arrow projectile, or duplicate within the dedup window)
      */
     public boolean damage(Projectile projectile) {
         return damageableComponent.damage(projectile);

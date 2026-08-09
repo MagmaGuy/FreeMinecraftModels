@@ -48,18 +48,16 @@ import com.magmaguy.magmacore.nightbreak.NightbreakPluginSpec;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
-import org.bukkit.entity.LivingEntity;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
-import org.bukkit.event.Listener;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-public final class FreeMinecraftModels extends JavaPlugin implements Listener {
+public final class FreeMinecraftModels extends JavaPlugin {
+    private final AtomicBoolean importedContentReloadInProgress =
+            new AtomicBoolean(false);
     public static final NightbreakPluginSpec NIGHTBREAK_PLUGIN_SPEC = new NightbreakPluginSpec(
             "FreeMinecraftModels",
             "freeminecraftmodels",
@@ -137,11 +135,14 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        boolean shutdownDuringInitialization =
+                MagmaCore.getInitializationState(this.getName())
+                        == PluginInitializationState.INITIALIZING;
         MagmaCore.requestInitializationShutdown(this);
         ModeledEntitiesClock.shutdown();
         OBBHitDetection.shutdown();
         Bukkit.getServer().getScheduler().cancelTasks(MetadataHandler.PLUGIN);
-        if (MagmaCore.getInitializationState(this.getName()) == PluginInitializationState.INITIALIZING) {
+        if (shutdownDuringInitialization) {
             MagmaCore.shutdown(this);
             return;
         }
@@ -153,6 +154,7 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         FMMPackage.shutdown();
         FMMPackageRefresher.reset();
         PropInventoryListener.shutdown();
+        ModelItemListener.shutdown();
         PropScriptManager.shutdown();
         ItemScriptManager.shutdown();
         PropRecipeManager.shutdown();
@@ -173,8 +175,6 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         MagmaCore.initializeImporter(this);
         initializationContext.step("Output Folder");
         OutputFolder.initializeConfig();
-        initializationContext.step("Item Scripting");
-        ItemScriptManager.initialize();
         initializationContext.step("Models Folder");
         ModelsFolder.initializeConfig();
         initializationContext.step("Content Packages");
@@ -184,8 +184,9 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
     }
 
     private void syncInitialization(PluginInitializationContext initializationContext) {
+        initializationContext.step("Item Scripting");
+        ItemScriptManager.initialize();
         initializationContext.step("Event Listeners");
-        Bukkit.getPluginManager().registerEvents(new ModeledEntityEvents(), this);
         Bukkit.getPluginManager().registerEvents(new OBBHitDetection(), this);
         Bukkit.getPluginManager().registerEvents(new PropEntity.PropEntityEvents(), this);
         Bukkit.getPluginManager().registerEvents(new EntityTeleportEvent(), this);
@@ -203,7 +204,6 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         Bukkit.getPluginManager().registerEvents(new MountDismountListener(), this);
         Bukkit.getPluginManager().registerEvents(new DisguiseListeners(), this);
         Bukkit.getPluginManager().registerEvents(new FreeMinecraftModelsFirstTimeSetupWarner(this), this);
-        Bukkit.getPluginManager().registerEvents(this, this);
 
         initializationContext.step("NMS Adapter");
         NMSManager.initializeAdapter(this);
@@ -250,9 +250,6 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         initializationContext.step("Prop Scripting");
         new PropScriptLuaConfig(new File(getDataFolder(), "scripts"));
         PropScriptManager.initialize();
-        if (PropScriptManager.getListener() != null) {
-            Bukkit.getPluginManager().registerEvents(PropScriptManager.getListener(), this);
-        }
         com.magmaguy.freeminecraftmodels.scripting.LuaEntityEnricher.register();
         com.magmaguy.freeminecraftmodels.scripting.LuaWorldEnricher.register();
         com.magmaguy.magmacore.location.LocationQueryRegistry.initializeBuiltInProtectionProviders();
@@ -268,10 +265,34 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
     }
 
     public void reloadImportedContent(CommandSender sender) {
+        if (!Bukkit.isPrimaryThread()) {
+            Bukkit.getScheduler().runTask(
+                    this,
+                    () -> reloadImportedContent(sender));
+            return;
+        }
+        if (!importedContentReloadInProgress.compareAndSet(false, true)) {
+            if (sender != null) {
+                com.magmaguy.magmacore.util.Logger.sendMessage(
+                        sender,
+                        "&eA FreeMinecraftModels content reload is already running.");
+            }
+            return;
+        }
+
+        // Stop every task that can observe the live entity/model registries
+        // before clearing them. In particular, the one-tick model clock is
+        // asynchronous and otherwise races this teardown.
+        ModeledEntitiesClock.shutdown();
+        OBBHitDetection.pauseProjectileDetection();
+        ModelItemListener.shutdown();
         DisguiseManager.shutdown();
+        PropInventoryListener.shutdown();
         ModeledEntity.shutdown();
         PropEntity.shutdown();
         DynamicEntity.shutdown();
+        PropScriptManager.shutdown();
+        ItemScriptManager.shutdown();
         FileModelConverter.shutdown();
         FMMPackage.shutdown();
         ConfigurationLocation.shutdown();
@@ -282,32 +303,55 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
                 OutputFolder.initializeConfig();
                 ModelsFolder.initializeConfig();
                 new ContentPackageConfig();
+                FMMPackageRefresher.reset();
                 OutputFolder.zipResourcePack();
 
                 Bukkit.getScheduler().runTask(this, () -> {
-                    // Re-initialize script managers before scanning props
-                    PropScriptManager.shutdown();
-                    PropScriptManager.initialize();
-                    if (PropScriptManager.getListener() != null) {
-                        Bukkit.getPluginManager().registerEvents(PropScriptManager.getListener(), FreeMinecraftModels.this);
-                    }
-                    ItemScriptManager.shutdown();
-                    ItemScriptManager.initialize();
-                    PropEntity.onStartup();
-                    notifyResourcePackManager();
-                    if (sender != null) {
-                        com.magmaguy.magmacore.util.Logger.sendMessage(sender, "Reloaded!");
+                    try {
+                        // ModelsFolder populated the item-definition registry on
+                        // the worker. Reinitialize listeners/providers without
+                        // clearing that newly built registry.
+                        PropScriptManager.initialize();
+                        ItemScriptManager.initialize();
+                        PropEntity.onStartup();
+                        ModeledEntitiesClock.start();
+                        OBBHitDetection.startProjectileDetection();
+                        notifyResourcePackManager();
+                        Bukkit.getPluginManager().callEvent(
+                                new com.magmaguy.freeminecraftmodels.api.FmmReloadedEvent());
+                        importedContentReloadInProgress.set(false);
+                        if (sender != null) {
+                            com.magmaguy.magmacore.util.Logger.sendMessage(
+                                    sender,
+                                    "Reloaded!");
+                        }
+                    } catch (Throwable throwable) {
+                        failImportedContentReload(sender, throwable);
                     }
                 });
-            } catch (Exception exception) {
-                exception.printStackTrace();
-                Bukkit.getScheduler().runTask(this, () -> {
-                    if (sender != null) {
-                        com.magmaguy.magmacore.util.Logger.sendMessage(sender, "&cFailed to reload FreeMinecraftModels. Check the console.");
-                    }
-                });
+            } catch (Throwable throwable) {
+                Bukkit.getScheduler().runTask(
+                        this,
+                        () -> failImportedContentReload(sender, throwable));
             }
         });
+    }
+
+    private void failImportedContentReload(
+            CommandSender sender,
+            Throwable throwable) {
+        importedContentReloadInProgress.set(false);
+        Bukkit.getLogger().severe(
+                "[FreeMinecraftModels] Imported-content reload failed; "
+                        + "disabling the plugin rather than running with empty "
+                        + "or partial model registries.");
+        throwable.printStackTrace();
+        if (sender != null) {
+            com.magmaguy.magmacore.util.Logger.sendMessage(
+                    sender,
+                    "&cFailed to reload FreeMinecraftModels. Check the console.");
+        }
+        Bukkit.getPluginManager().disablePlugin(this);
     }
 
     private static void notifyResourcePackManager() {
@@ -319,11 +363,4 @@ public final class FreeMinecraftModels extends JavaPlugin implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.LOWEST)
-    public void onEntityDamagedByEntityEvent(EntityDamageByEntityEvent event) {
-        if (!event.isCancelled()) return;
-        if (!(event.getEntity() instanceof LivingEntity livingEntity)) return;
-        if (DynamicEntity.isDynamicEntity(livingEntity))
-            event.setCancelled(false);
-    }
 }

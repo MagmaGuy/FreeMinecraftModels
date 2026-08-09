@@ -7,8 +7,8 @@ import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import org.bukkit.Bukkit;
 
-import java.util.HashMap;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.UUID;
 
 public class ModeledEntityManager {
@@ -32,7 +32,7 @@ public class ModeledEntityManager {
      * @return Whether the model exists
      */
     public static boolean modelExists(String modelName) {
-        return FileModelConverter.getConvertedFileModels().containsKey(modelName);
+        return FileModelConverter.containsModel(modelName);
     }
 
     /**

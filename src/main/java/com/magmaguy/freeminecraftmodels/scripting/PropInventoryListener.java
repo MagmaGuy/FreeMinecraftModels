@@ -6,6 +6,7 @@ import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
@@ -23,6 +24,7 @@ public class PropInventoryListener implements Listener {
 
     private static final Map<UUID, TrackedInventory> trackedInventories = new ConcurrentHashMap<>();
     private static boolean initialized = false;
+    private static PropInventoryListener listener;
 
     public static void trackInventory(UUID playerUUID, Inventory inventory, ArmorStand armorStand) {
         trackedInventories.put(playerUUID, new TrackedInventory(inventory, armorStand));
@@ -39,7 +41,10 @@ public class PropInventoryListener implements Listener {
     public static synchronized void initialize() {
         if (initialized) return;
         initialized = true;
-        Bukkit.getPluginManager().registerEvents(new PropInventoryListener(), MetadataHandler.PLUGIN);
+        listener = new PropInventoryListener();
+        Bukkit.getPluginManager().registerEvents(
+                listener,
+                MetadataHandler.PLUGIN);
     }
 
     /**
@@ -56,6 +61,10 @@ public class PropInventoryListener implements Listener {
             }
         }
         trackedInventories.clear();
+        if (listener != null) {
+            HandlerList.unregisterAll(listener);
+            listener = null;
+        }
         initialized = false;
     }
 

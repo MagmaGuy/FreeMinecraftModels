@@ -17,10 +17,9 @@ public class ReloadCommand extends AdvancedCommand {
     }
 
     public static void reloadPlugin(CommandSender sender) {
-        NightbreakPluginBootstrap.setPendingReloadSender((org.bukkit.plugin.java.JavaPlugin) MetadataHandler.PLUGIN, sender);
-        MetadataHandler.PLUGIN.onDisable();
-        MetadataHandler.PLUGIN.onLoad();
-        MetadataHandler.PLUGIN.onEnable();
+        NightbreakPluginBootstrap.reloadPlugin(
+                (org.bukkit.plugin.java.JavaPlugin) MetadataHandler.PLUGIN,
+                sender);
     }
 
     @Override

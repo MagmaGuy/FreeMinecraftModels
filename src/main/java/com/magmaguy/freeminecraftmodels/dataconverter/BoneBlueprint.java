@@ -14,6 +14,7 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -402,14 +403,21 @@ public class BoneBlueprint {
      * @param textureReferencesClone Map to modify
      */
     private void setDisplay(Map<String, Object> textureReferencesClone) {
-        textureReferencesClone.put("display", Map.of(
-                "head", Map.of(
-                        "translation", List.of(
-                                0,
-                                -6.4,
-                                0),
-                        "scale", List.of(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE))
-        ));
+        //LinkedHashMap, not Map.of: this is serialised straight to a model JSON in the resource
+        //pack, so iteration order is the file's byte order. Map.of is backed by
+        //java.util.ImmutableCollections, which randomises iteration order per JVM run via its SALT,
+        //so "translation" and "scale" swapped places on every server start. That rewrote the model
+        //files each boot, changed the pack hash, and forced ResourcePackManager to re-upload the
+        //pack and every player to re-download it. Same reason ModelsFolder builds its item
+        //definitions with LinkedHashMap.
+        Map<String, Object> headDisplay = new LinkedHashMap<>();
+        headDisplay.put("translation", List.of(0, -6.4, 0));
+        headDisplay.put("scale", List.of(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE));
+
+        Map<String, Object> display = new LinkedHashMap<>();
+        display.put("head", headDisplay);
+
+        textureReferencesClone.put("display", display);
     }
 
     private void writeFile(String modelName, String filename, Map<String, Object> boneJSON) {

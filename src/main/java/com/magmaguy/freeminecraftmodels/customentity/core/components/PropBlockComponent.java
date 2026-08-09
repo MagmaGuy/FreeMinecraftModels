@@ -11,11 +11,15 @@ import java.util.List;
 import java.util.UUID;
 
 public class PropBlockComponent {
-    public List<PropBlocks> propBlocks = new ArrayList<>();
-    private ModeledEntity modeledEntity;
+    private List<PropBlocks> propBlocks = new ArrayList<>();
+    private final ModeledEntity modeledEntity;
 
     public PropBlockComponent(ModeledEntity modeledEntity) {
         this.modeledEntity = modeledEntity;
+    }
+
+    public List<PropBlocks> getPropBlocks() {
+        return propBlocks;
     }
 
     /**
@@ -44,9 +48,13 @@ public class PropBlockComponent {
      * @param player Player to show the prop blocks to.
      */
     public void showFakePropBlocksToPlayer(Player player) {
+        if (propBlocks.isEmpty()) return;
+        // getSpawnLocation() clones — hoist the clone out of the per-block loop.
+        // getProcessedLocation never mutates the passed location.
+        Location spawnLocation = modeledEntity.getSpawnLocation();
         for (PropBlocks propBlock : propBlocks) {
-            Location finalLocation = propBlock.getProcessedLocation(modeledEntity.getSpawnLocation());
-            player.sendBlockChange(finalLocation, propBlock.getMaterial().createBlockData());
+            Location finalLocation = propBlock.getProcessedLocation(spawnLocation);
+            player.sendBlockChange(finalLocation, propBlock.getBlockData());
         }
     }
 
@@ -67,8 +75,11 @@ public class PropBlockComponent {
      * @param player Player to show the real blocks to.
      */
     public void showRealBlocksToPlayer(Player player) {
+        if (propBlocks.isEmpty()) return;
+        // getSpawnLocation() clones — hoist the clone out of the per-block loop.
+        Location spawnLocation = modeledEntity.getSpawnLocation();
         for (PropBlocks propBlock : propBlocks) {
-            Location finalLocation = propBlock.getProcessedLocation(modeledEntity.getSpawnLocation());
+            Location finalLocation = propBlock.getProcessedLocation(spawnLocation);
             if (!locationChunkIsLoaded(finalLocation)) continue;
             player.sendBlockChange(
                     finalLocation,
