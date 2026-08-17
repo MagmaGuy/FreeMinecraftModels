@@ -170,7 +170,9 @@ public class PropEntity extends StaticEntity {
     static PropEntity respawnPropEntityFromArmorStand(String entityID, ArmorStand armorStand, Collection<? extends Entity> knownChunkEntities) {
         FileModelConverter fileModelConverter = FileModelConverter.getModel(entityID);
         if (fileModelConverter == null || fileModelConverter.getSkeletonBlueprint() == null) {
-            Logger.warn("[FMM Props] Refused to restore prop with unknown model ID '" + entityID + "'.");
+            //Intentional design: skip silently. Placed props can reference models from packs that are
+            //currently uninstalled; that is a normal state, and this runs per armor stand per chunk
+            //load, so logging here would spam the console (the prop restores again once the pack is back).
             return null;
         }
         if (removeIfDuplicateProp(entityID, armorStand, knownChunkEntities)) return null;

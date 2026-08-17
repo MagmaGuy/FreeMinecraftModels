@@ -42,7 +42,9 @@ public class AnimationBlueprint {
         this.skeletonBlueprint = skeletonBlueprint;
         initializeGlobalValues(animationData);
         if (duration <= 0) {
-            warnMalformedTimeline("animation duration is " + duration + " tick(s); the animation was skipped");
+            //Intentional design: a zero-length animation is a valid authoring choice meaning "no
+            //animation" (e.g. a static single-pose idle on furniture models), so it is skipped
+            //silently rather than warned about as malformed.
             return;
         }
 
