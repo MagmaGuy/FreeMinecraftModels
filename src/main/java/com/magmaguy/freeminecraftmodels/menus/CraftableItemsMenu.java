@@ -32,10 +32,9 @@ public class CraftableItemsMenu {
         this.player = player;
         this.page = 0;
 
-        Set<String> recipeIds = PropRecipeManager.getLoadedRecipes().keySet();
         this.craftableModels = FileModelConverter.getConvertedFileModels().values().stream()
                 .filter(ModelMenuHelper::isMenuModel)
-                .filter(converter -> recipeIds.contains(ModelMenuHelper.getMenuModelId(converter)))
+                .filter(converter -> PropRecipeManager.getCraftableRecipe(ModelMenuHelper.getMenuModelId(converter)) != null)
                 .sorted(Comparator.comparing(ModelMenuHelper::getMenuModelId))
                 .collect(Collectors.collectingAndThen(
                         Collectors.toMap(ModelMenuHelper::getMenuModelId, converter -> converter,

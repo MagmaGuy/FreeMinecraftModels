@@ -106,6 +106,12 @@ public class PropRecipeConfig extends CustomConfigFields {
         return shape;
     }
 
+    /** Whether this catalog entry currently has a crafting recipe on the server. */
+    public boolean isRegistered() {
+        if (modelId == null || modelId.isEmpty()) return false;
+        return Bukkit.getRecipe(new NamespacedKey(MetadataHandler.PLUGIN, "prop_recipe_" + modelId)) != null;
+    }
+
     public void unregisterRecipe() {
         if (modelId == null || modelId.isEmpty()) return;
         NamespacedKey recipeKey = new NamespacedKey(MetadataHandler.PLUGIN, "prop_recipe_" + modelId);

@@ -63,7 +63,7 @@ public class RecipeDetailMenu {
         // Back button
         inventory.setItem(BACK_SLOT, ModelMenuHelper.buildBackItem());
 
-        PropRecipeConfig recipe = PropRecipeManager.getLoadedRecipes().get(modelId);
+        PropRecipeConfig recipe = PropRecipeManager.getCraftableRecipe(modelId);
         if (recipe == null) return;
 
         // Render 3x3 crafting grid

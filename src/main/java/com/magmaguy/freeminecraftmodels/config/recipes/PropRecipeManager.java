@@ -84,4 +84,10 @@ public class PropRecipeManager {
     public static Map<String, PropRecipeConfig> getLoadedRecipes() {
         return loadedRecipes;
     }
+
+    /** The shop retains the catalog even when its entries cannot be crafted. */
+    public static PropRecipeConfig getCraftableRecipe(String modelId) {
+        PropRecipeConfig recipe = loadedRecipes.get(modelId);
+        return recipe != null && recipe.isRegistered() ? recipe : null;
+    }
 }

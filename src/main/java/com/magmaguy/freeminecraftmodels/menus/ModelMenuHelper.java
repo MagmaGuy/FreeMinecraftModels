@@ -179,7 +179,7 @@ public final class ModelMenuHelper {
         }
 
         // Craftable status
-        PropRecipeConfig recipe = PropRecipeManager.getLoadedRecipes().get(modelId);
+        PropRecipeConfig recipe = PropRecipeManager.getCraftableRecipe(modelId);
         if (recipe != null) {
             lore.add("&7Craftable: &aYes");
             lore.add("");
