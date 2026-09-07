@@ -102,7 +102,9 @@ public class AnimationBlueprint {
             for (Object keyframeData : (List) animationData.get("keyframes")) {
                 keyframes.add(new Keyframe(keyframeData, modelName, animationName));
             }
-            boneKeyframes.put(boneBlueprint, AnimationTimeline.normalize(keyframes));
+            // Position, rotation and scale may all have a keyframe at the same time.
+            // Deduplicate only after separating those independent tracks below.
+            boneKeyframes.put(boneBlueprint, keyframes);
         }
     }
 
@@ -159,9 +161,9 @@ public class AnimationBlueprint {
             animationFramesArray[i] = new AnimationFrame();
 
         //Interpolation time
-        interpolateRotations(animationFramesArray, rotationKeyframes);
-        interpolateTranslations(animationFramesArray, positionKeyframes);
-        interpolateScales(animationFramesArray, scaleKeyframes);
+        interpolateRotations(animationFramesArray, AnimationTimeline.normalize(rotationKeyframes));
+        interpolateTranslations(animationFramesArray, AnimationTimeline.normalize(positionKeyframes));
+        interpolateScales(animationFramesArray, AnimationTimeline.normalize(scaleKeyframes));
 
         this.animationFrames.put(boneBlueprint, animationFramesArray);
     }
