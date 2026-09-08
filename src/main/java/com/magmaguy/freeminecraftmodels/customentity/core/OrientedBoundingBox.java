@@ -227,6 +227,9 @@ public class OrientedBoundingBox {
 
         // Check each entity for intersection
         for (ModeledEntity entity : entities) {
+            // Death animations and concurrently removed models cannot own a hit
+            // or occlude another model that is still accepting interactions.
+            if (entity.isRemoved() || entity.isDying()) continue;
             // Only consider entities in the same world.
             // We do NOT exclude entities with packet-interaction here, even though
             // it means static/prop clicks can fire from both paths — the

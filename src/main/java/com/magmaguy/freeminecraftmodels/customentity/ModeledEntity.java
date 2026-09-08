@@ -227,9 +227,14 @@ public class ModeledEntity {
         // before subclass fields were initialized (or before an underlying entity
         // had been bound). A modeled entity only becomes tickable after its spawn
         // path and display initialization have completed successfully.
-        if (!isRemoved) {
-            initializeBedrockBackend();
-            onSpawnComplete();
+        if (isRemoved) return;
+        initializeBedrockBackend();
+        onSpawnComplete();
+        // Spawn hooks can remove the model, for example when its backing entity
+        // is already invalid. Never publish it again after that removal. Pair
+        // publication with markRemoved so the async clock cannot race this check.
+        synchronized (this) {
+            if (isRemoved) return;
             loadedModeledEntities.add(this);
         }
     }
@@ -272,9 +277,7 @@ public class ModeledEntity {
     }
 
     public void remove() {
-        if (isRemoved) {
-            return;
-        }
+        if (!markRemoved()) return;
 
         // Clean up mount points
         if (mountPointManager != null) {
@@ -286,11 +289,7 @@ public class ModeledEntity {
         hitboxComponent.removePacketInteractionEntity();
         if (bedrockModeledEntity != null) bedrockModeledEntity.remove();
         skeleton.remove();
-        loadedModeledEntities.remove(this);
-        // Always drop the underlyingEntity->ModeledEntity mapping so removed
-        // props don't leak stale references when the chunk unloads.
         if (underlyingEntity != null) {
-            loadedModeledEntitiesWithUnderlyingEntities.remove(underlyingEntity);
             // Only actually despawn the underlying entity for non-persistent
             // cases — persistent props must serialize with the chunk.
             if (!(this instanceof PropEntity) ||
@@ -304,7 +303,16 @@ public class ModeledEntity {
                 }
             }
         }
+    }
+
+    private synchronized boolean markRemoved() {
+        if (isRemoved) return false;
         isRemoved = true;
+        loadedModeledEntities.remove(this);
+        if (underlyingEntity != null) {
+            loadedModeledEntitiesWithUnderlyingEntities.remove(underlyingEntity, this);
+        }
+        return true;
     }
 
     /**
