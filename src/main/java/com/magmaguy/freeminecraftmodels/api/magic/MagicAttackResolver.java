@@ -19,6 +19,12 @@ public interface MagicAttackResolver {
 
     void resolve(MagicAttackRequest request, MagicDamageApplication application);
 
+    /** Called once before casting, while the held item is still available for item policy. */
+    default boolean canAttack(org.bukkit.entity.Player player, org.bukkit.inventory.ItemStack weapon,
+                              MagicAttackKind attackKind) {
+        return true;
+    }
+
     /**
      * Optionally narrows FMM's generic living-target rules for an integrating combat system.
      * FMM still performs acquisition, flight, collision and the eventual damage application.

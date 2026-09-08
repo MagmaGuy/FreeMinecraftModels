@@ -267,6 +267,14 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         if (!isOperational() || player == null || !player.isOnline()) return;
         MagicAttackKind attackKind = MagicWeaponInputRouter.route(definition.kind(), input).orElse(null);
         if (attackKind == null) return;
+        MagicAttackResolver resolver = activeResolver();
+        if (resolver != null) {
+            try {
+                if (!resolver.canAttack(player, weapon, attackKind)) return;
+            } catch (RuntimeException policyFailure) {
+                return;
+            }
+        }
         long tick = projectiles.currentTick();
         if (!deduplicator.accept(player.getUniqueId(), attackKind, tick)) return;
         CooldownKey cooldownKey = new CooldownKey(player.getUniqueId(), definition.itemId(), attackKind);
