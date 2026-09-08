@@ -30,6 +30,11 @@ public final class LuaWorldEnricher {
     }
 
     private static void enrich(LuaTable table, World world) {
+        table.set("start_elitemobs_transport", LuaTableSupport.tableMethod(table, args -> {
+            Player player = resolvePlayer(args.arg(1));
+            return LuaValue.valueOf(player != null && player.getWorld().equals(world)
+                    && com.magmaguy.freeminecraftmodels.thirdparty.EliteMobsTransport.start(player, args.checkjstring(2)));
+        }));
         table.set("drop_elitemobs_procedural_loot", LuaTableSupport.tableMethod(table, args ->
                 dropEliteMobsProceduralLoot(world, args)));
         table.set("drop_elitemobs_random_loot", LuaTableSupport.tableMethod(table, args ->
