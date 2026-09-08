@@ -27,6 +27,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityKnockbackEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -57,6 +58,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
     private final MagicProjectileEngine projectiles;
     private final Map<CooldownKey, Long> readyAtTick = new HashMap<>();
     private final ThreadLocal<Integer> applyingDamageDepth = ThreadLocal.withInitial(() -> 0);
+    private final ThreadLocal<LivingEntity> noKnockbackTarget = new ThreadLocal<>();
     private Plugin resolverOwner;
     private MagicAttackResolver resolver;
     private volatile boolean contentReady;
@@ -413,7 +415,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         MagicAttackRequest request = new MagicAttackRequest(
                 cast.attackId(), cast.attackKind(), cast.owner(), target, cast.weapon(), balance);
         MagicResolutionOutcome outcome = damageResolution.resolve(
-                request, activeResolver(), damage -> damageTarget(cast.owner(), target, damage));
+                request, activeResolver(), damage -> damageTarget(cast, target, damage));
         if (outcome == MagicResolutionOutcome.STANDALONE_FALLBACK && !fallbackWarningSent) {
             fallbackWarningSent = true;
             Logger.warn("The registered magic damage resolver did not resolve an impact. "
@@ -463,14 +465,19 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         }
     }
 
-    private void damageTarget(Player owner, LivingEntity target, double damage) {
+    private void damageTarget(MagicCast cast, LivingEntity target, double damage) {
         int previousDepth = applyingDamageDepth.get();
         boolean previousObbBypass = OBBHitDetection.applyDamage;
+        LivingEntity previousNoKnockbackTarget = noKnockbackTarget.get();
+        if (cast.attackKind().weaponKind() == MagicWeaponKind.WAND) noKnockbackTarget.set(target);
+        else noKnockbackTarget.remove();
         applyingDamageDepth.set(previousDepth + 1);
         OBBHitDetection.applyDamage = true;
         try {
-            target.damage(damage, owner);
+            target.damage(damage, cast.owner());
         } finally {
+            if (previousNoKnockbackTarget == null) noKnockbackTarget.remove();
+            else noKnockbackTarget.set(previousNoKnockbackTarget);
             OBBHitDetection.applyDamage = previousObbBypass;
             if (previousDepth == 0) applyingDamageDepth.remove();
             else applyingDamageDepth.set(previousDepth);
@@ -479,6 +486,12 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
 
     private boolean isApplyingDamage() {
         return applyingDamageDepth.get() > 0;
+    }
+
+    /** Wand damage must not add either horizontal knockback or the vanilla vertical lift. */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onWandKnockback(EntityKnockbackEvent event) {
+        if (event.getEntity().equals(noKnockbackTarget.get())) event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
