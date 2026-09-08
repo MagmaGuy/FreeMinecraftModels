@@ -232,15 +232,31 @@ final class MagicProjectileEngine implements Listener, AutoCloseable {
                 finish(flight);
                 continue;
             }
+            if (absorbed(flight, flight.previous, flight.marker.getLocation())) continue;
+            flight.previous = flight.marker.getLocation().clone();
             flight.tick();
+            if (flights.lookup(flight.marker.getUniqueId()) == flight)
+                absorbed(flight, flight.marker.getLocation(), flight.marker.getLocation().add(flight.marker.getVelocity()));
         }
     }
 
     private void resolve(Flight flight, LivingEntity target, Location impact, Vector incoming) {
+        if (absorbed(flight, flight.previous, impact)) return;
         if (!flights.claim(flight.marker.getUniqueId(), flight)) return;
         flight.cleanup();
         flight.marker.remove();
         impactHandler.onImpact(flight.cast, target, impact.clone(), incoming.clone());
+    }
+
+    private boolean absorbed(Flight flight, Location from, Location to) {
+        if (com.magmaguy.freeminecraftmodels.api.magic.MagicProjectileTravelEvent.getHandlerList()
+                .getRegisteredListeners().length == 0) return false;
+        var query = new com.magmaguy.freeminecraftmodels.api.magic.MagicProjectileTravelEvent(
+                flight.cast.owner(), flight.cast.definition().kind(), from, to);
+        plugin.getServer().getPluginManager().callEvent(query);
+        if (!query.isCancelled()) return false;
+        finish(flight);
+        return true;
     }
 
     private void finish(Flight flight) {
@@ -267,12 +283,14 @@ final class MagicProjectileEngine implements Listener, AutoCloseable {
         final Arrow marker;
         final MagicCast cast;
         final UUID worldId;
+        Location previous;
         int elapsed;
 
         Flight(Arrow marker, MagicCast cast) {
             this.marker = marker;
             this.cast = cast;
             this.worldId = marker.getWorld().getUID();
+            this.previous = marker.getLocation().clone();
         }
 
         boolean valid() {
