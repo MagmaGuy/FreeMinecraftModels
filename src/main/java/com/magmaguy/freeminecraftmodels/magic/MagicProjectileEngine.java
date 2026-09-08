@@ -77,9 +77,15 @@ final class MagicProjectileEngine implements Listener, AutoCloseable {
             double assistDegrees,
             Predicate<LivingEntity> eligibility,
             ToIntFunction<LivingEntity> priority) {
+        return acquireTargets(owner, range, assistDegrees, eligibility, priority, 1).stream().findFirst();
+    }
+
+    List<LivingEntity> acquireTargets(Player owner, double range, double assistDegrees,
+                                      Predicate<LivingEntity> eligibility, ToIntFunction<LivingEntity> priority,
+                                      int limit) {
         Location eye = owner.getEyeLocation();
         Vector aim = eye.getDirection();
-        if (aim.lengthSquared() < 1.0E-9D) return Optional.empty();
+        if (aim.lengthSquared() < 1.0E-9D) return List.of();
         aim.normalize();
         double minimumDot = Math.cos(Math.toRadians(assistDegrees));
         List<AimCandidate> candidates = new ArrayList<>();
@@ -95,24 +101,30 @@ final class MagicProjectileEngine implements Listener, AutoCloseable {
                     target, priority.applyAsInt(target), (1D - dot) * 100D + distance / range, distance));
         }
         return candidates.stream()
-                .min(Comparator.comparingInt(AimCandidate::tier)
+                .sorted(Comparator.comparingInt(AimCandidate::tier)
                         .thenComparingDouble(AimCandidate::score)
                         .thenComparingDouble(AimCandidate::distance))
-                .map(AimCandidate::target);
+                .limit(Math.max(1, Math.min(3, limit)))
+                .map(AimCandidate::target).toList();
     }
 
     boolean launchWand(MagicCast cast, LivingEntity target) {
-        if (closed || (target != null && !validTarget(cast.owner(), target))) return false;
-        Location eye = cast.owner().getEyeLocation();
-        Vector direction = target == null ? eye.getDirection()
-                : center(target).toVector().subtract(eye.toVector());
-        if (direction.lengthSquared() < 1.0E-9D) return false;
-        Location start = eye.clone()
-                .add(direction.normalize().multiply(.35D))
-                .subtract(0D, PROJECTILE_ORIGIN_DROP, 0D);
+        return launchWand(cast, target == null ? List.of() : List.of(target));
+    }
+
+    boolean launchWand(MagicCast cast, List<LivingEntity> targets) {
+        if (closed) return false;
         int launched = 0;
         int missileCount = cast.definition().traits().missileCount();
         for (int missileIndex = 0; missileIndex < missileCount; missileIndex++) {
+            LivingEntity target = targets.isEmpty() ? null : targets.get(missileIndex % targets.size());
+            if (target != null && !validTarget(cast.owner(), target)) target = null;
+            Location eye = cast.owner().getEyeLocation();
+            Vector direction = target == null ? eye.getDirection()
+                    : center(target).toVector().subtract(eye.toVector());
+            if (direction.lengthSquared() < 1.0E-9D) continue;
+            Location start = eye.clone().add(direction.normalize().multiply(.35D))
+                    .subtract(0D, PROJECTILE_ORIGIN_DROP, 0D);
             Arrow marker = spawnMarker(cast.owner(), start, direction);
             if (marker == null) continue;
             Flight flight = target == null

@@ -10,6 +10,7 @@ import com.magmaguy.freeminecraftmodels.api.magic.MagicResolutionOutcome;
 import com.magmaguy.freeminecraftmodels.api.magic.MagicTargetRequest;
 import com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponKind;
 import com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponService;
+import com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponModifiers;
 import com.magmaguy.freeminecraftmodels.customentity.core.OBBHitDetection;
 import com.magmaguy.freeminecraftmodels.interaction.InteractionProtectionPolicy;
 import com.magmaguy.magmacore.util.Logger;
@@ -27,6 +28,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityCombustByEntityEvent;
 import org.bukkit.event.entity.EntityKnockbackEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
@@ -59,6 +61,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
     private final Map<CooldownKey, Long> readyAtTick = new HashMap<>();
     private final ThreadLocal<Integer> applyingDamageDepth = ThreadLocal.withInitial(() -> 0);
     private final ThreadLocal<LivingEntity> noKnockbackTarget = new ThreadLocal<>();
+    private final ThreadLocal<DamageAttempt> damageAttempt = new ThreadLocal<>();
     private Plugin resolverOwner;
     private MagicAttackResolver resolver;
     private volatile boolean contentReady;
@@ -310,14 +313,14 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
 
     private boolean castWand(MagicCast cast) {
         MagicWeaponTraits traits = cast.definition().traits();
-        LivingEntity target = projectiles.acquireTarget(
+        List<LivingEntity> targets = projectiles.acquireTargets(
                 cast.owner(), traits.range(), traits.aimAssistDegrees(),
                 candidate -> targetEligible(cast, candidate),
-                candidate -> targetPriority(cast, candidate)).orElse(null);
-        if (!projectiles.launchWand(cast, target)) return false;
+                candidate -> targetPriority(cast, candidate), traits.missileCount());
+        if (!projectiles.launchWand(cast, targets)) return false;
         cast.owner().getWorld().playSound(
                 cast.owner().getEyeLocation(), Sound.ENTITY_EVOKER_CAST_SPELL,
-                target == null ? .4F : .55F, target == null ? 1.4F : 1.7F);
+                targets.isEmpty() ? .4F : .55F, targets.isEmpty() ? 1.4F : 1.7F);
         return true;
     }
 
@@ -364,12 +367,16 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         double radius = traits.impactRadius();
         world.spawnParticle(Particle.EXPLOSION, impact, 3, .4, .4, .4, .02);
         world.spawnParticle(Particle.SOUL_FIRE_FLAME, impact, 34, 1.1, .7, 1.1, .08);
+        for (int point = 0; point < 32; point++) {
+            double angle = 2D * Math.PI * point / 32D;
+            world.spawnParticle(Particle.FLAME, impact.clone().add(Math.cos(angle) * radius, .1D,
+                    Math.sin(angle) * radius), 1, 0, 0, 0, 0);
+        }
         world.playSound(impact, Sound.ENTITY_GENERIC_EXPLODE, .85F, 1.05F);
 
         if (radius <= 0D) {
             if (targetEligible(cast, directTarget)) {
-                applyDamage(cast, directTarget, 1D);
-                ignite(directTarget, traits.ignitionTicks());
+                if (applyDamage(cast, directTarget, 1D)) ignite(cast, directTarget, traits.ignitionTicks());
             }
             return;
         }
@@ -388,14 +395,17 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
 
         for (LivingEntity target : targets) {
             double distance = Math.min(radius, MagicProjectileEngine.center(target).distance(impact));
-            applyDamage(cast, target, .35D + .65D * (1D - distance / radius));
-            ignite(target, traits.ignitionTicks());
+            if (applyDamage(cast, target, .35D + .65D * (1D - distance / radius)))
+                ignite(cast, target, traits.ignitionTicks());
         }
     }
 
-    private static void ignite(LivingEntity target, int ignitionTicks) {
-        if (ignitionTicks > 0)
-            target.setFireTicks(Math.max(target.getFireTicks(), ignitionTicks));
+    private void ignite(MagicCast cast, LivingEntity target, int ignitionTicks) {
+        if (ignitionTicks <= 0 || target.isDead()) return;
+        EntityCombustByEntityEvent event = new EntityCombustByEntityEvent(cast.owner(), target, ignitionTicks / 20F);
+        plugin.getServer().getPluginManager().callEvent(event);
+        if (!event.isCancelled())
+            target.setFireTicks(Math.max(target.getFireTicks(), Math.min(200, Math.round(event.getDuration() * 20F))));
     }
 
     private static boolean explosionLine(Location impact, Vector incoming, Location target) {
@@ -405,17 +415,18 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         return MagicProjectileEngine.unobstructed(source, target);
     }
 
-    private void applyDamage(MagicCast cast, LivingEntity target, double impactScale) {
+    private boolean applyDamage(MagicCast cast, LivingEntity target, double impactScale) {
         if (!MagicProjectileEngine.validTarget(cast.owner(), target)
-                || !Double.isFinite(impactScale) || impactScale <= 0D) return;
+                || !Double.isFinite(impactScale) || impactScale <= 0D) return false;
         MagicAttackBalance balance = new MagicAttackBalance(
                 BuiltInMagicWeapons.STANDALONE_REFERENCE_DAMAGE,
                 cast.definition().basePower(cast.attackKind()),
                 impactScale);
         MagicAttackRequest request = new MagicAttackRequest(
                 cast.attackId(), cast.attackKind(), cast.owner(), target, cast.weapon(), balance);
+        boolean[] accepted = {false};
         MagicResolutionOutcome outcome = damageResolution.resolve(
-                request, activeResolver(), damage -> damageTarget(cast, target, damage));
+                request, activeResolver(), damage -> accepted[0] = damageTarget(cast, target, damage));
         if (outcome == MagicResolutionOutcome.STANDALONE_FALLBACK && !fallbackWarningSent) {
             fallbackWarningSent = true;
             Logger.warn("The registered magic damage resolver did not resolve an impact. "
@@ -423,6 +434,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         } else if (outcome == MagicResolutionOutcome.FAILED) {
             Logger.warn("A magic weapon impact could not be applied to " + target.getType() + ".");
         }
+        return accepted[0];
     }
 
     private Optional<MagicWeaponDefinition> resolveDefinition(ItemStack weapon) {
@@ -430,7 +442,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         if (base.isEmpty()) return Optional.empty();
         try {
             return Optional.of(MagicWeaponDefinitionComposition.compose(
-                    weapon, base.get(), definitionComposer));
+                    weapon, base.get(), definitionComposer.andThen(this::applyResolverModifiers)));
         } catch (RuntimeException invalidComposition) {
             if (!compositionWarningSent) {
                 compositionWarningSent = true;
@@ -465,17 +477,51 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         }
     }
 
-    private void damageTarget(MagicCast cast, LivingEntity target, double damage) {
+    private MagicWeaponDefinition applyResolverModifiers(ItemStack weapon, MagicWeaponDefinition definition) {
+        MagicAttackResolver active = activeResolver();
+        if (active == null) return definition;
+        MagicWeaponModifiers modifiers = java.util.Objects.requireNonNull(active.modifiers(weapon, definition.kind()));
+        if (modifiers.equals(MagicWeaponModifiers.NONE)) return definition;
+        MagicWeaponTraits traits = definition.traits();
+        boolean wand = definition.kind() == MagicWeaponKind.WAND;
+        MagicWeaponTraits effective = new MagicWeaponTraits(
+                wand ? modifiers.missileCount() : traits.missileCount(), traits.spreadDegrees(),
+                wand ? traits.impactRadius() : Math.min(6D, traits.impactRadius() * modifiers.blastRadiusMultiplier()),
+                wand ? traits.ignitionTicks() : Math.max(traits.ignitionTicks(), modifiers.ignitionTicks()), traits.projectileSpeed(), traits.range(),
+                traits.travelTicks(), traits.aimAssistDegrees());
+        Map<MagicAttackKind, Double> powers = new HashMap<>(definition.basePowers());
+        if (wand) powers.computeIfPresent(MagicAttackKind.WAND_MISSILE,
+                (kind, power) -> power * modifiers.missileDamageMultiplier());
+        return new MagicWeaponDefinition(definition.itemId(), definition.kind(), effective, powers, definition.reloadTicks());
+    }
+
+    private boolean damageTarget(MagicCast cast, LivingEntity target, double damage) {
         int previousDepth = applyingDamageDepth.get();
         boolean previousObbBypass = OBBHitDetection.applyDamage;
         LivingEntity previousNoKnockbackTarget = noKnockbackTarget.get();
+        DamageAttempt previousAttempt = damageAttempt.get();
+        DamageAttempt attempt = new DamageAttempt(target, cast.owner());
+        damageAttempt.set(attempt);
+        int previousInvulnerability = target.getNoDamageTicks();
+        double previousLastDamage = target.getLastDamage();
+        boolean multicast = cast.attackKind() == MagicAttackKind.WAND_MISSILE
+                && cast.definition().traits().missileCount() > 1;
         if (cast.attackKind().weaponKind() == MagicWeaponKind.WAND) noKnockbackTarget.set(target);
         else noKnockbackTarget.remove();
         applyingDamageDepth.set(previousDepth + 1);
         OBBHitDetection.applyDamage = true;
         try {
+            // Separate bolts must each resolve, including when all bolts hit the same enemy.
+            if (multicast) target.setNoDamageTicks(0);
             target.damage(damage, cast.owner());
+            return attempt.accepted;
         } finally {
+            if (multicast) {
+                target.setNoDamageTicks(previousInvulnerability);
+                target.setLastDamage(previousLastDamage);
+            }
+            if (previousAttempt == null) damageAttempt.remove();
+            else damageAttempt.set(previousAttempt);
             if (previousNoKnockbackTarget == null) noKnockbackTarget.remove();
             else noKnockbackTarget.set(previousNoKnockbackTarget);
             OBBHitDetection.applyDamage = previousObbBypass;
@@ -486,6 +532,20 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
 
     private boolean isApplyingDamage() {
         return applyingDamageDepth.get() > 0;
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
+    public void observeMagicDamage(EntityDamageByEntityEvent event) {
+        DamageAttempt attempt = damageAttempt.get();
+        if (attempt != null && event.getEntity().equals(attempt.target) && event.getDamager().equals(attempt.owner))
+            attempt.accepted = !event.isCancelled() && event.getFinalDamage() > 0D;
+    }
+
+    private static final class DamageAttempt {
+        private final LivingEntity target;
+        private final Player owner;
+        private boolean accepted;
+        private DamageAttempt(LivingEntity target, Player owner) { this.target = target; this.owner = owner; }
     }
 
     /** Wand damage must not add either horizontal knockback or the vanilla vertical lift. */

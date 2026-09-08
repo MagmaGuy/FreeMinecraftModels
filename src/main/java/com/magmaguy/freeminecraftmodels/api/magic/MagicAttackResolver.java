@@ -19,6 +19,11 @@ public interface MagicAttackResolver {
 
     void resolve(MagicAttackRequest request, MagicDamageApplication application);
 
+    /** Supplies bounded mechanics before FMM snapshots an item for a cast. */
+    default MagicWeaponModifiers modifiers(org.bukkit.inventory.ItemStack weapon, MagicWeaponKind kind) {
+        return MagicWeaponModifiers.NONE;
+    }
+
     /** Called once before casting, while the held item is still available for item policy. */
     default boolean canAttack(org.bukkit.entity.Player player, org.bukkit.inventory.ItemStack weapon,
                               MagicAttackKind attackKind) {
