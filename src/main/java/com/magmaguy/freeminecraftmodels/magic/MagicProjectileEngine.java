@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.magic;
 
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityHitByProjectileEvent;
+import com.magmaguy.magmacore.util.EntityAimAssist;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
 import org.bukkit.Particle;
@@ -29,8 +30,6 @@ import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -46,7 +45,6 @@ import java.util.function.ToIntFunction;
  * through one impact ledger.</p>
  */
 final class MagicProjectileEngine implements Listener, AutoCloseable {
-    private static final double BLOCK_EPSILON = .08D;
     private static final double PROJECTILE_ORIGIN_DROP = .3D;
 
     private final Plugin plugin;
@@ -83,29 +81,11 @@ final class MagicProjectileEngine implements Listener, AutoCloseable {
     List<LivingEntity> acquireTargets(Player owner, double range, double assistDegrees,
                                       Predicate<LivingEntity> eligibility, ToIntFunction<LivingEntity> priority,
                                       int limit) {
-        Location eye = owner.getEyeLocation();
-        Vector aim = eye.getDirection();
-        if (aim.lengthSquared() < 1.0E-9D) return List.of();
-        aim.normalize();
-        double minimumDot = Math.cos(Math.toRadians(assistDegrees));
-        List<AimCandidate> candidates = new ArrayList<>();
-        for (Entity candidate : owner.getWorld().getNearbyEntities(eye, range, range, range)) {
-            if (!(candidate instanceof LivingEntity target) || !validTarget(owner, target)) continue;
-            Location center = center(target);
-            Vector offset = center.toVector().subtract(eye.toVector());
-            double distance = offset.length();
-            if (distance <= 1.0E-6D || distance > range) continue;
-            double dot = offset.multiply(1D / distance).dot(aim);
-            if (dot < minimumDot || !unobstructed(eye, center) || !eligibility.test(target)) continue;
-            candidates.add(new AimCandidate(
-                    target, priority.applyAsInt(target), (1D - dot) * 100D + distance / range, distance));
-        }
-        return candidates.stream()
-                .sorted(Comparator.comparingInt(AimCandidate::tier)
-                        .thenComparingDouble(AimCandidate::score)
-                        .thenComparingDouble(AimCandidate::distance))
-                .limit(Math.max(1, Math.min(3, limit)))
-                .map(AimCandidate::target).toList();
+        List<LivingEntity> nearby = owner.getWorld()
+                .getNearbyEntities(owner.getEyeLocation(), range, range, range).stream()
+                .filter(LivingEntity.class::isInstance).map(LivingEntity.class::cast).toList();
+        return EntityAimAssist.select(owner, nearby, range, assistDegrees,
+                eligibility, priority, Math.max(1, Math.min(3, limit)));
     }
 
     boolean launchWand(MagicCast cast, LivingEntity target) {
@@ -472,19 +452,11 @@ final class MagicProjectileEngine implements Listener, AutoCloseable {
     }
 
     static Location center(LivingEntity entity) {
-        return entity.getLocation().add(0D, Math.max(.35D, entity.getHeight() * .52D), 0D);
+        return EntityAimAssist.center(entity);
     }
 
     static boolean unobstructed(Location source, Location destination) {
-        World world = source.getWorld();
-        if (world == null || destination.getWorld() == null || !world.equals(destination.getWorld())) return false;
-        Vector delta = destination.toVector().subtract(source.toVector());
-        double distance = delta.length();
-        if (distance < 1.0E-6D) return true;
-        RayTraceResult hit = world.rayTraceBlocks(
-                source, delta.normalize(), distance, FluidCollisionMode.NEVER, true);
-        return hit == null || hit.getHitPosition() == null
-                || hit.getHitPosition().distance(source.toVector()) >= distance - BLOCK_EPSILON;
+        return EntityAimAssist.unobstructed(source, destination);
     }
 
     private static boolean loaded(Location location) {
@@ -518,6 +490,4 @@ final class MagicProjectileEngine implements Listener, AutoCloseable {
         void onImpact(MagicCast cast, LivingEntity directTarget, Location impact, Vector incoming);
     }
 
-    private record AimCandidate(LivingEntity target, int tier, double score, double distance) {
-    }
 }
