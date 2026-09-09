@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
+import com.magmaguy.easyminecraftgoals.internal.StackedText;
 import com.magmaguy.freeminecraftmodels.bedrock.BedrockModeledEntity;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
@@ -78,6 +79,10 @@ public class ModeledEntity {
     private MountPointManager mountPointManager = null;
     @Getter
     private String displayName = null;
+    @Getter
+    private final StackedText nameplate = new StackedText();
+    private Bone nameplateAnchor;
+    private boolean nameplateAnchorResolved;
     private int viewDistanceOverride = -1;
     private Color persistentTint = null;
 
@@ -175,12 +180,39 @@ public class ModeledEntity {
     }
 
     public void setDisplayName(String displayName) {
+        if (Objects.equals(this.displayName, displayName)) return;
         this.displayName = displayName;
-        getSkeleton().getNametags().forEach(nametag -> nametag.getBoneTransforms().setTextDisplayText(displayName));
+        nameplate.setLines(displayName == null || displayName.isEmpty() ? List.of() : List.of(displayName));
     }
 
+    /** Lines are top-to-bottom; the last line remains at the model's name anchor. */
+    public void setDisplayNameLines(List<String> lines) {
+        setDisplayName(String.join("\n", lines));
+    }
+
+    public void setDisplayNameScale(float scale) { nameplate.setScale(scale); }
+
+    /** Clear gap in blocks at scale 1; scaled Java text scales both glyphs and spacing. */
+    public void setDisplayNameLineGap(double gap) { nameplate.setLineGap(gap); }
+
     public void setDisplayNameVisible(boolean visible) {
-        getSkeleton().getNametags().forEach(nametag -> nametag.getBoneTransforms().setTextDisplayVisible(visible));
+        nameplate.setVisible(visible);
+    }
+
+    /** Authored nametag position, or a fallback above the model's hitbox. */
+    public Location getNameplateLocation() {
+        if (!nameplateAnchorResolved && skeleton != null) {
+            nameplateAnchor = skeleton.getNametags().stream()
+                    .min(Comparator.comparing(bone -> bone.getBoneBlueprint().getBoneName())).orElse(null);
+            nameplateAnchorResolved = true;
+        }
+        if (nameplateAnchor != null)
+            return nameplateAnchor.getBoneLocation().subtract(0, BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT() - 0.5, 0);
+        Location location = getLocation();
+        if (location == null) return null;
+        var hitbox = skeletonBlueprint == null ? null : skeletonBlueprint.getHitbox();
+        double height = hitbox == null ? 2 : hitbox.getHeight() + hitbox.getModelOffset().getY();
+        return location.clone().add(0, height * scaleModifier + 0.3, 0);
     }
 
     /**
@@ -256,6 +288,7 @@ public class ModeledEntity {
         //check if the entity exists, basically
         if (isRemoved || getLocation() == null) return;
         getSkeleton().tick(abstractPacketBundle);
+        if (displayName != null && !displayName.isEmpty()) nameplate.move(getNameplateLocation());
         if (bedrockModeledEntity != null) bedrockModeledEntity.tick();
         hitboxComponent.tick(abstractPacketBundle);
         animationComponent.tick();
@@ -288,6 +321,7 @@ public class ModeledEntity {
         // Remove the packet interaction entity
         hitboxComponent.removePacketInteractionEntity();
         if (bedrockModeledEntity != null) bedrockModeledEntity.remove();
+        nameplate.remove();
         skeleton.remove();
         if (underlyingEntity != null) {
             // Only actually despawn the underlying entity for non-persistent
