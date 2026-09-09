@@ -83,6 +83,10 @@ public class SkeletonWatchers {
             }
         }
         resync(VIEWER_STATE_INTERVAL_TICKS);
+        var modeledEntity = skeleton.getModeledEntity();
+        modeledEntity.getNameplate().move(modeledEntity.getNameplateLocation());
+        modeledEntity.getNameplate().syncViewers(isInvisible ? List.of()
+                : viewers.stream().map(Bukkit::getPlayer).filter(Objects::nonNull).toList());
     }
 
     private volatile long lastResyncTime = 0L;
@@ -391,6 +395,7 @@ public class SkeletonWatchers {
         if (modeledEntity != null && modeledEntity.getBedrockModeledEntity() != null) {
             modeledEntity.getBedrockModeledEntity().hideFrom(uuid);
         }
+        if (modeledEntity != null) modeledEntity.getNameplate().hideFrom(uuid);
         skeleton.getBones().forEach(bone -> bone.hideFrom(uuid));
         // Hide the packet interaction entity (uses UUID, works even if player is offline)
         if (modeledEntity != null)

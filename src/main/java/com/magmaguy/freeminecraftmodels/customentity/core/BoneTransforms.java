@@ -3,7 +3,6 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.easyminecraftgoals.internal.PacketModelEntity;
-import com.magmaguy.easyminecraftgoals.internal.PacketTextEntity;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.utils.TransformationMatrix;
@@ -26,26 +25,9 @@ public class BoneTransforms {
     private PacketModelEntity packetArmorStandEntity = null;
     @Getter
     private PacketModelEntity packetDisplayEntity = null;
-    @Getter
-    private PacketTextEntity packetTextDisplayArmorStandEntity = null;
-
     public BoneTransforms(Bone bone, Bone parent) {
         this.bone = bone;
         this.parent = parent;
-    }
-
-    public void setTextDisplayText(String text) {
-        if (packetTextDisplayArmorStandEntity == null) return;
-        packetTextDisplayArmorStandEntity.setText(text);
-        // Text changes ride the per-tick metadata packet; force it out next tick
-        // even if the bone didn't move (see sendUpdatePacket dirty-checking).
-        markDirty();
-    }
-
-    public void setTextDisplayVisible(boolean visible) {
-        if (packetTextDisplayArmorStandEntity == null) return;
-        packetTextDisplayArmorStandEntity.setTextVisible(visible);
-        markDirty();
     }
 
     public void transform() {
@@ -149,19 +131,11 @@ public class BoneTransforms {
         }
         if (bone.getBoneBlueprint().isDisplayModel()) {
             if (bone.getBoneBlueprint().isNameTag()) {
-                initializeTextDisplayBone();
                 return;
             }
             initializeDisplayEntityBone();
             initializeArmorStandBone();
         }
-    }
-
-    private void initializeTextDisplayBone() {
-        Location textDisplayLocation = getArmorStandTargetLocation();
-        packetTextDisplayArmorStandEntity = NMSManager.getAdapter().createPacketTextArmorStandEntity(textDisplayLocation);
-        packetTextDisplayArmorStandEntity.initializeText(textDisplayLocation);
-        packetTextDisplayArmorStandEntity.sendLocationAndRotationPacket(textDisplayLocation, new EulerAngle(0, 0, 0));
     }
 
     private void initializeMountPointBone() {
@@ -280,8 +254,6 @@ public class BoneTransforms {
     private double asLx, asLy, asLz, asRx, asRy, asRz;
     private boolean displayStateValid = false;
     private double deLx, deLy, deLz, deRx, deRy, deRz, deSx, deSy, deSz;
-    private boolean textStateValid = false;
-    private double txLx, txLy, txLz;
 
     /**
      * Forces this bone to resend its packets on the next tick regardless of whether
@@ -313,13 +285,7 @@ public class BoneTransforms {
                 sendDisplayEntityUpdatePacket(packetBundle, loc, rot, scale);
             }
         }
-        if (packetTextDisplayArmorStandEntity != null && packetTextDisplayArmorStandEntity.hasViewers()) {
-            Location loc = getArmorStandTargetLocation();
-            if (force || textChanged(loc)) {
-                if (packetBundle == null) packetBundle = packetTextDisplayArmorStandEntity.createPacketBundle();
-                sendTextDisplayUpdatePacket(packetBundle, loc);
-            }
-        }
+
     }
 
     private boolean armorStandChanged(Location loc, EulerAngle rot) {
@@ -335,25 +301,8 @@ public class BoneTransforms {
                 || !same(deSx, scale[0]) || !same(deSy, scale[1]) || !same(deSz, scale[2]);
     }
 
-    private boolean textChanged(Location loc) {
-        if (!textStateValid) return true;
-        return !same(txLx, loc.getX()) || !same(txLy, loc.getY()) || !same(txLz, loc.getZ());
-    }
-
     private static boolean same(double a, double b) {
         return Math.abs(a - b) < TRANSFORM_EPSILON;
-    }
-
-    private void sendTextDisplayUpdatePacket(AbstractPacketBundle packetBundle, Location loc) {
-        packetTextDisplayArmorStandEntity.generateLocationAndRotationAndScalePackets(
-                packetBundle,
-                loc,
-                new EulerAngle(0, 0, 0),
-                1f);
-        txLx = loc.getX();
-        txLy = loc.getY();
-        txLz = loc.getZ();
-        textStateValid = true;
     }
 
     private void sendArmorStandUpdatePacket(AbstractPacketBundle packetBundle, Location loc, EulerAngle rot) {
