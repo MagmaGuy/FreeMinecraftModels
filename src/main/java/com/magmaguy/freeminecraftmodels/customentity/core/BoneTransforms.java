@@ -43,9 +43,13 @@ public class BoneTransforms {
                 double[] inheritedScale = globalMatrix.getScale();
 
                 globalMatrix.resetRotation();
-                float yaw = -bone.getSkeleton().getCurrentHeadYaw() + 180;
+                Location gaze = bone.getSkeleton().hasLookTarget()
+                        ? bone.getSkeleton().getLookDirection(getMountPointTargetLocation()) : null;
+                float headYaw = gaze == null ? bone.getSkeleton().getCurrentHeadYaw() : gaze.getYaw();
+                float headPitch = gaze == null ? bone.getSkeleton().getCurrentHeadPitch() : gaze.getPitch();
+                float yaw = -headYaw + 180;
                 globalMatrix.rotateY((float) Math.toRadians(yaw));
-                globalMatrix.rotateX(-(float) Math.toRadians(bone.getSkeleton().getCurrentHeadPitch()));
+                globalMatrix.rotateX(-(float) Math.toRadians(headPitch));
 
                 // Reapply the inherited scale
                 globalMatrix.scale(inheritedScale[0], inheritedScale[1], inheritedScale[2]);

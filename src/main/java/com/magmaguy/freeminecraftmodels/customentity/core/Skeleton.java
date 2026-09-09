@@ -43,6 +43,31 @@ public class Skeleton {
     @Setter
     private ModeledEntity modeledEntity = null;
     private Bone rootBone = null;
+    // Published from the main thread and consumed by the asynchronous model clock.
+    // Never mutate or expose the stored Location after publication.
+    private volatile Location lookTarget;
+
+    /** Overrides model gaze. Pass null to resume the carrier's normal head rotation. */
+    public void setLookTarget(Location target) {
+        if (target != null) {
+            target.checkFinite();
+            if (target.getWorld() == null) throw new IllegalArgumentException("Look target must have a world");
+        }
+        lookTarget = target == null ? null : target.clone();
+    }
+
+    /** Resolves gaze from an actual bone position, including the model's scale and animation. */
+    public Location getLookDirection(Location origin) {
+        Location target = lookTarget;
+        if (target == null || origin == null || origin.getWorld() != target.getWorld()) return null;
+        var direction = target.toVector().subtract(origin.toVector());
+        if (direction.lengthSquared() < 1.0E-8D) return null;
+        return origin.clone().setDirection(direction);
+    }
+
+    public boolean hasLookTarget() {
+        return lookTarget != null;
+    }
 
     public Skeleton(SkeletonBlueprint skeletonBlueprint, ModeledEntity modeledEntity) {
         this.skeletonBlueprint = skeletonBlueprint;

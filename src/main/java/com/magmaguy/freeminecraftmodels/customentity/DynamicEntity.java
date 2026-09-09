@@ -209,6 +209,15 @@ public class DynamicEntity extends ModeledEntity {
         this.syncMovement = syncMovement;
     }
 
+    /**
+     * Faces the model toward a world position, aiming head bones independently at that position.
+     * Does not rotate or move the underlying entity or require vanilla AI. Callers own the target
+     * lifecycle and must pass null when releasing gaze. The supplied location is copied.
+     */
+    public void setLookTarget(@Nullable Location target) {
+        getSkeleton().setLookTarget(target);
+    }
+
     @Override
     public void remove() {
         super.remove();
@@ -230,6 +239,12 @@ public class DynamicEntity extends ModeledEntity {
      */
     public Location getBodyLocation() {
         Location bodyLoc = underlyingEntity.getLocation().clone();
+        Location gaze = getSkeleton().getLookDirection(bodyLoc);
+        if (gaze != null) {
+            bodyLoc.setYaw(gaze.getYaw());
+            bodyLoc.setPitch(0F);
+            return bodyLoc;
+        }
 
         // current body yaw (what Minecraft thinks the body is doing)
         float bodyYaw = NMSManager.getAdapter().getBodyRotation(underlyingEntity);
