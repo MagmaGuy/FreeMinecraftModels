@@ -202,6 +202,8 @@ public class ItemScriptListener implements Listener {
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = false)
     public void onPlayerInteractEntity(PlayerInteractEntityEvent event) {
+        // A permission probe must not execute item scripts before protection listeners finish.
+        if (event instanceof com.magmaguy.freeminecraftmodels.api.ModeledEntityInteractEvent) return;
         fireForMainHand(event.getPlayer(), ScriptableItem.ON_INTERACT_ENTITY, event);
     }
 

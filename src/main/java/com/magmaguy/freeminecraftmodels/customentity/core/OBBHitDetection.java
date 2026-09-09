@@ -458,15 +458,17 @@ public class OBBHitDetection implements Listener {
     // with useInteractedBlock=DENY (there's no block to "use"), and Bukkit
     // reports such events as cancelled — so ignoreCancelled=true would silently
     // skip every air click, breaking hit detection on any entity without a
-    // block behind it. Suppress only when BOTH useBlock and useItem are DENY,
-    // which is the real "another plugin cancelled this" signal.
+    // block behind it. Complete denial still suppresses left clicks. Right clicks
+    // use a separate entity permission check in InteractionComponent: block-use
+    // protection must not also disable NPCs and props in the protected area.
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onPlayerInteract(PlayerInteractEvent event) {
-        if (event.useInteractedBlock() == Event.Result.DENY
+        Action action = event.getAction();
+        if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK
+                && event.useInteractedBlock() == Event.Result.DENY
                 && event.useItemInHand() == Event.Result.DENY) {
             return;
         }
-        Action action = event.getAction();
         if (action == Action.LEFT_CLICK_AIR || action == Action.LEFT_CLICK_BLOCK) {
             attackCooldowns.put(event.getPlayer().getUniqueId(), event.getPlayer().getAttackCooldown());
             executeLeftClickAttack(event.getPlayer());

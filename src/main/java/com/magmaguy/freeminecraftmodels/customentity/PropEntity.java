@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.api.ModeledEntityInteractEvent;
 import com.magmaguy.freeminecraftmodels.config.props.PropBlocks;
 import com.magmaguy.freeminecraftmodels.customentity.core.components.PropBlockComponent;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
@@ -512,6 +513,7 @@ public class PropEntity extends StaticEntity {
     public static class PropEntityEvents implements Listener {
         @EventHandler
         public void onArmorStandInteract(PlayerInteractEntityEvent event) {
+            if (event instanceof ModeledEntityInteractEvent) return;
             if (event.getRightClicked() instanceof ArmorStand armorStand && isPropEntity(armorStand))
                 event.setCancelled(true);
         }

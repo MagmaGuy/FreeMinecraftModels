@@ -211,6 +211,8 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
     }
 
     private void dispatchEntityRightClick(PlayerInteractEntityEvent event, Entity clicked) {
+        // The modeled event after this permission check owns spell dispatch.
+        if (event instanceof com.magmaguy.freeminecraftmodels.api.ModeledEntityInteractEvent) return;
         ItemStack held = event.getPlayer().getInventory().getItemInMainHand();
         Optional<MagicWeaponDefinition> definition = resolveDefinition(held);
         if (definition.isEmpty() || MagicWeaponInputRouter.route(

@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.customentity.core.components;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.api.ModeledEntityInteractEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityHitByProjectileEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityHitboxContactEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityLeftClickEvent;
@@ -67,14 +68,26 @@ public class InteractionComponent {
     }
 
     public void callRightClickEvent(Player player) {
-        if (modeledEntity.isDying()) return;
+        if (modeledEntity.isDying() || modeledEntity.isRemoved()) return;
         long now = System.currentTimeMillis();
         Long last = rightClickCooldowns.get(player.getUniqueId());
         if (last != null && (now - last) < RIGHT_CLICK_COOLDOWN_MS) return;
         pruneExpired(rightClickCooldowns, now, RIGHT_CLICK_COOLDOWN_MS);
         rightClickCooldowns.put(player.getUniqueId(), now);
+        // A block/air/packet click has no Bukkit entity permission decision of its own.
+        // Normalize all model inputs through the backing entity before any model behavior.
+        // The cooldown is claimed first so reentrant listeners cannot dispatch this twice.
+        if (modeledEntity.getUnderlyingEntity() != null) {
+            if (!modeledEntity.getUnderlyingEntity().isValid()) return;
+            ModeledEntityInteractEvent permission = new ModeledEntityInteractEvent(player, modeledEntity);
+            Bukkit.getPluginManager().callEvent(permission);
+            if (permission.isCancelled()) return;
+        }
+        if (modeledEntity.isRemoved() || modeledEntity.isDying() || !player.isOnline()
+                || modeledEntity.getWorld() != player.getWorld()) return;
         ModeledEntityRightClickEvent event = new ModeledEntityRightClickEvent(player, modeledEntity);
         Bukkit.getPluginManager().callEvent(event);
+        if (!event.isCancelled()) handleRightClickEvent(player);
     }
 
     /**
@@ -221,14 +234,6 @@ public class InteractionComponent {
         public void onLeftClick(ModeledEntityLeftClickEvent event) {
             if (event.isCancelled()) return;
             event.getEntity().getInteractionComponent().handleLeftClickEvent(event.getPlayer());
-        }
-
-        @EventHandler
-        public void onRightClick(ModeledEntityRightClickEvent event) {
-            if (event.isCancelled()) {
-                return;
-            }
-            event.getEntity().getInteractionComponent().handleRightClickEvent(event.getPlayer());
         }
 
         @EventHandler
