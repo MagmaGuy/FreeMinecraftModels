@@ -54,7 +54,6 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
 
     private final Plugin plugin;
     private final MagicWeaponCatalog catalog;
-    private final MagicWeaponDefinitionComposer definitionComposer;
     private final MagicInputDeduplicator deduplicator = new MagicInputDeduplicator();
     private final MagicDamageResolution damageResolution = new MagicDamageResolution();
     private final MagicProjectileEngine projectiles;
@@ -74,26 +73,12 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
     private boolean targetPolicyWarningSent;
 
     public MagicWeaponRuntime(Plugin plugin) {
-        this(plugin, BuiltInMagicWeapons.catalog(), MagicWeaponDefinitionComposer.identity());
-    }
-
-    public MagicWeaponRuntime(
-            Plugin plugin,
-            MagicWeaponDefinitionComposer definitionComposer) {
-        this(plugin, BuiltInMagicWeapons.catalog(), definitionComposer);
+        this(plugin, BuiltInMagicWeapons.catalog());
     }
 
     MagicWeaponRuntime(Plugin plugin, MagicWeaponCatalog catalog) {
-        this(plugin, catalog, MagicWeaponDefinitionComposer.identity());
-    }
-
-    MagicWeaponRuntime(
-            Plugin plugin,
-            MagicWeaponCatalog catalog,
-            MagicWeaponDefinitionComposer definitionComposer) {
         this.plugin = java.util.Objects.requireNonNull(plugin, "plugin");
         this.catalog = java.util.Objects.requireNonNull(catalog, "catalog");
-        this.definitionComposer = java.util.Objects.requireNonNull(definitionComposer, "definitionComposer");
         this.projectiles = new MagicProjectileEngine(plugin, this::onImpact);
     }
 
@@ -448,8 +433,8 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         Optional<MagicWeaponDefinition> base = MagicWeaponIdentity.resolve(weapon, catalog);
         if (base.isEmpty()) return Optional.empty();
         try {
-            return Optional.of(MagicWeaponDefinitionComposition.compose(
-                    weapon, base.get(), definitionComposer.andThen(this::applyResolverModifiers)));
+            // The resolver receives a copy, so item modifiers cannot rewrite the held stack.
+            return Optional.of(applyResolverModifiers(weapon.clone(), base.get()));
         } catch (RuntimeException invalidComposition) {
             if (!compositionWarningSent) {
                 compositionWarningSent = true;

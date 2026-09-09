@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.scripting;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.BowStateDetector;
 import com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields;
+import com.magmaguy.freeminecraftmodels.magic.BuiltInMagicWeapons;
 import com.magmaguy.magmacore.scripting.LuaEngine;
 import com.magmaguy.magmacore.scripting.ScriptDefinition;
 import com.magmaguy.magmacore.scripting.ScriptInstance;
@@ -166,7 +167,9 @@ public final class ItemScriptManager {
 
             PersistentDataContainer pdc = meta.getPersistentDataContainer();
             String itemId = pdc.get(ITEM_ID_KEY, PersistentDataType.STRING);
-            if (itemId != null && itemDefinitions.containsKey(itemId)) {
+            if (itemId != null
+                    && BuiltInMagicWeapons.catalog().find(itemId).isEmpty()
+                    && itemDefinitions.containsKey(itemId)) {
                 equippedIds.add(itemId);
             }
         }
