@@ -154,7 +154,9 @@ public final class PropScriptManager {
             ScriptInstance instance = new ScriptInstance(definition, scriptable);
 
             listener.register(prop, instance);
-
+            // A tick-only script has no spawn hook to initialize its VM. Start once here;
+            // hook dispatch and owned-task cleanup still use the normal instance lifecycle.
+            instance.start();
             instance.handleEvent(ScriptHook.ON_SPAWN, null, null, null);
         }
     }

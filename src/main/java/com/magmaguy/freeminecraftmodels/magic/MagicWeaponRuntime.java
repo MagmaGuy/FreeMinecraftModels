@@ -320,6 +320,11 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
                 candidate -> targetEligible(cast, candidate),
                 candidate -> targetPriority(cast, candidate), traits.missileCount());
         if (!projectiles.launchWand(cast, targets)) return false;
+        var slowness = cast.owner().getPotionEffect(org.bukkit.potion.PotionEffectType.SLOWNESS);
+        if (slowness == null || slowness.getAmplifier() == 0
+                && !slowness.isInfinite() && slowness.getDuration() < 20)
+            cast.owner().addPotionEffect(new org.bukkit.potion.PotionEffect(
+                    org.bukkit.potion.PotionEffectType.SLOWNESS, 20, 0));
         cast.owner().getWorld().playSound(
                 cast.owner().getEyeLocation(), Sound.ENTITY_EVOKER_CAST_SPELL,
                 targets.isEmpty() ? .4F : .55F, targets.isEmpty() ? 1.4F : 1.7F);
