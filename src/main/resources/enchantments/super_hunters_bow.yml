@@ -1,0 +1,11 @@
+isEnabled: true
+name: Super Hunter's Bow
+description: Pull the selected eligible mob toward you on shift-right-click.
+maxLevel: 1
+validSlots: [MAINHAND, OFFHAND]
+itemTypes: [BOW]
+stacking: source_item
+script: super_hunters_bow.lua
+parameters:
+  lifetime_ticks: 44
+  stop_on_unequip: true

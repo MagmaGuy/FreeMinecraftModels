@@ -47,6 +47,7 @@ public class FMMPackage extends AbstractNightbreakContentPackage {
         if (!disabledScripts.isEmpty()) {
             NightbreakFileUtils.moveEntriesFlat(disabledScripts, getInstalledScriptsFolder());
         }
+        NightbreakFileUtils.moveEntriesFlat(collectManagedEntries(getEnchantmentFolder(false)), getEnchantmentFolder(true));
 
         handleStateSave(player,
                 contentPackageConfigFields.setEnabledAndSave(true),
@@ -74,6 +75,7 @@ public class FMMPackage extends AbstractNightbreakContentPackage {
         if (!installedScripts.isEmpty()) {
             NightbreakFileUtils.moveEntriesFlat(installedScripts, getDisabledScriptsFolder());
         }
+        NightbreakFileUtils.moveEntriesFlat(collectManagedEntries(getEnchantmentFolder(true)), getEnchantmentFolder(false));
 
         handleStateSave(player,
                 contentPackageConfigFields.setEnabledAndSave(false),
@@ -102,6 +104,10 @@ public class FMMPackage extends AbstractNightbreakContentPackage {
 
     private File getDisabledScriptsFolder() {
         return new File(MetadataHandler.PLUGIN.getDataFolder(), "scripts_disabled");
+    }
+
+    private File getEnchantmentFolder(boolean installed) {
+        return new File(MetadataHandler.PLUGIN.getDataFolder(), installed ? "enchantments" : "enchantments_disabled");
     }
 
     private List<File> collectManagedEntries(File rootFolder) {
@@ -189,6 +195,8 @@ public class FMMPackage extends AbstractNightbreakContentPackage {
         return !collectManagedEntries(getInstalledModelsFolder()).isEmpty()
                 || !collectManagedEntries(getDisabledModelsFolder()).isEmpty()
                 || !collectManagedScriptEntries(getInstalledScriptsFolder()).isEmpty()
-                || !collectManagedScriptEntries(getDisabledScriptsFolder()).isEmpty();
+                || !collectManagedScriptEntries(getDisabledScriptsFolder()).isEmpty()
+                || !collectManagedEntries(getEnchantmentFolder(true)).isEmpty()
+                || !collectManagedEntries(getEnchantmentFolder(false)).isEmpty();
     }
 }
