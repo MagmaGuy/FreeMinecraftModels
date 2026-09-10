@@ -118,7 +118,7 @@ return {
             local start_y = py + SPAWN_HEIGHT + math.random() * SPAWN_HEIGHT_VARIANCE
 
             -- Raycast straight down from spawn point to find the first solid block
-            local hit = context.world:raycast(sx, start_y, sz, 0, -1, 0, MAX_FALL_SCAN)
+            local hit = context.world:raycast(sx, start_y, sz, 0, -1, 0, MAX_FALL_SCAN, "NEVER", true, true)
             local end_y
             if hit and hit.hit_location then
                 end_y = hit.hit_location.y
@@ -134,34 +134,13 @@ return {
                 context.world:play_sound("ENTITY_CHICKEN_AMBIENT", sx, start_y, sz,
                     CLUCK_VOLUME, CLUCK_PITCH_MIN + math.random() * CLUCK_PITCH_VARIANCE)
 
-                -- Animate the falling egg with particles
+                -- The shared physical projectile owner resolves each egg impact once.
                 local tick_count = 0
-                local fall_task = context.scheduler:run_repeating(0, FALL_INTERVAL, function()
-                    tick_count = tick_count + 1
-                    if tick_count > FALL_STEPS then return end
-
-                    local progress = tick_count / FALL_STEPS
-                    local current_y = start_y + (end_y - start_y) * progress
-
-                    -- Egg body — tight white cloud cluster
-                    context.world:spawn_particle(EGG_PARTICLE, sx, current_y, sz,
-                        EGG_PARTICLE_COUNT, EGG_SPREAD, EGG_SPREAD, EGG_SPREAD, EGG_SPEED)
-
-                    -- Smoke trail behind the egg (slightly above)
-                    context.world:spawn_particle(TRAIL_PARTICLE, sx, current_y + 0.5, sz,
-                        TRAIL_PARTICLE_COUNT, TRAIL_SPREAD, TRAIL_SPREAD, TRAIL_SPREAD, TRAIL_SPEED)
-
-                    -- Panicked clucking every other step
-                    if tick_count % 2 == 0 then
-                        context.world:play_sound("ENTITY_CHICKEN_AMBIENT", sx, current_y, sz,
-                            TRAIL_SOUND_VOLUME, TRAIL_SOUND_PITCH_MIN + math.random() * TRAIL_SOUND_PITCH_VAR)
-                    end
-                end)
-
-                -- Impact when the egg reaches the ground
-                local impact_delay = FALL_STEPS * FALL_INTERVAL + 1
-                context.scheduler:run_later(impact_delay, function()
-                    context.scheduler:cancel(fall_task)
+                local flight_ticks = FALL_STEPS * FALL_INTERVAL
+                local distance = math.max(.1,start_y-end_y)
+                context.action:launch_projectile({x=sx,y=start_y,z=sz},{x=0,y=-1,z=0},
+                    distance/flight_ticks,distance+1,flight_ticks+2,function(_,impact)
+                    local sx,end_y,sz=impact.x,impact.y,impact.z
 
                     -- Explosion VFX
                     context.world:spawn_particle("EXPLOSION", sx, end_y, sz,
@@ -208,7 +187,18 @@ return {
                             end
                         end
                     end
-                end)
+                end,function(at)
+                    tick_count=tick_count+1
+                    if tick_count % FALL_INTERVAL ~= 0 then return end
+                    context.world:spawn_particle(EGG_PARTICLE,at.x,at.y,at.z,
+                        EGG_PARTICLE_COUNT,EGG_SPREAD,EGG_SPREAD,EGG_SPREAD,EGG_SPEED)
+                    context.world:spawn_particle(TRAIL_PARTICLE,at.x,at.y+.5,at.z,
+                        TRAIL_PARTICLE_COUNT,TRAIL_SPREAD,TRAIL_SPREAD,TRAIL_SPREAD,TRAIL_SPEED)
+                    if tick_count % (FALL_INTERVAL*2)==0 then
+                        context.world:play_sound('ENTITY_CHICKEN_AMBIENT',at.x,at.y,at.z,
+                            TRAIL_SOUND_VOLUME,TRAIL_SOUND_PITCH_MIN+math.random()*TRAIL_SOUND_PITCH_VAR)
+                    end
+                end,true)
             end)
         end
     end,

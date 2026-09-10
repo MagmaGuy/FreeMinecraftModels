@@ -27,8 +27,6 @@ final class MagicEnchantmentModifiers {
             var resolved = EnchantmentDefinitions.resolve(entry.getKey());
             if (resolved == null || !resolved.available())
                 throw new IllegalArgumentException("Unavailable enchantment " + entry.getKey());
-            if (entry.getValue() > resolved.definition().maxLevel())
-                throw new IllegalArgumentException("Enchantment exceeds its authored level limit: " + entry.getKey());
             if (!resolved.definition().attackKinds().isEmpty() && !resolved.definition().attackKinds().contains(attack.name())) continue;
             if (!resolved.provider().capabilities().contains(EnchantmentQueries.CAPABILITY)) continue;
             for (ScriptHook hook : hooks.stream().sorted(Comparator.comparing(ScriptHook::getKey)).toList())

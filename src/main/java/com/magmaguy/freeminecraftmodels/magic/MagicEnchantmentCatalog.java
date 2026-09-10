@@ -56,19 +56,7 @@ public final class MagicEnchantmentCatalog implements AutoCloseable {
                 plugin.saveResource("enchantments/" + name + ".lua", false);
             }
         }
-        EnchantmentCatalog candidate = EnchantmentCatalog.load("freeminecraftmodels", directory, ALL_HOOKS);
-        EnchantmentDefinition multicast = candidate.definitions().get(MULTICAST);
-        if (multicast != null) {
-            if (multicast.maxLevel() != 3
-                    || !multicast.validSlots().equals(Set.of(EnchantmentDefinition.Slot.MAINHAND))
-                    || !multicast.itemTypes().equals(Set.of(EnchantmentDefinition.ItemType.WAND))
-                    || !multicast.attackKinds().equals(Set.of("WAND_MISSILE"))
-                    || multicast.stacking() != EnchantmentDefinition.Stacking.SOURCE_ITEM
-                    || !candidate.script(MULTICAST).orElseThrow().getHooks().equals(Set.of(MISSILE_COUNT, MISSILE_DAMAGE_FACTOR)))
-                throw new IOException("Multicast requires levels I-III, main-hand wands, WAND_MISSILE, "
-                        + "source_item stacking and both missile query hooks");
-        }
-        return candidate;
+        return EnchantmentCatalog.load("freeminecraftmodels", directory, ALL_HOOKS);
     }
 
     /** Publishes only a fully prepared candidate on the server thread. */
