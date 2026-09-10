@@ -7,6 +7,6 @@ public final class EliteMobsEnchantmentDamage {
     private EliteMobsEnchantmentDamage() { }
 
     public static void apply(EnchantmentActions.DamageInput damage, Runnable application) {
-        com.magmaguy.elitemobs.combatsystem.EnchantmentDamage.apply(damage.attackId(), damage.equipment(), application);
+        com.magmaguy.elitemobs.combatsystem.EnchantmentDamage.apply(damage.attackId(), damage.actor().getUniqueId(), damage.equipment(), application);
     }
 }
