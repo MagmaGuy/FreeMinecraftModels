@@ -1,0 +1,10 @@
+isEnabled: true
+name: Aqua Prodder
+maxLevel: 1
+validSlots: [MAINHAND]
+itemTypes: [SPEAR]
+stacking: source_item
+script: aqua_prodder.lua
+parameters:
+  lifetime_ticks: 1201
+  stop_on_unequip: true

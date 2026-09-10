@@ -1,0 +1,10 @@
+isEnabled: true
+name: Sediment Surveyor
+maxLevel: 1
+validSlots: [MAINHAND]
+itemTypes: [SHOVEL]
+stacking: source_item
+script: sediment_surveyor.lua
+parameters:
+  lifetime_ticks: 46
+  stop_on_unequip: true

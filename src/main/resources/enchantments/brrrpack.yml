@@ -1,0 +1,10 @@
+isEnabled: true
+name: Brrrpack
+maxLevel: 1
+validSlots: [MAINHAND, OFFHAND]
+itemTypes: [SHIELD]
+stacking: source_item
+script: brrrpack.lua
+parameters:
+  lifetime_ticks: 140
+  stop_on_unequip: true

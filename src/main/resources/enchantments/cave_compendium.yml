@@ -1,0 +1,10 @@
+isEnabled: true
+name: Cave Compendium
+maxLevel: 1
+validSlots: [MAINHAND]
+itemTypes: [PICKAXE]
+stacking: source_item
+script: cave_compendium.lua
+parameters:
+  lifetime_ticks: 140
+  stop_on_unequip: true
