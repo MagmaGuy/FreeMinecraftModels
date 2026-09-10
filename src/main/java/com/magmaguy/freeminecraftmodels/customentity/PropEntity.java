@@ -23,6 +23,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
+import org.bukkit.event.world.WorldUnloadEvent;
 import org.bukkit.event.world.EntitiesLoadEvent;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -177,8 +178,12 @@ public class PropEntity extends StaticEntity {
             return null;
         }
         if (removeIfDuplicateProp(entityID, armorStand, knownChunkEntities)) return null;
-        if (propEntities.containsKey(armorStand.getUniqueId())) {
-            return propEntities.get(armorStand.getUniqueId());
+        PropEntity cached = propEntities.get(armorStand.getUniqueId());
+        if (cached != null) {
+            if (cached.getUnderlyingEntity() == armorStand && !cached.isRemoved()) return cached;
+            // Copied instance worlds reuse saved entity UUIDs. A wrapper for the
+            // previous stand must not prevent attachment to the newly loaded one.
+            cached.remove(false);
         }
         PropEntity propEntity = new PropEntity(entityID, armorStand);
         return propEntity;
@@ -438,7 +443,7 @@ public class PropEntity extends StaticEntity {
         LuaPropTable.invalidate(this);
         super.remove();
         if (showRealBlocks) showRealBlocksToAllPlayers();
-        if (underlyingUuid != null) propEntities.remove(underlyingUuid);
+        if (underlyingUuid != null) propEntities.remove(underlyingUuid, this);
         // Non-persistent props: ModeledEntity.remove() already despawns the underlying
         // entity (thread-safely, via the primary thread when needed) — no duplicate
         // remove() call needed here.
@@ -550,7 +555,7 @@ public class PropEntity extends StaticEntity {
         }
 
         //todo: well this isn't going to scale well
-        @EventHandler
+        @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
         public void onChunkUnloadEvent(ChunkUnloadEvent event) {
             String chunkHash = ChunkLocationChecker.chunkToString(event.getChunk());
             Collection<PropEntity> propEntitiesClone = new ArrayList<>(PropEntity.propEntities.values());
@@ -558,6 +563,16 @@ public class PropEntity extends StaticEntity {
                 if (value.chunkHash.equals(chunkHash)) {
                     value.remove(false);
                 }
+            }
+        }
+
+        @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+        public void onWorldUnloadEvent(WorldUnloadEvent event) {
+            // Whole-world unload does not reliably pass through chunk cleanup.
+            // Remove runtime models while retaining their persistent backing stands.
+            for (PropEntity prop : new ArrayList<>(propEntities.values())) {
+                Entity backing = prop.getUnderlyingEntity();
+                if (backing != null && backing.getWorld() == event.getWorld()) prop.remove(false);
             }
         }
     }
