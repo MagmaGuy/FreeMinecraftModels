@@ -21,10 +21,29 @@ public final class MagicEnchantmentCatalog implements AutoCloseable {
     public static final ScriptHook IGNITION_TICKS = new ScriptHook("on_ignition_ticks");
     private static final Set<ScriptHook> HOOKS = Set.of(MISSILE_COUNT, MISSILE_DAMAGE_FACTOR, BLAST_RADIUS_FACTOR, IGNITION_TICKS);
     private final EnchantmentDefinitions.HostedCatalog hosted;
+    private final com.magmaguy.magmacore.enchantments.EnchantmentAnvil.Registration anvil;
 
     public MagicEnchantmentCatalog(JavaPlugin plugin, EnchantmentCatalog candidate) {
         hosted = EnchantmentDefinitions.publishQueries(plugin, candidate, Set.of(), HOOKS,
                 (operation, request) -> Map.of("supported", false));
+        anvil = com.magmaguy.magmacore.enchantments.EnchantmentAnvil.register(plugin, MagicEnchantmentCatalog::itemProfile, item -> null);
+    }
+
+    private static com.magmaguy.magmacore.enchantments.EnchantmentItemProfile itemProfile(org.bukkit.inventory.ItemStack item) {
+        String id = item.getItemMeta().getPersistentDataContainer().get(
+                com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager.ITEM_ID_KEY,
+                org.bukkit.persistence.PersistentDataType.STRING);
+        if (id == null) return null;
+        var fields = com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager.getItemDefinitions().get(id);
+        if (fields == null || !fields.isEnabled() || org.bukkit.Material.matchMaterial(fields.getMaterial()) != item.getType())
+            throw new IllegalArgumentException("FMM item definition is unavailable or its material changed");
+        var weapon = fields.getWeapon();
+        if (weapon == null) return com.magmaguy.magmacore.enchantments.EnchantmentItemProfile.vanilla(item);
+        boolean wand = weapon.kind() == com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponKind.WAND;
+        return new com.magmaguy.magmacore.enchantments.EnchantmentItemProfile(
+                wand ? EnchantmentDefinition.ItemType.WAND : EnchantmentDefinition.ItemType.STAFF,
+                Set.of(EnchantmentDefinition.Slot.MAINHAND),
+                wand ? Set.of("WAND_MISSILE") : Set.of("STAFF_FIREBALL", "STAFF_MELEE"));
     }
 
     /** Called during asynchronous preflight, before any active content is torn down. */
@@ -61,6 +80,7 @@ public final class MagicEnchantmentCatalog implements AutoCloseable {
 
     @Override
     public void close() {
+        anvil.close();
         hosted.close();
     }
 }
