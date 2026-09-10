@@ -19,6 +19,12 @@ public interface MagicAttackResolver {
 
     void resolve(MagicAttackRequest request, MagicDamageApplication application);
 
+    /** Provider-owned scalar combat facts captured once before a cast commits. */
+    default java.util.Map<String, Double> capture(org.bukkit.entity.Player player,
+            org.bukkit.inventory.ItemStack weapon, MagicAttackKind attackKind) {
+        return java.util.Map.of();
+    }
+
     /** Called once before casting, while the held item is still available for item policy. */
     default boolean canAttack(org.bukkit.entity.Player player, org.bukkit.inventory.ItemStack weapon,
                               MagicAttackKind attackKind) {

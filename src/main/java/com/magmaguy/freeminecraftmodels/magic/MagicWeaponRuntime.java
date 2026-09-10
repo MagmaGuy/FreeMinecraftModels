@@ -279,8 +279,12 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         }
 
         ItemStack capturedWeapon = weapon.clone();
+        var capturedEquipment = com.magmaguy.magmacore.enchantments.EnchantmentActions.captureEquipment(player);
+        java.util.Map<String, Double> resolverFacts;
         try {
             definition = MagicEnchantmentModifiers.apply(player, capturedWeapon, definition, attackKind);
+            resolverFacts = MagicAttackRequest.copyResolverFacts(resolver == null ? java.util.Map.of()
+                    : resolver.capture(player, capturedWeapon.clone(), attackKind));
         } catch (RuntimeException invalidComposition) {
             if (!compositionWarningSent) {
                 compositionWarningSent = true;
@@ -290,7 +294,8 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
             return;
         }
         compositionWarningSent = false;
-        MagicCast cast = new MagicCast(UUID.randomUUID(), player, capturedWeapon, definition, attackKind, resolver);
+        MagicCast cast = new MagicCast(UUID.randomUUID(), player, capturedWeapon, definition, attackKind, resolver,
+                capturedEquipment, resolverFacts);
         boolean launched = switch (attackKind) {
             case STAFF_MELEE -> strikeWithStaff(cast, clickedTarget);
             case WAND_MISSILE -> castWand(cast);
@@ -431,7 +436,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
                 cast.definition().basePower(cast.attackKind()),
                 impactScale);
         MagicAttackRequest request = new MagicAttackRequest(
-                cast.attackId(), cast.attackKind(), cast.owner(), target, cast.weapon(), balance);
+                cast.attackId(), cast.attackKind(), cast.owner(), target, cast.weapon(), balance, cast.equipment(), cast.resolverFacts());
         boolean[] accepted = {false};
         MagicResolutionOutcome outcome = damageResolution.resolve(
                 request, cast.resolver(), damage -> accepted[0] = damageTarget(cast, target, damage));

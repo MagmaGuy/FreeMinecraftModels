@@ -14,7 +14,9 @@ record MagicCast(
         ItemStack weapon,
         MagicWeaponDefinition definition,
         MagicAttackKind attackKind,
-        com.magmaguy.freeminecraftmodels.api.magic.MagicAttackResolver resolver)
+        com.magmaguy.freeminecraftmodels.api.magic.MagicAttackResolver resolver,
+        java.util.Map<String, ItemStack> equipment,
+        java.util.Map<String, Double> resolverFacts)
         implements com.magmaguy.magmacore.projectiles.MagicProjectileEngine.Source {
     MagicCast {
         Objects.requireNonNull(attackId, "attackId");
@@ -23,11 +25,17 @@ record MagicCast(
         Objects.requireNonNull(definition, "definition");
         Objects.requireNonNull(attackKind, "attackKind");
         weapon = weapon.clone();
+        equipment = com.magmaguy.freeminecraftmodels.api.magic.MagicAttackRequest.copyEquipment(equipment);
+        resolverFacts = com.magmaguy.freeminecraftmodels.api.magic.MagicAttackRequest.copyResolverFacts(resolverFacts);
     }
 
     @Override
     public ItemStack weapon() {
         return weapon.clone();
+    }
+
+    @Override public java.util.Map<String, ItemStack> equipment() {
+        return com.magmaguy.freeminecraftmodels.api.magic.MagicAttackRequest.copyEquipment(equipment);
     }
 
     @Override public MagicWeaponTraits traits() { return definition.traits(); }
