@@ -41,8 +41,7 @@ class MagicProjectileEngineTest {
         LivingEntity closestToCrosshair = target(world, targetBaseAt(eye, 40D, 10D));
         nearbyEntities.set(List.of(fartherFromCrosshair, closestToCrosshair));
 
-        MagicWeaponTraits traits = BuiltInMagicWeapons.catalog()
-                .require(BuiltInMagicWeapons.DEFAULT_WAND_ID)
+        MagicWeaponTraits traits = BuiltInMagicWeapons.defaults(BuiltInMagicWeapons.DEFAULT_WAND_ID, com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponKind.WAND)
                 .traits();
         MagicProjectileEngine engine = new MagicProjectileEngine(
                 proxy(Plugin.class, (ignored, method, arguments) -> defaultValue(method.getReturnType())),
@@ -72,7 +71,7 @@ class MagicProjectileEngineTest {
                     UUID.randomUUID(),
                     owner,
                     new ItemStack(Material.BLAZE_ROD),
-                    BuiltInMagicWeapons.catalog().require(BuiltInMagicWeapons.DEFAULT_STAFF_ID),
+                    BuiltInMagicWeapons.defaults(BuiltInMagicWeapons.DEFAULT_STAFF_ID, com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponKind.STAFF),
                     MagicAttackKind.STAFF_FIREBALL);
 
             assertTrue(engine.launchStaff(cast, new Vector(0D, 0D, 1D)));
@@ -106,7 +105,7 @@ class MagicProjectileEngineTest {
                     UUID.randomUUID(),
                     owner,
                     new ItemStack(Material.BLAZE_ROD),
-                    BuiltInMagicWeapons.catalog().require(BuiltInMagicWeapons.DEFAULT_WAND_ID),
+                    BuiltInMagicWeapons.defaults(BuiltInMagicWeapons.DEFAULT_WAND_ID, com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponKind.WAND),
                     MagicAttackKind.WAND_MISSILE);
 
             assertTrue(engine.launchWand(cast, target));

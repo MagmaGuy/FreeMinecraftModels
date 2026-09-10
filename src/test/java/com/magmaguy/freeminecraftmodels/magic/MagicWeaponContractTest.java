@@ -98,8 +98,8 @@ class MagicWeaponContractTest {
 
     @Test
     void defaultCatalogCarriesConservativeBaselineAndGenericModifierSeam() {
-        MagicWeaponDefinition wand = BuiltInMagicWeapons.catalog().require(BuiltInMagicWeapons.DEFAULT_WAND_ID);
-        MagicWeaponDefinition staff = BuiltInMagicWeapons.catalog().require(BuiltInMagicWeapons.DEFAULT_STAFF_ID);
+        MagicWeaponDefinition wand = BuiltInMagicWeapons.defaults(BuiltInMagicWeapons.DEFAULT_WAND_ID, com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponKind.WAND);
+        MagicWeaponDefinition staff = BuiltInMagicWeapons.defaults(BuiltInMagicWeapons.DEFAULT_STAFF_ID, com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponKind.STAFF);
 
         assertEquals(MagicWeaponKind.WAND, wand.kind());
         assertEquals(MagicWeaponKind.STAFF, staff.kind());

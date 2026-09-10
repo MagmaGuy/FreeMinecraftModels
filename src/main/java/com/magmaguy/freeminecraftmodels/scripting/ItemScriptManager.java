@@ -3,7 +3,8 @@ package com.magmaguy.freeminecraftmodels.scripting;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.BowStateDetector;
 import com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields;
-import com.magmaguy.freeminecraftmodels.magic.BuiltInMagicWeapons;
+import com.magmaguy.freeminecraftmodels.magic.MagicWeaponCatalog;
+import com.magmaguy.magmacore.config.ContentFileSelector;
 import com.magmaguy.magmacore.scripting.LuaEngine;
 import com.magmaguy.magmacore.scripting.ScriptDefinition;
 import com.magmaguy.magmacore.scripting.ScriptInstance;
@@ -46,12 +47,14 @@ public final class ItemScriptManager {
     };
 
     /** item id -> config fields (only models with material set) */
-    @Getter
-    private static final Map<String, PropScriptConfigFields> itemDefinitions = new ConcurrentHashMap<>();
-
-    /** item id -> source .json file location (for menu folder grouping) */
-    @Getter
-    private static final Map<String, File> itemSourceFiles = new ConcurrentHashMap<>();
+    public record ItemCatalog(Map<String, PropScriptConfigFields> definitions, Map<String, File> sources,
+                              MagicWeaponCatalog weapons) {
+        public ItemCatalog { definitions = Map.copyOf(definitions); sources = Map.copyOf(sources); }
+    }
+    private static volatile ItemCatalog catalog = new ItemCatalog(Map.of(), Map.of(), new MagicWeaponCatalog(List.of()));
+    public static Map<String, PropScriptConfigFields> getItemDefinitions() { return catalog.definitions(); }
+    public static Map<String, File> getItemSourceFiles() { return catalog.sources(); }
+    public static MagicWeaponCatalog getWeaponCatalog() { return catalog.weapons(); }
 
     /** player UUID -> (item id -> script instance) */
     private static final Map<UUID, Map<String, ScriptInstance>> activeScripts = new ConcurrentHashMap<>();
@@ -91,53 +94,53 @@ public final class ItemScriptManager {
      * @param modelsFolder the root models directory to scan
      */
     public static void scanForCustomItems(File modelsFolder) {
-        itemDefinitions.clear();
-        itemSourceFiles.clear();
-        if (modelsFolder == null || !modelsFolder.isDirectory()) return;
-        scanDirectory(modelsFolder);
-        if (!itemDefinitions.isEmpty()) {
-            Logger.info("Loaded " + itemDefinitions.size() + " custom item definition(s).");
+        activateCandidate(prepareCatalog(modelsFolder));
+    }
+
+    /** Read and validate a complete candidate before any live registry is cleared. */
+    public static ItemCatalog prepareCatalog(File directory) {
+        try {
+            var root = directory.toPath().toRealPath();
+            Map<String, PropScriptConfigFields> definitions = new LinkedHashMap<>();
+            Map<String, File> sources = new LinkedHashMap<>();
+            List<File> files;
+            try (var walk = java.nio.file.Files.walk(root)) {
+                files = walk.filter(path -> path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".yml"))
+                        .map(java.nio.file.Path::toFile).toList();
+            }
+            for (File file : ContentFileSelector.select(files, name -> name.toLowerCase(Locale.ROOT))) {
+                if (!file.toPath().toRealPath().startsWith(root) || !file.isFile())
+                    throw new IllegalArgumentException("Item configuration escapes the models folder: " + file);
+                String stem = file.getName().substring(0, file.getName().length() - 4);
+                if (BowStateDetector.isDrawStateSuffix(stem)) continue;
+                String itemId = stem.toLowerCase(Locale.ROOT);
+                YamlConfiguration yaml = new YamlConfiguration();
+                yaml.load(file);
+                PropScriptConfigFields fields = new PropScriptConfigFields(itemId + ".yml", true);
+                fields.setFileConfiguration(yaml);
+                fields.setFile(file);
+                try {
+                    fields.processConfigFields();
+                } catch (IllegalArgumentException invalid) {
+                    throw new IllegalArgumentException(file + ": " + invalid.getMessage(), invalid);
+                }
+                if (!fields.isEnabled() || !fields.isCustomItem()) continue;
+                if (!itemId.matches("[a-z0-9._-]{1,128}")) throw new IllegalArgumentException("Invalid item filename: " + file);
+                if (definitions.putIfAbsent(itemId, fields) != null) throw new IllegalArgumentException("Duplicate item identity: " + itemId);
+                File bbmodel = new File(file.getParentFile(), stem + ".bbmodel");
+                File fmmodel = new File(file.getParentFile(), stem + ".fmmodel");
+                sources.put(itemId, bbmodel.isFile() ? bbmodel : fmmodel.isFile() ? fmmodel : file);
+            }
+            return new ItemCatalog(definitions, sources, new MagicWeaponCatalog(definitions.values().stream()
+                    .map(PropScriptConfigFields::getWeapon).filter(Objects::nonNull).toList()));
+        } catch (java.io.IOException | org.bukkit.configuration.InvalidConfigurationException failure) {
+            throw new IllegalArgumentException("Invalid FMM item catalog: " + failure.getMessage(), failure);
         }
     }
 
-    private static void scanDirectory(File directory) {
-        File[] files = directory.listFiles();
-        if (files == null) return;
-
-        for (File file : files) {
-            if (file.isDirectory()) {
-                scanDirectory(file);
-                continue;
-            }
-
-            if (!file.getName().endsWith(".yml")) continue;
-
-            // Skip draw state YMLs — bow/crossbow states are handled by the base model's YML
-            String nameWithoutExt = file.getName().substring(0, file.getName().length() - 4);
-            if (BowStateDetector.isDrawStateSuffix(nameWithoutExt)) continue;
-
-            // Load the YML and check if it defines a custom item (has material set)
-            PropScriptConfigFields configFields = new PropScriptConfigFields(file.getName(), true);
-            FileConfiguration fileConfig = YamlConfiguration.loadConfiguration(file);
-            configFields.setFileConfiguration(fileConfig);
-            configFields.setFile(file);
-            configFields.processConfigFields();
-
-            if (!configFields.isEnabled() || !configFields.isCustomItem()) continue;
-
-            // Item ID is the base filename without .yml
-            String baseName = file.getName();
-            if (baseName.endsWith(".yml")) baseName = baseName.substring(0, baseName.length() - 4);
-            String itemId = baseName;
-
-            // Find the corresponding model file for source tracking
-            File bbmodel = new File(file.getParentFile(), baseName + ".bbmodel");
-            File fmmodel = new File(file.getParentFile(), baseName + ".fmmodel");
-            File sourceFile = bbmodel.exists() ? bbmodel : fmmodel.exists() ? fmmodel : file;
-
-            itemDefinitions.put(itemId, configFields);
-            itemSourceFiles.put(itemId, sourceFile);
-        }
+    public static void activateCandidate(ItemCatalog candidate) {
+        catalog = Objects.requireNonNull(candidate, "candidate");
+        Logger.info("Loaded " + candidate.definitions().size() + " custom item definition(s).");
     }
 
     // ── 3. Per-player script lifecycle ───────────────────────────────────
@@ -168,8 +171,8 @@ public final class ItemScriptManager {
             PersistentDataContainer pdc = meta.getPersistentDataContainer();
             String itemId = pdc.get(ITEM_ID_KEY, PersistentDataType.STRING);
             if (itemId != null
-                    && BuiltInMagicWeapons.catalog().find(itemId).isEmpty()
-                    && itemDefinitions.containsKey(itemId)) {
+                    && catalog.weapons().find(itemId).isEmpty()
+                    && catalog.definitions().containsKey(itemId)) {
                 equippedIds.add(itemId);
             }
         }
@@ -192,7 +195,7 @@ public final class ItemScriptManager {
         for (String itemId : equippedIds) {
             if (playerScripts.containsKey(itemId)) continue;
 
-            PropScriptConfigFields config = itemDefinitions.get(itemId);
+            PropScriptConfigFields config = catalog.definitions().get(itemId);
             if (config == null) continue;
 
             List<String> scripts = config.getScripts();
@@ -282,8 +285,7 @@ public final class ItemScriptManager {
             }
         }
         activeScripts.clear();
-        itemDefinitions.clear();
-        itemSourceFiles.clear();
+        catalog = new ItemCatalog(Map.of(), Map.of(), new MagicWeaponCatalog(List.of()));
         ScriptableItem.clearAllCooldowns();
 
         // Don't unregister script provider — shared "fmm" namespace managed by PropScriptManager

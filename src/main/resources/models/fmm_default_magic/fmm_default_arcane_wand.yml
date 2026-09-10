@@ -7,3 +7,5 @@ lore:
 - "&7Left-click to fire an aim-assisted magic missile."
 - "&7Missiles arc upward and sideways toward their target."
 scripts: []
+weapon:
+  type: WAND

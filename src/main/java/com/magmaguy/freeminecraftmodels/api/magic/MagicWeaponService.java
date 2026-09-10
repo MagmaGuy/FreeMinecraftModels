@@ -7,9 +7,11 @@ import org.bukkit.plugin.Plugin;
 public interface MagicWeaponService {
     boolean isOperational();
 
-    boolean isBuiltInWeapon(String itemId);
+    boolean isWeapon(String itemId);
 
-    boolean applyBuiltInWeaponData(ItemStack itemStack, String itemId);
+    MagicWeaponKind weaponKind(String itemId);
+
+    boolean applyWeaponData(ItemStack itemStack, String itemId);
 
     boolean registerResolver(Plugin owner, MagicAttackResolver resolver);
 

@@ -5,9 +5,13 @@ import com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry;
 import com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.VersionChecker;
+import com.magmaguy.magmacore.enchantments.EnchantmentDefinitions;
+import com.magmaguy.magmacore.enchantments.EnchantmentItems;
+import com.magmaguy.magmacore.enchantments.EnchantmentItemProfile;
+import com.magmaguy.magmacore.enchantments.EnchantmentDefinition;
+import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
-import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -58,11 +62,11 @@ public final class ModelItemFactory {
      */
     public static ItemStack createCustomItem(String itemId, PropScriptConfigFields config) {
         Material material = config.getParsedMaterial();
-        if (material == null) material = Material.PAPER;
+        if (material == null) throw new IllegalArgumentException("Item has no material: " + itemId);
 
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
-        if (meta == null) return item;
+        if (meta == null) throw new IllegalArgumentException("Item does not support metadata: " + itemId);
 
         // Name — use config name if set, otherwise generate from ID
         String name = config.getItemName();
@@ -79,11 +83,6 @@ public final class ModelItemFactory {
             meta.setLore(ChatColorConverter.convert(lore));
         }
 
-        // Enchantments
-        for (Map.Entry<Enchantment, Integer> entry : config.getParsedEnchantments().entrySet()) {
-            meta.addEnchant(entry.getKey(), entry.getValue(), true);
-        }
-
         // PDC — custom item ID (not model_id, so ModelItemListener won't try to place it)
         NamespacedKey itemKey = new NamespacedKey(MetadataHandler.PLUGIN, "fmm_item_id");
         meta.getPersistentDataContainer().set(itemKey, PersistentDataType.STRING, itemId);
@@ -95,7 +94,19 @@ public final class ModelItemFactory {
         }
 
         item.setItemMeta(meta);
-        return item;
+        if (config.getParsedEnchantments().isEmpty()) return item;
+        EnchantmentItems enchantments = new EnchantmentItems(EnchantmentDefinitions::resolve, ModelItemFactory::enchantmentProfile);
+        return enchantments.preview(item, config.getParsedEnchantments()).apply(item);
+    }
+
+    public static EnchantmentItemProfile enchantmentProfile(ItemStack item) {
+        String id = item.hasItemMeta() ? item.getItemMeta().getPersistentDataContainer()
+                .get(ItemScriptManager.ITEM_ID_KEY, PersistentDataType.STRING) : null;
+        var weapon = ItemScriptManager.getWeaponCatalog().find(id).orElse(null);
+        if (weapon == null) return EnchantmentItemProfile.vanilla(item);
+        return new EnchantmentItemProfile(EnchantmentDefinition.ItemType.valueOf(weapon.kind().name()),
+                java.util.Set.of(EnchantmentDefinition.Slot.MAINHAND),
+                weapon.basePowers().keySet().stream().map(Enum::name).collect(java.util.stream.Collectors.toUnmodifiableSet()));
     }
 
     /**

@@ -6,3 +6,5 @@ lore:
 - "&7Left-click for a weak close-range strike."
 - "&7Right-click to launch a slow area fireball."
 scripts: []
+weapon:
+  type: STAFF

@@ -2,8 +2,9 @@ package com.magmaguy.freeminecraftmodels.config.props;
 
 import com.magmaguy.magmacore.config.CustomConfigFields;
 import lombok.Getter;
+import com.magmaguy.freeminecraftmodels.magic.MagicWeaponConfig;
+import com.magmaguy.freeminecraftmodels.magic.MagicWeaponDefinition;
 import org.bukkit.Material;
-import org.bukkit.enchantments.Enchantment;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -38,6 +39,9 @@ public class PropScriptConfigFields extends CustomConfigFields {
     private boolean voxelize = false;
     @Getter
     private boolean solidify = false;
+    @Getter
+    private MagicWeaponDefinition weapon;
+    private Map<String, Integer> parsedEnchantments = Map.of();
 
     /**
      * Used when creating a new default config or loading an existing one.
@@ -51,7 +55,21 @@ public class PropScriptConfigFields extends CustomConfigFields {
 
     @Override
     public void processConfigFields() {
+        Object enabled = fileConfiguration.get("isEnabled");
+        if (enabled != null && !(enabled instanceof Boolean))
+            throw new IllegalArgumentException(filename + ": isEnabled must be a boolean");
         this.isEnabled = processBoolean("isEnabled", isEnabled, true, true);
+        weapon = null;
+        parsedEnchantments = Map.of();
+        if (!isEnabled) return;
+        Object rawMaterial = fileConfiguration.get("material");
+        if (rawMaterial != null && !(rawMaterial instanceof String))
+            throw new IllegalArgumentException(filename + ": material must be a string");
+        if (fileConfiguration.contains("weapon")) {
+            Object rawScripts = fileConfiguration.get("scripts");
+            if (rawScripts != null && (!(rawScripts instanceof List<?> list) || !list.isEmpty()))
+                throw new IllegalArgumentException(filename + ": weapon effects must use enchantments, not item scripts");
+        }
         this.scripts = processStringList("scripts", scripts, new ArrayList<>(), true);
         this.material = processString("material", material, "", false);
         this.itemName = processString("name", itemName, "", false);
@@ -59,6 +77,18 @@ public class PropScriptConfigFields extends CustomConfigFields {
         this.enchantments = processStringList("enchantments", enchantments, new ArrayList<>(), false);
         this.voxelize = processBoolean("voxelize", voxelize, false, false);
         this.solidify = processBoolean("solidify", solidify, false, false);
+        if (fileConfiguration.contains("weapon")) {
+            if (!isCustomItem()) throw new IllegalArgumentException(filename + ": weapon requires an item material");
+            weapon = MagicWeaponConfig.parse(filename.substring(0, filename.length() - 4).toLowerCase(java.util.Locale.ROOT),
+                    fileConfiguration.getConfigurationSection("weapon"));
+            if (!scripts.isEmpty()) throw new IllegalArgumentException(filename + ": weapon effects must use enchantments, not item scripts");
+        }
+        if (isCustomItem()) {
+            Material parsedMaterial = getParsedMaterial();
+            if (parsedMaterial.isAir() || !parsedMaterial.isItem() || weapon != null && parsedMaterial == Material.ENCHANTED_BOOK)
+                throw new IllegalArgumentException(filename + ": invalid material for this item definition");
+            parsedEnchantments = parseEnchantments(fileConfiguration.get("enchantments"));
+        }
     }
 
     /**
@@ -69,33 +99,30 @@ public class PropScriptConfigFields extends CustomConfigFields {
         return material != null && !material.isEmpty();
     }
 
-    /**
-     * Parses the enchantments list into a map of {@link Enchantment} to level.
-     * Format: {@code "ENCHANTMENT_NAME,LEVEL"} (e.g. {@code "SHARPNESS,5"}).
-     */
-    public Map<Enchantment, Integer> getParsedEnchantments() {
-        Map<Enchantment, Integer> parsed = new HashMap<>();
-        for (String entry : enchantments) {
-            String[] parts = entry.split(",");
-            if (parts.length != 2) continue;
-            Enchantment enchantment = Enchantment.getByName(parts[0].trim().toUpperCase());
-            if (enchantment == null) continue;
-            try {
-                parsed.put(enchantment, Integer.parseInt(parts[1].trim()));
-            } catch (NumberFormatException ignored) {}
+    public Map<String, Integer> getParsedEnchantments() { return parsedEnchantments; }
+
+    private Map<String, Integer> parseEnchantments(Object raw) {
+        if (raw == null) return Map.of();
+        if (!(raw instanceof List<?> entries)) throw new IllegalArgumentException(filename + ": enchantments must be a list");
+        Map<String, Integer> parsed = new HashMap<>();
+        for (Object value : entries) {
+            if (!(value instanceof String entry)) throw new IllegalArgumentException(filename + ": enchantment entries must be strings");
+            String[] parts = entry.split(",", -1);
+            if (parts.length != 2 || !parts[0].trim().matches("[a-z0-9._-]{1,64}:[a-z0-9._-]{1,128}") || !parts[1].trim().matches("[1-9][0-9]*"))
+                throw new IllegalArgumentException(filename + ": expected namespaced enchantment and positive integer level: " + entry);
+            int level = Integer.parseInt(parts[1].trim());
+            if (parsed.putIfAbsent(parts[0].trim(), level) != null) throw new IllegalArgumentException(filename + ": duplicate enchantment " + parts[0]);
         }
-        return parsed;
+        return Map.copyOf(parsed);
     }
 
     /**
-     * Parses the material string. Returns null if not set or invalid.
+     * Parses the material string. Returns null only when it is not set.
      */
     public Material getParsedMaterial() {
         if (material == null || material.isEmpty()) return null;
         try {
-            return Material.valueOf(material.trim().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            return Material.PAPER;
-        }
+            return Material.valueOf(material.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) { throw new IllegalArgumentException(filename + ": unknown item material " + material, e); }
     }
 }

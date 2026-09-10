@@ -61,6 +61,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
     private final AtomicBoolean importedContentReloadInProgress =
             new AtomicBoolean(false);
     private MagicWeaponRuntime magicWeaponRuntime;
+    private volatile ItemScriptManager.ItemCatalog pendingItemCatalog;
     public static final NightbreakPluginSpec NIGHTBREAK_PLUGIN_SPEC = new NightbreakPluginSpec(
             "FreeMinecraftModels",
             "freeminecraftmodels",
@@ -107,6 +108,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
 
                     @Override
                     public void onInitializationSuccess() {
+                        importedContentReloadInProgress.set(false);
                         Bukkit.getLogger().info("[FreeMinecraftModels] Fully initialized!");
                         notifyResourcePackManager();
                         // Scan all online players for equipped custom items (covers reload/restart)
@@ -126,6 +128,8 @@ public final class FreeMinecraftModels extends JavaPlugin {
 
                     @Override
                     public void onInitializationFailure(Throwable throwable) {
+                        pendingItemCatalog = null;
+                        importedContentReloadInProgress.set(false);
                         throwable.printStackTrace();
                     }
                 });
@@ -183,7 +187,10 @@ public final class FreeMinecraftModels extends JavaPlugin {
         initializationContext.step("Bundled Magic Content");
         BundledMagicContent.installDefaults(this);
         initializationContext.step("Models Folder");
-        ModelsFolder.initializeConfig();
+        ItemScriptManager.ItemCatalog candidate = pendingItemCatalog;
+        pendingItemCatalog = null;
+        if (candidate == null) ModelsFolder.initializeConfig();
+        else ModelsFolder.initializeConfig(candidate);
         initializationContext.step("Content Packages");
         new ContentPackageConfig();
         initializationContext.step("Resource Pack Zip");
@@ -276,10 +283,19 @@ public final class FreeMinecraftModels extends JavaPlugin {
     }
 
     public void reloadImportedContent(CommandSender sender) {
+        prepareContentReload(sender, false);
+    }
+
+    /** Validates item content before the public full plugin reload clears its live state. */
+    public void reloadPlugin(CommandSender sender) {
+        prepareContentReload(sender, true);
+    }
+
+    private void prepareContentReload(CommandSender sender, boolean fullReload) {
         if (!Bukkit.isPrimaryThread()) {
             Bukkit.getScheduler().runTask(
                     this,
-                    () -> reloadImportedContent(sender));
+                    () -> prepareContentReload(sender, fullReload));
             return;
         }
         if (!importedContentReloadInProgress.compareAndSet(false, true)) {
@@ -291,6 +307,32 @@ public final class FreeMinecraftModels extends JavaPlugin {
             return;
         }
 
+        // Import and validate authored items while the current catalog remains usable.
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                MagmaCore.initializeImporter(this);
+                BundledMagicContent.installDefaults(this);
+                ItemScriptManager.ItemCatalog candidate = ItemScriptManager.prepareCatalog(ModelsFolder.resolveModelsFolder());
+                Bukkit.getScheduler().runTask(this, () -> {
+                    if (fullReload) {
+                        pendingItemCatalog = candidate;
+                        NightbreakPluginBootstrap.reloadPlugin(this, sender);
+                    } else {
+                        reloadValidatedContent(sender, candidate);
+                    }
+                });
+            } catch (Exception failure) {
+                Bukkit.getScheduler().runTask(this, () -> {
+                    importedContentReloadInProgress.set(false);
+                    getLogger().warning("Content reload rejected; the current catalog remains active: " + failure.getMessage());
+                    if (sender != null) com.magmaguy.magmacore.util.Logger.sendMessage(sender,
+                            "&cContent reload rejected; the current catalog remains active. " + failure.getMessage());
+                });
+            }
+        });
+    }
+
+    private void reloadValidatedContent(CommandSender sender, ItemScriptManager.ItemCatalog candidate) {
         // Stop every task that can observe the live entity/model registries
         // before clearing them. In particular, the one-tick model clock is
         // asynchronous and otherwise races this teardown.
@@ -311,10 +353,8 @@ public final class FreeMinecraftModels extends JavaPlugin {
 
         Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
             try {
-                MagmaCore.initializeImporter(this);
                 OutputFolder.initializeConfig();
-                BundledMagicContent.installDefaults(this);
-                ModelsFolder.initializeConfig();
+                ModelsFolder.initializeConfig(candidate);
                 new ContentPackageConfig();
                 FMMPackageRefresher.reset();
                 OutputFolder.zipResourcePack();
