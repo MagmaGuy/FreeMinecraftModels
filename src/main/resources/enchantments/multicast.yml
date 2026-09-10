@@ -1,0 +1,15 @@
+isEnabled: true
+name: Multicast
+description: Fires multiple wand missiles with reduced damage per missile.
+maxLevel: 3
+curse: false
+validSlots: [MAINHAND]
+itemTypes: [WAND]
+attackKinds: [WAND_MISSILE]
+requires: []
+conflicts: []
+stacking: source_item
+script: multicast.lua
+parameters:
+  missile_count: [2, 2, 3]
+  missile_damage_factor: [0.75, 0.85, 0.70]

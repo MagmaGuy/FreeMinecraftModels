@@ -1,0 +1,10 @@
+# FreeMinecraftModels owns this weapon's attacks.
+isEnabled: true
+material: WOODEN_SPEAR
+name: "<gradient:#76EFC4:#00C96E:#0A7A44>Arcane Staff of Wonders</gradient>"
+lore:
+- "&7Left-click for a weak close-range strike."
+- "&7Right-click to launch a slow area fireball."
+scripts: []
+weapon:
+  type: STAFF

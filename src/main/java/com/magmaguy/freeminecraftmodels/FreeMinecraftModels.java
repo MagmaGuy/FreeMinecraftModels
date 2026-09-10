@@ -30,6 +30,9 @@ import com.magmaguy.freeminecraftmodels.listeners.DisguiseListeners;
 import com.magmaguy.freeminecraftmodels.listeners.FreeMinecraftModelsFirstTimeSetupWarner;
 import com.magmaguy.freeminecraftmodels.listeners.ModelItemListener;
 import com.magmaguy.freeminecraftmodels.listeners.MountDismountListener;
+import com.magmaguy.freeminecraftmodels.magic.BundledMagicContent;
+import com.magmaguy.freeminecraftmodels.magic.MagicEnchantmentCatalog;
+import com.magmaguy.freeminecraftmodels.magic.MagicWeaponRuntime;
 import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
 import com.magmaguy.freeminecraftmodels.scripting.PropInventoryListener;
 import com.magmaguy.freeminecraftmodels.scripting.PropScriptManager;
@@ -38,6 +41,7 @@ import com.magmaguy.freeminecraftmodels.menus.FreeMinecraftModelsSetupMenu;
 import com.magmaguy.freeminecraftmodels.utils.ConfigurationLocation;
 import com.magmaguy.magmacore.MagmaCore;
 import com.magmaguy.magmacore.command.CommandManager;
+import com.magmaguy.magmacore.enchantments.EnchantmentCatalog;
 import com.magmaguy.magmacore.initialization.PluginInitializationConfig;
 import com.magmaguy.magmacore.initialization.PluginInitializationContext;
 import com.magmaguy.magmacore.initialization.PluginInitializationState;
@@ -58,6 +62,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class FreeMinecraftModels extends JavaPlugin {
     private final AtomicBoolean importedContentReloadInProgress =
             new AtomicBoolean(false);
+    private MagicWeaponRuntime magicWeaponRuntime;
+    private MagicEnchantmentCatalog magicEnchantmentCatalog;
+    private volatile ItemScriptManager.ItemCatalog pendingItemCatalog;
+    private volatile EnchantmentCatalog pendingEnchantmentCatalog;
     public static final NightbreakPluginSpec NIGHTBREAK_PLUGIN_SPEC = new NightbreakPluginSpec(
             "FreeMinecraftModels",
             "freeminecraftmodels",
@@ -70,7 +78,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
     public static final NightbreakFirstTimeSetupSpec FIRST_TIME_SETUP_SPEC = new NightbreakFirstTimeSetupSpec(
             "FreeMinecraftModels",
             "freeminecraftmodels.*",
-            null,
+            "/fmm initialize",
             "/fmm setup",
             "/fmm downloadall",
             "https://nightbreak.io/plugin/freeminecraftmodels/",
@@ -104,6 +112,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
 
                     @Override
                     public void onInitializationSuccess() {
+                        importedContentReloadInProgress.set(false);
                         Bukkit.getLogger().info("[FreeMinecraftModels] Fully initialized!");
                         notifyResourcePackManager();
                         // Scan all online players for equipped custom items (covers reload/restart)
@@ -123,6 +132,11 @@ public final class FreeMinecraftModels extends JavaPlugin {
 
                     @Override
                     public void onInitializationFailure(Throwable throwable) {
+                        pendingItemCatalog = null;
+                        pendingEnchantmentCatalog = null;
+                        if (magicEnchantmentCatalog != null) magicEnchantmentCatalog.close();
+                        magicEnchantmentCatalog = null;
+                        importedContentReloadInProgress.set(false);
                         throwable.printStackTrace();
                     }
                 });
@@ -139,6 +153,10 @@ public final class FreeMinecraftModels extends JavaPlugin {
                 MagmaCore.getInitializationState(this.getName())
                         == PluginInitializationState.INITIALIZING;
         MagmaCore.requestInitializationShutdown(this);
+        if (magicWeaponRuntime != null) magicWeaponRuntime.close();
+        magicWeaponRuntime = null;
+        if (magicEnchantmentCatalog != null) magicEnchantmentCatalog.close();
+        magicEnchantmentCatalog = null;
         ModeledEntitiesClock.shutdown();
         OBBHitDetection.shutdown();
         Bukkit.getServer().getScheduler().cancelTasks(MetadataHandler.PLUGIN);
@@ -175,8 +193,20 @@ public final class FreeMinecraftModels extends JavaPlugin {
         MagmaCore.initializeImporter(this);
         initializationContext.step("Output Folder");
         OutputFolder.initializeConfig();
+        initializationContext.step("Bundled Magic Content");
+        BundledMagicContent.installDefaults(this);
+        if (pendingEnchantmentCatalog == null) {
+            try {
+                pendingEnchantmentCatalog = MagicEnchantmentCatalog.prepare(this);
+            } catch (java.io.IOException failure) {
+                throw new IllegalStateException("Invalid FMM enchantment catalog", failure);
+            }
+        }
         initializationContext.step("Models Folder");
-        ModelsFolder.initializeConfig();
+        ItemScriptManager.ItemCatalog candidate = pendingItemCatalog;
+        pendingItemCatalog = null;
+        if (candidate == null) ModelsFolder.initializeConfig();
+        else ModelsFolder.initializeConfig(candidate);
         initializationContext.step("Content Packages");
         new ContentPackageConfig();
         initializationContext.step("Resource Pack Zip");
@@ -185,6 +215,9 @@ public final class FreeMinecraftModels extends JavaPlugin {
 
     private void syncInitialization(PluginInitializationContext initializationContext) {
         initializationContext.step("Item Scripting");
+        magicEnchantmentCatalog = new MagicEnchantmentCatalog(this,
+                java.util.Objects.requireNonNull(pendingEnchantmentCatalog, "prepared enchantment catalog"));
+        pendingEnchantmentCatalog = null;
         ItemScriptManager.initialize();
         initializationContext.step("Event Listeners");
         Bukkit.getPluginManager().registerEvents(new OBBHitDetection(), this);
@@ -204,6 +237,10 @@ public final class FreeMinecraftModels extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(new MountDismountListener(), this);
         Bukkit.getPluginManager().registerEvents(new DisguiseListeners(), this);
         Bukkit.getPluginManager().registerEvents(new FreeMinecraftModelsFirstTimeSetupWarner(this), this);
+
+        initializationContext.step("Magic Weapons");
+        magicWeaponRuntime = new MagicWeaponRuntime(this);
+        magicWeaponRuntime.start();
 
         initializationContext.step("NMS Adapter");
         NMSManager.initializeAdapter(this);
@@ -265,10 +302,19 @@ public final class FreeMinecraftModels extends JavaPlugin {
     }
 
     public void reloadImportedContent(CommandSender sender) {
+        prepareContentReload(sender, false);
+    }
+
+    /** Validates item content before the public full plugin reload clears its live state. */
+    public void reloadPlugin(CommandSender sender) {
+        prepareContentReload(sender, true);
+    }
+
+    private void prepareContentReload(CommandSender sender, boolean fullReload) {
         if (!Bukkit.isPrimaryThread()) {
             Bukkit.getScheduler().runTask(
                     this,
-                    () -> reloadImportedContent(sender));
+                    () -> prepareContentReload(sender, fullReload));
             return;
         }
         if (!importedContentReloadInProgress.compareAndSet(false, true)) {
@@ -280,9 +326,39 @@ public final class FreeMinecraftModels extends JavaPlugin {
             return;
         }
 
+        // Import and validate authored items while the current catalog remains usable.
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                MagmaCore.initializeImporter(this);
+                BundledMagicContent.installDefaults(this);
+                ItemScriptManager.ItemCatalog candidate = ItemScriptManager.prepareCatalog(ModelsFolder.resolveModelsFolder());
+                EnchantmentCatalog enchantments = MagicEnchantmentCatalog.prepare(this);
+                Bukkit.getScheduler().runTask(this, () -> {
+                    if (fullReload) {
+                        pendingItemCatalog = candidate;
+                        pendingEnchantmentCatalog = enchantments;
+                        NightbreakPluginBootstrap.reloadPlugin(this, sender);
+                    } else {
+                        reloadValidatedContent(sender, candidate, enchantments);
+                    }
+                });
+            } catch (Exception failure) {
+                Bukkit.getScheduler().runTask(this, () -> {
+                    importedContentReloadInProgress.set(false);
+                    getLogger().warning("Content reload rejected; the current catalog remains active: " + failure.getMessage());
+                    if (sender != null) com.magmaguy.magmacore.util.Logger.sendMessage(sender,
+                            "&cContent reload rejected; the current catalog remains active. " + failure.getMessage());
+                });
+            }
+        });
+    }
+
+    private void reloadValidatedContent(CommandSender sender, ItemScriptManager.ItemCatalog candidate,
+                                        EnchantmentCatalog enchantments) {
         // Stop every task that can observe the live entity/model registries
         // before clearing them. In particular, the one-tick model clock is
         // asynchronous and otherwise races this teardown.
+        if (magicWeaponRuntime != null) magicWeaponRuntime.pauseForContentReload();
         ModeledEntitiesClock.shutdown();
         OBBHitDetection.pauseProjectileDetection();
         ModelItemListener.shutdown();
@@ -299,9 +375,8 @@ public final class FreeMinecraftModels extends JavaPlugin {
 
         Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
             try {
-                MagmaCore.initializeImporter(this);
                 OutputFolder.initializeConfig();
-                ModelsFolder.initializeConfig();
+                ModelsFolder.initializeConfig(candidate);
                 new ContentPackageConfig();
                 FMMPackageRefresher.reset();
                 OutputFolder.zipResourcePack();
@@ -311,8 +386,10 @@ public final class FreeMinecraftModels extends JavaPlugin {
                         // ModelsFolder populated the item-definition registry on
                         // the worker. Reinitialize listeners/providers without
                         // clearing that newly built registry.
+                        magicEnchantmentCatalog.reload(enchantments);
                         PropScriptManager.initialize();
                         ItemScriptManager.initialize();
+                        if (magicWeaponRuntime != null) magicWeaponRuntime.resumeAfterContentReload();
                         PropEntity.onStartup();
                         ModeledEntitiesClock.start();
                         OBBHitDetection.startProjectileDetection();

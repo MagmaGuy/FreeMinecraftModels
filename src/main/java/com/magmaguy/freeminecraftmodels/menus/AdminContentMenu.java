@@ -298,8 +298,12 @@ public class AdminContentMenu {
             com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields config =
                     ItemScriptManager.getItemDefinitions().get(itemId);
             if (config != null) {
+                try {
                 player.getInventory().addItem(
                         com.magmaguy.freeminecraftmodels.utils.ModelItemFactory.createCustomItem(itemId, config));
+                } catch (IllegalArgumentException | IllegalStateException invalid) {
+                    com.magmaguy.magmacore.util.Logger.sendMessage(player, "&cCannot create " + itemId + ": " + invalid.getMessage());
+                }
             }
         }
     }
