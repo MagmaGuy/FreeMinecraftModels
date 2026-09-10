@@ -216,7 +216,8 @@ public final class FreeMinecraftModels extends JavaPlugin {
     private void syncInitialization(PluginInitializationContext initializationContext) {
         initializationContext.step("Item Scripting");
         magicEnchantmentCatalog = new MagicEnchantmentCatalog(this,
-                java.util.Objects.requireNonNull(pendingEnchantmentCatalog, "prepared enchantment catalog"));
+                java.util.Objects.requireNonNull(pendingEnchantmentCatalog, "prepared enchantment catalog"),
+                request -> magicWeaponRuntime != null && magicWeaponRuntime.applyEnchantmentDamage(request));
         pendingEnchantmentCatalog = null;
         ItemScriptManager.initialize();
         initializationContext.step("Event Listeners");

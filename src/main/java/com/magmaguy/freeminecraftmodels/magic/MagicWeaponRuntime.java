@@ -59,7 +59,6 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
     private final Map<CooldownKey, Long> readyAtTick = new HashMap<>();
     private final ThreadLocal<Integer> applyingDamageDepth = ThreadLocal.withInitial(() -> 0);
     private final ThreadLocal<LivingEntity> noKnockbackTarget = new ThreadLocal<>();
-    private final ThreadLocal<DamageAttempt> damageAttempt = new ThreadLocal<>();
     private Plugin resolverOwner;
     private MagicAttackResolver resolver;
     private volatile boolean contentReady;
@@ -485,39 +484,57 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         }
     }
 
+    /** Reuses the native application owner without classifying an ordinary enchanted item as a wand. */
+    public boolean applyEnchantmentDamage(Map<String, Object> request) {
+        if (!org.bukkit.Bukkit.isPrimaryThread()) throw new IllegalStateException("Authored damage requires the server thread");
+        if (closed || !started || paused) return false;
+        var damage = com.magmaguy.magmacore.enchantments.EnchantmentActions.DamageInput.read(request);
+        if (damage == null) return false;
+        Runnable application = () -> damage.target().damage(damage.amount(), damage.actor());
+        if (plugin.getServer().getPluginManager().isPluginEnabled("EliteMobs")) {
+            Runnable nativeApplication = application;
+            application = () -> com.magmaguy.freeminecraftmodels.thirdparty.EliteMobsEnchantmentDamage
+                    .apply(damage, nativeApplication);
+        }
+        return applyOwnedDamage(damage.actor(), damage.target(), false, application);
+    }
+
     private boolean damageTarget(MagicCast cast, LivingEntity target, double damage) {
-        int previousDepth = applyingDamageDepth.get();
-        boolean previousObbBypass = OBBHitDetection.applyDamage;
-        LivingEntity previousNoKnockbackTarget = noKnockbackTarget.get();
-        DamageAttempt previousAttempt = damageAttempt.get();
-        DamageAttempt attempt = new DamageAttempt(target, cast.owner());
-        damageAttempt.set(attempt);
         int previousInvulnerability = target.getNoDamageTicks();
         double previousLastDamage = target.getLastDamage();
         boolean multicast = cast.attackKind() == MagicAttackKind.WAND_MISSILE
                 && cast.definition().traits().missileCount() > 1;
-        if (cast.attackKind().weaponKind() == MagicWeaponKind.WAND) noKnockbackTarget.set(target);
-        else noKnockbackTarget.remove();
-        applyingDamageDepth.set(previousDepth + 1);
-        OBBHitDetection.applyDamage = true;
         try {
             // Separate bolts must each resolve, including when all bolts hit the same enemy.
             if (multicast) target.setNoDamageTicks(0);
-            com.magmaguy.magmacore.enchantments.EnchantmentInputs.runExplicitDamage(plugin, cast.owner(),
+            boolean accepted = applyOwnedDamage(cast.owner(), target,
+                    cast.attackKind().weaponKind() == MagicWeaponKind.WAND,
                     () -> target.damage(damage, cast.owner()));
-            if (attempt.accepted) com.magmaguy.magmacore.enchantments.EnchantmentInputs.dispatch(plugin, cast.effects(),
+            if (accepted) com.magmaguy.magmacore.enchantments.EnchantmentInputs.dispatch(plugin, cast.effects(),
                     cast.attackKind() == MagicAttackKind.STAFF_MELEE
                             ? com.magmaguy.magmacore.enchantments.EnchantmentInputs.ATTACK
                             : com.magmaguy.magmacore.enchantments.EnchantmentInputs.PROJECTILE_HIT,
                     target, UUID.randomUUID().toString());
-            return attempt.accepted;
+            return accepted;
         } finally {
             if (multicast) {
                 target.setNoDamageTicks(previousInvulnerability);
                 target.setLastDamage(previousLastDamage);
             }
-            if (previousAttempt == null) damageAttempt.remove();
-            else damageAttempt.set(previousAttempt);
+        }
+    }
+
+    private boolean applyOwnedDamage(Player owner, LivingEntity target, boolean suppressKnockback, Runnable application) {
+        int previousDepth = applyingDamageDepth.get();
+        boolean previousObbBypass = OBBHitDetection.applyDamage;
+        LivingEntity previousNoKnockbackTarget = noKnockbackTarget.get();
+        if (suppressKnockback) noKnockbackTarget.set(target);
+        else noKnockbackTarget.remove();
+        applyingDamageDepth.set(previousDepth + 1);
+        OBBHitDetection.applyDamage = true;
+        try {
+            return com.magmaguy.magmacore.enchantments.EnchantmentInputs.applyExplicitDamage(plugin, owner, target, application);
+        } finally {
             if (previousNoKnockbackTarget == null) noKnockbackTarget.remove();
             else noKnockbackTarget.set(previousNoKnockbackTarget);
             OBBHitDetection.applyDamage = previousObbBypass;
@@ -528,20 +545,6 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
 
     private boolean isApplyingDamage() {
         return applyingDamageDepth.get() > 0;
-    }
-
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
-    public void observeMagicDamage(EntityDamageByEntityEvent event) {
-        DamageAttempt attempt = damageAttempt.get();
-        if (attempt != null && event.getEntity().equals(attempt.target) && event.getDamager().equals(attempt.owner))
-            attempt.accepted = !event.isCancelled() && event.getFinalDamage() > 0D;
-    }
-
-    private static final class DamageAttempt {
-        private final LivingEntity target;
-        private final Player owner;
-        private boolean accepted;
-        private DamageAttempt(LivingEntity target, Player owner) { this.target = target; this.owner = owner; }
     }
 
     /** Wand damage must not add either horizontal knockback or the vanilla vertical lift. */

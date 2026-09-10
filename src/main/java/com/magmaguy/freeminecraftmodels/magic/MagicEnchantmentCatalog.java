@@ -25,10 +25,13 @@ public final class MagicEnchantmentCatalog implements AutoCloseable {
     private final EnchantmentDefinitions.HostedCatalog hosted;
     private final com.magmaguy.magmacore.enchantments.EnchantmentAnvil.Registration anvil;
 
-    public MagicEnchantmentCatalog(JavaPlugin plugin, EnchantmentCatalog candidate) {
+    public MagicEnchantmentCatalog(JavaPlugin plugin, EnchantmentCatalog candidate,
+                                   java.util.function.Predicate<Map<String, Object>> damage) {
         hosted = EnchantmentDefinitions.publishActions(plugin, candidate, Set.of(), HOOKS,
                 com.magmaguy.magmacore.enchantments.EnchantmentInputs.HOOKS,
-                (operation, request) -> Map.of("supported", false));
+                (operation, request) -> operation == com.magmaguy.magmacore.enchantments.EnchantmentProviders.Operation.EVALUATE
+                        && "attributed_damage".equals(request.get("kind"))
+                        ? Map.of("applied", damage.test(request)) : Map.of("supported", false));
         anvil = com.magmaguy.magmacore.enchantments.EnchantmentAnvil.register(plugin, MagicEnchantmentCatalog::itemProfile, item -> null);
     }
 

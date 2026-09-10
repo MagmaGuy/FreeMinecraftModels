@@ -96,7 +96,7 @@ public final class ModelItemFactory {
         item.setItemMeta(meta);
         if (config.getParsedEnchantments().isEmpty()) return item;
         EnchantmentItems enchantments = new EnchantmentItems(EnchantmentDefinitions::resolve, ModelItemFactory::enchantmentProfile);
-        return enchantments.preview(item, config.getParsedEnchantments()).apply(item);
+        return enchantments.previewAuthored(item, config.getParsedEnchantments()).apply(item);
     }
 
     public static EnchantmentItemProfile enchantmentProfile(ItemStack item) {
