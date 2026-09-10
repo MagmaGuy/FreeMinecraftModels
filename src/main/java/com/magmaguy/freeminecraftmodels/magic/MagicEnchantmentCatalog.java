@@ -20,11 +20,14 @@ public final class MagicEnchantmentCatalog implements AutoCloseable {
     public static final ScriptHook BLAST_RADIUS_FACTOR = new ScriptHook("on_blast_radius_factor");
     public static final ScriptHook IGNITION_TICKS = new ScriptHook("on_ignition_ticks");
     private static final Set<ScriptHook> HOOKS = Set.of(MISSILE_COUNT, MISSILE_DAMAGE_FACTOR, BLAST_RADIUS_FACTOR, IGNITION_TICKS);
+    private static final Set<ScriptHook> ALL_HOOKS = java.util.stream.Stream.concat(HOOKS.stream(),
+            com.magmaguy.magmacore.enchantments.EnchantmentInputs.HOOKS.stream()).collect(java.util.stream.Collectors.toUnmodifiableSet());
     private final EnchantmentDefinitions.HostedCatalog hosted;
     private final com.magmaguy.magmacore.enchantments.EnchantmentAnvil.Registration anvil;
 
     public MagicEnchantmentCatalog(JavaPlugin plugin, EnchantmentCatalog candidate) {
-        hosted = EnchantmentDefinitions.publishQueries(plugin, candidate, Set.of(), HOOKS,
+        hosted = EnchantmentDefinitions.publishActions(plugin, candidate, Set.of(), HOOKS,
+                com.magmaguy.magmacore.enchantments.EnchantmentInputs.HOOKS,
                 (operation, request) -> Map.of("supported", false));
         anvil = com.magmaguy.magmacore.enchantments.EnchantmentAnvil.register(plugin, MagicEnchantmentCatalog::itemProfile, item -> null);
     }
@@ -43,12 +46,13 @@ public final class MagicEnchantmentCatalog implements AutoCloseable {
             Files.createDirectories(directory);
             // Install once. Moving or removing an authored definition must not recreate a
             // competing root copy at every reload. Administrators can disable it in YAML.
-            for (String name : java.util.List.of("multicast", "blast_radius", "ignition")) {
+            for (String name : java.util.List.of("multicast", "blast_radius", "ignition", "inertial_persuader",
+                    "velocity_enhancer_mk1", "aquatic_relocator")) {
                 plugin.saveResource("enchantments/" + name + ".yml", false);
                 plugin.saveResource("enchantments/" + name + ".lua", false);
             }
         }
-        EnchantmentCatalog candidate = EnchantmentCatalog.load("freeminecraftmodels", directory, HOOKS);
+        EnchantmentCatalog candidate = EnchantmentCatalog.load("freeminecraftmodels", directory, ALL_HOOKS);
         EnchantmentDefinition multicast = candidate.definitions().get(MULTICAST);
         if (multicast != null) {
             if (multicast.maxLevel() != 3

@@ -36,6 +36,8 @@ public final class LuaEntityEnricher {
     private static void enrich(LuaTable table, Entity entity) {
         addFmmFields(table, entity);
         if (Bukkit.getPluginManager().isPluginEnabled("EliteMobs")) {
+            // An unavailable EM adapter must not make its allies look like standalone targets.
+            table.set("can_receive_hostile_effect", LuaTableSupport.tableMethod(table, args -> LuaValue.FALSE));
             try {
                 EliteMobsEntityEnricher.enrich(table, entity);
             } catch (NoClassDefFoundError ignored) {

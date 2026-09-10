@@ -1,0 +1,10 @@
+isEnabled: true
+name: Inertial Persuader
+description: A mace strike can unleash a shockwave that shrinks, slows and pushes nearby mobs.
+maxLevel: 1
+validSlots: [MAINHAND]
+itemTypes: [MACE]
+stacking: source_item
+script: inertial_persuader.lua
+parameters:
+  lifetime_ticks: 100

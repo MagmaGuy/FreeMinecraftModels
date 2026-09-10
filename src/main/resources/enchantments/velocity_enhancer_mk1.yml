@@ -1,0 +1,10 @@
+isEnabled: true
+name: Velocity Enhancer Mk1
+description: An arrow hit can apply a weighted negative potion effect to its target.
+maxLevel: 1
+validSlots: [MAINHAND, OFFHAND]
+itemTypes: [BOW]
+stacking: source_item
+script: velocity_enhancer_mk1.lua
+parameters:
+  lifetime_ticks: 100

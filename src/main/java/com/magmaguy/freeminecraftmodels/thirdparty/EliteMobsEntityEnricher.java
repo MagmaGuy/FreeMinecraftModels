@@ -21,6 +21,14 @@ public final class EliteMobsEntityEnricher {
     }
 
     public static void enrich(LuaTable table, Entity entity) {
+        table.set("can_receive_hostile_effect", LuaTableSupport.tableMethod(table, args -> {
+            Entity actor = org.bukkit.Bukkit.getEntity(java.util.UUID.fromString(args.checkjstring(1)));
+            return LuaValue.valueOf(org.bukkit.Bukkit.getPluginManager().isPluginEnabled("EliteMobs")
+                    && actor instanceof org.bukkit.entity.Player player
+                    && com.magmaguy.magmacore.scripting.tables.LuaEntityTable.isHostileEffectTarget(player, entity)
+                    && com.magmaguy.elitemobs.experimentalcombat.ExperimentalCombatEnemyAuthorization
+                    .canTargetWithMagicWeapon(player, (org.bukkit.entity.LivingEntity) entity));
+        }));
         boolean isElite = EntityTracker.isEliteMob(entity);
         table.set("is_elite", LuaValue.valueOf(isElite));
 

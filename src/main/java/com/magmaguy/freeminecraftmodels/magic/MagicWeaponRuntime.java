@@ -280,11 +280,16 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
 
         ItemStack capturedWeapon = weapon.clone();
         var capturedEquipment = com.magmaguy.magmacore.enchantments.EnchantmentActions.captureEquipment(player);
+        UUID attackId = UUID.randomUUID();
+        java.util.Map<String,Object> effects;
         java.util.Map<String, Double> resolverFacts;
         try {
             definition = MagicEnchantmentModifiers.apply(player, capturedWeapon, definition, attackKind);
             resolverFacts = MagicAttackRequest.copyResolverFacts(resolver == null ? java.util.Map.of()
                     : resolver.capture(player, capturedWeapon.clone(), attackKind));
+            effects = com.magmaguy.magmacore.enchantments.EnchantmentInputs.capture(player, capturedWeapon,
+                    com.magmaguy.magmacore.enchantments.EnchantmentDefinition.Slot.MAINHAND,
+                    player.getInventory().getHeldItemSlot(), null, attackKind.name(), attackId);
         } catch (RuntimeException invalidComposition) {
             if (!compositionWarningSent) {
                 compositionWarningSent = true;
@@ -294,8 +299,8 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
             return;
         }
         compositionWarningSent = false;
-        MagicCast cast = new MagicCast(UUID.randomUUID(), player, capturedWeapon, definition, attackKind, resolver,
-                capturedEquipment, resolverFacts);
+        MagicCast cast = new MagicCast(attackId, player, capturedWeapon, definition, attackKind, resolver,
+                capturedEquipment, resolverFacts, effects);
         boolean launched = switch (attackKind) {
             case STAFF_MELEE -> strikeWithStaff(cast, clickedTarget);
             case WAND_MISSILE -> castWand(cast);
@@ -498,7 +503,13 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         try {
             // Separate bolts must each resolve, including when all bolts hit the same enemy.
             if (multicast) target.setNoDamageTicks(0);
-            target.damage(damage, cast.owner());
+            com.magmaguy.magmacore.enchantments.EnchantmentInputs.runExplicitDamage(plugin, cast.owner(),
+                    () -> target.damage(damage, cast.owner()));
+            if (attempt.accepted) com.magmaguy.magmacore.enchantments.EnchantmentInputs.dispatch(plugin, cast.effects(),
+                    cast.attackKind() == MagicAttackKind.STAFF_MELEE
+                            ? com.magmaguy.magmacore.enchantments.EnchantmentInputs.ATTACK
+                            : com.magmaguy.magmacore.enchantments.EnchantmentInputs.PROJECTILE_HIT,
+                    target, UUID.randomUUID().toString());
             return attempt.accepted;
         } finally {
             if (multicast) {

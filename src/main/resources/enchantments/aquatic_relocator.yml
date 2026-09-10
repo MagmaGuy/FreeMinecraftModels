@@ -1,0 +1,11 @@
+isEnabled: true
+name: Aquatic Relocator
+description: Lift nearby fish and then pull them toward you with a fishing rod.
+maxLevel: 1
+validSlots: [MAINHAND]
+itemTypes: [FISHING_ROD]
+stacking: source_item
+script: aquatic_relocator.lua
+parameters:
+  lifetime_ticks: 140
+  stop_on_unequip: true
