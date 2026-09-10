@@ -1,0 +1,10 @@
+isEnabled: true
+name: Arboreal Terminator
+maxLevel: 1
+validSlots: [MAINHAND]
+itemTypes: [AXE]
+stacking: source_item
+script: arboreal_terminator.lua
+parameters:
+  lifetime_ticks: 1200
+  stop_on_unequip: true
