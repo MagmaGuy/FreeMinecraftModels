@@ -490,7 +490,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         if (closed || !started || paused) return false;
         var damage = com.magmaguy.magmacore.enchantments.EnchantmentActions.DamageInput.read(request);
         if (damage == null) return false;
-        Runnable application = () -> damage.target().damage(damage.amount(), damage.actor());
+        Runnable application = damage::applyDamage;
         if (plugin.getServer().getPluginManager().isPluginEnabled("EliteMobs")) {
             Runnable nativeApplication = application;
             application = () -> com.magmaguy.freeminecraftmodels.thirdparty.EliteMobsEnchantmentDamage
