@@ -1,0 +1,10 @@
+isEnabled: true
+name: Velocity Enhancer Mk2
+maxLevel: 1
+validSlots: [MAINHAND, OFFHAND]
+itemTypes: [CROSSBOW]
+stacking: source_item
+script: velocity_enhancer_mk2.lua
+parameters:
+  lifetime_ticks: 141
+  stop_on_unequip: true
