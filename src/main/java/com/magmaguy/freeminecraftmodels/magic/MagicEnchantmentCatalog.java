@@ -17,7 +17,9 @@ public final class MagicEnchantmentCatalog implements AutoCloseable {
     public static final String MULTICAST = "freeminecraftmodels:multicast";
     public static final ScriptHook MISSILE_COUNT = new ScriptHook("on_missile_count");
     public static final ScriptHook MISSILE_DAMAGE_FACTOR = new ScriptHook("on_missile_damage_factor");
-    private static final Set<ScriptHook> HOOKS = Set.of(MISSILE_COUNT, MISSILE_DAMAGE_FACTOR);
+    public static final ScriptHook BLAST_RADIUS_FACTOR = new ScriptHook("on_blast_radius_factor");
+    public static final ScriptHook IGNITION_TICKS = new ScriptHook("on_ignition_ticks");
+    private static final Set<ScriptHook> HOOKS = Set.of(MISSILE_COUNT, MISSILE_DAMAGE_FACTOR, BLAST_RADIUS_FACTOR, IGNITION_TICKS);
     private final EnchantmentDefinitions.HostedCatalog hosted;
 
     public MagicEnchantmentCatalog(JavaPlugin plugin, EnchantmentCatalog candidate) {
@@ -32,8 +34,10 @@ public final class MagicEnchantmentCatalog implements AutoCloseable {
             Files.createDirectories(directory);
             // Install once. Moving or removing an authored definition must not recreate a
             // competing root copy at every reload. Administrators can disable it in YAML.
-            plugin.saveResource("enchantments/multicast.yml", false);
-            plugin.saveResource("enchantments/multicast.lua", false);
+            for (String name : java.util.List.of("multicast", "blast_radius", "ignition")) {
+                plugin.saveResource("enchantments/" + name + ".yml", false);
+                plugin.saveResource("enchantments/" + name + ".lua", false);
+            }
         }
         EnchantmentCatalog candidate = EnchantmentCatalog.load("freeminecraftmodels", directory, HOOKS);
         EnchantmentDefinition multicast = candidate.definitions().get(MULTICAST);
@@ -43,7 +47,7 @@ public final class MagicEnchantmentCatalog implements AutoCloseable {
                     || !multicast.itemTypes().equals(Set.of(EnchantmentDefinition.ItemType.WAND))
                     || !multicast.attackKinds().equals(Set.of("WAND_MISSILE"))
                     || multicast.stacking() != EnchantmentDefinition.Stacking.SOURCE_ITEM
-                    || !candidate.script(MULTICAST).orElseThrow().getHooks().equals(HOOKS))
+                    || !candidate.script(MULTICAST).orElseThrow().getHooks().equals(Set.of(MISSILE_COUNT, MISSILE_DAMAGE_FACTOR)))
                 throw new IOException("Multicast requires levels I-III, main-hand wands, WAND_MISSILE, "
                         + "source_item stacking and both missile query hooks");
         }

@@ -10,7 +10,6 @@ import com.magmaguy.freeminecraftmodels.api.magic.MagicResolutionOutcome;
 import com.magmaguy.freeminecraftmodels.api.magic.MagicTargetRequest;
 import com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponKind;
 import com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponService;
-import com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponModifiers;
 import com.magmaguy.freeminecraftmodels.customentity.core.OBBHitDetection;
 import com.magmaguy.freeminecraftmodels.interaction.InteractionProtectionPolicy;
 import com.magmaguy.magmacore.util.Logger;
@@ -280,7 +279,19 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
             return;
         }
 
-        MagicCast cast = new MagicCast(UUID.randomUUID(), player, weapon, definition, attackKind);
+        ItemStack capturedWeapon = weapon.clone();
+        try {
+            definition = MagicEnchantmentModifiers.apply(player, capturedWeapon, definition, attackKind);
+        } catch (RuntimeException invalidComposition) {
+            if (!compositionWarningSent) {
+                compositionWarningSent = true;
+                Logger.warn("Magic cast rejected because its enchantments could not be evaluated: "
+                        + invalidComposition.getMessage());
+            }
+            return;
+        }
+        compositionWarningSent = false;
+        MagicCast cast = new MagicCast(UUID.randomUUID(), player, capturedWeapon, definition, attackKind);
         boolean launched = switch (attackKind) {
             case STAFF_MELEE -> strikeWithStaff(cast, clickedTarget);
             case WAND_MISSILE -> castWand(cast);
@@ -435,19 +446,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
     }
 
     private Optional<MagicWeaponDefinition> resolveDefinition(ItemStack weapon) {
-        Optional<MagicWeaponDefinition> base = MagicWeaponIdentity.resolve(weapon, catalog);
-        if (base.isEmpty()) return Optional.empty();
-        try {
-            // The resolver receives a copy, so item modifiers cannot rewrite the held stack.
-            return Optional.of(applyResolverModifiers(weapon.clone(), base.get()));
-        } catch (RuntimeException invalidComposition) {
-            if (!compositionWarningSent) {
-                compositionWarningSent = true;
-                Logger.warn("A magic item modifier produced an invalid effective definition. "
-                        + "FMM used the built-in mechanics instead: " + invalidComposition.getMessage());
-            }
-            return base;
-        }
+        return MagicWeaponIdentity.resolve(weapon, catalog);
     }
 
     private boolean targetEligible(MagicCast cast, LivingEntity target) {
@@ -472,24 +471,6 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
             if (resolverOwner == null || resolver == null || !resolverOwner.isEnabled()) return null;
             return resolver;
         }
-    }
-
-    private MagicWeaponDefinition applyResolverModifiers(ItemStack weapon, MagicWeaponDefinition definition) {
-        MagicAttackResolver active = activeResolver();
-        if (active == null) return definition;
-        MagicWeaponModifiers modifiers = java.util.Objects.requireNonNull(active.modifiers(weapon, definition.kind()));
-        if (modifiers.equals(MagicWeaponModifiers.NONE)) return definition;
-        MagicWeaponTraits traits = definition.traits();
-        boolean wand = definition.kind() == MagicWeaponKind.WAND;
-        MagicWeaponTraits effective = new MagicWeaponTraits(
-                wand ? modifiers.missileCount() : traits.missileCount(), traits.spreadDegrees(),
-                wand ? traits.impactRadius() : Math.min(6D, traits.impactRadius() * modifiers.blastRadiusMultiplier()),
-                wand ? traits.ignitionTicks() : Math.max(traits.ignitionTicks(), modifiers.ignitionTicks()), traits.projectileSpeed(), traits.range(),
-                traits.travelTicks(), traits.aimAssistDegrees());
-        Map<MagicAttackKind, Double> powers = new HashMap<>(definition.basePowers());
-        if (wand) powers.computeIfPresent(MagicAttackKind.WAND_MISSILE,
-                (kind, power) -> power * modifiers.missileDamageMultiplier());
-        return new MagicWeaponDefinition(definition.itemId(), definition.kind(), effective, powers, definition.reloadTicks());
     }
 
     private boolean damageTarget(MagicCast cast, LivingEntity target, double damage) {

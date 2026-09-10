@@ -1,0 +1,14 @@
+isEnabled: true
+name: Blast Radius
+description: Increases the blast radius of staff fireballs.
+maxLevel: 3
+curse: false
+validSlots: [MAINHAND]
+itemTypes: [STAFF]
+attackKinds: [STAFF_FIREBALL]
+requires: []
+conflicts: []
+stacking: source_item
+script: blast_radius.lua
+parameters:
+  increment: 0.15

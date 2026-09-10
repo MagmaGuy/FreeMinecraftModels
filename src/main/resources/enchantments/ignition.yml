@@ -1,0 +1,15 @@
+isEnabled: true
+name: Ignition
+description: Sets surviving targets on fire after a staff fireball hits.
+maxLevel: 3
+curse: false
+validSlots: [MAINHAND]
+itemTypes: [STAFF]
+attackKinds: [STAFF_FIREBALL]
+requires: []
+conflicts: []
+stacking: source_item
+script: ignition.lua
+parameters:
+  base_ticks: 20
+  ticks_per_level: 20
