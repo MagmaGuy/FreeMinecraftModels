@@ -106,11 +106,10 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         }
     }
 
-    /** Stops new casts and retires in-flight markers before live content registries are cleared. */
+    /** Stops new casts; launched projectiles retain their captured definitions and modifiers. */
     public void pauseForContentReload() {
         if (closed) return;
         paused = true;
-        projectiles.cancelAll();
     }
 
     /** Reopens casting only after the rebuilt item and display-model registries are available. */
@@ -291,7 +290,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
             return;
         }
         compositionWarningSent = false;
-        MagicCast cast = new MagicCast(UUID.randomUUID(), player, capturedWeapon, definition, attackKind);
+        MagicCast cast = new MagicCast(UUID.randomUUID(), player, capturedWeapon, definition, attackKind, resolver);
         boolean launched = switch (attackKind) {
             case STAFF_MELEE -> strikeWithStaff(cast, clickedTarget);
             case WAND_MISSILE -> castWand(cast);
@@ -333,7 +332,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
     }
 
     private int targetPriority(MagicCast cast, LivingEntity target) {
-        MagicAttackResolver active = activeResolver();
+        MagicAttackResolver active = cast.resolver();
         if (active == null) return MagicAttackResolver.defaultTargetPriority(target);
         try {
             return active.targetPriority(new MagicTargetRequest(
@@ -424,6 +423,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
     }
 
     private boolean applyDamage(MagicCast cast, LivingEntity target, double impactScale) {
+        if (!resolverCurrent(cast)) return false;
         if (!MagicProjectileEngine.validTarget(cast.owner(), target)
                 || !Double.isFinite(impactScale) || impactScale <= 0D) return false;
         MagicAttackBalance balance = new MagicAttackBalance(
@@ -434,12 +434,9 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
                 cast.attackId(), cast.attackKind(), cast.owner(), target, cast.weapon(), balance);
         boolean[] accepted = {false};
         MagicResolutionOutcome outcome = damageResolution.resolve(
-                request, activeResolver(), damage -> accepted[0] = damageTarget(cast, target, damage));
-        if (outcome == MagicResolutionOutcome.STANDALONE_FALLBACK && !fallbackWarningSent) {
+                request, cast.resolver(), damage -> accepted[0] = damageTarget(cast, target, damage));
+        if (outcome == MagicResolutionOutcome.FAILED && !fallbackWarningSent) {
             fallbackWarningSent = true;
-            Logger.warn("The registered magic damage resolver did not resolve an impact. "
-                    + "FreeMinecraftModels used conservative standalone damage instead.");
-        } else if (outcome == MagicResolutionOutcome.FAILED) {
             Logger.warn("A magic weapon impact could not be applied to " + target.getType() + ".");
         }
         return accepted[0];
@@ -450,8 +447,9 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
     }
 
     private boolean targetEligible(MagicCast cast, LivingEntity target) {
+        if (!resolverCurrent(cast)) return false;
         if (!MagicProjectileEngine.validTarget(cast.owner(), target)) return false;
-        MagicAttackResolver active = activeResolver();
+        MagicAttackResolver active = cast.resolver();
         if (active == null) return true;
         try {
             return active.isTargetEligible(new MagicTargetRequest(
@@ -464,6 +462,10 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
             }
             return false;
         }
+    }
+
+    private boolean resolverCurrent(MagicCast cast) {
+        return cast.resolver() == activeResolver();
     }
 
     private MagicAttackResolver activeResolver() {

@@ -51,22 +51,11 @@ public final class MagicDamageResolution {
             resolver.resolve(oneShot);
             if (applied.get()) return MagicResolutionOutcome.APPLIED;
             if (suppressed.get()) return MagicResolutionOutcome.NO_DAMAGE;
-            oneShot.apply(balance.standaloneDamage());
-            return applied.get()
-                    ? MagicResolutionOutcome.STANDALONE_FALLBACK
-                    : MagicResolutionOutcome.FAILED;
-        } catch (Throwable failure) {
+            return MagicResolutionOutcome.FAILED;
+        } catch (RuntimeException | LinkageError failure) {
             if (applied.get()) return MagicResolutionOutcome.APPLIED;
             if (suppressed.get()) return MagicResolutionOutcome.NO_DAMAGE;
-            if (resolved.get()) return MagicResolutionOutcome.FAILED;
-            try {
-                oneShot.apply(balance.standaloneDamage());
-                return applied.get()
-                        ? MagicResolutionOutcome.STANDALONE_FALLBACK
-                        : MagicResolutionOutcome.FAILED;
-            } catch (Throwable fallbackFailure) {
-                return MagicResolutionOutcome.FAILED;
-            }
+            return MagicResolutionOutcome.FAILED;
         }
     }
 

@@ -14,7 +14,7 @@ public record MagicWeaponTraits(
         double projectileSpeed,
         double range,
         int travelTicks,
-        double aimAssistDegrees) {
+        double aimAssistDegrees) implements com.magmaguy.magmacore.projectiles.MagicProjectileEngine.Traits {
 
     public MagicWeaponTraits {
         if (missileCount < 1 || travelTicks < 1)

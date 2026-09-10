@@ -4,6 +4,5 @@ package com.magmaguy.freeminecraftmodels.api.magic;
 public enum MagicResolutionOutcome {
     APPLIED,
     NO_DAMAGE,
-    STANDALONE_FALLBACK,
     FAILED
 }
