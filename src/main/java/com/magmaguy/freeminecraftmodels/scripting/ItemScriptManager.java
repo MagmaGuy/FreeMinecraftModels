@@ -124,6 +124,11 @@ public final class ItemScriptManager {
                 } catch (IllegalArgumentException invalid) {
                     throw new IllegalArgumentException(file + ": " + invalid.getMessage(), invalid);
                 }
+                if (fields.getUnavailableReason() != null) {
+                    Logger.warn("[FMM Items] Skipping " + file + ": " + fields.getUnavailableReason()
+                            + ". The file was left unchanged; other content will continue loading.");
+                    continue;
+                }
                 if (!fields.isEnabled() || !fields.isCustomItem()) continue;
                 if (!itemId.matches("[a-z0-9._-]{1,128}")) throw new IllegalArgumentException("Invalid item filename: " + file);
                 if (definitions.putIfAbsent(itemId, fields) != null) throw new IllegalArgumentException("Duplicate item identity: " + itemId);

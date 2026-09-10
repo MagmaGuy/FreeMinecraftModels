@@ -42,6 +42,8 @@ public class PropScriptConfigFields extends CustomConfigFields {
     @Getter
     private MagicWeaponDefinition weapon;
     private Map<String, Integer> parsedEnchantments = Map.of();
+    @Getter
+    private String unavailableReason;
 
     /**
      * Used when creating a new default config or loading an existing one.
@@ -61,10 +63,34 @@ public class PropScriptConfigFields extends CustomConfigFields {
         this.isEnabled = processBoolean("isEnabled", isEnabled, true, true);
         weapon = null;
         parsedEnchantments = Map.of();
+        unavailableReason = null;
+        scripts = new ArrayList<>();
+        material = "";
         if (!isEnabled) return;
         Object rawMaterial = fileConfiguration.get("material");
         if (rawMaterial != null && !(rawMaterial instanceof String))
             throw new IllegalArgumentException(filename + ": material must be a string");
+        if (rawMaterial instanceof String itemMaterial && !itemMaterial.isBlank()) {
+            // Unsupported/retired authored items are isolated content, not a plugin bootstrap failure.
+            // Do not rewrite the file, infer a replacement material, or revive its old item script.
+            try { Material.valueOf(itemMaterial.trim().toUpperCase(java.util.Locale.ROOT)); }
+            catch (IllegalArgumentException unavailable) {
+                unavailableReason = "item material " + itemMaterial + " is unavailable on this server";
+                return;
+            }
+            if (fileConfiguration.get("scripts") instanceof List<?> itemScripts && !itemScripts.isEmpty()) {
+                unavailableReason = "retired scripted item format; replace this item with authored enchantments";
+                return;
+            }
+            if (fileConfiguration.get("enchantments") instanceof List<?> entries) {
+                for (Object entry : entries) {
+                    if (entry instanceof String text && text.matches("(?i)\\s*[a-z0-9_]+\\s*,.*")) {
+                        unavailableReason = "retired unnamespaced item enchantments; replace this item definition";
+                        return;
+                    }
+                }
+            }
+        }
         if (fileConfiguration.contains("weapon")) {
             Object rawScripts = fileConfiguration.get("scripts");
             if (rawScripts != null && (!(rawScripts instanceof List<?> list) || !list.isEmpty()))

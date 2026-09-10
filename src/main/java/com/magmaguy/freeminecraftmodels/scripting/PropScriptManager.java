@@ -130,6 +130,7 @@ public final class PropScriptManager {
         configFields.setFileConfiguration(fileConfig);
         configFields.setFile(ymlFile);
         configFields.processConfigFields();
+        if (!configFields.isEnabled() || configFields.getUnavailableReason() != null) return;
 
         prop.setVoxelizeConfig(configFields.isVoxelize(), configFields.isSolidify());
         prop.applySolidify();
