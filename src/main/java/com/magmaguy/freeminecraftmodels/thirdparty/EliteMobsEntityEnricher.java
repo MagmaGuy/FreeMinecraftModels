@@ -26,7 +26,7 @@ public final class EliteMobsEntityEnricher {
             return LuaValue.valueOf(org.bukkit.Bukkit.getPluginManager().isPluginEnabled("EliteMobs")
                     && actor instanceof org.bukkit.entity.Player player
                     && com.magmaguy.magmacore.scripting.tables.LuaEntityTable.isHostileEffectTarget(player, entity)
-                    && com.magmaguy.elitemobs.experimentalcombat.ExperimentalCombatEnemyAuthorization
+                    && com.magmaguy.elitemobs.advancedcombat.AdvancedCombatEnemyAuthorization
                     .canTargetWithMagicWeapon(player, (org.bukkit.entity.LivingEntity) entity));
         }));
         boolean isElite = EntityTracker.isEliteMob(entity);
