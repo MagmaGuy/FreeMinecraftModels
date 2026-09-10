@@ -1,0 +1,9 @@
+# Uses an intentional vanilla blaze rod presentation.
+# FreeMinecraftModels owns this weapon's attacks.
+isEnabled: true
+material: BLAZE_ROD
+name: "<gradient:#D9B8FF:#8A5CFF>Arcane Wand</gradient>"
+lore:
+- "&7Left-click to fire an aim-assisted magic missile."
+- "&7Missiles arc upward and sideways toward their target."
+scripts: []

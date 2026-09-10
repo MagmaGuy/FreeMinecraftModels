@@ -30,6 +30,8 @@ import com.magmaguy.freeminecraftmodels.listeners.DisguiseListeners;
 import com.magmaguy.freeminecraftmodels.listeners.FreeMinecraftModelsFirstTimeSetupWarner;
 import com.magmaguy.freeminecraftmodels.listeners.ModelItemListener;
 import com.magmaguy.freeminecraftmodels.listeners.MountDismountListener;
+import com.magmaguy.freeminecraftmodels.magic.BundledMagicContent;
+import com.magmaguy.freeminecraftmodels.magic.MagicWeaponRuntime;
 import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
 import com.magmaguy.freeminecraftmodels.scripting.PropInventoryListener;
 import com.magmaguy.freeminecraftmodels.scripting.PropScriptManager;
@@ -58,6 +60,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class FreeMinecraftModels extends JavaPlugin {
     private final AtomicBoolean importedContentReloadInProgress =
             new AtomicBoolean(false);
+    private MagicWeaponRuntime magicWeaponRuntime;
     public static final NightbreakPluginSpec NIGHTBREAK_PLUGIN_SPEC = new NightbreakPluginSpec(
             "FreeMinecraftModels",
             "freeminecraftmodels",
@@ -70,7 +73,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
     public static final NightbreakFirstTimeSetupSpec FIRST_TIME_SETUP_SPEC = new NightbreakFirstTimeSetupSpec(
             "FreeMinecraftModels",
             "freeminecraftmodels.*",
-            null,
+            "/fmm initialize",
             "/fmm setup",
             "/fmm downloadall",
             "https://nightbreak.io/plugin/freeminecraftmodels/",
@@ -139,6 +142,8 @@ public final class FreeMinecraftModels extends JavaPlugin {
                 MagmaCore.getInitializationState(this.getName())
                         == PluginInitializationState.INITIALIZING;
         MagmaCore.requestInitializationShutdown(this);
+        if (magicWeaponRuntime != null) magicWeaponRuntime.close();
+        magicWeaponRuntime = null;
         ModeledEntitiesClock.shutdown();
         OBBHitDetection.shutdown();
         Bukkit.getServer().getScheduler().cancelTasks(MetadataHandler.PLUGIN);
@@ -175,6 +180,8 @@ public final class FreeMinecraftModels extends JavaPlugin {
         MagmaCore.initializeImporter(this);
         initializationContext.step("Output Folder");
         OutputFolder.initializeConfig();
+        initializationContext.step("Bundled Magic Content");
+        BundledMagicContent.installDefaults(this);
         initializationContext.step("Models Folder");
         ModelsFolder.initializeConfig();
         initializationContext.step("Content Packages");
@@ -204,6 +211,10 @@ public final class FreeMinecraftModels extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(new MountDismountListener(), this);
         Bukkit.getPluginManager().registerEvents(new DisguiseListeners(), this);
         Bukkit.getPluginManager().registerEvents(new FreeMinecraftModelsFirstTimeSetupWarner(this), this);
+
+        initializationContext.step("Magic Weapons");
+        magicWeaponRuntime = new MagicWeaponRuntime(this);
+        magicWeaponRuntime.start();
 
         initializationContext.step("NMS Adapter");
         NMSManager.initializeAdapter(this);
@@ -283,6 +294,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         // Stop every task that can observe the live entity/model registries
         // before clearing them. In particular, the one-tick model clock is
         // asynchronous and otherwise races this teardown.
+        if (magicWeaponRuntime != null) magicWeaponRuntime.pauseForContentReload();
         ModeledEntitiesClock.shutdown();
         OBBHitDetection.pauseProjectileDetection();
         ModelItemListener.shutdown();
@@ -301,6 +313,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
             try {
                 MagmaCore.initializeImporter(this);
                 OutputFolder.initializeConfig();
+                BundledMagicContent.installDefaults(this);
                 ModelsFolder.initializeConfig();
                 new ContentPackageConfig();
                 FMMPackageRefresher.reset();
@@ -313,6 +326,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
                         // clearing that newly built registry.
                         PropScriptManager.initialize();
                         ItemScriptManager.initialize();
+                        if (magicWeaponRuntime != null) magicWeaponRuntime.resumeAfterContentReload();
                         PropEntity.onStartup();
                         ModeledEntitiesClock.start();
                         OBBHitDetection.startProjectileDetection();

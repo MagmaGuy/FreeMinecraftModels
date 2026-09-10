@@ -95,6 +95,18 @@ public final class BedrockModeledEntity {
         return bukkitCustomEntity != null;
     }
 
+    /**
+     * Returns the entity ID a Bedrock client can target for this presentation.
+     * A Bukkit-backed presentation reuses the real entity ID; a fake custom
+     * presentation owns its packet carrier ID.
+     */
+    public int getTargetableEntityId() {
+        if (bukkitCustomEntity != null && bukkitCustomEntity.isValid()) {
+            return bukkitCustomEntity.entity().getEntityId();
+        }
+        return fakeCustomEntity == null ? -1 : fakeCustomEntity.getEntityId();
+    }
+
     public void bindToUnderlyingEntity(Entity entity) {
         if (entity == null || !entity.isValid()) {
             return;
