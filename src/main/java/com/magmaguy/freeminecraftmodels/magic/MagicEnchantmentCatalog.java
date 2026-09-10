@@ -30,20 +30,10 @@ public final class MagicEnchantmentCatalog implements AutoCloseable {
     }
 
     private static com.magmaguy.magmacore.enchantments.EnchantmentItemProfile itemProfile(org.bukkit.inventory.ItemStack item) {
-        String id = item.getItemMeta().getPersistentDataContainer().get(
+        if (!item.getItemMeta().getPersistentDataContainer().has(
                 com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager.ITEM_ID_KEY,
-                org.bukkit.persistence.PersistentDataType.STRING);
-        if (id == null) return null;
-        var fields = com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager.getItemDefinitions().get(id);
-        if (fields == null || !fields.isEnabled() || org.bukkit.Material.matchMaterial(fields.getMaterial()) != item.getType())
-            throw new IllegalArgumentException("FMM item definition is unavailable or its material changed");
-        var weapon = fields.getWeapon();
-        if (weapon == null) return com.magmaguy.magmacore.enchantments.EnchantmentItemProfile.vanilla(item);
-        boolean wand = weapon.kind() == com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponKind.WAND;
-        return new com.magmaguy.magmacore.enchantments.EnchantmentItemProfile(
-                wand ? EnchantmentDefinition.ItemType.WAND : EnchantmentDefinition.ItemType.STAFF,
-                Set.of(EnchantmentDefinition.Slot.MAINHAND),
-                wand ? Set.of("WAND_MISSILE") : Set.of("STAFF_FIREBALL", "STAFF_MELEE"));
+                org.bukkit.persistence.PersistentDataType.STRING)) return null;
+        return com.magmaguy.freeminecraftmodels.utils.ModelItemFactory.enchantmentProfile(item);
     }
 
     /** Called during asynchronous preflight, before any active content is torn down. */

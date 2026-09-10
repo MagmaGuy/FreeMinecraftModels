@@ -102,7 +102,11 @@ public final class ModelItemFactory {
     public static EnchantmentItemProfile enchantmentProfile(ItemStack item) {
         String id = item.hasItemMeta() ? item.getItemMeta().getPersistentDataContainer()
                 .get(ItemScriptManager.ITEM_ID_KEY, PersistentDataType.STRING) : null;
-        var weapon = ItemScriptManager.getWeaponCatalog().find(id).orElse(null);
+        if (id == null) return EnchantmentItemProfile.vanilla(item);
+        var definition = ItemScriptManager.getItemDefinitions().get(id);
+        if (definition == null || !definition.isEnabled() || definition.getParsedMaterial() != item.getType())
+            throw new IllegalArgumentException("FMM item definition is unavailable or its material changed: " + id);
+        var weapon = definition.getWeapon();
         if (weapon == null) return EnchantmentItemProfile.vanilla(item);
         return new EnchantmentItemProfile(EnchantmentDefinition.ItemType.valueOf(weapon.kind().name()),
                 java.util.Set.of(EnchantmentDefinition.Slot.MAINHAND),
