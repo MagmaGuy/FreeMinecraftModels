@@ -50,7 +50,8 @@ public final class MagicEnchantmentCatalog implements AutoCloseable {
             // Install once. Moving or removing an authored definition must not recreate a
             // competing root copy at every reload. Administrators can disable it in YAML.
             for (String name : java.util.List.of("multicast", "blast_radius", "ignition", "inertial_persuader",
-                    "velocity_enhancer_mk1", "aquatic_relocator", "super_hunters_bow", "cave_compendium", "sediment_surveyor", "brrrpack", "aqua_prodder", "velocity_enhancer_mk2", "arboreal_terminator")) {
+                    "velocity_enhancer_mk1", "aquatic_relocator", "super_hunters_bow", "cave_compendium", "sediment_surveyor", "brrrpack", "aqua_prodder", "velocity_enhancer_mk2", "arboreal_terminator",
+                    "chicken_staff", "entropy_scythe", "formula_7")) {
                 plugin.saveResource("enchantments/" + name + ".yml", false);
                 plugin.saveResource("enchantments/" + name + ".lua", false);
             }

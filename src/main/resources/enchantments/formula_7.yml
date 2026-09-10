@@ -1,0 +1,10 @@
+isEnabled: true
+name: Formula 7
+maxLevel: 1
+validSlots: [MAINHAND]
+itemTypes: [SWORD]
+stacking: source_item
+script: formula_7.lua
+parameters:
+  lifetime_ticks: 141
+  stop_on_unequip: true

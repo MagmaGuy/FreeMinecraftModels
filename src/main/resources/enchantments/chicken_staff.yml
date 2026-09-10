@@ -1,0 +1,10 @@
+isEnabled: true
+name: Chicken Staff
+maxLevel: 1
+validSlots: [MAINHAND]
+itemTypes: [SPEAR]
+stacking: source_item
+script: chicken_staff.lua
+parameters:
+  lifetime_ticks: 81
+  stop_on_unequip: true

@@ -1,0 +1,10 @@
+isEnabled: true
+name: Entropy Scythe
+maxLevel: 1
+validSlots: [MAINHAND]
+itemTypes: [HOE]
+stacking: source_item
+script: entropy_scythe.lua
+parameters:
+  lifetime_ticks: 65
+  stop_on_unequip: true
