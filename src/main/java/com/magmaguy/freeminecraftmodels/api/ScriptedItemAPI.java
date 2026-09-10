@@ -9,19 +9,15 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 
-/**
- * Public API for external plugins to integrate with FMM's scripted item system.
- * <p>
- * Allows other plugins to stamp their own ItemStacks with FMM scripted item data
- * (PDC tag + item model) so that FMM's Lua script hooks fire for those items,
- * without FMM overriding the item's name, lore, or enchantments.
+/** Applies the current FMM authored-item identity and display model to host-owned items.
+ * Enchantments are authored and applied separately through MagmaCore.
  */
 public final class ScriptedItemAPI {
 
     private ScriptedItemAPI() {}
 
     /**
-     * Checks whether a scripted item definition exists for the given item ID.
+     * Checks whether a authored item definition exists for the given item ID.
      *
      * @param itemId the item ID (FMM config filename without .yml)
      * @return true if the item ID is registered in FMM's item definitions
@@ -31,11 +27,11 @@ public final class ScriptedItemAPI {
     }
 
     /**
-     * Applies FMM scripted item data to an existing ItemStack.
+     * Applies FMM authored item data to an existing ItemStack.
      * <p>
      * This sets:
      * <ul>
-     *   <li>The {@code fmm_item_id} PDC tag so FMM's script system recognizes the item</li>
+     *   <li>The {@code fmm_item_id} PDC tag for FMM authored-item identity</li>
      *   <li>The item model (1.21.4+) from FMM's display model registry</li>
      * </ul>
      * Does NOT modify name, lore, enchantments, or any other item properties.
@@ -53,7 +49,7 @@ public final class ScriptedItemAPI {
         ItemMeta meta = itemStack.getItemMeta();
         if (meta == null) return false;
 
-        // Stamp the fmm_item_id PDC tag so ItemScriptListener picks it up
+        // Stamp the canonical authored-item identity.
         meta.getPersistentDataContainer().set(
                 ItemScriptManager.ITEM_ID_KEY,
                 PersistentDataType.STRING,

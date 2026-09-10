@@ -115,12 +115,6 @@ public final class FreeMinecraftModels extends JavaPlugin {
                         importedContentReloadInProgress.set(false);
                         Bukkit.getLogger().info("[FreeMinecraftModels] Fully initialized!");
                         notifyResourcePackManager();
-                        // Scan all online players for equipped custom items (covers reload/restart)
-                        Bukkit.getScheduler().runTaskLater(FreeMinecraftModels.this, () -> {
-                            for (org.bukkit.entity.Player player : Bukkit.getOnlinePlayers()) {
-                                ItemScriptManager.updateEquippedScripts(player);
-                            }
-                        }, 40L);
                         // Notify consumers (EliteMobs, BetterStructures, etc.) that FMM finished
                         // initializing. On reload, they'll need to re-attach custom models to
                         // their surviving underlying entities (NPCs/bosses/etc.); on first
@@ -214,12 +208,11 @@ public final class FreeMinecraftModels extends JavaPlugin {
     }
 
     private void syncInitialization(PluginInitializationContext initializationContext) {
-        initializationContext.step("Item Scripting");
+        initializationContext.step("Authored Items and Enchantments");
         magicEnchantmentCatalog = new MagicEnchantmentCatalog(this,
                 java.util.Objects.requireNonNull(pendingEnchantmentCatalog, "prepared enchantment catalog"),
                 request -> magicWeaponRuntime != null && magicWeaponRuntime.applyEnchantmentDamage(request));
         pendingEnchantmentCatalog = null;
-        ItemScriptManager.initialize();
         initializationContext.step("Event Listeners");
         Bukkit.getPluginManager().registerEvents(new OBBHitDetection(), this);
         Bukkit.getPluginManager().registerEvents(new PropEntity.PropEntityEvents(), this);
@@ -389,7 +382,6 @@ public final class FreeMinecraftModels extends JavaPlugin {
                         // clearing that newly built registry.
                         magicEnchantmentCatalog.reload(enchantments);
                         PropScriptManager.initialize();
-                        ItemScriptManager.initialize();
                         if (magicWeaponRuntime != null) magicWeaponRuntime.resumeAfterContentReload();
                         PropEntity.onStartup();
                         ModeledEntitiesClock.start();
