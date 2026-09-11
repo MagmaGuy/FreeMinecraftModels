@@ -243,18 +243,11 @@ public class OrientedBoundingBox {
             // Get the entity's cached OBB (updated in place each tick)
             OrientedBoundingBox obb = entity.getHitboxComponent().getObbHitbox();
 
-            // Squared-distance prefilter against the OBB's own cached center and
-            // extents (the exact geometry rayIntersection tests): if the whole box
-            // lies beyond maxDistance from the ray origin, no in-range intersection
-            // is possible and the slab math can be skipped.
-            double reach = maxDistance + obb.getHalfExtents().length();
-            double dx = obb.getCenter().x - location.getX();
-            double dy = obb.getCenter().y - location.getY();
-            double dz = obb.getCenter().z - location.getZ();
-            if (dx * dx + dy * dy + dz * dz > reach * reach) continue;
-
-            // Check for ray intersection
-            double distance = obb.rayIntersection(location, maxDistance);
+            // Snapshot the coarse prefilter and exact ray under the same OBB
+            // monitor. Model ticks publish pose updates off-thread; splitting
+            // these reads could combine two poses or race the reusable slab
+            // vectors and turn a valid, already-consumed packet click into a miss.
+            double distance = obb.rayIntersectionIfWithinReach(location, maxDistance);
 
             // If there's an intersection and it's closer than any previous hit
             if (distance > 0 && distance < closestDistance) {
@@ -326,7 +319,7 @@ public class OrientedBoundingBox {
      * @param location The location to update from
      * @return this OrientedBoundingBox for method chaining
      */
-    public OrientedBoundingBox update(Location location) {
+    public synchronized OrientedBoundingBox update(Location location) {
         double x = location.getX();
         double y = location.getY();
         double z = location.getZ();
@@ -401,12 +394,16 @@ public class OrientedBoundingBox {
      *
      * @return Array of corner vectors
      */
-    public Vector3d[] getCorners() {
+    public synchronized Vector3d[] getCorners() {
         updateHalfExtents(); // Ensure scale is applied
         if (cornersDirty) {
             updateCorners();
         }
-        return cornerCache;
+        Vector3d[] snapshot = new Vector3d[cornerCache.length];
+        for (int i = 0; i < cornerCache.length; i++) {
+            snapshot[i] = new Vector3d(cornerCache[i]);
+        }
+        return snapshot;
     }
 
     /**
@@ -439,12 +436,26 @@ public class OrientedBoundingBox {
      * @param maxDistance The maximum distance to check
      * @return The distance to the intersection point, or -1 if no intersection
      */
-    public double rayIntersection(Location eyeLocation, double maxDistance) {
+    public synchronized double rayIntersection(Location eyeLocation, double maxDistance) {
         Vector dir = eyeLocation.getDirection();
         return rayIntersection(
                 eyeLocation.getX(), eyeLocation.getY(), eyeLocation.getZ(),
                 dir.getX(), dir.getY(), dir.getZ(),
                 maxDistance);
+    }
+
+    /**
+     * Performs the center-distance prefilter and exact slab test against one
+     * coherent pose. Both operations intentionally share this monitor with
+     * {@link #update(Location)} because model pose updates run asynchronously.
+     */
+    private synchronized double rayIntersectionIfWithinReach(Location origin, double maxDistance) {
+        double reach = maxDistance + halfExtents.length();
+        double dx = center.x - origin.getX();
+        double dy = center.y - origin.getY();
+        double dz = center.z - origin.getZ();
+        if (dx * dx + dy * dy + dz * dz > reach * reach) return -1D;
+        return rayIntersection(origin, maxDistance);
     }
 
     /**
@@ -464,9 +475,9 @@ public class OrientedBoundingBox {
      * @param maxDistance maximum distance along the ray to consider
      * @return distance to the nearest intersection, or -1 if none within range
      */
-    public double rayIntersection(double ox, double oy, double oz,
-                                  double dx, double dy, double dz,
-                                  double maxDistance) {
+    public synchronized double rayIntersection(double ox, double oy, double oz,
+                                               double dx, double dy, double dz,
+                                               double maxDistance) {
         // Set the local origin/direction caches directly from the parameters
         localOriginCache.set(ox, oy, oz);
         localDirCache.set(dx, dy, dz);
@@ -539,7 +550,7 @@ public class OrientedBoundingBox {
      * model's "fattest" world-axis profile — the source of arrows passing
      * through visibly-correct hitboxes on yawed mobs.
      */
-    public boolean quickAabbReject(BoundingBox aabb) {
+    public synchronized boolean quickAabbReject(BoundingBox aabb) {
         updateHalfExtents();
 
         double aabbCenterX = (aabb.getMinX() + aabb.getMaxX()) / 2d;
@@ -575,7 +586,7 @@ public class OrientedBoundingBox {
      * Exact OBB-vs-AABB intersection via the Separating Axis Theorem (15 axes).
      * More expensive than {@link #quickAabbReject}; call after that returns true.
      */
-    public boolean intersectsAABB(BoundingBox aabb) {
+    public synchronized boolean intersectsAABB(BoundingBox aabb) {
         updateHalfExtents();
 
         double aabbCenterX = (aabb.getMinX() + aabb.getMaxX()) / 2d;
@@ -653,5 +664,36 @@ public class OrientedBoundingBox {
         }
 
         return true;
+    }
+
+    /**
+     * Runs the cheap enclosing-AABB rejection and the exact SAT test against
+     * the same pose. Callers must not compose the two public predicates
+     * themselves while {@link #update(Location)} can publish off-thread.
+     */
+    public synchronized boolean intersectsAABBCoherently(BoundingBox aabb) {
+        return quickAabbReject(aabb) && intersectsAABB(aabb);
+    }
+
+    /**
+     * Returns the center distance when the supplied AABB intersects this exact
+     * pose, or {@code -1} when it does not. This keeps projectile acceptance
+     * and nearest-target ordering on one published geometry state.
+     */
+    public synchronized double centerDistanceIfIntersects(
+            BoundingBox aabb,
+            double x,
+            double y,
+            double z) {
+        if (!quickAabbReject(aabb) || !intersectsAABB(aabb)) return -1D;
+        return distanceFromCenter(x, y, z);
+    }
+
+    /** Returns the distance from the current coherent OBB center to a point. */
+    public synchronized double distanceFromCenter(double x, double y, double z) {
+        double dx = center.x - x;
+        double dy = center.y - y;
+        double dz = center.z - z;
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 }

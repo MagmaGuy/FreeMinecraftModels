@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.config.recipes;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.BowStateDetector;
+import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry;
 import com.magmaguy.freeminecraftmodels.config.ShopConfig;
 import com.magmaguy.freeminecraftmodels.utils.ModelItemFactory;
@@ -97,8 +98,13 @@ public class PropRecipeConfig extends CustomConfigFields {
             recipe.setIngredient(entry.getKey(), entry.getValue());
         }
 
+        // removeRecipe always runs so flipping registerCraftingRecipes off and
+        // restarting also clears recipes persisted into world data. The recipe
+        // object is still built and returned either way, because the shop and
+        // recipe menus render from it — purchase-only servers keep the catalog.
         Bukkit.removeRecipe(recipeKey);
-        Bukkit.addRecipe(recipe);
+        if (DefaultConfig.registerCraftingRecipes)
+            Bukkit.addRecipe(recipe);
         return recipe;
     }
 

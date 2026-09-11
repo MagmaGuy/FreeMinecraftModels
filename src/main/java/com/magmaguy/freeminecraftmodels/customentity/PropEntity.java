@@ -21,9 +21,12 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
+import org.bukkit.event.world.WorldUnloadEvent;
 import org.bukkit.event.world.EntitiesLoadEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -123,6 +126,13 @@ public class PropEntity extends StaticEntity {
         propEntities.put(underlyingEntity.getUniqueId(), this);
     }
 
+    @Override
+    protected void onSpawnFailed() {
+        if (underlyingEntity != null) {
+            propEntities.remove(underlyingEntity.getUniqueId(), this);
+        }
+    }
+
     public static void onStartup() {
         for (World world : Bukkit.getWorlds()) {
             for (Chunk loadedChunk : world.getLoadedChunks()) {
@@ -177,8 +187,12 @@ public class PropEntity extends StaticEntity {
             return null;
         }
         if (removeIfDuplicateProp(entityID, armorStand, knownChunkEntities)) return null;
-        if (propEntities.containsKey(armorStand.getUniqueId())) {
-            return propEntities.get(armorStand.getUniqueId());
+        PropEntity cached = propEntities.get(armorStand.getUniqueId());
+        if (cached != null) {
+            if (cached.getUnderlyingEntity() == armorStand && !cached.isRemoved()) return cached;
+            // Copied instance worlds reuse saved entity UUIDs. A wrapper for the
+            // previous stand must not prevent attachment to the newly loaded one.
+            cached.remove(false);
         }
         PropEntity propEntity = new PropEntity(entityID, armorStand);
         return propEntity;
@@ -224,6 +238,7 @@ public class PropEntity extends StaticEntity {
 
     static int removeDuplicateProps(Collection<? extends Entity> entities) {
         Map<PropBlockKey, List<ArmorStand>> propsByBlock = new HashMap<>();
+        List<ArmorStand> allPropStands = new ArrayList<>();
 
         for (Entity entity : entities) {
             if (!(entity instanceof ArmorStand armorStand) || !armorStand.isValid()) continue;
@@ -231,6 +246,7 @@ public class PropEntity extends StaticEntity {
             String propEntityID = getPropEntityID(armorStand);
             if (propEntityID == null) continue;
 
+            allPropStands.add(armorStand);
             PropBlockKey key = PropBlockKey.from(propEntityID, armorStand.getLocation());
             if (key == null) continue;
 
@@ -254,7 +270,35 @@ public class PropEntity extends StaticEntity {
             alertDuplicatePropsRemoved(entry.getKey(), kept.getUniqueId(), removedForBlock);
         }
 
+        warnOnStackedProps(allPropStands);
         return removed;
+    }
+
+    /**
+     * Diagnostic for suspected prop entity leaks: two props within 0.1 blocks of
+     * each other should basically never happen (the same-block dedupe above already
+     * removed same-model overlaps), so any surviving pair this close means props
+     * are being multiplied — report it loudly instead of guessing from chunk sizes.
+     * Off by default; runtime toggle via /fmm debug props on.
+     */
+    private static void warnOnStackedProps(List<ArmorStand> propStands) {
+        if (!PropDebug.enabled()) return;
+        final double maxDistanceSquared = 0.1 * 0.1;
+        for (int first = 0; first < propStands.size(); first++) {
+            ArmorStand firstStand = propStands.get(first);
+            if (!firstStand.isValid()) continue;
+            for (int second = first + 1; second < propStands.size(); second++) {
+                ArmorStand secondStand = propStands.get(second);
+                if (!secondStand.isValid()) continue;
+                if (firstStand.getLocation().distanceSquared(secondStand.getLocation()) > maxDistanceSquared)
+                    continue;
+                Logger.warn("[FMM Props] STACKED PROPS DETECTED: prop '" + getPropEntityID(firstStand)
+                        + "' (" + firstStand.getUniqueId() + ") and prop '" + getPropEntityID(secondStand)
+                        + "' (" + secondStand.getUniqueId() + ") are within 0.1 blocks of each other at "
+                        + formatBlockLocation(firstStand.getLocation())
+                        + ". This should never happen and indicates a prop entity leak - please report this log line.");
+            }
+        }
     }
 
     private static boolean removeIfDuplicateProp(String entityID, ArmorStand armorStand, Collection<? extends Entity> knownChunkEntities) {
@@ -438,7 +482,7 @@ public class PropEntity extends StaticEntity {
         LuaPropTable.invalidate(this);
         super.remove();
         if (showRealBlocks) showRealBlocksToAllPlayers();
-        if (underlyingUuid != null) propEntities.remove(underlyingUuid);
+        if (underlyingUuid != null) propEntities.remove(underlyingUuid, this);
         // Non-persistent props: ModeledEntity.remove() already despawns the underlying
         // entity (thread-safely, via the primary thread when needed) — no duplicate
         // remove() call needed here.
@@ -511,11 +555,33 @@ public class PropEntity extends StaticEntity {
     }
 
     public static class PropEntityEvents implements Listener {
-        @EventHandler
+        @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
         public void onArmorStandInteract(PlayerInteractEntityEvent event) {
+            // Older supported Bukkit versions give INTERACT_AT a separate
+            // HandlerList, while 26.2 shares the parent list. Let the dedicated
+            // handler own that subtype in both layouts so it fires exactly once.
+            if (event instanceof PlayerInteractAtEntityEvent) return;
+            forwardArmorStandInteraction(event);
+        }
+
+        @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+        public void onArmorStandInteractAt(PlayerInteractAtEntityEvent event) {
+            forwardArmorStandInteraction(event);
+        }
+
+        private void forwardArmorStandInteraction(PlayerInteractEntityEvent event) {
             if (event instanceof ModeledEntityInteractEvent) return;
-            if (event.getRightClicked() instanceof ArmorStand armorStand && isPropEntity(armorStand))
-                event.setCancelled(true);
+            if (event.getHand() != EquipmentSlot.HAND
+                    || !(event.getRightClicked() instanceof ArmorStand armorStand)
+                    || !isPropEntity(armorStand)) return;
+
+            event.setCancelled(true);
+            PropEntity propEntity = propEntities.get(armorStand.getUniqueId());
+            if (propEntity != null) {
+                // InteractionComponent owns duplicate suppression, including the
+                // rare server versions that surface both entity event variants.
+                propEntity.getInteractionComponent().callRightClickEvent(event.getPlayer());
+            }
         }
 
         /**
@@ -550,7 +616,7 @@ public class PropEntity extends StaticEntity {
         }
 
         //todo: well this isn't going to scale well
-        @EventHandler
+        @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
         public void onChunkUnloadEvent(ChunkUnloadEvent event) {
             String chunkHash = ChunkLocationChecker.chunkToString(event.getChunk());
             Collection<PropEntity> propEntitiesClone = new ArrayList<>(PropEntity.propEntities.values());
@@ -558,6 +624,16 @@ public class PropEntity extends StaticEntity {
                 if (value.chunkHash.equals(chunkHash)) {
                     value.remove(false);
                 }
+            }
+        }
+
+        @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+        public void onWorldUnloadEvent(WorldUnloadEvent event) {
+            // Whole-world unload does not reliably pass through chunk cleanup.
+            // Remove runtime models while retaining their persistent backing stands.
+            for (PropEntity prop : new ArrayList<>(propEntities.values())) {
+                Entity backing = prop.getUnderlyingEntity();
+                if (backing != null && backing.getWorld() == event.getWorld()) prop.remove(false);
             }
         }
     }

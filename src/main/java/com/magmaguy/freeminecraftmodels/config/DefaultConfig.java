@@ -14,6 +14,7 @@ public class DefaultConfig extends ConfigurationFile {
     public static int maxInteractionAndAttackDistanceForProps;
     public static boolean sendCustomModelsToBedrockClientsV2;
     public static boolean preventPropPlacementInProtectedRegions;
+    public static boolean registerCraftingRecipes;
     public static boolean skipUnchangedBoneUpdates;
     public static boolean useDeltaMetadataPackets;
     public static int maxModelsForProximityOverride;
@@ -104,6 +105,14 @@ public class DefaultConfig extends ConfigurationFile {
                         "Players with the freeminecraftmodels.bypassregionprotection permission (default: op) are never blocked.",
                         "Built-in player-aware providers currently cover WorldGuard and GriefPrevention; other plugins can register a MagmaCore protection provider."),
                 fileConfiguration, "preventPropPlacementInProtectedRegions", true);
+        registerCraftingRecipes = ConfigurationEngine.setBoolean(
+                List.of("Sets whether prop recipes are registered as actual crafting recipes.",
+                        "Set to false for purchase-only economies: items stay visible and buyable in /fmm shop",
+                        "and the recipe menus, but players can no longer craft them at a crafting table.",
+                        "Individual recipes can still be disabled entirely with isEnabled: false in their",
+                        "recipes/ file (which also removes them from the shop).",
+                        "Restart the server after changing this so already-registered recipes are dropped."),
+                fileConfiguration, "registerCraftingRecipes", true);
         // Bedrock display debug logging is intentionally NOT a config flag —
         // it's a runtime toggle via /fmm debug bedrock on|off. See
         // com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog for

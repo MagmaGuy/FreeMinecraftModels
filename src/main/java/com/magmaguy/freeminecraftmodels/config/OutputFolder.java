@@ -6,6 +6,7 @@ import com.magmaguy.magmacore.util.ZipFile;
 import org.apache.commons.io.FileUtils;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
@@ -33,8 +34,15 @@ public class OutputFolder {
     }
 
     public static void zipResourcePack() {
+        File resourcePackFolder = new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath()
+                + File.separatorChar + "output" + File.separatorChar + "FreeMinecraftModels");
+        try {
+            BlocksAtlasGenerator.materialize(resourcePackFolder.toPath());
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to generate the FreeMinecraftModels blocks atlas", e);
+        }
         ZipFile.zip(
-                new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar + "output" + File.separatorChar + "FreeMinecraftModels"),
+                resourcePackFolder,
                 MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar + "output" + File.separatorChar + "FreeMinecraftModels.zip");
     }
 

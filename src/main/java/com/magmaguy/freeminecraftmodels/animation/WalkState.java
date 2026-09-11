@@ -35,7 +35,7 @@ public class WalkState implements IAnimState {
         }
         if (!entity.getUnderlyingEntity().isOnGround()) {
             requestedNext = AnimationStateType.JUMP;
-        } else if (entity.getUnderlyingEntity().getVelocity().length() <= .08) {
+        } else if (entity.getUnderlyingEntity().getVelocity().length() <= .04) {
             requestedNext = AnimationStateType.IDLE;
         }
     }

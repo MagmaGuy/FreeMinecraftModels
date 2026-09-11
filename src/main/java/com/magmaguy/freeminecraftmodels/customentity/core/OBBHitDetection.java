@@ -1,7 +1,9 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.api.ModeledEntityInteractEvent;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
+import com.magmaguy.freeminecraftmodels.interaction.InteractionProtectionPolicy;
 import lombok.Getter;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -18,15 +20,20 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.ProjectileLaunchEvent;
+import org.bukkit.event.player.PlayerAnimationEvent;
+import org.bukkit.event.player.PlayerInteractAtEntityEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 
 /**
  * Handles hit detection for modeled entities using Oriented Bounding Boxes.
@@ -60,7 +67,52 @@ public class OBBHitDetection implements Listener {
     private static final Set<UUID> projectilesPendingRemoval = ConcurrentHashMap.newKeySet();
     private static final Set<UUID> projectilesRetiredInBlock = ConcurrentHashMap.newKeySet();
     private static final Set<UUID> piercingFlightRestores = ConcurrentHashMap.newKeySet();
+    // Identity-scoped because Bukkit damage events have no stable public event
+    // ID. Entries live only from LOWEST through MONITOR during one synchronous
+    // dispatch and let the visible model flash only when native damage survives.
+    private static final Set<EntityDamageByEntityEvent> nativeMeleeTintCandidates =
+            Collections.newSetFromMap(new IdentityHashMap<>());
+    private static final OneTickInteractionLedger interactionLedger =
+            new OneTickInteractionLedger(task -> new BukkitRunnable() {
+                @Override
+                public void run() {
+                    task.run();
+                }
+            }.runTaskLater(MetadataHandler.PLUGIN, 1L));
+    private static final ClassValue<AnimationHandResolver> animationHandResolvers =
+            new ClassValue<>() {
+                @Override
+                protected AnimationHandResolver computeValue(Class<?> eventType) {
+                    try {
+                        Method getHand = eventType.getMethod("getHand");
+                        if (!EquipmentSlot.class.isAssignableFrom(getHand.getReturnType())) {
+                            return ignored -> null;
+                        }
+                        return event -> {
+                            try {
+                                Object hand = getHand.invoke(event);
+                                return hand instanceof EquipmentSlot slot ? slot : null;
+                            } catch (ReflectiveOperationException | RuntimeException ignored) {
+                                // A Paper-style event advertised hand data but it
+                                // could not be read. Fail closed instead of turning
+                                // an unknown/offhand animation into a mainhand hit.
+                                return null;
+                            }
+                        };
+                    } catch (NoSuchMethodException ignored) {
+                        // Spigot exposes the hand through PlayerAnimationType.
+                        return OBBHitDetection::resolveSpigotAnimationHand;
+                    } catch (RuntimeException ignored) {
+                        return event -> null;
+                    }
+                }
+            };
     private static BukkitTask projectileDetectionTask = null;
+
+    @FunctionalInterface
+    private interface AnimationHandResolver {
+        EquipmentSlot resolve(PlayerAnimationEvent event);
+    }
 
     private record ProjectileTarget(UUID projectileId, UUID targetId) {
     }
@@ -68,22 +120,119 @@ public class OBBHitDetection implements Listener {
     private record ProjectileHitCandidate(ModeledEntity entity, double distance) {
     }
 
-    @EventHandler(priority = EventPriority.LOWEST)
+    enum BackingMeleeRoute {
+        ALLOW_NATIVE,
+        CANCEL_NATIVE,
+        ROUTE_VISIBLE_MODEL
+    }
+
+    /**
+     * Chooses the single owner of a melee swing that reached a modeled entity's
+     * vanilla backing entity. A matching visible OBB keeps the original Bukkit
+     * damage event intact. A missing ray result also keeps that authoritative
+     * native hit because there is no alternate visible target to receive it. A
+     * different OBB in front owns the swing instead, and an already-routed swing
+     * can never apply a second hit.
+     */
+    static BackingMeleeRoute resolveBackingMeleeRoute(UUID backingModelId,
+                                                       UUID rayHitModelId,
+                                                       UUID alreadyRoutedModelId) {
+        if (alreadyRoutedModelId != null)
+            return BackingMeleeRoute.CANCEL_NATIVE;
+        if (rayHitModelId == null || backingModelId.equals(rayHitModelId))
+            return BackingMeleeRoute.ALLOW_NATIVE;
+        return BackingMeleeRoute.ROUTE_VISIBLE_MODEL;
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void EntityDamageByEntityEvent(EntityDamageByEntityEvent event) {
-        if (
-                !RegisterModelEntity.isModelEntity(event.getEntity())
-                        || (event.getDamageSource().getDamageType().equals(DamageType.MOB_ATTACK)
-                                &&!RegisterModelEntity.isModelEntity(event.getDamager()))
-        ) return;
         if (applyDamage) {
             applyDamage = false;
             return;
         }
-        if (event.getDamager() instanceof Player player) {
-            ModeledEntity modeledEntity = ModeledEntity.getModeledEntity(event.getEntity());
-            if (modeledEntity != null) modeledEntity.getInteractionComponent().callLeftClickEvent(player);
+
+        Player player = event.getDamager() instanceof Player attacker ? attacker : null;
+        boolean physicalPlayerMelee = shouldObservePhysicalPlayerMelee(
+                player != null, event.getCause());
+        boolean modeledTarget = RegisterModelEntity.isModelEntity(event.getEntity());
+        if (physicalPlayerMelee) {
+            // Some native path already owns this swing — a real entity, or one
+            // of the modeled routes below. Its paired arm-animation packet can
+            // be processed a tick or two later under load, so record the click
+            // now; otherwise that late animation could raytrace a second
+            // modeled hit out of the same physical input.
+            interactionLedger.observeLeftClick(player.getUniqueId());
+            if (!modeledTarget) return;
+        }
+        if (!modeledTarget
+                || (event.getDamageSource().getDamageType().equals(DamageType.MOB_ATTACK)
+                        && !RegisterModelEntity.isModelEntity(event.getDamager()))) return;
+
+        if (player != null) {
+            UUID playerId = player.getUniqueId();
+            // A cancelled event still consumed the physical swing; the
+            // observation above already keeps the animation fallback from
+            // resurrecting the denied input.
+            if (event.isCancelled()) return;
+            ModeledEntity backingModel = ModeledEntity.getModeledEntity(event.getEntity());
+            if (backingModel == null) {
+                event.setCancelled(true);
+                return;
+            }
+
+            Optional<ModeledEntity> rayHit = OrientedBoundingBox.raytraceFromPlayer(player);
+            BackingMeleeRoute route = resolveBackingMeleeRoute(
+                    backingModel.getModelInstanceId(),
+                    rayHit.map(ModeledEntity::getModelInstanceId).orElse(null),
+                    interactionLedger.meleeTarget(playerId));
+
+            if (route == BackingMeleeRoute.ALLOW_NATIVE) {
+                if (!recordMeleeRoute(player, backingModel)) {
+                    event.setCancelled(true);
+                    return;
+                }
+                if (backingModel.getInteractionComponent().callNativeBackingLeftClickEvent(player)) {
+                    nativeMeleeTintCandidates.add(event);
+                    return;
+                }
+                event.setCancelled(true);
+                return;
+            }
+
+            event.setCancelled(true);
+            if (route == BackingMeleeRoute.ROUTE_VISIBLE_MODEL) {
+                routeTransferredMeleeHit(player, rayHit.orElseThrow(), event.getDamage());
+            }
+            return;
         }
         event.setCancelled(true);
+    }
+
+    static boolean shouldObservePhysicalPlayerMelee(
+            boolean playerDamager,
+            EntityDamageEvent.DamageCause cause) {
+        return playerDamager
+                && (cause == EntityDamageEvent.DamageCause.ENTITY_ATTACK
+                        || cause == EntityDamageEvent.DamageCause.ENTITY_SWEEP_ATTACK);
+    }
+
+    static EquipmentSlot resolveAnimationHand(PlayerAnimationEvent event) {
+        return animationHandResolvers.get(event.getClass()).resolve(event);
+    }
+
+    private static EquipmentSlot resolveSpigotAnimationHand(PlayerAnimationEvent event) {
+        return switch (event.getAnimationType().name()) {
+            case "ARM_SWING" -> EquipmentSlot.HAND;
+            case "OFF_ARM_SWING" -> EquipmentSlot.OFF_HAND;
+            default -> null;
+        };
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
+    public void tintAcceptedNativeMeleeHit(EntityDamageByEntityEvent event) {
+        if (!nativeMeleeTintCandidates.remove(event) || event.isCancelled()) return;
+        ModeledEntity modeledEntity = ModeledEntity.getModeledEntity(event.getEntity());
+        if (modeledEntity != null) modeledEntity.getSkeleton().tint();
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)
@@ -113,14 +262,13 @@ public class OBBHitDetection implements Listener {
         // Only cancel if the entity is closer than or at the same distance as the block
         if (entityDistance <= blockDistance) {
             event.setCancelled(true);
-            hitEntity.getInteractionComponent().callLeftClickEvent(event.getPlayer());
+            // The dig click's swing packets can trail into later ticks; keep
+            // them from re-routing this click through the animation fallback.
+            interactionLedger.observeLeftClick(event.getPlayer().getUniqueId());
+            routeLeftClick(event.getPlayer(), hitEntity);
         }
     }
 
-    // UUID-keyed (not Player) so no Player references are retained, and cleaned
-    // up in onPlayerQuit in case the 1-tick removal task never fires (shutdown).
-    private static final HashSet<UUID> leftClickCooldownPlayers = new HashSet<>();
-    private static final HashSet<UUID> rightClickCooldownPlayers = new HashSet<>();
     @Getter
     private static HashMap<UUID, Float> attackCooldowns = new HashMap<>();
 
@@ -270,8 +418,8 @@ public class OBBHitDetection implements Listener {
         projectilesPendingRemoval.clear();
         projectilesRetiredInBlock.clear();
         piercingFlightRestores.clear();
-        leftClickCooldownPlayers.clear();
-        rightClickCooldownPlayers.clear();
+        nativeMeleeTintCandidates.clear();
+        interactionLedger.clear();
         attackCooldowns.clear();
         applyDamage = false;
         bypassProjectileRedirect = false;
@@ -309,12 +457,9 @@ public class OBBHitDetection implements Listener {
         // Slow, newly-launched, or resting projectiles still need the exact SAT
         // overlap path. Sort those endpoint-only hits after swept intersections.
         org.bukkit.util.BoundingBox projectileBounds = proj.getBoundingBox();
-        if (obb.quickAabbReject(projectileBounds) && obb.intersectsAABB(projectileBounds)) {
-            double dx = obb.getCenter().x - cur.getX();
-            double dy = obb.getCenter().y - cur.getY();
-            double dz = obb.getCenter().z - cur.getZ();
-            return segmentLength + Math.sqrt(dx * dx + dy * dy + dz * dz);
-        }
+        double centerDistance = obb.centerDistanceIfIntersects(
+                projectileBounds, cur.getX(), cur.getY(), cur.getZ());
+        if (centerDistance >= 0D) return segmentLength + centerDistance;
         return -1;
     }
 
@@ -427,31 +572,92 @@ public class OBBHitDetection implements Listener {
         projectilesRetiredInBlock.add(projectileId);
     }
 
-    private static void executeLeftClickAttack(Player player) {
-        executePlayerInteraction(player, leftClickCooldownPlayers,
-                hitEntity -> hitEntity.getInteractionComponent().callLeftClickEvent(player));
+    /**
+     * Routes every non-native left-click source through the same one-tick target
+     * ledger. Packet Interaction entities, OBB raytraces, and block interception
+     * therefore cannot each fire the same click independently.
+     */
+    public static void routeLeftClick(Player player, ModeledEntity target) {
+        if (!recordMeleeRoute(player, target)) return;
+        target.getInteractionComponent().callLeftClickEvent(player);
     }
 
-    private static void executeRightClickInteraction(Player player) {
-        executePlayerInteraction(player, rightClickCooldownPlayers,
-                hitEntity -> hitEntity.getInteractionComponent().callRightClickEvent(player));
+    /**
+     * Validates a client-targeted packet entity against the authoritative OBB
+     * ray before routing it. This preserves configured reach, block occlusion,
+     * rotated geometry, and nearest-visible-model ownership even for packet ID
+     * aliases and deliberately over-approximated Interaction envelopes.
+     */
+    public static void routePacketLeftClick(Player player, ModeledEntity packetOwner) {
+        if (player == null) return;
+        // The client sends the paired arm-swing packet right behind this
+        // ATTACK packet, but under load it can be processed a tick or two
+        // later — after the one-tick melee claim below has already expired.
+        // Record the click before resolving the ray so the swing can never be
+        // reclassified as a second click, not even when the ray misses here
+        // and would hit a model that moved into it by swing time.
+        interactionLedger.observeLeftClick(player.getUniqueId());
+        resolvePacketInteractionTarget(player, packetOwner)
+                .ifPresent(target -> routeLeftClick(player, target));
     }
 
-    private static void executePlayerInteraction(Player player, HashSet<UUID> cooldownSet,
-                                                 Consumer<ModeledEntity> interactionCallback) {
-        UUID playerId = player.getUniqueId();
-        if (cooldownSet.contains(playerId)) return;
-        cooldownSet.add(playerId);
+    public static void routePacketRightClick(Player player, ModeledEntity packetOwner) {
+        if (player == null) return;
+        interactionLedger.routeRightClick(
+                player.getUniqueId(),
+                () -> resolvePacketInteractionTarget(player, packetOwner),
+                target -> target.getInteractionComponent().callRightClickEvent(player));
+    }
+
+    private static Optional<ModeledEntity> resolvePacketInteractionTarget(
+            Player player,
+            ModeledEntity packetOwner) {
+        if (player == null || packetOwner == null || packetOwner.isRemoved()
+                || !player.isOnline() || !player.isValid()
+                || packetOwner.getWorld() == null
+                || !packetOwner.getWorld().equals(player.getWorld())) {
+            return Optional.empty();
+        }
+        return OrientedBoundingBox.raytraceFromPlayer(player);
+    }
+
+    private static void routeTransferredMeleeHit(Player player, ModeledEntity target, double rawDamage) {
+        if (!recordMeleeRoute(player, target)) return;
+        if (!target.getInteractionComponent().callNativeBackingLeftClickEvent(player)) return;
+        if (!Double.isFinite(rawDamage) || rawDamage <= 0D) return;
+
+        // The original Bukkit event was aimed at a backing entity hidden behind
+        // this nearer visible OBB. Preserve its already-computed base attack
+        // damage, but avoid recursively invoking Player#attack from inside the
+        // original damage event (the server can reject that second attack).
+        applyDamage = true;
+        try {
+            target.damage(player, rawDamage);
+        } finally {
+            applyDamage = false;
+        }
+    }
+
+    private static boolean recordMeleeRoute(Player player, ModeledEntity target) {
+        return interactionLedger.claimMelee(
+                player.getUniqueId(), target.getModelInstanceId());
+    }
+
+    private static void scheduleCapturedInteraction(
+            Player player,
+            ModeledEntity target,
+            Runnable dispatcher) {
         new BukkitRunnable() {
             @Override
             public void run() {
-                cooldownSet.remove(playerId);
+                if (!player.isOnline() || !player.isValid()
+                        || target.isRemoved() || target.getWorld() == null
+                        || !target.getWorld().equals(player.getWorld())) {
+                    return;
+                }
+                dispatcher.run();
             }
-        }.runTaskLater(MetadataHandler.PLUGIN, 1);
-
-        Optional<ModeledEntity> hitEntity = OrientedBoundingBox.raytraceFromPlayer(player);
-        if (hitEntity.isEmpty()) return;
-        interactionCallback.accept(hitEntity.get());
+        }.runTaskLater(MetadataHandler.PLUGIN, 1L);
     }
 
     // ignoreCancelled=false on purpose: LEFT_CLICK_AIR / RIGHT_CLICK_AIR arrive
@@ -461,20 +667,116 @@ public class OBBHitDetection implements Listener {
     // block behind it. Complete denial still suppresses left clicks. Right clicks
     // use a separate entity permission check in InteractionComponent: block-use
     // protection must not also disable NPCs and props in the protected area.
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
     public void onPlayerInteract(PlayerInteractEvent event) {
         Action action = event.getAction();
-        if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK
-                && event.useInteractedBlock() == Event.Result.DENY
-                && event.useItemInHand() == Event.Result.DENY) {
+        boolean leftClick = action == Action.LEFT_CLICK_AIR || action == Action.LEFT_CLICK_BLOCK;
+        boolean rightClick = action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK;
+        if (!leftClick && !rightClick) return;
+
+        Player player = event.getPlayer();
+        UUID playerId = player.getUniqueId();
+        boolean denied = InteractionProtectionPolicy.isDenied(
+                event.useInteractedBlock(), event.useItemInHand());
+
+        if (leftClick) {
+            interactionLedger.observeLeftClick(playerId);
+            if (denied) return;
+
+            float attackCooldown = player.getAttackCooldown();
+            OrientedBoundingBox.raytraceFromPlayer(player).ifPresent(target ->
+                    scheduleCapturedInteraction(player, target, () -> {
+                        attackCooldowns.put(playerId, attackCooldown);
+                        routeLeftClick(player, target);
+                    }));
             return;
         }
-        if (action == Action.LEFT_CLICK_AIR || action == Action.LEFT_CLICK_BLOCK) {
-            attackCooldowns.put(event.getPlayer().getUniqueId(), event.getPlayer().getAttackCooldown());
-            executeLeftClickAttack(event.getPlayer());
-        } else if (action == Action.RIGHT_CLICK_AIR || action == Action.RIGHT_CLICK_BLOCK) {
-            executeRightClickInteraction(event.getPlayer());
-        }
+
+        // Claim before resolving the target so a swallowed or duplicate right-click
+        // cannot later be reclassified as an animation-based left attack.
+        if (!interactionLedger.observeRightClick(playerId)
+                || event.getHand() != org.bukkit.inventory.EquipmentSlot.HAND) return;
+        OrientedBoundingBox.raytraceFromPlayer(player).ifPresent(target ->
+                scheduleCapturedInteraction(
+                        player,
+                        target,
+                        () -> target.getInteractionComponent().callRightClickEvent(player)));
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void routePlayerInteractEntity(PlayerInteractEntityEvent event) {
+        if (event instanceof ModeledEntityInteractEvent) return;
+        if (event instanceof PlayerInteractAtEntityEvent) return;
+        routeAllowedNativeBackingRightClick(event);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void routePlayerInteractAtEntity(PlayerInteractAtEntityEvent event) {
+        routeAllowedNativeBackingRightClick(event);
+    }
+
+    private static void routeAllowedNativeBackingRightClick(
+            PlayerInteractEntityEvent event) {
+        ModeledEntity target = ModeledEntity.getModeledEntity(event.getRightClicked());
+        if (!shouldRouteNativeRightClick(
+                event.isCancelled(), event.getHand(), target != null)) return;
+        Player player = event.getPlayer();
+        event.setCancelled(true);
+        if (!interactionLedger.observeRightClick(player.getUniqueId())) return;
+        scheduleCapturedInteraction(
+                player,
+                target,
+                () -> target.getInteractionComponent().callRightClickEvent(player));
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
+    public void observePlayerInteractEntity(PlayerInteractEntityEvent event) {
+        if (event instanceof ModeledEntityInteractEvent) return;
+        if (event instanceof PlayerInteractAtEntityEvent) return;
+        interactionLedger.observeRightClick(event.getPlayer().getUniqueId());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
+    public void observePlayerInteractAtEntity(PlayerInteractAtEntityEvent event) {
+        interactionLedger.observeRightClick(event.getPlayer().getUniqueId());
+    }
+
+    static boolean shouldRouteNativeRightClick(
+            boolean cancelled,
+            EquipmentSlot hand,
+            boolean modeledBacking) {
+        return !cancelled && hand == EquipmentSlot.HAND && modeledBacking;
+    }
+
+    /**
+     * Spigot/Paper can suppress LEFT_CLICK_AIR when its server-side ray hits a
+     * backing entity that the client was told to hide. The arm-swing packet is
+     * then the only surviving evidence of the physical click. Delay its OBB
+     * fallback by one tick so packet-only entity routes can claim the same
+     * input first. Every other route — packet Interaction attacks, native
+     * melee, Bukkit interact and right-click paths — records its click in the
+     * ledger with a multi-tick swing suppression, because this swing packet
+     * can be processed a tick or two after the input that owns it; only a
+     * swing with no recorded owner may be routed as a click of its own.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerAnimation(PlayerAnimationEvent event) {
+        if (resolveAnimationHand(event) != EquipmentSlot.HAND) return;
+        Player player = event.getPlayer();
+        UUID playerId = player.getUniqueId();
+        String animationType = event.getAnimationType().name();
+        if (!interactionLedger.shouldRouteAnimation(playerId, animationType)) return;
+        Optional<ModeledEntity> fallbackTarget =
+                OrientedBoundingBox.raytraceFromPlayer(player);
+        if (fallbackTarget.isEmpty()) return;
+        ModeledEntity target = fallbackTarget.get();
+        float attackCooldown = player.getAttackCooldown();
+        scheduleCapturedInteraction(player, target, () -> {
+            if (interactionLedger.shouldRouteAnimation(playerId, animationType)) {
+                attackCooldowns.put(playerId, attackCooldown);
+                routeLeftClick(player, target);
+            }
+        });
     }
 
     @EventHandler
@@ -482,8 +784,7 @@ public class OBBHitDetection implements Listener {
         // Keyed by UUID and cleaned up here so quitting players don't leak entries.
         UUID playerId = event.getPlayer().getUniqueId();
         attackCooldowns.remove(playerId);
-        leftClickCooldownPlayers.remove(playerId);
-        rightClickCooldownPlayers.remove(playerId);
+        interactionLedger.forget(playerId);
     }
 
     @EventHandler
@@ -511,6 +812,11 @@ public class OBBHitDetection implements Listener {
         if (bypassProjectileRedirect) return;
         if (!(event.getDamager() instanceof Projectile projectile) || !RegisterModelEntity.isModelEntity(event.getEntity()))
             return;
+        // FMM's magic engine owns these marker arrows end to end. Its LOWEST
+        // listener cancels native arrow damage and resolves one custom impact;
+        // routing the same marker through the ordinary modeled-projectile path
+        // here would create a second damage authority.
+        if (com.magmaguy.magmacore.projectiles.MagicProjectileMarker.isMarked(projectile)) return;
         event.setCancelled(true);
         ModeledEntity modeledEntity = ModeledEntity.getModeledEntity(event.getEntity());
 

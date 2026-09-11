@@ -52,6 +52,9 @@ public class ModeledEntity {
     private final AnimationComponent animationComponent = new AnimationComponent(this);
     @Getter
     protected Entity underlyingEntity = null;
+    private Entity spawnRegistrationEntity = null;
+    private String previousSpawnModelRegistration = null;
+    private boolean spawnRegistrationRollbackArmed = false;
     protected Location spawnLocation = null;
     protected Location currentLocation = null;
     // Cached location specifically for bone transforms - when set, bone transforms use this instead of getLocation()
@@ -174,6 +177,10 @@ public class ModeledEntity {
 
     public void setUnderlyingEntity(Entity underlyingEntity) {
         this.underlyingEntity = underlyingEntity;
+        spawnRegistrationEntity = underlyingEntity;
+        previousSpawnModelRegistration = underlyingEntity.getPersistentDataContainer()
+                .get(RegisterModelEntity.ENTITY_KEY, PersistentDataType.STRING);
+        spawnRegistrationRollbackArmed = true;
         loadedModeledEntitiesWithUnderlyingEntities.put(underlyingEntity, this);
         RegisterModelEntity.registerModelEntity(underlyingEntity, getSkeletonBlueprint().getModelName());
         hitboxComponent.setCustomHitboxOnUnderlyingEntity();
@@ -235,18 +242,30 @@ public class ModeledEntity {
     }
 
     public void spawn(Entity entity) {
-        setUnderlyingEntity(entity);
-        this.spawnLocation = entity.getLocation();
-        this.currentLocation = entity.getLocation();
-        displayInitializer();
-        registerLoadedEntity();
+        try {
+            setUnderlyingEntity(entity);
+            this.spawnLocation = entity.getLocation();
+            this.currentLocation = entity.getLocation();
+            displayInitializer();
+            registerLoadedEntity();
+            commitSpawnActivation();
+        } catch (RuntimeException | Error activationFailure) {
+            rollbackFailedSpawn(activationFailure);
+            throw activationFailure;
+        }
     }
 
     public void spawn(Location location) {
-        this.spawnLocation = location;
-        this.currentLocation = location;
-        displayInitializer();
-        registerLoadedEntity();
+        try {
+            this.spawnLocation = location;
+            this.currentLocation = location;
+            displayInitializer();
+            registerLoadedEntity();
+            commitSpawnActivation();
+        } catch (RuntimeException | Error activationFailure) {
+            rollbackFailedSpawn(activationFailure);
+            throw activationFailure;
+        }
     }
 
     public void spawn() {
@@ -267,6 +286,7 @@ public class ModeledEntity {
         // publication with markRemoved so the async clock cannot race this check.
         synchronized (this) {
             if (isRemoved) return;
+            hitboxComponent.refreshPacketInteractionAliases();
             loadedModeledEntities.add(this);
         }
     }
@@ -278,6 +298,65 @@ public class ModeledEntity {
      * point where the underlying entity (if any) and Bedrock backend are bound.
      */
     protected void onSpawnComplete() {
+    }
+
+    /** Subclasses undo any registry entry installed by a partial onSpawnComplete. */
+    protected void onSpawnFailed() {
+    }
+
+    private void commitSpawnActivation() {
+        spawnRegistrationRollbackArmed = false;
+        spawnRegistrationEntity = null;
+        previousSpawnModelRegistration = null;
+    }
+
+    /**
+     * Rolls back only model-owned activation state. The caller's backing entity
+     * remains alive; a rendering failure must not delete an EliteMob or restored
+     * persistent prop that FMM was asked to wrap.
+     */
+    private void rollbackFailedSpawn(Throwable activationFailure) {
+        markRemoved();
+        cleanupAfterFailedSpawn(activationFailure, this::onSpawnFailed);
+        cleanupAfterFailedSpawn(activationFailure, interactionComponent::clearCallbacks);
+        cleanupAfterFailedSpawn(activationFailure, hitboxComponent::removePacketInteractionEntity);
+        if (mountPointManager != null) {
+            cleanupAfterFailedSpawn(activationFailure, mountPointManager::cleanup);
+        }
+        if (bedrockModeledEntity != null) {
+            cleanupAfterFailedSpawn(activationFailure, bedrockModeledEntity::remove);
+        }
+        cleanupAfterFailedSpawn(activationFailure, skeleton::remove);
+        loadedModeledEntities.remove(this);
+
+        Entity registeredEntity = spawnRegistrationEntity;
+        if (registeredEntity != null) {
+            loadedModeledEntitiesWithUnderlyingEntities.remove(registeredEntity, this);
+        }
+        if (spawnRegistrationRollbackArmed && registeredEntity != null) {
+            cleanupAfterFailedSpawn(activationFailure, () -> {
+                String current = registeredEntity.getPersistentDataContainer()
+                        .get(RegisterModelEntity.ENTITY_KEY, PersistentDataType.STRING);
+                if (!Objects.equals(current, getSkeletonBlueprint().getModelName())) return;
+                if (previousSpawnModelRegistration == null) {
+                    registeredEntity.getPersistentDataContainer().remove(RegisterModelEntity.ENTITY_KEY);
+                } else {
+                    registeredEntity.getPersistentDataContainer().set(
+                            RegisterModelEntity.ENTITY_KEY,
+                            PersistentDataType.STRING,
+                            previousSpawnModelRegistration);
+                }
+            });
+        }
+        commitSpawnActivation();
+    }
+
+    private static void cleanupAfterFailedSpawn(Throwable activationFailure, Runnable cleanup) {
+        try {
+            cleanup.run();
+        } catch (RuntimeException | Error cleanupFailure) {
+            activationFailure.addSuppressed(cleanupFailure);
+        }
     }
 
     protected void shutdownRemove() {
