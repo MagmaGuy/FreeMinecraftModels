@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.animation;
 
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
+import org.bukkit.util.Vector;
 
 import java.util.Optional;
 
@@ -22,8 +23,12 @@ public class IdleState implements IAnimState {
     @Override
     public void update() {
         requestedNext = null;
-        if (entity.getUnderlyingEntity() != null && entity.getUnderlyingEntity().getVelocity().length() > .04) {
-            requestedNext = AnimationStateType.WALK;
+        if (entity.getUnderlyingEntity() != null) {
+            Vector velocity = entity.getUnderlyingEntity().getVelocity();
+            // Ignore vertical motion so gravity alone cannot trigger walking.
+            if (velocity.getX() != 0 || velocity.getZ() != 0) {
+                requestedNext = AnimationStateType.WALK;
+            }
         }
     }
 
