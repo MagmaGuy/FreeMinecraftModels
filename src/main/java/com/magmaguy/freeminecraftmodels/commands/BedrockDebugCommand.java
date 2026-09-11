@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.commands;
 
+import com.magmaguy.freeminecraftmodels.customentity.PropDebug;
 import com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog;
 import com.magmaguy.magmacore.command.AdvancedCommand;
 import com.magmaguy.magmacore.command.CommandData;
@@ -22,24 +23,25 @@ import java.util.List;
  *
  * <p>The first {@code <subsystem>} argument is named {@code bedrock} (not
  * just absent) so we leave room for future debug toggles ({@code particles},
- * {@code packets}, etc.) without renaming the command. Today only
- * {@code bedrock} is supported; unknown subsystems print usage.</p>
+ * {@code packets}, etc.) without renaming the command. Supported today:
+ * {@code bedrock} and {@code props} (stacked-props proximity scan); unknown
+ * subsystems print usage.</p>
  */
 public class BedrockDebugCommand extends AdvancedCommand {
 
     public BedrockDebugCommand() {
         super(List.of("debug"));
         addArgument("subsystem", new ListStringCommandArgument(
-                List.of("bedrock"),
+                List.of("bedrock", "props"),
                 "<subsystem>"));
         addArgument("state", new ListStringCommandArgument(
                 List.of("on", "off"),
                 "[on|off]"));
-        setDescription("Toggle FMM runtime diagnostic logging (e.g. Bedrock display pipeline).");
+        setDescription("Toggle FMM runtime diagnostic logging (Bedrock display pipeline, stacked-props scan).");
         // Same permission shape as the other admin/debug commands in this package
         // — anyone with the global FMM wildcard or an explicit grant can flip it.
         setPermission("freeminecraftmodels.*");
-        setUsage("/fmm debug bedrock [on|off]");
+        setUsage("/fmm debug <bedrock|props> [on|off]");
         // Console + player both make sense — debug toggles are usually flipped
         // from the console while tailing the log, but in-game admins might too.
         setSenderType(SenderType.ANY);
@@ -50,18 +52,21 @@ public class BedrockDebugCommand extends AdvancedCommand {
         String subsystem = commandData.getStringArgument("subsystem");
         String state = commandData.getStringArgument("state");
 
-        if (subsystem == null || subsystem.isBlank() || !"bedrock".equalsIgnoreCase(subsystem)) {
+        boolean bedrock = "bedrock".equalsIgnoreCase(subsystem);
+        boolean props = "props".equalsIgnoreCase(subsystem);
+        if (!bedrock && !props) {
             Logger.sendMessage(commandData.getCommandSender(),
-                    "Usage: /fmm debug bedrock [on|off] — currently the only supported subsystem is 'bedrock'.");
+                    "Usage: /fmm debug <bedrock|props> [on|off]");
             return;
         }
+        String label = bedrock ? "Bedrock display debug logging" : "Stacked-props diagnostic scan";
 
         if (state == null || state.isBlank()) {
             // No state argument → report current state, don't mutate.
+            boolean current = bedrock ? BedrockDebugLog.enabled() : PropDebug.enabled();
             Logger.sendMessage(commandData.getCommandSender(),
-                    "Bedrock display debug logging is currently "
-                            + (BedrockDebugLog.enabled() ? "ON" : "OFF")
-                            + ". Use /fmm debug bedrock on|off to change.");
+                    label + " is currently " + (current ? "ON" : "OFF")
+                            + ". Use /fmm debug " + subsystem.toLowerCase() + " on|off to change.");
             return;
         }
 
@@ -76,12 +81,15 @@ public class BedrockDebugCommand extends AdvancedCommand {
             }
         }
 
-        boolean actual = BedrockDebugLog.setEnabled(target);
+        boolean actual = bedrock ? BedrockDebugLog.setEnabled(target) : PropDebug.setEnabled(target);
+        String detail = bedrock
+                ? "Log lines prefixed with [FMM-BedrockDebug]. "
+                + (actual ? "Reproduce the issue then turn this OFF — it's verbose." : "")
+                : (actual
+                ? "Chunk loads now report any two props within 0.1 blocks of each other"
+                + " (\"STACKED PROPS DETECTED\")."
+                : "");
         Logger.sendMessage(commandData.getCommandSender(),
-                "Bedrock display debug logging is now " + (actual ? "ON" : "OFF")
-                        + ". Log lines prefixed with [FMM-BedrockDebug]. "
-                        + (actual
-                            ? "Reproduce the issue then turn this OFF — it's verbose."
-                            : ""));
+                label + " is now " + (actual ? "ON" : "OFF") + ". " + detail);
     }
 }

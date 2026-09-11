@@ -39,24 +39,19 @@ public class ModelsFolder {
     }
 
     public static void initializeConfig() {
+        File directory = resolveModelsFolder();
+        if (!directory.isDirectory() && !directory.mkdirs())
+            throw new IllegalStateException("Cannot create models directory: " + directory);
+        initializeConfig(ItemScriptManager.prepareCatalog(directory));
+    }
+
+    public static void initializeConfig(ItemScriptManager.ItemCatalog candidate) {
         counter = 1;
         folderCounter = 50;
 
         File file = resolveModelsFolder();
 
-        if (!file.exists()) {
-            file.mkdirs();
-        }
-
-        if (!file.exists()) {
-            Logger.warn("Failed to create models directory!");
-            return;
-        }
-
-        if (!file.isDirectory()) {
-            Logger.warn("Directory models was not a directory!");
-            return;
-        }
+        if (!file.isDirectory()) throw new IllegalStateException("Models directory is unavailable: " + file);
 
         FileModelConverter.preflightNormalizedModelIds(collectModelFiles(file));
 
@@ -64,6 +59,7 @@ public class ModelsFolder {
             legacyHorseArmorGeneration(file);
         else
             newModelGeneration(file);
+        ItemScriptManager.activateCandidate(candidate);
     }
 
     /**
@@ -319,9 +315,6 @@ public class ModelsFolder {
             }
             DisplayModelRegistry.register(base);
         }
-
-        // Scan for lone .json files that define custom items
-        ItemScriptManager.scanForCustomItems(file);
 
     }
 

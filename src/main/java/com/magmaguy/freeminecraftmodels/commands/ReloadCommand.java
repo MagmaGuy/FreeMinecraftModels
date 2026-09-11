@@ -17,9 +17,7 @@ public class ReloadCommand extends AdvancedCommand {
     }
 
     public static void reloadPlugin(CommandSender sender) {
-        NightbreakPluginBootstrap.reloadPlugin(
-                (org.bukkit.plugin.java.JavaPlugin) MetadataHandler.PLUGIN,
-                sender);
+        ((com.magmaguy.freeminecraftmodels.FreeMinecraftModels) MetadataHandler.PLUGIN).reloadPlugin(sender);
     }
 
     @Override

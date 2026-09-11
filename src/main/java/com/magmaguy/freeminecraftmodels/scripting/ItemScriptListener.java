@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.scripting;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.magic.MagicProjectileMarker;
 import com.magmaguy.magmacore.scripting.ScriptInstance;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
@@ -19,6 +20,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Predicate;
 
 /**
  * Bukkit event listener for the item scripting system.
@@ -35,14 +38,28 @@ import java.util.Map;
  */
 public class ItemScriptListener implements Listener {
 
-    private static final NamespacedKey ITEM_ID_KEY = ItemScriptManager.ITEM_ID_KEY;
+    private final Predicate<Projectile> internalMagicProjectile;
+    private final NamespacedKey itemIdKey;
+
+    public ItemScriptListener() {
+        this(MagicProjectileMarker::isMarked, ItemScriptManager.ITEM_ID_KEY);
+    }
+
+    ItemScriptListener(
+            Predicate<Projectile> internalMagicProjectile,
+            NamespacedKey itemIdKey) {
+        this.internalMagicProjectile = Objects.requireNonNull(
+                internalMagicProjectile,
+                "internalMagicProjectile");
+        this.itemIdKey = Objects.requireNonNull(itemIdKey, "itemIdKey");
+    }
 
     // ── Helper methods ──────────────────────────────────────────────────
 
     private String getItemId(ItemStack item) {
         if (item == null || !item.hasItemMeta()) return null;
         return item.getItemMeta().getPersistentDataContainer()
-                .get(ITEM_ID_KEY, PersistentDataType.STRING);
+                .get(itemIdKey, PersistentDataType.STRING);
     }
 
     private void fireForMainHand(Player player, com.magmaguy.magmacore.scripting.ScriptHook hook, org.bukkit.event.Event event) {
@@ -159,10 +176,25 @@ public class ItemScriptListener implements Listener {
         Projectile projectile = event.getEntity();
         if (!(projectile.getShooter() instanceof Player player)) return;
 
+        // Magic markers are FMM-owned collision probes, not projectiles fired
+        // by a scripted inventory item. Paper may expose their absent weapon
+        // as a CraftItemStack whose internal NMS handle is null, so attempting
+        // to inspect its item meta throws before the magic impact listener can
+        // finish routing the hit.
+        if (internalMagicProjectile.test(projectile)) return;
+
         // Try AbstractArrow.getWeapon() PDC first
         String itemId = null;
         if (projectile instanceof AbstractArrow arrow) {
-            itemId = getItemId(arrow.getWeapon());
+            ItemStack arrowWeapon = null;
+            try {
+                arrowWeapon = arrow.getWeapon();
+            } catch (RuntimeException | NoSuchMethodError invalidWeaponWrapper) {
+                // Paper can expose plugin-spawned arrows without a real weapon as
+                // a CraftItemStack backed by a null NMS handle. Treat that the
+                // same as an absent weapon and use the shooter's held item.
+            }
+            itemId = getItemId(arrowWeapon);
         }
 
         // Fall back to main hand

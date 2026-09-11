@@ -44,10 +44,14 @@ public class FileModelConverter {
         this.sourceFile = file;
         modelName = normalizedModelId(file);
         if (modelName == null) {
-            // Silently skip known companion files (e.g. .yml configs, .png textures)
-            if (file.getName().endsWith(".yml") || file.getName().endsWith(".yaml") || file.getName().endsWith(".png") || file.getName().endsWith(".json"))
+            // Silently skip known companion files (e.g. .yml configs, .png textures) and
+            // OS/package metadata (.DS_Store and other dotfiles, Thumbs.db, desktop.ini, pack.meta)
+            String fileName = file.getName();
+            if (fileName.endsWith(".yml") || fileName.endsWith(".yaml") || fileName.endsWith(".png") || fileName.endsWith(".json")
+                    || fileName.startsWith(".") || fileName.equalsIgnoreCase("Thumbs.db") || fileName.equalsIgnoreCase("desktop.ini")
+                    || fileName.equalsIgnoreCase("pack.meta"))
                 return;
-            Bukkit.getLogger().warning("File " + file.getName() + " should not be in the models folder!");
+            Bukkit.getLogger().warning("File " + fileName + " should not be in the models folder!");
             return;
         }
 

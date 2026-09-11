@@ -64,6 +64,8 @@ public class AnimationManager {
      * @return true if the animation exists and was scheduled
      */
     public boolean play(String name, boolean blendAnimation, boolean loop) {
+        // Death is terminal: late attack triggers, scripts or state changes must not interrupt it.
+        if (current != null && current.getType() == AnimationStateType.DEATH) return false;
         if (current instanceof CustomAnimationState && isAttackAnimationRequest(name)) return true;
 
         // 1) try built-in
@@ -105,6 +107,7 @@ public class AnimationManager {
 
 
     public void stop() {
+        if (current != null && current.getType() == AnimationStateType.DEATH) return;
         nextQueued = null;
         IAnimState idle = states.get(AnimationStateType.IDLE);
         if (idle != null) {
@@ -126,8 +129,12 @@ public class AnimationManager {
 
         // 3) handle transitions (including blends)
         if (nextQueued != null) {
-            transitionTo(nextQueued);
-            nextQueued = null;
+            // A blend queued before death started must not override the terminal death state.
+            if (current.getType() == AnimationStateType.DEATH) nextQueued = null;
+            else {
+                transitionTo(nextQueued);
+                nextQueued = null;
+            }
         } else {
             current.nextState().ifPresent(stateType -> {
                 IAnimState next = states.get(stateType);

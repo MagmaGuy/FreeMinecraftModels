@@ -53,7 +53,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
     private static final int REQUIRED_CAPABILITY_VERSION = 2;
 
     private final Plugin plugin;
-    private final MagicWeaponCatalog catalog;
+    private MagicWeaponCatalog catalog;
     private final MagicInputDeduplicator deduplicator = new MagicInputDeduplicator();
     private final MagicDamageResolution damageResolution = new MagicDamageResolution();
     private final MagicProjectileEngine projectiles;
@@ -73,7 +73,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
     private boolean targetPolicyWarningSent;
 
     public MagicWeaponRuntime(Plugin plugin) {
-        this(plugin, BuiltInMagicWeapons.catalog());
+        this(plugin, com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager.getWeaponCatalog());
     }
 
     MagicWeaponRuntime(Plugin plugin, MagicWeaponCatalog catalog) {
@@ -95,15 +95,15 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
                 MagicWeaponService.class, this, plugin, ServicePriority.Normal);
     }
 
-    /** Re-evaluates the code-matched defaults after FMM content reloads. */
+    /** Adopts the validated item catalog after the existing content-reload boundary. */
     public void refreshContentState() {
-        contentReady = MagicWeaponIdentity.bundledContentReady();
+        catalog = com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager.getWeaponCatalog();
+        contentReady = !catalog.definitions().isEmpty();
         if (contentReady) {
             contentWarningSent = false;
         } else if (!contentWarningSent) {
             contentWarningSent = true;
-            Logger.warn("Bundled FMM magic weapons are incomplete. Reinstall FreeMinecraftModels "
-                    + "so Spellcaster can be enabled.");
+            Logger.warn("No valid FMM weapon definitions are loaded. Define weapon sections in the model-adjacent item YAML.");
         }
     }
 
@@ -127,12 +127,17 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
     }
 
     @Override
-    public boolean isBuiltInWeapon(String itemId) {
+    public boolean isWeapon(String itemId) {
         return catalog.find(itemId).isPresent();
     }
 
     @Override
-    public boolean applyBuiltInWeaponData(ItemStack itemStack, String itemId) {
+    public com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponKind weaponKind(String itemId) {
+        return catalog.find(itemId).map(MagicWeaponDefinition::kind).orElse(null);
+    }
+
+    @Override
+    public boolean applyWeaponData(ItemStack itemStack, String itemId) {
         if (!isOperational()) return false;
         return catalog.find(itemId)
                 .map(definition -> MagicWeaponIdentity.apply(itemStack, definition))
