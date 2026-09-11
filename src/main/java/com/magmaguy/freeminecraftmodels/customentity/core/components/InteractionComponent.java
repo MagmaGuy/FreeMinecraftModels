@@ -1,11 +1,11 @@
 package com.magmaguy.freeminecraftmodels.customentity.core.components;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
-import com.magmaguy.freeminecraftmodels.api.ModeledEntityInteractEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityHitByProjectileEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityHitboxContactEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityLeftClickEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityRightClickEvent;
+import com.magmaguy.freeminecraftmodels.api.ModeledEntityInteractEvent;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntityHitboxContactCallback;
 import com.magmaguy.freeminecraftmodels.customentity.core.MountPointManager;
@@ -16,9 +16,6 @@ import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.Bukkit;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
 import org.bukkit.entity.AbstractArrow;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -26,6 +23,12 @@ import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.scheduler.BukkitRunnable;
+
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 /**
  * This class handles left click, right click, and hitbox contact events for the entity.
@@ -48,9 +51,11 @@ public class InteractionComponent {
 
     // Cooldown to prevent double-firing from both packet interaction entity and OBB raytrace
     private static final long RIGHT_CLICK_COOLDOWN_MS = 100;
-    private static final long LEFT_CLICK_COOLDOWN_MS = 100;
     private final Map<UUID, Long> rightClickCooldowns = new HashMap<>();
-    private final Map<UUID, Long> leftClickCooldowns = new HashMap<>();
+    // Marks the synchronous public-event dispatch for a native backing-entity
+    // hit. The normal default callback must not synthesize a second attack in
+    // that context, while explicit custom callbacks still own the interaction.
+    private final Set<UUID> nativeBackingLeftClickDispatches = new HashSet<>();
 
     public InteractionComponent(ModeledEntity modeledEntity) {
         this.modeledEntity = modeledEntity;
@@ -58,13 +63,33 @@ public class InteractionComponent {
 
     public void callLeftClickEvent(Player player) {
         if (modeledEntity.isDying()) return;
-        long now = System.currentTimeMillis();
-        Long last = leftClickCooldowns.get(player.getUniqueId());
-        if (last != null && (now - last) < LEFT_CLICK_COOLDOWN_MS) return;
-        pruneExpired(leftClickCooldowns, now, LEFT_CLICK_COOLDOWN_MS);
-        leftClickCooldowns.put(player.getUniqueId(), now);
         ModeledEntityLeftClickEvent event = new ModeledEntityLeftClickEvent(player, modeledEntity);
         Bukkit.getPluginManager().callEvent(event);
+        if (!event.isCancelled()) handleLeftClickEvent(player);
+    }
+
+    /**
+     * Fires the same public left-click event for a hit on a model's vanilla
+     * backing entity without recursively attacking that entity again. The native
+     * Bukkit damage event may continue only when no listener cancelled the
+     * modeled event and no explicit callback owns the click.
+     *
+     * @return true when the caller should keep the native damage event, false
+     * when the modeled interaction consumed or cancelled it
+     */
+    public boolean callNativeBackingLeftClickEvent(Player player) {
+        if (modeledEntity.isDying()) return false;
+        UUID playerId = player.getUniqueId();
+        if (!nativeBackingLeftClickDispatches.add(playerId)) return false;
+
+        ModeledEntityLeftClickEvent event = new ModeledEntityLeftClickEvent(player, modeledEntity);
+        try {
+            Bukkit.getPluginManager().callEvent(event);
+            if (!event.isCancelled()) handleLeftClickEvent(player);
+        } finally {
+            nativeBackingLeftClickDispatches.remove(playerId);
+        }
+        return !event.isCancelled() && leftClickCallback == null;
     }
 
     public void callRightClickEvent(Player player) {
@@ -151,6 +176,11 @@ public class InteractionComponent {
             leftClickCallback.onLeftClick(player, modeledEntity);
             return;
         }
+        // OBBHitDetection has already validated and retained the original
+        // backing-entity damage event for this dispatch. Re-entering through
+        // player.attack() here would either duplicate the hit or be rejected by
+        // the server as a second attack in the same tick.
+        if (nativeBackingLeftClickDispatches.contains(player.getUniqueId())) return;
         // Default behavior for dynamic entities (those with an underlying
         // LivingEntity backing the model): forward the swing to the underlying
         // entity as a vanilla attack so it takes damage normally. Without this
@@ -160,13 +190,8 @@ public class InteractionComponent {
         // The applyDamage flag bypasses OBBHitDetection's own
         // EntityDamageByEntityEvent cancel for this single dispatch.
         if (modeledEntity instanceof PropEntity) return;
-        if (!(modeledEntity.getUnderlyingEntity() instanceof LivingEntity underlying)) return;
-        OBBHitDetection.applyDamage = true;
-        try {
-            player.attack(underlying);
-        } finally {
-            OBBHitDetection.applyDamage = false;
-        }
+        if (!(modeledEntity.getUnderlyingEntity() instanceof LivingEntity)) return;
+        modeledEntity.damage(player);
     }
 
     public void handleRightClickEvent(Player player) {
@@ -230,12 +255,6 @@ public class InteractionComponent {
     }
 
     public static class InteractionComponentEvents implements Listener {
-        @EventHandler
-        public void onLeftClick(ModeledEntityLeftClickEvent event) {
-            if (event.isCancelled()) return;
-            event.getEntity().getInteractionComponent().handleLeftClickEvent(event.getPlayer());
-        }
-
         @EventHandler
         public void onHitboxContact(ModeledEntityHitboxContactEvent event) {
             if (event.isCancelled()) return;

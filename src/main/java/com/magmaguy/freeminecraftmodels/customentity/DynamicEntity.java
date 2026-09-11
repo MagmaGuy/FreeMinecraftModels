@@ -50,7 +50,6 @@ public class DynamicEntity extends ModeledEntity {
 
     public DynamicEntity(String entityID, Location targetLocation) {
         super(entityID, targetLocation);
-        setLeftClickCallback((player, entity) -> entity.damage(player));
         setModeledEntityHitByProjectileCallback((projectile, entity) -> entity.damage(projectile));
         setHitboxContactCallback((player, modeledEntity) -> {
             if (!damagesOnContact) return;
@@ -136,6 +135,13 @@ public class DynamicEntity extends ModeledEntity {
         }
         dynamicEntities.put(getUnderlyingEntity().getUniqueId(), this);
         syncSkeletonWithEntity();
+    }
+
+    @Override
+    protected void onSpawnFailed() {
+        if (underlyingEntity != null) {
+            dynamicEntities.remove(underlyingEntity.getUniqueId(), this);
+        }
     }
 
     @Override
