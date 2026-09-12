@@ -28,7 +28,6 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityCombustByEntityEvent;
-import org.bukkit.event.entity.EntityKnockbackEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -84,6 +83,8 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         if (closed || started) throw new IllegalStateException("Magic weapon runtime cannot start");
         refreshContentState();
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
+        com.magmaguy.magmacore.util.KnockbackEvents.registerCancellation(
+                plugin, this, entity -> entity.equals(noKnockbackTarget.get()));
         projectiles.start();
         started = true;
         // Publish only after the runtime can accept casts. FMM finishes initialization after
@@ -545,12 +546,6 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
 
     private boolean isApplyingDamage() {
         return applyingDamageDepth.get() > 0;
-    }
-
-    /** Wand damage must not add either horizontal knockback or the vanilla vertical lift. */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onWandKnockback(EntityKnockbackEvent event) {
-        if (event.getEntity().equals(noKnockbackTarget.get())) event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
