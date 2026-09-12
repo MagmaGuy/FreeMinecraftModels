@@ -164,16 +164,17 @@ public class TransformationMatrix {
      * @return [x, y, z]
      */
     public double[] getRotation() {
-        // Assuming the rotation matrix is "pure" (no scaling) and follows XYZ order
+        // Invert the Rz * Ry * Rx order used by rotateLocal and rotateAnimation.
         double[] rotation = new double[3];
+        double horizontal = Math.hypot(matrix[0][0], matrix[1][0]);
 
         // Yaw (rotation around Y axis)
-        rotation[1] = Math.atan2(-matrix[2][0], Math.sqrt(matrix[0][0] * matrix[0][0] + matrix[1][0] * matrix[1][0]));
+        rotation[1] = Math.atan2(-matrix[2][0], horizontal);
 
         // As a special case, if cos(yaw) is close to 0, use an alternative calculation
-        if (Math.abs(matrix[2][0]) < 1e-6 && Math.abs(matrix[2][2]) < 1e-6) {
+        if (horizontal <= 1e-6 * Math.hypot(horizontal, matrix[2][0])) {
             // Pitch (rotation around X axis)
-            rotation[0] = Math.atan2(matrix[1][2], matrix[1][1]);
+            rotation[0] = Math.atan2(-matrix[1][2], matrix[1][1]);
             // Roll (rotation around Z axis) is indeterminate: set to 0 or use previous value
             rotation[2] = 0;
         } else {
