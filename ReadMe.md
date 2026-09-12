@@ -107,23 +107,11 @@ mvn -DskipTests package
 
 The built plugin jar is written to `target/FreeMinecraftModels.jar`. Set `MC_DIST_DIR` to mirror it into a shared output directory. Publish a changed MagmaCore dependency to Maven Local before rebuilding.
 
-## API
+## Developer API
 
-FreeMinecraftModels can be used as a dependency in other plugins. Do **not** shade FMM into your plugin: it must be installed on the server as a standalone plugin.
+Models, interactions, disguises and item integration: [FreeMinecraftModels developer reference](https://wiki.nightbreak.io/FreeMinecraftModels/api_and_developer_guide). See the [Java API index](https://wiki.nightbreak.io/developers) for dependency setup and lifecycle guidance.
 
-```xml
-<repository>
-    <id>magmaguy-repo-releases</id>
-    <url>https://repo.magmaguy.com/releases</url>
-</repository>
-
-<dependency>
-    <groupId>com.magmaguy</groupId>
-    <artifactId>FreeMinecraftModels</artifactId>
-    <version>2.12.0</version>
-    <scope>provided</scope>
-</dependency>
-```
+Maven: `com.magmaguy:FreeMinecraftModels:2.12.0` from [MagmaGuy's repository](https://repo.magmaguy.com/releases). Use `provided` or `compileOnly` scope for the installed plugin.
 
 ## Links
 
