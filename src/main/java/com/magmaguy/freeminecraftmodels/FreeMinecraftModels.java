@@ -146,6 +146,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         boolean shutdownDuringInitialization =
                 MagmaCore.getInitializationState(this.getName())
                         == PluginInitializationState.INITIALIZING;
+        boolean hadPublishedCatalog = magicEnchantmentCatalog != null;
         MagmaCore.requestInitializationShutdown(this);
         if (magicWeaponRuntime != null) magicWeaponRuntime.close();
         magicWeaponRuntime = null;
@@ -154,7 +155,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         ModeledEntitiesClock.shutdown();
         OBBHitDetection.shutdown();
         Bukkit.getServer().getScheduler().cancelTasks(MetadataHandler.PLUGIN);
-        if (shutdownDuringInitialization) {
+        if (shutdownDuringInitialization && !hadPublishedCatalog) {
             MagmaCore.shutdown(this);
             return;
         }
@@ -296,29 +297,84 @@ public final class FreeMinecraftModels extends JavaPlugin {
     }
 
     public void reloadImportedContent(CommandSender sender) {
-        prepareContentReload(sender, false);
+        if (!Bukkit.isPrimaryThread()) {
+            Bukkit.getScheduler().runTask(this, () -> reloadImportedContent(sender));
+            return;
+        }
+        if (!beginContentReload(sender)) return;
+        AtomicBoolean registriesCleared = new AtomicBoolean(false);
+        // Use the same tracked lifecycle as startup: consumers must observe INITIALIZING
+        // before this method returns, and shutdown must await the model worker.
+        MagmaCore.startInitialization(this,
+                new PluginInitializationConfig("FreeMinecraftModels", "freeminecraftmodels.*", 4, List.of()),
+                context -> {
+                    try {
+                        context.step("Validate Imported Content");
+                        MagmaCore.initializeImporter(this);
+                        BundledMagicContent.installDefaults(this);
+                        ItemScriptManager.ItemCatalog candidate = ItemScriptManager.prepareCatalog(ModelsFolder.resolveModelsFolder());
+                        EnchantmentCatalog enchantments = MagicEnchantmentCatalog.prepare(this);
+                        if (context.isShutdownRequested()) return;
+                        Bukkit.getScheduler().callSyncMethod(this, () -> {
+                            if (context.isShutdownRequested()) return null;
+                            registriesCleared.set(true);
+                            clearContentRegistries();
+                            pendingEnchantmentCatalog = enchantments;
+                            return null;
+                        }).get();
+                        if (context.isShutdownRequested()) return;
+                        context.step("Rebuild Models");
+                        OutputFolder.initializeConfig();
+                        ModelsFolder.initializeConfig(candidate);
+                        if (context.isShutdownRequested()) return;
+                        new ContentPackageConfig();
+                        FMMPackageRefresher.reset();
+                        context.step("Resource Pack Zip");
+                        OutputFolder.zipResourcePack();
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("Imported-content reload interrupted", interrupted);
+                    } catch (Exception failure) {
+                        throw new IllegalStateException("Imported-content reload failed", failure);
+                    }
+                },
+                context -> {
+                    context.step("Activate Imported Content");
+                    magicEnchantmentCatalog.reload(java.util.Objects.requireNonNull(
+                            pendingEnchantmentCatalog, "prepared enchantment catalog"));
+                    pendingEnchantmentCatalog = null;
+                    PropScriptManager.initialize();
+                    if (magicWeaponRuntime != null) magicWeaponRuntime.resumeAfterContentReload();
+                    PropEntity.onStartup();
+                    ModeledEntitiesClock.start();
+                    OBBHitDetection.startProjectileDetection();
+                },
+                () -> {
+                    notifyResourcePackManager();
+                    Bukkit.getPluginManager().callEvent(new com.magmaguy.freeminecraftmodels.api.FmmReloadedEvent());
+                    importedContentReloadInProgress.set(false);
+                    if (sender != null) com.magmaguy.magmacore.util.Logger.sendMessage(sender, "Reloaded!");
+                },
+                failure -> {
+                    pendingEnchantmentCatalog = null;
+                    if (registriesCleared.get()) failImportedContentReload(sender, failure);
+                    else rejectContentReload(sender, failure);
+                });
     }
 
     /** Validates item content before the public full plugin reload clears its live state. */
     public void reloadPlugin(CommandSender sender) {
-        prepareContentReload(sender, true);
+        prepareFullReload(sender);
     }
 
-    private void prepareContentReload(CommandSender sender, boolean fullReload) {
+    private void prepareFullReload(CommandSender sender) {
         if (!Bukkit.isPrimaryThread()) {
             Bukkit.getScheduler().runTask(
                     this,
-                    () -> prepareContentReload(sender, fullReload));
+                    () -> prepareFullReload(sender));
             return;
         }
-        if (!importedContentReloadInProgress.compareAndSet(false, true)) {
-            if (sender != null) {
-                com.magmaguy.magmacore.util.Logger.sendMessage(
-                        sender,
-                        "&eA FreeMinecraftModels content reload is already running.");
-            }
-            return;
-        }
+        if (!beginContentReload(sender)) return;
 
         // Import and validate authored items while the current catalog remains usable.
         Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
@@ -328,27 +384,34 @@ public final class FreeMinecraftModels extends JavaPlugin {
                 ItemScriptManager.ItemCatalog candidate = ItemScriptManager.prepareCatalog(ModelsFolder.resolveModelsFolder());
                 EnchantmentCatalog enchantments = MagicEnchantmentCatalog.prepare(this);
                 Bukkit.getScheduler().runTask(this, () -> {
-                    if (fullReload) {
-                        pendingItemCatalog = candidate;
-                        pendingEnchantmentCatalog = enchantments;
-                        NightbreakPluginBootstrap.reloadPlugin(this, sender);
-                    } else {
-                        reloadValidatedContent(sender, candidate, enchantments);
-                    }
+                    pendingItemCatalog = candidate;
+                    pendingEnchantmentCatalog = enchantments;
+                    NightbreakPluginBootstrap.reloadPlugin(this, sender);
                 });
             } catch (Exception failure) {
-                Bukkit.getScheduler().runTask(this, () -> {
-                    importedContentReloadInProgress.set(false);
-                    getLogger().warning("Content reload rejected; the current catalog remains active: " + failure.getMessage());
-                    if (sender != null) com.magmaguy.magmacore.util.Logger.sendMessage(sender,
-                            "&cContent reload rejected; the current catalog remains active. " + failure.getMessage());
-                });
+                Bukkit.getScheduler().runTask(this, () -> rejectContentReload(sender, failure));
             }
         });
     }
 
-    private void reloadValidatedContent(CommandSender sender, ItemScriptManager.ItemCatalog candidate,
-                                        EnchantmentCatalog enchantments) {
+    private boolean beginContentReload(CommandSender sender) {
+        if (!isEnabled() || MagmaCore.getInitializationState(getName()) == PluginInitializationState.INITIALIZING
+                || !importedContentReloadInProgress.compareAndSet(false, true)) {
+            if (sender != null) com.magmaguy.magmacore.util.Logger.sendMessage(sender,
+                    "&eA FreeMinecraftModels initialization or content reload is already running.");
+            return false;
+        }
+        return true;
+    }
+
+    private void rejectContentReload(CommandSender sender, Throwable failure) {
+        importedContentReloadInProgress.set(false);
+        getLogger().warning("Content reload rejected; the current catalog remains active: " + failure.getMessage());
+        if (sender != null) com.magmaguy.magmacore.util.Logger.sendMessage(sender,
+                "&cContent reload rejected; the current catalog remains active. " + failure.getMessage());
+    }
+
+    private void clearContentRegistries() {
         // Stop every task that can observe the live entity/model registries
         // before clearing them. In particular, the one-tick model clock is
         // asynchronous and otherwise races this teardown.
@@ -367,44 +430,6 @@ public final class FreeMinecraftModels extends JavaPlugin {
         FMMPackage.shutdown();
         ConfigurationLocation.shutdown();
 
-        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
-            try {
-                OutputFolder.initializeConfig();
-                ModelsFolder.initializeConfig(candidate);
-                new ContentPackageConfig();
-                FMMPackageRefresher.reset();
-                OutputFolder.zipResourcePack();
-
-                Bukkit.getScheduler().runTask(this, () -> {
-                    try {
-                        // ModelsFolder populated the item-definition registry on
-                        // the worker. Reinitialize listeners/providers without
-                        // clearing that newly built registry.
-                        magicEnchantmentCatalog.reload(enchantments);
-                        PropScriptManager.initialize();
-                        if (magicWeaponRuntime != null) magicWeaponRuntime.resumeAfterContentReload();
-                        PropEntity.onStartup();
-                        ModeledEntitiesClock.start();
-                        OBBHitDetection.startProjectileDetection();
-                        notifyResourcePackManager();
-                        Bukkit.getPluginManager().callEvent(
-                                new com.magmaguy.freeminecraftmodels.api.FmmReloadedEvent());
-                        importedContentReloadInProgress.set(false);
-                        if (sender != null) {
-                            com.magmaguy.magmacore.util.Logger.sendMessage(
-                                    sender,
-                                    "Reloaded!");
-                        }
-                    } catch (Throwable throwable) {
-                        failImportedContentReload(sender, throwable);
-                    }
-                });
-            } catch (Throwable throwable) {
-                Bukkit.getScheduler().runTask(
-                        this,
-                        () -> failImportedContentReload(sender, throwable));
-            }
-        });
     }
 
     private void failImportedContentReload(
