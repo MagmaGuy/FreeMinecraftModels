@@ -67,8 +67,13 @@ public final class ItemScriptManager {
                     throw new IllegalArgumentException(file + ": " + invalid.getMessage(), invalid);
                 }
                 if (fields.getUnavailableReason() != null) {
-                    Logger.warn("[FMM Items] Skipping " + file + ": " + fields.getUnavailableReason()
-                            + ". The file was left unchanged; other content will continue loading.");
+                    String message = "[FMM Items] Skipping " + file + ": " + fields.getUnavailableReason()
+                            + ". The file was left unchanged; other content will continue loading.";
+                    // Retired content is an expected migration outcome and is
+                    // already isolated by the update/archive flow; keep the
+                    // administrator console clean while retaining diagnostics.
+                    if (fields.getUnavailableReason().startsWith("retired ")) Logger.info(message);
+                    else Logger.warn(message);
                     continue;
                 }
                 if (!fields.isEnabled() || !fields.isCustomItem()) continue;
