@@ -1,0 +1,19 @@
+isEnabled: true
+material: IRON_SWORD
+name: "<gradient:#5DFDCB:#00B4D8>Craftenmine's Formula #7</gradient>"
+lore:
+- "&bThe 7th attempt at the"
+- "&bperfect battle compound."
+- "&bThe first 6 exploded."
+- "&f--------------------------------"
+- "&7Has a 5% chance to trigger an"
+- "&7explosion on impact."
+- "&f--------------------------------"
+enchantments:
+- "SHARPNESS,5"
+- "FIRE_ASPECT,4"
+- "KNOCKBACK,3"
+- "LOOTING,2"
+- "UNBREAKING,1"
+scripts:
+- fmm_craftenmine_basic_item_pack_formula_7_sword.lua
