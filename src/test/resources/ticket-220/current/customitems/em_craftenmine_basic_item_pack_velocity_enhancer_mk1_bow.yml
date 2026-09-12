@@ -1,0 +1,22 @@
+isEnabled: true
+material: BOW
+name: "<gradient:#5DFDCB:#00B4D8>Craftenmine's Velocity Enhancer Mk.I</gradient>"
+lore:
+- "&bAccelerates projectiles."
+- "&bThe target provides"
+- "&bthe deceleration."
+- "&f--------------------------------"
+- "&7Has 5% chance to trigger Dipped Tip,"
+- "&7applies a random negative effect"
+- "&7on the mob hit."
+- "&f--------------------------------"
+enchantments:
+- "minecraft:power,5"
+- "minecraft:punch,4"
+- "minecraft:unbreaking,2"
+- "minecraft:mending,1"
+- "freeminecraftmodels:velocity_enhancer_mk1,1"
+itemType: droppable
+scalability: scalable
+soulbound: true
+fmmItemModel: fmm_craftenmine_basic_item_pack_velocity_enhancer_mk1_bow

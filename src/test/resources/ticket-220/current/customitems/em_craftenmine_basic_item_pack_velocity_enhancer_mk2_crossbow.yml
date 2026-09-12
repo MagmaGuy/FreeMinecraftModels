@@ -1,0 +1,22 @@
+isEnabled: true
+material: CROSSBOW
+name: "<gradient:#5DFDCB:#00B4D8>Craftenmine's Velocity Enhancer Mk.II</gradient>"
+lore:
+- "&bImproved over Mk.I by"
+- "&badding more velocity."
+- "&bMk.III is pending."
+- "&f--------------------------------"
+- "&7Has 10% chance to trigger Air Piston,"
+- "&7releases large air pressure to push"
+- "&7away the target."
+- "&f--------------------------------"
+enchantments:
+- "minecraft:piercing,5"
+- "minecraft:quick_charge,4"
+- "minecraft:unbreaking,2"
+- "minecraft:mending,1"
+- "freeminecraftmodels:velocity_enhancer_mk2,1"
+itemType: droppable
+scalability: scalable
+soulbound: true
+fmmItemModel: fmm_craftenmine_basic_item_pack_velocity_enhancer_mk2_crossbow

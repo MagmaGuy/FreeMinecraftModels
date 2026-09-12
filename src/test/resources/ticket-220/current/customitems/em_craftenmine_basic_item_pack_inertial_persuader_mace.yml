@@ -1,0 +1,23 @@
+isEnabled: true
+material: MACE
+name: "<gradient:#5DFDCB:#00B4D8>Craftenmine's Inertial Persuader</gradient>"
+lore:
+- "&bApplies inertia to"
+- "&bconvince enemies to"
+- "&bchange direction."
+- "&f--------------------------------"
+- "&7When you hit an enemy you have a"
+- "&75% chance to trigger Slam, pushes"
+- "&7away and shrinks mobs."
+- "&f--------------------------------"
+enchantments:
+- "minecraft:density,5"
+- "minecraft:breach,4"
+- "minecraft:wind_burst,3"
+- "minecraft:unbreaking,2"
+- "minecraft:mending,1"
+- "freeminecraftmodels:inertial_persuader,1"
+itemType: droppable
+scalability: scalable
+soulbound: true
+fmmItemModel: fmm_craftenmine_basic_item_pack_inertial_persuader_mace

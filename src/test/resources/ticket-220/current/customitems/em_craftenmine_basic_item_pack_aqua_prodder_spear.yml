@@ -1,0 +1,26 @@
+isEnabled: true
+material: IRON_SPEAR
+name: "<gradient:#5DFDCB:#00B4D8>Craftenmine's Aqua Prodder</gradient>"
+lore:
+- "&bDesigned for underwater"
+- "&bresearch. Not a weapon."
+- "&bNote: Can also be used"
+- "&bas a weapon."
+- "&f--------------------------------"
+- "&7When on an ocean or river floor, press"
+- "&7Crouch+Right Click to spawn an Aqua Dome"
+- "&7that will last for 1 minute."
+- "&f--------------------------------"
+enchantments:
+- "minecraft:impaling,5"
+- "minecraft:lunge,4"
+- "minecraft:loyalty,3"
+- "minecraft:unbreaking,2"
+- "minecraft:mending,1"
+- "freeminecraftmodels:aqua_prodder,1"
+potionEffects:
+- "DOLPHINS_GRACE,1,self,continuous"
+itemType: droppable
+scalability: scalable
+soulbound: true
+fmmItemModel: fmm_craftenmine_basic_item_pack_aqua_prodder_spear

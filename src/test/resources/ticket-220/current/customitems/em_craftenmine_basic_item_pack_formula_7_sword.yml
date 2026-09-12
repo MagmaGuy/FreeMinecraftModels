@@ -1,0 +1,25 @@
+isEnabled: true
+material: IRON_SWORD
+name: "<gradient:#5DFDCB:#00B4D8>Craftenmine's Formula #7</gradient>"
+lore:
+- "&bThe 7th attempt at the"
+- "&bperfect battle compound."
+- "&bThe first 6 exploded."
+- "&f--------------------------------"
+- "&7Has a 5% chance to trigger an"
+- "&7explosion on impact."
+- "&f--------------------------------"
+enchantments:
+- "minecraft:sharpness,5"
+- "minecraft:fire_aspect,4"
+- "minecraft:knockback,3"
+- "minecraft:looting,2"
+- "minecraft:unbreaking,1"
+- "freeminecraftmodels:formula_7,1"
+potionEffects:
+- "INCREASE_DAMAGE,1,self,continuous"
+- "REGENERATION,0,self,continuous"
+itemType: droppable
+scalability: scalable
+soulbound: true
+fmmItemModel: fmm_craftenmine_basic_item_pack_formula_7_sword
