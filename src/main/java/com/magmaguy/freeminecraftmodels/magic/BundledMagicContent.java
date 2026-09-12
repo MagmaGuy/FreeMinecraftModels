@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.magic;
 
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -28,6 +29,24 @@ public final class BundledMagicContent {
                 File destination = new File(plugin.getDataFolder(), resource);
                 if (!destination.isFile()) plugin.saveResource(resource, false);
             }
+            ensureWeaponSection(plugin, assets);
+        }
+    }
+
+    /**
+     * Older installations retain the original model YAML after an upgrade. Add the
+     * required weapon declaration in place so those installations join the current
+     * catalog without overwriting administrator presentation edits.
+     */
+    private static void ensureWeaponSection(JavaPlugin plugin, AssetSet assets) {
+        File item = new File(plugin.getDataFolder(), RESOURCE_DIRECTORY + "/" + assets.modelId() + ".yml");
+        YamlConfiguration configuration = YamlConfiguration.loadConfiguration(item);
+        if (configuration.contains("weapon.type")) return;
+        configuration.set("weapon.type", assets == STAFF ? "STAFF" : "WAND");
+        try {
+            configuration.save(item);
+        } catch (java.io.IOException failure) {
+            throw new IllegalStateException("Unable to migrate bundled magic weapon " + item.getName(), failure);
         }
     }
 
