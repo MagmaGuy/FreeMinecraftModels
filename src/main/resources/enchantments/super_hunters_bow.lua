@@ -63,7 +63,7 @@ return {
     api_version = 1,
 
     -- Shift + Right-click: acquire target and fire
-    on_shift_right_click = function(context)
+    on_right_click =  function(context)
         local player = context.player
         if not context.item or not player then return end
         -- Durability guard — EM treats ≤1% as broken
@@ -223,3 +223,4 @@ return {
     end,
 
 }
+
