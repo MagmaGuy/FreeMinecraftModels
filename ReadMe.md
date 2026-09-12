@@ -109,9 +109,11 @@ The built plugin jar is written to `target/FreeMinecraftModels.jar`. Set `MC_DIS
 
 ## Developer API
 
+[Java class and method reference](https://wiki.nightbreak.io/javadoc/freeminecraftmodels/index.html).
+
 Models, interactions, disguises and item integration: [FreeMinecraftModels developer reference](https://wiki.nightbreak.io/FreeMinecraftModels/api_and_developer_guide). See the [Java API index](https://wiki.nightbreak.io/developers) for dependency setup and lifecycle guidance.
 
-Maven: `com.magmaguy:FreeMinecraftModels:2.12.0` from [MagmaGuy's repository](https://repo.magmaguy.com/releases). Use `provided` or `compileOnly` scope for the installed plugin.
+Maven: `com.magmaguy:FreeMinecraftModels:2.12.0` from [MagmaGuy's repository](https://repo.magmaguy.com/#/releases). Use `provided` or `compileOnly` scope for the installed plugin.
 
 ## Links
 
