@@ -110,7 +110,6 @@ public class ParsedTexture {
                     .create()
                     .toJson(animationMeta);
             FileUtils.writeStringToFile(mcMetaFile, json, java.nio.charset.StandardCharsets.UTF_8);
-            Logger.info("Created .mcmeta file for animated texture: " + filename);
         } catch (IOException e) {
             Logger.warn("Failed to write .mcmeta file " + mcMetaFile.getAbsolutePath() + "!");
             throw new RuntimeException(e);
