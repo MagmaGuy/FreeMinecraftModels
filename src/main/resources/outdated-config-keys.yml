@@ -1,0 +1,35 @@
+# The old equipped-item runtime shared scripts/ with prop scripts and used API 1.
+# Retire a Lua file only when its complete returned definition is valid under that
+# contract and contains an item-only hook. Props, shared-hook-only scripts and
+# malformed/unknown formats stay in place. Current effects in enchantments/ are
+# outside this scan. The archive preserves original files before loading and after imports.
+scripts:
+  - lua:
+      supportedHooks:
+        - on_spawn
+        - on_game_tick
+        - on_zone_enter
+        - on_zone_leave
+        - on_destroy
+        - on_left_click
+        - on_right_click
+        - on_projectile_hit
+      retiredHooks:
+        - on_equip
+        - on_unequip
+        - on_attack_entity
+        - on_kill_entity
+        - on_take_damage
+        - on_shield_block
+        - on_shoot_bow
+        - on_projectile_launch
+        - on_shift_right_click
+        - on_shift_left_click
+        - on_interact_entity
+        - on_swap_hands
+        - on_drop
+        - on_break_block
+        - on_consume
+        - on_item_damage
+        - on_fish
+        - on_death
