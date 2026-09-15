@@ -217,6 +217,19 @@ public class ModelsFolder {
                 String jsonContent = FileUtils.readFileToString(displayJsonFile, StandardCharsets.UTF_8);
                 JsonObject displayModel = JsonParser.parseString(jsonContent).getAsJsonObject();
 
+                // Match generated bones: retain shade for older clients and its 26.3 equivalent.
+                if (displayModel.has("elements") && displayModel.get("elements").isJsonArray()) {
+                    for (var element : displayModel.getAsJsonArray("elements")) {
+                        if (!element.isJsonObject()) continue;
+                        JsonObject cube = element.getAsJsonObject();
+                        if (!cube.has("shade_direction_override") && cube.has("shade")
+                                && cube.get("shade").isJsonPrimitive()
+                                && cube.getAsJsonPrimitive("shade").isBoolean()
+                                && !cube.get("shade").getAsBoolean())
+                            cube.addProperty("shade_direction_override", "up");
+                    }
+                }
+
                 // Rewrite bare texture references (no ":" means not namespaced)
                 if (displayModel.has("textures")) {
                     JsonObject textures = displayModel.getAsJsonObject("textures");

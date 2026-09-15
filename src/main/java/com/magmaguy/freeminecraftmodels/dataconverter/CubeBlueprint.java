@@ -54,6 +54,11 @@ public class CubeBlueprint {
         cubeJSON.remove("light_emission");
         // NOTE: don't remove "inflate" here; we will read & bake it in, then remove it.
 
+        // 26.3 reads the direction override; older clients read shade and ignore the new key.
+        // Keep both so the same generated geometry retains its lighting on either client.
+        if (Boolean.FALSE.equals(cubeJSON.get("shade")) && !cubeJSON.containsKey("shade_direction_override"))
+            cubeJSON.put("shade_direction_override", "up");
+
         // process face textures ...
         processFace(parsedTextures, (Map<String, Object>) cubeJSON.get("faces"), "north", modelName);
         processFace(parsedTextures, (Map<String, Object>) cubeJSON.get("faces"), "east", modelName);
