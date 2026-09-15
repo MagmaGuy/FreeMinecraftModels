@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.magic;
 
+import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityLeftClickEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityRightClickEvent;
 import com.magmaguy.freeminecraftmodels.api.magic.MagicAttackBalance;
@@ -501,13 +502,13 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
     }
 
     private boolean damageTarget(MagicCast cast, LivingEntity target, double damage) {
-        int previousInvulnerability = target.getNoDamageTicks();
+        int previousDamageCooldown = NMSManager.getAdapter().getDamageCooldownTicks(target);
         double previousLastDamage = target.getLastDamage();
         boolean multicast = cast.attackKind() == MagicAttackKind.WAND_MISSILE
                 && cast.definition().traits().missileCount() > 1;
         try {
             // Separate bolts must each resolve, including when all bolts hit the same enemy.
-            if (multicast) target.setNoDamageTicks(0);
+            if (multicast) NMSManager.getAdapter().setDamageCooldownTicks(target, 0);
             boolean accepted = applyOwnedDamage(cast.owner(), target,
                     cast.attackKind().weaponKind() == MagicWeaponKind.WAND,
                     () -> target.damage(damage, cast.owner()));
@@ -519,7 +520,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
             return accepted;
         } finally {
             if (multicast) {
-                target.setNoDamageTicks(previousInvulnerability);
+                NMSManager.getAdapter().setDamageCooldownTicks(target, previousDamageCooldown);
                 target.setLastDamage(previousLastDamage);
             }
         }
