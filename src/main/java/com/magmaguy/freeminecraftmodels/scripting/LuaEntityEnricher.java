@@ -48,6 +48,8 @@ public final class LuaEntityEnricher {
 
     private static void addFmmFields(LuaTable table, Entity entity) {
         if (entity instanceof Player player) {
+            // The optional EliteMobs adapter replaces this when it is available.
+            table.set("is_holding_elitemobs_item", LuaTableSupport.tableMethod(table, args -> LuaValue.FALSE));
             table.set("has_permission", LuaTableSupport.tableMethod(table, args ->
                     LuaValue.valueOf(player.hasPermission(args.checkjstring(1)))));
             table.set("is_op", LuaValue.valueOf(player.isOp()));
