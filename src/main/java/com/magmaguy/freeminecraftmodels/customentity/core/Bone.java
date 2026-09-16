@@ -91,7 +91,9 @@ public class Bone {
     //Note that several optimizations might be possible here, but that syncing with a base entity is necessary.
     public void transform(AbstractPacketBundle abstractPacketBundle) {
         boneTransforms.transform();
-        boneChildren.forEach(childBone -> childBone.transform(abstractPacketBundle));
+        for (int childIndex = 0; childIndex < boneChildren.size(); childIndex++) {
+            boneChildren.get(childIndex).transform(abstractPacketBundle);
+        }
         skeleton.getSkeletonWatchers().sendPackets(this, abstractPacketBundle);
     }
 
