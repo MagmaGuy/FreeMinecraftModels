@@ -1,216 +1,130 @@
 package com.magmaguy.freeminecraftmodels.utils;
 
-import org.joml.Matrix4d;
-import org.joml.Vector3d;
 import org.joml.Vector3f;
 
+import java.util.Arrays;
+
+/** Mutable row-major matrix using column vectors and post-multiplied local transforms. */
 public class TransformationMatrix {
-    Matrix4d replacementMatrix = new Matrix4d();
-    private double[][] matrix = new double[4][4];
+    private final double[] matrix = new double[16];
+    private final double[] product = new double[16];
 
     public TransformationMatrix() {
-        // Initialize with identity matrix
         resetToIdentityMatrix();
     }
 
     public static void multiplyMatrices(TransformationMatrix firstMatrix, TransformationMatrix secondMatrix, TransformationMatrix resultMatrix) {
-        resultMatrix.replacementMatrix = new Matrix4d(firstMatrix.replacementMatrix).mul(secondMatrix.replacementMatrix);
-        // Assume resultMatrix is already initialized to the correct dimensions (4x4)
-        for (int row = 0; row < 4; row++) {
+        double[] first = firstMatrix.matrix;
+        double[] second = secondMatrix.matrix;
+        // Retained scratch storage also permits either input to be the destination.
+        double[] result = resultMatrix.product;
+        for (int row = 0; row < 16; row += 4) {
             for (int col = 0; col < 4; col++) {
-                resultMatrix.matrix[row][col] = 0; // Reset result matrix cell
-                for (int i = 0; i < 4; i++) {
-                    resultMatrix.matrix[row][col] += firstMatrix.matrix[row][i] * secondMatrix.matrix[i][col];
-                }
+                result[row + col] = first[row] * second[col]
+                        + first[row + 1] * second[4 + col]
+                        + first[row + 2] * second[8 + col]
+                        + first[row + 3] * second[12 + col];
             }
         }
+        System.arraycopy(result, 0, resultMatrix.matrix, 0, 16);
     }
 
     public void resetToIdentityMatrix() {
-        replacementMatrix.identity();
-        for (int i = 0; i < 4; i++) {
-            for (int j = 0; j < 4; j++) {
-                matrix[i][j] = (i == j) ? 1 : 0;
-            }
-        }
+        Arrays.fill(matrix, 0);
+        matrix[0] = matrix[5] = matrix[10] = matrix[15] = 1;
     }
 
     public void translateLocal(Vector3f vector) {
-        translateLocal(vector.get(0), vector.get(1), vector.get(2));
+        translateLocal(vector.x(), vector.y(), vector.z());
     }
 
     public void translateLocal(float x, float y, float z) {
-        TransformationMatrix translationMatrix = new TransformationMatrix();
-        translationMatrix.matrix[0][3] = x;
-        translationMatrix.matrix[1][3] = y;
-        translationMatrix.matrix[2][3] = z;
-        multiplyWith(translationMatrix);
-        replacementMatrix.translateLocal(new Vector3d(x, y, z));
+        for (int row = 0; row < 16; row += 4) {
+            matrix[row + 3] = matrix[row] * x + matrix[row + 1] * y
+                    + matrix[row + 2] * z + matrix[row + 3];
+        }
     }
 
     public void scale(double x, double y, double z) {
-        TransformationMatrix scaleMatrix = new TransformationMatrix();
-        scaleMatrix.matrix[0][0] = x;
-        scaleMatrix.matrix[1][1] = y;
-        scaleMatrix.matrix[2][2] = z;
-        multiplyWith(scaleMatrix);
+        for (int row = 0; row < 16; row += 4) {
+            matrix[row] *= x;
+            matrix[row + 1] *= y;
+            matrix[row + 2] *= z;
+        }
     }
 
-    /**
-     * Rotates the matrix by x y z coordinates. Must be in radian!
-     */
+    /** Rotates in Rz * Ry * Rx order. Angles are in radians. */
     public void rotateLocal(double x, double y, double z) {
         rotateZ(z);
         rotateY(y);
         rotateX(x);
-        replacementMatrix.rotateLocalZ(z);
-        replacementMatrix.rotateLocalY(y);
-        replacementMatrix.rotateLocalX(x);
     }
 
     public void rotateAnimation(double x, double y, double z) {
-        rotateZ(z);
-        rotateY(y);
-        rotateX(x);
-        replacementMatrix.rotateLocalZ(z);
-        replacementMatrix.rotateLocalY(y);
-        replacementMatrix.rotateLocalX(x);
+        rotateLocal(x, y, z);
     }
 
-    /**
-     * Extracts the scale factors from the transformation matrix
-     *
-     * @return [scaleX, scaleY, scaleZ]
-     */
+    /** @return the magnitudes of the three basis vectors: [scaleX, scaleY, scaleZ] */
     public double[] getScale() {
-        double[] scale = new double[3];
-
-        // Extract scale by calculating the magnitude of the basis vectors
-        scale[0] = Math.sqrt(
-                matrix[0][0] * matrix[0][0] +
-                        matrix[1][0] * matrix[1][0] +
-                        matrix[2][0] * matrix[2][0]
-        );
-
-        scale[1] = Math.sqrt(
-                matrix[0][1] * matrix[0][1] +
-                        matrix[1][1] * matrix[1][1] +
-                        matrix[2][1] * matrix[2][1]
-        );
-
-        scale[2] = Math.sqrt(
-                matrix[0][2] * matrix[0][2] +
-                        matrix[1][2] * matrix[1][2] +
-                        matrix[2][2] * matrix[2][2]
-        );
-
-        Vector3d jomlScale = new Vector3d();
-        replacementMatrix.getScale(jomlScale);
-        return scale;
+        return new double[]{
+                Math.sqrt(matrix[0] * matrix[0] + matrix[4] * matrix[4] + matrix[8] * matrix[8]),
+                Math.sqrt(matrix[1] * matrix[1] + matrix[5] * matrix[5] + matrix[9] * matrix[9]),
+                Math.sqrt(matrix[2] * matrix[2] + matrix[6] * matrix[6] + matrix[10] * matrix[10])
+        };
     }
 
     public void rotateX(double angleRadians) {
-        TransformationMatrix rotationMatrix = new TransformationMatrix();
-        rotationMatrix.matrix[1][1] = Math.cos(angleRadians);
-        rotationMatrix.matrix[1][2] = -Math.sin(angleRadians);
-        rotationMatrix.matrix[2][1] = Math.sin(angleRadians);
-        rotationMatrix.matrix[2][2] = Math.cos(angleRadians);
-        multiplyWith(rotationMatrix);
+        double cosine = Math.cos(angleRadians), sine = Math.sin(angleRadians);
+        for (int row = 0; row < 16; row += 4) {
+            double y = matrix[row + 1], z = matrix[row + 2];
+            matrix[row + 1] = y * cosine + z * sine;
+            matrix[row + 2] = -y * sine + z * cosine;
+        }
     }
 
     public void rotateY(double angleRadians) {
-        TransformationMatrix rotationMatrix = new TransformationMatrix();
-        rotationMatrix.matrix[0][0] = Math.cos(angleRadians);
-        rotationMatrix.matrix[0][2] = Math.sin(angleRadians);
-        rotationMatrix.matrix[2][0] = -Math.sin(angleRadians);
-        rotationMatrix.matrix[2][2] = Math.cos(angleRadians);
-        multiplyWith(rotationMatrix);
+        double cosine = Math.cos(angleRadians), sine = Math.sin(angleRadians);
+        for (int row = 0; row < 16; row += 4) {
+            double x = matrix[row], z = matrix[row + 2];
+            matrix[row] = x * cosine - z * sine;
+            matrix[row + 2] = x * sine + z * cosine;
+        }
     }
 
     public void rotateZ(double angleRadians) {
-        TransformationMatrix rotationMatrix = new TransformationMatrix();
-        rotationMatrix.matrix[0][0] = Math.cos(angleRadians);
-        rotationMatrix.matrix[0][1] = -Math.sin(angleRadians);
-        rotationMatrix.matrix[1][0] = Math.sin(angleRadians);
-        rotationMatrix.matrix[1][1] = Math.cos(angleRadians);
-        multiplyWith(rotationMatrix);
-    }
-
-    private void multiplyWith(TransformationMatrix other) {
-        double[][] result = new double[4][4];
-        for (int i = 0; i < 4; i++) {
-            for (int j = 0; j < 4; j++) {
-                for (int k = 0; k < 4; k++) {
-                    result[i][j] += this.matrix[i][k] * other.matrix[k][j];
-                }
-            }
+        double cosine = Math.cos(angleRadians), sine = Math.sin(angleRadians);
+        for (int row = 0; row < 16; row += 4) {
+            double x = matrix[row], y = matrix[row + 1];
+            matrix[row] = x * cosine + y * sine;
+            matrix[row + 1] = -x * sine + y * cosine;
         }
-        this.matrix = result;
     }
 
-    /**
-     * Extracts a xyz position
-     *
-     * @return [x, y, z]
-     */
+    /** @return the translation: [x, y, z] */
     public double[] getTranslation() {
-        // Extract translation components directly from the matrix
-        return new double[]{matrix[0][3], matrix[1][3], matrix[2][3]};
+        return new double[]{matrix[3], matrix[7], matrix[11]};
     }
 
-    /**
-     * Extracts a rotation in radians
-     *
-     * @return [x, y, z]
-     */
+    /** @return the rotation in radians: [x, y, z] */
     public double[] getRotation() {
         // Invert the Rz * Ry * Rx order used by rotateLocal and rotateAnimation.
         double[] rotation = new double[3];
-        double horizontal = Math.hypot(matrix[0][0], matrix[1][0]);
-
-        // Yaw (rotation around Y axis)
-        rotation[1] = Math.atan2(-matrix[2][0], horizontal);
-
-        // As a special case, if cos(yaw) is close to 0, use an alternative calculation
-        if (horizontal <= 1e-6 * Math.hypot(horizontal, matrix[2][0])) {
-            // Pitch (rotation around X axis)
-            rotation[0] = Math.atan2(-matrix[1][2], matrix[1][1]);
-            // Roll (rotation around Z axis) is indeterminate: set to 0 or use previous value
+        double horizontal = Math.hypot(matrix[0], matrix[4]);
+        rotation[1] = Math.atan2(-matrix[8], horizontal);
+        if (horizontal <= 1e-6 * Math.hypot(horizontal, matrix[8])) {
+            // At gimbal lock, roll is indeterminate; choose zero.
+            rotation[0] = Math.atan2(-matrix[6], matrix[5]);
             rotation[2] = 0;
         } else {
-            // Pitch (rotation around X axis)
-            rotation[0] = Math.atan2(matrix[2][1], matrix[2][2]);
-            // Roll (rotation around Z axis)
-            rotation[2] = Math.atan2(matrix[1][0], matrix[0][0]);
+            rotation[0] = Math.atan2(matrix[9], matrix[10]);
+            rotation[2] = Math.atan2(matrix[4], matrix[0]);
         }
-
-        return rotation; // Returns rotations in radians
+        return rotation;
     }
 
     public void resetRotation() {
-        // Create a new identity matrix to reset rotation
-        double[][] identityRotation = {
-                {1, 0, 0, 0},
-                {0, 1, 0, 0},
-                {0, 0, 1, 0},
-                {0, 0, 0, 1}
-        };
-
-        // Keep the translation values intact
-        identityRotation[0][3] = matrix[0][3];
-        identityRotation[1][3] = matrix[1][3];
-        identityRotation[2][3] = matrix[2][3];
-
-        // Replace the current matrix's rotation part with the identity matrix
-        for (int i = 0; i < 3; i++) {
-            System.arraycopy(identityRotation[i], 0, matrix[i], 0, 3);
-        }
-
-        // Reset the rotation part of replacementMatrix using the JOML library
-        replacementMatrix.m00(1).m01(0).m02(0);
-        replacementMatrix.m10(0).m11(1).m12(0);
-        replacementMatrix.m20(0).m21(0).m22(1);
-
-        // The translation part remains unchanged in replacementMatrix
+        // Preserve translation and the bottom row, matching the existing reset contract.
+        matrix[0] = matrix[5] = matrix[10] = 1;
+        matrix[1] = matrix[2] = matrix[4] = matrix[6] = matrix[8] = matrix[9] = 0;
     }
 }
