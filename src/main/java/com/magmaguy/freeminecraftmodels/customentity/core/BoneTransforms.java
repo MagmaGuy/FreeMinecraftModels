@@ -22,6 +22,8 @@ public class BoneTransforms {
     private final Vector animationRotationVector = new Vector();
     // Per-bone scratch storage for the sequential transform/update path. Packets receive scalars only.
     private final double[] scaleBuffer = new double[3];
+    private final double[] positionBuffer = new double[3];
+    private final double[] rotationBuffer = new double[3];
     private TransformationMatrix globalMatrix = new TransformationMatrix();
     @Getter
     private PacketModelEntity packetArmorStandEntity = null;
@@ -202,46 +204,53 @@ public class BoneTransforms {
     }
 
     protected Location getArmorStandTargetLocation() {
-        // Hoisted: see getMountPointTargetLocation().
         Location currentLocation = bone.getSkeleton().getCurrentLocation();
-        double[] translatedGlobalMatrix = globalMatrix.getTranslation();
-        Location armorStandLocation = new Location(currentLocation.getWorld(),
-                translatedGlobalMatrix[0],
-                translatedGlobalMatrix[1],
-                translatedGlobalMatrix[2])
-                .add(currentLocation);
-        armorStandLocation.setYaw(180);
-        armorStandLocation.subtract(0, BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT(), 0);
-        return armorStandLocation;
+        double[] position = new double[3];
+        readTargetPosition(currentLocation, position, true);
+        return createTargetLocation(currentLocation, position, true);
     }
 
     protected Location getDisplayEntityTargetLocation() {
-        // Hoisted: see getMountPointTargetLocation().
         Location currentLocation = bone.getSkeleton().getCurrentLocation();
-        double[] translatedGlobalMatrix = globalMatrix.getTranslation();
-        Location armorStandLocation = new Location(currentLocation.getWorld(),
-                translatedGlobalMatrix[0],
-                translatedGlobalMatrix[1],
-                translatedGlobalMatrix[2])
-                .add(currentLocation);
-        if (!VersionChecker.serverVersionOlderThan(20, 0)) {
-            armorStandLocation.setYaw(180);
-        }
-        return armorStandLocation;
+        double[] position = new double[3];
+        readTargetPosition(currentLocation, position, false);
+        return createTargetLocation(currentLocation, position, false);
     }
 
     protected EulerAngle getDisplayEntityRotation() {
-        double[] rotation = globalMatrix.getRotation();
-        if (VersionChecker.serverVersionOlderThan(20, 0))
-            return new EulerAngle(rotation[0], rotation[1], rotation[2]);
-        else {
-            return new EulerAngle(-rotation[0], rotation[1], -rotation[2]);
-        }
+        double[] rotation = new double[3];
+        readTargetRotation(rotation, false);
+        return new EulerAngle(rotation[0], rotation[1], rotation[2]);
     }
 
     protected EulerAngle getArmorStandEntityRotation() {
-        double[] rotation = globalMatrix.getRotation();
-        return new EulerAngle(-rotation[0], -rotation[1], rotation[2]);
+        double[] rotation = new double[3];
+        readTargetRotation(rotation, true);
+        return new EulerAngle(rotation[0], rotation[1], rotation[2]);
+    }
+
+    private void readTargetPosition(Location origin, double[] position, boolean armorStand) {
+        globalMatrix.getTranslation(position);
+        position[0] += origin.getX();
+        position[1] += origin.getY();
+        position[2] += origin.getZ();
+        if (armorStand) position[1] -= BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT();
+    }
+
+    private Location createTargetLocation(Location origin, double[] position, boolean armorStand) {
+        float yaw = armorStand || !VersionChecker.serverVersionOlderThan(20, 0) ? 180 : 0;
+        return new Location(origin.getWorld(), position[0], position[1], position[2], yaw, 0);
+    }
+
+    private void readTargetRotation(double[] rotation, boolean armorStand) {
+        globalMatrix.getRotation(rotation);
+        if (armorStand) {
+            rotation[0] = -rotation[0];
+            rotation[1] = -rotation[1];
+        } else if (!VersionChecker.serverVersionOlderThan(20, 0)) {
+            rotation[0] = -rotation[0];
+            rotation[2] = -rotation[2];
+        }
     }
 
     // ---- per-tick change detection ----------------------------------------
@@ -275,35 +284,39 @@ public class BoneTransforms {
         forceNextUpdate = false;
 
         if (packetArmorStandEntity != null && packetArmorStandEntity.hasViewers()) {
-            Location loc = getArmorStandTargetLocation();
-            EulerAngle rot = getArmorStandEntityRotation();
-            if (force || armorStandChanged(loc, rot)) {
+            Location origin = bone.getSkeleton().getCurrentLocation();
+            readTargetPosition(origin, positionBuffer, true);
+            readTargetRotation(rotationBuffer, true);
+            if (force || armorStandChanged(positionBuffer, rotationBuffer)) {
                 if (packetBundle == null) packetBundle = packetArmorStandEntity.createPacketBundle();
-                sendArmorStandUpdatePacket(packetBundle, loc, rot);
+                sendArmorStandUpdatePacket(packetBundle, createTargetLocation(origin, positionBuffer, true),
+                        new EulerAngle(rotationBuffer[0], rotationBuffer[1], rotationBuffer[2]));
             }
         }
         if (packetDisplayEntity != null && packetDisplayEntity.hasViewers()) {
-            Location loc = getDisplayEntityTargetLocation();
-            EulerAngle rot = getDisplayEntityRotation();
+            Location origin = bone.getSkeleton().getCurrentLocation();
+            readTargetPosition(origin, positionBuffer, false);
+            readTargetRotation(rotationBuffer, false);
             globalMatrix.getScale(scaleBuffer);
-            if (force || displayChanged(loc, rot, scaleBuffer)) {
+            if (force || displayChanged(positionBuffer, rotationBuffer, scaleBuffer)) {
                 if (packetBundle == null) packetBundle = packetDisplayEntity.createPacketBundle();
-                sendDisplayEntityUpdatePacket(packetBundle, loc, rot, scaleBuffer);
+                sendDisplayEntityUpdatePacket(packetBundle, createTargetLocation(origin, positionBuffer, false),
+                        new EulerAngle(rotationBuffer[0], rotationBuffer[1], rotationBuffer[2]), scaleBuffer);
             }
         }
 
     }
 
-    private boolean armorStandChanged(Location loc, EulerAngle rot) {
+    private boolean armorStandChanged(double[] position, double[] rotation) {
         if (!armorStandStateValid) return true;
-        return !same(asLx, loc.getX()) || !same(asLy, loc.getY()) || !same(asLz, loc.getZ())
-                || !same(asRx, rot.getX()) || !same(asRy, rot.getY()) || !same(asRz, rot.getZ());
+        return !same(asLx, position[0]) || !same(asLy, position[1]) || !same(asLz, position[2])
+                || !same(asRx, rotation[0]) || !same(asRy, rotation[1]) || !same(asRz, rotation[2]);
     }
 
-    private boolean displayChanged(Location loc, EulerAngle rot, double[] scale) {
+    private boolean displayChanged(double[] position, double[] rotation, double[] scale) {
         if (!displayStateValid) return true;
-        return !same(deLx, loc.getX()) || !same(deLy, loc.getY()) || !same(deLz, loc.getZ())
-                || !same(deRx, rot.getX()) || !same(deRy, rot.getY()) || !same(deRz, rot.getZ())
+        return !same(deLx, position[0]) || !same(deLy, position[1]) || !same(deLz, position[2])
+                || !same(deRx, rotation[0]) || !same(deRy, rotation[1]) || !same(deRz, rotation[2])
                 || !same(deSx, scale[0]) || !same(deSy, scale[1]) || !same(deSz, scale[2]);
     }
 

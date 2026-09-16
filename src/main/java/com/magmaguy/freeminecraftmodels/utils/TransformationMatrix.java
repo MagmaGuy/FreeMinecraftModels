@@ -108,13 +108,30 @@ public class TransformationMatrix {
 
     /** @return the translation: [x, y, z] */
     public double[] getTranslation() {
-        return new double[]{matrix[3], matrix[7], matrix[11]};
+        double[] result = new double[3];
+        getTranslation(result);
+        return result;
+    }
+
+    /** Writes [x, y, z] into caller-owned storage; does not retain it. */
+    public void getTranslation(double[] result) {
+        if (result.length < 3) throw new IllegalArgumentException("Translation output requires at least three elements");
+        result[0] = matrix[3];
+        result[1] = matrix[7];
+        result[2] = matrix[11];
     }
 
     /** @return the rotation in radians: [x, y, z] */
     public double[] getRotation() {
-        // Invert the Rz * Ry * Rx order used by rotateLocal and rotateAnimation.
         double[] rotation = new double[3];
+        getRotation(rotation);
+        return rotation;
+    }
+
+    /** Writes XYZ rotation in radians into caller-owned storage; does not retain it. */
+    public void getRotation(double[] rotation) {
+        if (rotation.length < 3) throw new IllegalArgumentException("Rotation output requires at least three elements");
+        // Invert the Rz * Ry * Rx order used by rotateLocal and rotateAnimation.
         double horizontal = Math.hypot(matrix[0], matrix[4]);
         rotation[1] = Math.atan2(-matrix[8], horizontal);
         if (horizontal <= 1e-6 * Math.hypot(horizontal, matrix[8])) {
@@ -125,7 +142,6 @@ public class TransformationMatrix {
             rotation[0] = Math.atan2(matrix[9], matrix[10]);
             rotation[2] = Math.atan2(matrix[4], matrix[0]);
         }
-        return rotation;
     }
 
     public void resetRotation() {
