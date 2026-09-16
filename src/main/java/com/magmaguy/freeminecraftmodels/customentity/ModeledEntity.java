@@ -121,11 +121,11 @@ public class ModeledEntity {
             return;
         }
         // Only build the per-model Bedrock backend when a Bedrock proxy (Geyser/Floodgate) is
-        // actually installed. Without one there can be no Bedrock viewers, so constructing and
+        // installed locally. Proxy-only viewers require a separate activation path; constructing and
         // ticking a BedrockModeledEntity (a fake carrier entity + exported bundle) for every
         // model is pure RAM/CPU waste on a Java-only server. Bones still serve Java players;
         // every Bedrock call site already null-checks getBedrockModeledEntity().
-        if (com.magmaguy.freeminecraftmodels.thirdparty.BedrockChecker.isBedrockSupportPresent()) {
+        if (com.magmaguy.easyminecraftgoals.thirdparty.BedrockChecker.isBedrockSupportPresent()) {
             try {
                 // Use explicit, initialized base-class state rather than asking a potentially
                 // overridden getLocation(). This activation runs only after the subclass and
