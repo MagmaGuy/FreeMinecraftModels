@@ -2,11 +2,14 @@ package com.magmaguy.freeminecraftmodels.thirdparty;
 
 import com.magmaguy.elitemobs.api.internal.RemovalReason;
 import com.magmaguy.elitemobs.entitytracker.EntityTracker;
+import com.magmaguy.elitemobs.items.ItemTagger;
 import com.magmaguy.elitemobs.mobconstructor.EliteEntity;
 import com.magmaguy.magmacore.scripting.tables.LuaTableSupport;
 import com.magmaguy.shaded.luaj.vm2.LuaTable;
 import com.magmaguy.shaded.luaj.vm2.LuaValue;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 
 /**
  * Adds EliteMobs-specific fields (is_elite, is_custom_boss, is_significant_boss,
@@ -21,6 +24,15 @@ public final class EliteMobsEntityEnricher {
     }
 
     public static void enrich(LuaTable table, Entity entity) {
+        if (entity instanceof Player player) {
+            table.set("is_holding_elitemobs_item", LuaTableSupport.tableMethod(table, args -> {
+                String filename = args.checkjstring(1);
+                if (!Bukkit.getPluginManager().isPluginEnabled("EliteMobs")) return LuaValue.FALSE;
+                var item = player.getInventory().getItemInMainHand();
+                return LuaValue.valueOf(!item.getType().isAir() && item.getAmount() > 0
+                        && ItemTagger.hasKey(item, filename));
+            }));
+        }
         table.set("can_receive_hostile_effect", LuaTableSupport.tableMethod(table, args -> {
             Entity actor = org.bukkit.Bukkit.getEntity(java.util.UUID.fromString(args.checkjstring(1)));
             return LuaValue.valueOf(org.bukkit.Bukkit.getPluginManager().isPluginEnabled("EliteMobs")
