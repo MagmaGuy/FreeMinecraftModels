@@ -20,6 +20,8 @@ public class BoneTransforms {
     private final TransformationMatrix localMatrix = new TransformationMatrix();
     // Reused Vector for rotateAnimation()'s local math — never escapes the method.
     private final Vector animationRotationVector = new Vector();
+    // Per-bone scratch storage for the sequential transform/update path. Packets receive scalars only.
+    private final double[] scaleBuffer = new double[3];
     private TransformationMatrix globalMatrix = new TransformationMatrix();
     @Getter
     private PacketModelEntity packetArmorStandEntity = null;
@@ -40,7 +42,7 @@ public class BoneTransforms {
             TransformationMatrix.multiplyMatrices(parent.getBoneTransforms().globalMatrix, localMatrix, globalMatrix);
             if (bone.getBoneBlueprint().isHead()) {
                 // Store the inherited scale before resetting
-                double[] inheritedScale = globalMatrix.getScale();
+                globalMatrix.getScale(scaleBuffer);
 
                 globalMatrix.resetRotation();
                 Location gaze = bone.getSkeleton().hasLookTarget()
@@ -52,7 +54,7 @@ public class BoneTransforms {
                 globalMatrix.rotateX(-(float) Math.toRadians(headPitch));
 
                 // Reapply the inherited scale
-                globalMatrix.scale(inheritedScale[0], inheritedScale[1], inheritedScale[2]);
+                globalMatrix.scale(scaleBuffer[0], scaleBuffer[1], scaleBuffer[2]);
             }
         } else {
             globalMatrix = localMatrix;
@@ -283,10 +285,10 @@ public class BoneTransforms {
         if (packetDisplayEntity != null && packetDisplayEntity.hasViewers()) {
             Location loc = getDisplayEntityTargetLocation();
             EulerAngle rot = getDisplayEntityRotation();
-            double[] scale = globalMatrix.getScale();
-            if (force || displayChanged(loc, rot, scale)) {
+            globalMatrix.getScale(scaleBuffer);
+            if (force || displayChanged(loc, rot, scaleBuffer)) {
                 if (packetBundle == null) packetBundle = packetDisplayEntity.createPacketBundle();
-                sendDisplayEntityUpdatePacket(packetBundle, loc, rot, scale);
+                sendDisplayEntityUpdatePacket(packetBundle, loc, rot, scaleBuffer);
             }
         }
 

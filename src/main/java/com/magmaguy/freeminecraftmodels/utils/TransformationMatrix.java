@@ -66,11 +66,17 @@ public class TransformationMatrix {
 
     /** @return the magnitudes of the three basis vectors: [scaleX, scaleY, scaleZ] */
     public double[] getScale() {
-        return new double[]{
-                Math.sqrt(matrix[0] * matrix[0] + matrix[4] * matrix[4] + matrix[8] * matrix[8]),
-                Math.sqrt(matrix[1] * matrix[1] + matrix[5] * matrix[5] + matrix[9] * matrix[9]),
-                Math.sqrt(matrix[2] * matrix[2] + matrix[6] * matrix[6] + matrix[10] * matrix[10])
-        };
+        double[] result = new double[3];
+        getScale(result);
+        return result;
+    }
+
+    /** Writes [scaleX, scaleY, scaleZ] into caller-owned storage; does not retain it. */
+    public void getScale(double[] result) {
+        if (result.length < 3) throw new IllegalArgumentException("Scale output requires at least three elements");
+        result[0] = Math.sqrt(matrix[0] * matrix[0] + matrix[4] * matrix[4] + matrix[8] * matrix[8]);
+        result[1] = Math.sqrt(matrix[1] * matrix[1] + matrix[5] * matrix[5] + matrix[9] * matrix[9]);
+        result[2] = Math.sqrt(matrix[2] * matrix[2] + matrix[6] * matrix[6] + matrix[10] * matrix[10]);
     }
 
     public void rotateX(double angleRadians) {
