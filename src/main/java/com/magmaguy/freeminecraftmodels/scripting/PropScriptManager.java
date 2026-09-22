@@ -5,7 +5,6 @@ import com.magmaguy.freeminecraftmodels.config.BowStateDetector;
 import com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
-import com.magmaguy.magmacore.config.ConfigurationEngine;
 import com.magmaguy.magmacore.scripting.LuaEngine;
 import com.magmaguy.magmacore.scripting.ScriptDefinition;
 import com.magmaguy.magmacore.scripting.ScriptHook;
@@ -22,15 +21,19 @@ import org.bukkit.event.HandlerList;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Manages the lifecycle of Lua scripts bound to props in FreeMinecraftModels.
  * <p>
- * On prop spawn, checks for a sibling YML config next to the model file.
- * If absent, creates a default config asynchronously (no scripts this load).
- * If present, reads the config and binds the listed scripts from the {@code scripts/} folder.
+ * Prop spawns use the prepared model catalog and bind scripts from the {@code scripts/} folder.
+ * Missing definitions create a default file once per generation. Manual edits apply on reload.
  */
 public final class PropScriptManager {
 
@@ -40,6 +43,7 @@ public final class PropScriptManager {
     private static PropScriptListener listener;
     private static PropScriptProvider provider;
     private static boolean initialized = false;
+    private static final Set<File> scheduledDefaults = new HashSet<>();
 
     private PropScriptManager() {}
 
@@ -90,7 +94,7 @@ public final class PropScriptManager {
 
     /**
      * Called when a PropEntity is created. Determines the sibling YML path
-     * from the model file, loads or creates the config, and binds scripts.
+     * from the model file, reads its prepared settings, and binds scripts.
      *
      * @param prop the prop entity that just spawned
      */
@@ -104,38 +108,16 @@ public final class PropScriptManager {
         File ymlFile = resolveSiblingYml(converter);
         if (ymlFile == null) return;
 
-        // 3. If YML doesn't exist, create it async with defaults and return (no scripts this load)
-        if (!ymlFile.exists()) {
-            final File targetFile = ymlFile;
-            Bukkit.getScheduler().runTaskAsynchronously(MetadataHandler.PLUGIN, () -> {
-                try {
-                    targetFile.getParentFile().mkdirs();
-                    targetFile.createNewFile();
-                    PropScriptConfigFields defaults = new PropScriptConfigFields(targetFile.getName(), true);
-                    FileConfiguration config = new YamlConfiguration();
-                    defaults.setFileConfiguration(config);
-                    defaults.setFile(targetFile);
-                    defaults.processConfigFields();
-                    ConfigurationEngine.fileSaverCustomValues(config, targetFile);
-                } catch (IOException e) {
-                    Logger.warn("[FMM Scripts] Failed to create default config: " + targetFile.getName());
-                }
-            });
+        PropScriptConfigFields configFields = ItemScriptManager.getPropDefinition(ymlFile);
+        if (configFields == null) {
+            createMissingDefault(ymlFile);
             return;
         }
-
-        // 4. Load the existing YML as PropScriptConfigFields
-        PropScriptConfigFields configFields = new PropScriptConfigFields(ymlFile.getName(), true);
-        FileConfiguration fileConfig = YamlConfiguration.loadConfiguration(ymlFile);
-        configFields.setFileConfiguration(fileConfig);
-        configFields.setFile(ymlFile);
-        configFields.processConfigFields();
         if (!configFields.isEnabled() || configFields.getUnavailableReason() != null) return;
 
         prop.setVoxelizeConfig(configFields.isVoxelize(), configFields.isSolidify());
         prop.applySolidify();
 
-        if (!configFields.isEnabled()) return;
         List<String> scripts = configFields.getScripts();
         if (scripts == null || scripts.isEmpty()) return;
 
@@ -160,6 +142,27 @@ public final class PropScriptManager {
             instance.start();
             instance.handleEvent(ScriptHook.ON_SPAWN, null, null, null);
         }
+    }
+
+    private static void createMissingDefault(File targetFile) {
+        if (!scheduledDefaults.add(targetFile)) return;
+        Bukkit.getScheduler().runTaskAsynchronously(MetadataHandler.PLUGIN, () -> {
+            try {
+                PropScriptConfigFields defaults = new PropScriptConfigFields(targetFile.getName(), true);
+                FileConfiguration config = new YamlConfiguration();
+                defaults.setFileConfiguration(config);
+                defaults.setFile(targetFile);
+                defaults.processConfigFields();
+                config.options().copyDefaults(true);
+                String yaml = config.saveToString();
+                Files.createDirectories(targetFile.toPath().getParent());
+                Files.writeString(targetFile.toPath(), yaml, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+            } catch (FileAlreadyExistsException alreadyCreated) {
+                // Another writer or an administrator owns the file. Reload will prepare it.
+            } catch (IOException | RuntimeException failure) {
+                Logger.warn("[FMM Scripts] Failed to create default config " + targetFile.getName() + ": " + failure.getMessage());
+            }
+        });
     }
 
     /**
@@ -234,6 +237,7 @@ public final class PropScriptManager {
         }
 
         LuaEngine.unregisterScriptProvider(NAMESPACE);
+        scheduledDefaults.clear();
         provider = null;
         initialized = false;
     }

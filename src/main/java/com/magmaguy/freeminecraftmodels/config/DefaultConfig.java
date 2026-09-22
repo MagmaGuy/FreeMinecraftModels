@@ -31,8 +31,8 @@ public class DefaultConfig extends ConfigurationFile {
     }
 
     public static void toggleSetupDone(boolean value) {
-        setupDone = value;
-        ConfigurationEngine.writeValue(setupDone, instance.file, instance.getFileConfiguration(), "setupDone");
+        if (ConfigurationEngine.writeValue(value, instance.file, instance.getFileConfiguration(), "setupDone"))
+            setupDone = value;
     }
 
     @Override

@@ -173,7 +173,10 @@ public class CraftifyListener implements Listener {
 
         // Save and register
         PropRecipeConfig config = PropRecipeConfig.create(modelId, shape, ingredients, PropRecipeManager.getRecipesFolder());
-        PropRecipeManager.addRecipe(config);
+        if (!PropRecipeManager.addRecipe(config)) {
+            Logger.sendMessage(player, "\u00a7cThe recipe could not be saved. Your ingredients are still in the grid; check the console.");
+            return;
+        }
 
         // Visual feedback
         player.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, player.getLocation().add(0, 1, 0), 30, 0.5, 0.5, 0.5);

@@ -7,11 +7,13 @@ import com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry;
 import com.magmaguy.freeminecraftmodels.config.ShopConfig;
 import com.magmaguy.freeminecraftmodels.utils.ModelItemFactory;
 import com.magmaguy.magmacore.config.CustomConfigFields;
+import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.Recipe;
 import org.bukkit.inventory.ShapedRecipe;
 
 import java.io.File;
@@ -39,7 +41,7 @@ public class PropRecipeConfig extends CustomConfigFields {
 
     /**
      * Creates a new PropRecipeConfig programmatically (e.g. from the craftify UI).
-     * Sets up the file configuration with the provided values and saves to the recipes folder.
+     * Prepares a detached configuration; the manager persists it after registration succeeds.
      */
     public static PropRecipeConfig create(String modelId, List<String> shape, Map<Character, Material> ingredients, File recipesFolder) {
         if (!recipesFolder.exists()) recipesFolder.mkdirs();
@@ -87,8 +89,8 @@ public class PropRecipeConfig extends CustomConfigFields {
     }
 
     public ShapedRecipe registerRecipe() {
-        if (modelId == null || modelId.isEmpty()) return null;
-        NamespacedKey recipeKey = new NamespacedKey(MetadataHandler.PLUGIN, "prop_recipe_" + modelId);
+        if (modelId == null || modelId.isEmpty()) throw new IllegalArgumentException("Recipe model ID is missing");
+        NamespacedKey recipeKey = recipeKey();
 
         ItemStack output = ModelItemFactory.createModelItem(modelId, Material.PAPER);
 
@@ -98,14 +100,36 @@ public class PropRecipeConfig extends CustomConfigFields {
             recipe.setIngredient(entry.getKey(), entry.getValue());
         }
 
-        // removeRecipe always runs so flipping registerCraftingRecipes off and
-        // restarting also clears recipes persisted into world data. The recipe
+        // Clear any previous registration even when crafting is disabled, including
+        // recipes persisted into world data. The recipe
         // object is still built and returned either way, because the shop and
         // recipe menus render from it — purchase-only servers keep the catalog.
-        Bukkit.removeRecipe(recipeKey);
-        if (DefaultConfig.registerCraftingRecipes)
-            Bukkit.addRecipe(recipe);
+        Recipe previous = Bukkit.getRecipe(recipeKey);
+        if (previous != null && !Bukkit.removeRecipe(recipeKey))
+            throw new IllegalStateException("Could not remove the previous recipe " + recipeKey);
+        try {
+            if (DefaultConfig.registerCraftingRecipes && !Bukkit.addRecipe(recipe))
+                throw new IllegalStateException("Server rejected recipe " + recipeKey);
+        } catch (RuntimeException failure) {
+            try {
+                restoreRecipe(previous);
+            } catch (RuntimeException restorationFailure) {
+                failure.addSuppressed(restorationFailure);
+                Logger.warn("Could not restore recipe " + recipeKey + ": " + restorationFailure.getMessage());
+            }
+            throw failure;
+        }
         return recipe;
+    }
+
+    NamespacedKey recipeKey() {
+        return new NamespacedKey(MetadataHandler.PLUGIN, "prop_recipe_" + modelId);
+    }
+
+    void restoreRecipe(Recipe previous) {
+        Bukkit.removeRecipe(recipeKey());
+        if (previous != null && !Bukkit.addRecipe(previous))
+            throw new IllegalStateException("Server rejected restoration of recipe " + recipeKey());
     }
 
     public List<String> getShapeList() {

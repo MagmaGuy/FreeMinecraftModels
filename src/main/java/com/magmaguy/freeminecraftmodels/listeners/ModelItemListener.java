@@ -6,6 +6,7 @@ import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.HitboxBlueprint;
 import com.magmaguy.freeminecraftmodels.scripting.PropScriptManager;
+import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
 import com.magmaguy.freeminecraftmodels.utils.PlayerPlacementPermissionProbe;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.Logger;
@@ -14,8 +15,6 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.GameMode;
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -29,14 +28,11 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 
-import java.io.File;
-
 public class ModelItemListener implements Listener {
 
     private static final NamespacedKey MODEL_ID_KEY = new NamespacedKey(com.magmaguy.freeminecraftmodels.MetadataHandler.PLUGIN, "model_id");
     private static final NamespacedKey ITEM_ID_KEY = new NamespacedKey(com.magmaguy.freeminecraftmodels.MetadataHandler.PLUGIN, "fmm_item_id");
     private static final java.util.Map<java.util.UUID, Long> placementCooldowns = new java.util.HashMap<>();
-    private static final java.util.Map<String, java.util.Optional<PropScriptConfigFields>> propConfigCache = new java.util.HashMap<>();
     private static final long PLACEMENT_COOLDOWN_MS = 500; // ~10 ticks
 
     @EventHandler(priority = EventPriority.LOWEST)
@@ -188,29 +184,14 @@ public class ModelItemListener implements Listener {
     }
 
     /**
-     * Loads the sibling YML config for a prop model.
-     * Uses the same pattern as PropScriptManager: finds the FileModelConverter,
-     * locates the sibling .yml file, and loads PropScriptConfigFields.
+     * Reads the same prepared prop settings used when the placed entity activates.
      *
      * @param modelID the model identifier
      * @return the loaded config, or null if no config exists
      */
     private PropScriptConfigFields loadPropConfig(String modelID) {
-        return propConfigCache.computeIfAbsent(modelID, ModelItemListener::readPropConfig).orElse(null);
-    }
-
-    private static java.util.Optional<PropScriptConfigFields> readPropConfig(String modelID) {
         FileModelConverter converter = FileModelConverter.getModel(modelID);
-        File ymlFile = PropScriptManager.resolveSiblingYml(converter);
-
-        if (ymlFile == null || !ymlFile.exists()) return java.util.Optional.empty();
-
-        PropScriptConfigFields configFields = new PropScriptConfigFields(ymlFile.getName(), true);
-        FileConfiguration fileConfig = YamlConfiguration.loadConfiguration(ymlFile);
-        configFields.setFileConfiguration(fileConfig);
-        configFields.setFile(ymlFile);
-        configFields.processConfigFields();
-        return java.util.Optional.of(configFields);
+        return ItemScriptManager.getPropDefinition(PropScriptManager.resolveSiblingYml(converter));
     }
 
     @EventHandler
@@ -220,7 +201,6 @@ public class ModelItemListener implements Listener {
 
     public static void shutdown() {
         placementCooldowns.clear();
-        propConfigCache.clear();
     }
 
     /**

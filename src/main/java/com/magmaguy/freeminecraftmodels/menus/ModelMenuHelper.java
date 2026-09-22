@@ -8,12 +8,13 @@ import com.magmaguy.freeminecraftmodels.config.recipes.PropRecipeConfig;
 import com.magmaguy.freeminecraftmodels.config.recipes.PropRecipeManager;
 import com.magmaguy.freeminecraftmodels.content.FMMPackage;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
+import com.magmaguy.freeminecraftmodels.scripting.PropScriptManager;
 import com.magmaguy.freeminecraftmodels.utils.ModelItemFactory;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.ItemStackGenerator;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
@@ -116,33 +117,14 @@ public final class ModelMenuHelper {
     }
 
     /**
-     * Reads the sibling {@code .yml} config file for a model and returns
+     * Reads the prepared sibling {@code .yml} settings for a model and returns
      * the list of attached script filenames, or an empty list if none.
      */
     public static List<String> getScriptsForModel(FileModelConverter converter) {
-        File source = converter.getSourceFile();
-        if (source == null) return Collections.emptyList();
-
-        String baseName = source.getName();
-        int dotIndex = baseName.lastIndexOf('.');
-        if (dotIndex > 0) {
-            baseName = baseName.substring(0, dotIndex);
-        }
-        baseName = BowStateDetector.stripStateSuffix(baseName);
-
-        File ymlFile = new File(source.getParentFile(), baseName + ".yml");
-        if (!ymlFile.exists()) return Collections.emptyList();
-
-        try {
-            PropScriptConfigFields fields = new PropScriptConfigFields(ymlFile.getName(), true);
-            fields.setFileConfiguration(YamlConfiguration.loadConfiguration(ymlFile));
-            fields.setFile(ymlFile);
-            fields.processConfigFields();
-            List<String> scripts = fields.getScripts();
-            return scripts != null ? scripts : Collections.emptyList();
-        } catch (Exception e) {
+        PropScriptConfigFields fields = ItemScriptManager.getPropDefinition(PropScriptManager.resolveSiblingYml(converter));
+        if (fields == null || !fields.isEnabled() || fields.getUnavailableReason() != null)
             return Collections.emptyList();
-        }
+        return fields.getScripts() != null ? fields.getScripts() : Collections.emptyList();
     }
 
     // ---------------------------------------------------------------
