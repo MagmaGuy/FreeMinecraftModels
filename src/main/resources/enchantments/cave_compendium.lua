@@ -238,14 +238,18 @@ end
 --- Each row = { blocks = { {x,y,z}, ... }, distance = d, height = h }
 --- Height ramps: CONE_HEIGHT_START → CONE_HEIGHT_MID → CONE_HEIGHT_END
 ---
---- FIX: Uses a dedup set and fills the full bounding rectangle per row slice
----      so that diagonal facing directions can't skip block positions, which
----      previously left "pillars" of unmined stone inside the cone.
+--- Anchor the cone at the centre of the player's block. A block belongs to
+--- the nearest forward row centre, using [d - 0.5, d + 0.5) to break ties.
+--- Its horizontal footprint must intersect the row's lateral width; touching
+--- only the outer edge does not count. Each coordinate has exactly one row.
 local function build_cone_rows(ox, oy, oz, dir_x, dir_z, length, end_width)
     local rows = {}
     local perp_x = -dir_z   -- perpendicular direction on XZ plane
     local perp_z =  dir_x
     local floor_oy = math.floor(oy)
+    local origin_x, origin_z = math.floor(ox), math.floor(oz)
+    local lateral_radius = (math.abs(perp_x) + math.abs(perp_z)) * 0.5
+    local scan_x = math.abs(dir_z) >= math.abs(dir_x)
 
     for d = 1, length do
         local progress   = d / length
@@ -253,60 +257,35 @@ local function build_cone_rows(ox, oy, oz, dir_x, dir_z, length, end_width)
         local height     = get_height_at_progress(progress)
         local row        = { blocks = {}, distance = d, height = height }
 
-        -- Compute centre of this row slice in world space
-        local cx = ox + dir_x * d
-        local cz = oz + dir_z * d
-
-        -- Sample enough points along the perpendicular to find every
-        -- integer block position the slice covers.  We over-sample by 2×
-        -- to guarantee no gaps regardless of facing angle.
-        local samples  = math.max(3, math.floor(half_width * 2) + 1) * 2
-        local seen     = {}   -- dedup: "x,z" → true
-
-        for i = 0, samples do
-            local t  = -half_width + (half_width * 2) * (i / samples)
-            local bx = math.floor(cx + perp_x * t)
-            local bz = math.floor(cz + perp_z * t)
-            local key = bx .. "," .. bz
-
-            if not seen[key] then
-                seen[key] = true
-                for dy = 0, height - 1 do
-                    table.insert(row.blocks, { x = bx, y = floor_oy + dy, z = bz })
-                end
+        local function add_block_column(ix, iz)
+            local rx, rz = ix - origin_x, iz - origin_z
+            local forward = rx * dir_x + rz * dir_z
+            if math.floor(forward + 0.5 + 1e-9) ~= d then return end
+            local lateral = math.abs(rx * perp_x + rz * perp_z)
+            if lateral >= half_width + lateral_radius - 1e-9 then return end
+            for dy = 0, height - 1 do
+                table.insert(row.blocks, { x = ix, y = floor_oy + dy, z = iz })
             end
         end
 
-        -- Second pass: fill the integer bounding box of the sampled points
-        -- and keep any position that's geometrically inside the half-width.
-        -- This catches any block the sampling step may have jumped over.
-        local min_x, max_x, min_z, max_z = math.huge, -math.huge, math.huge, -math.huge
-        for k, _ in pairs(seen) do
-            local sx, sz = k:match("^(-?%d+),(-?%d+)$")
-            sx = tonumber(sx); sz = tonumber(sz)
-            if sx < min_x then min_x = sx end
-            if sx > max_x then max_x = sx end
-            if sz < min_z then min_z = sz end
-            if sz > max_z then max_z = sz end
-        end
-
-        for ix = min_x, max_x do
-            for iz = min_z, max_z do
-                local key = ix .. "," .. iz
-                if not seen[key] then
-                    -- Check if this integer position is within the row's
-                    -- half-width from the row centre line
-                    local rel_x = ix + 0.5 - cx
-                    local rel_z = iz + 0.5 - cz
-                    -- Project onto perpendicular axis
-                    local proj = math.abs(rel_x * perp_x + rel_z * perp_z)
-                    if proj <= half_width + 0.5 then   -- +0.5 for block centre tolerance
-                        seen[key] = true
-                        for dy = 0, height - 1 do
-                            table.insert(row.blocks, { x = ix, y = floor_oy + dy, z = iz })
-                        end
-                    end
-                end
+        -- Scan along the lateral axis. Solve the one-block forward interval
+        -- for the other coordinate, so diagonal work grows with row width,
+        -- rather than traversing its entire square bounding area.
+        local centre = scan_x and (origin_x + dir_x * d) or (origin_z + dir_z * d)
+        local forward_component = scan_x and dir_x or dir_z
+        local cross_component = scan_x and dir_z or dir_x
+        local perpendicular = scan_x and perp_x or perp_z
+        local origin = scan_x and origin_x or origin_z
+        local cross_origin = scan_x and origin_z or origin_x
+        local extent = math.abs(forward_component) * 0.5
+            + math.abs(perpendicular) * (half_width + lateral_radius)
+        for along = math.floor(centre - extent), math.ceil(centre + extent) do
+            local projection = (along - origin) * forward_component
+            local a = cross_origin + (d - 0.5 - projection) / cross_component
+            local b = cross_origin + (d + 0.5 - projection) / cross_component
+            for across = math.ceil(math.min(a, b) - 1e-9), math.floor(math.max(a, b) + 1e-9) do
+                if scan_x then add_block_column(along, across)
+                else add_block_column(across, along) end
             end
         end
 
@@ -409,9 +388,9 @@ return {
         local dlen  = math.sqrt(dir_x * dir_x + dir_z * dir_z)
         if dlen > 0 then dir_x = dir_x / dlen; dir_z = dir_z / dlen end
 
-        local origin_x = loc.x
+        local origin_x = math.floor(loc.x) + 0.5
         local origin_y = loc.y
-        local origin_z = loc.z
+        local origin_z = math.floor(loc.z) + 0.5
 
         -- Build cone geometry
         local rows = build_cone_rows(
