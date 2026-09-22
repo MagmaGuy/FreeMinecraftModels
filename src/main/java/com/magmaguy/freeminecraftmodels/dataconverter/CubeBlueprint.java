@@ -268,8 +268,9 @@ public class CubeBlueprint {
         if (cubeJSON.get("rotation") != null) {
             List<Double> rotations = (List<Double>) cubeJSON.get("rotation");
             for (int i = rotations.size() - 1; i >= 0; i--) {
-                if (rotations.get(i) != 0) {
-                    angle = Round.fourDecimalPlaces(rotations.get(i));
+                double rotation = rotations.get(i);
+                if (rotation != 0) {
+                    angle = Round.fourDecimalPlaces(normalizeRotation(rotation));
                     switch (i) {
                         case 0 -> axis = "x";
                         case 1 -> axis = "y";
@@ -286,26 +287,26 @@ public class CubeBlueprint {
         if (decomp.baseRotation != 0) {
             // Transform the geometry for the base rotation
             transformCubeGeometry(decomp.baseRotation, axis, xOrigin, yOrigin, zOrigin);
-            // Use the remainder as the actual rotation
-            newRotationData.put("angle", decomp.remainder);
-            newRotationData.put("axis", axis);
-        } else {
-            // Use normal rotation for already allowed angles
-            newRotationData.put("angle", angle);
-            newRotationData.put("axis", axis);
         }
 
+        // Keep the normalized/rounded result even when no geometry transform is needed.
+        newRotationData.put("angle", decomp.remainder);
+        newRotationData.put("axis", axis);
         newRotationData.put("origin", List.of(xOrigin, yOrigin, zOrigin));
         cubeJSON.put("rotation", newRotationData);
         cubeJSON.remove("origin");
     }
 
+    private static double normalizeRotation(double angle) {
+        if (!Double.isFinite(angle)) throw new IllegalArgumentException("Cube rotation must be finite");
+        angle %= 360;
+        if (angle > 180) angle -= 360;
+        if (angle < -180) angle += 360;
+        return angle;
+    }
+
     private RotationDecomposition decomposeRotation(double angle) {
         RotationDecomposition result = new RotationDecomposition();
-
-        // Normalize angle to -180 to 180 range
-        while (angle > 180) angle -= 360;
-        while (angle < -180) angle += 360;
 
         // MC 1.21.6+ supports arbitrary rotations from -45 to 45 degrees
         boolean supportsArbitraryRotations = !VersionChecker.serverVersionOlderThan(21, 6);
@@ -318,9 +319,9 @@ public class CubeBlueprint {
 
         for (double base : baseRotations) {
             double remainder = angle - base;
-            // Normalize remainder
-            while (remainder > 180) remainder -= 360;
-            while (remainder < -180) remainder += 360;
+            // The angle and base are already within one revolution.
+            if (remainder > 180) remainder -= 360;
+            if (remainder < -180) remainder += 360;
 
             if (supportsArbitraryRotations) {
                 // MC 1.21.6+: Accept any remainder within ±45 degrees

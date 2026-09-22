@@ -29,18 +29,9 @@ public class Animation {
     public Animation(AnimationBlueprint animationBlueprint, ModeledEntity modeledEntity) {
         this.animationBlueprint = animationBlueprint;
 
-        // Map bone blueprints to bone instances
-        animationBlueprint.getAnimationFrames().forEach((key, value) -> {
-            for (Bone bone : modeledEntity.getSkeleton().getBones())
-                if (bone.getBoneBlueprint().equals(key)) {
-                    animationFrames.put(bone, value);
-                    break;
-                }
-        });
+        // A missing track stays null so animation changes reset unanimated bones.
         modeledEntity.getSkeleton().getBones().forEach(bone -> {
-            if (!animationFrames.containsKey(bone)) {
-                animationFrames.put(bone, null);
-            }
+            animationFrames.put(bone, animationBlueprint.getAnimationFrames().get(bone.getBoneBlueprint()));
         });
 
         // Map IK controller names to IKChain instances

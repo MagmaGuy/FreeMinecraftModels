@@ -106,7 +106,7 @@ public class Skeleton {
     }
 
     public void remove() {
-        boneMap.values().forEach(Bone::remove);
+        if (rootBone != null) rootBone.remove();
     }
 
     public List<Bone> getNametags() {
