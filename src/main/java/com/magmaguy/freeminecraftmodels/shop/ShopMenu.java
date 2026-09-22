@@ -64,8 +64,7 @@ public class ShopMenu {
         Inventory inventory = Bukkit.createInventory(null, 54,
                 ChatColorConverter.convert(ShopConfig.getMenuTitle()));
         populate(inventory);
-        openMenus.put(inventory, this);
-        player.openInventory(inventory);
+        ModelMenuHelper.openMenu(player, inventory, this, openMenus);
     }
 
     private void populate(Inventory inventory) {
@@ -124,6 +123,10 @@ public class ShopMenu {
         }
 
         return item;
+    }
+
+    public static void shutdown() {
+        ModelMenuHelper.closeMenus(openMenus);
     }
 
     public static void registerEvents(Plugin plugin) {

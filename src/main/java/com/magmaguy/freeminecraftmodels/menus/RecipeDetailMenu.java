@@ -55,8 +55,7 @@ public class RecipeDetailMenu {
         Inventory inventory = Bukkit.createInventory(null, 54, title);
 
         populate(inventory);
-        openMenus.put(inventory, this);
-        player.openInventory(inventory);
+        ModelMenuHelper.openMenu(player, inventory, this, openMenus);
     }
 
     private void populate(Inventory inventory) {
@@ -107,6 +106,10 @@ public class RecipeDetailMenu {
         return sb.toString();
     }
 
+    public static void shutdown() {
+        ModelMenuHelper.closeMenus(openMenus);
+    }
+
     public static void registerEvents(Plugin plugin) {
         Bukkit.getPluginManager().registerEvents(new Events(), plugin);
     }
@@ -129,8 +132,7 @@ public class RecipeDetailMenu {
             int slot = event.getRawSlot();
 
             if (slot == BACK_SLOT) {
-                openMenus.remove(inventory);
-                new CraftableItemsMenu((Player) event.getWhoClicked());
+                    new CraftableItemsMenu((Player) event.getWhoClicked());
             }
         }
 

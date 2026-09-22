@@ -268,6 +268,7 @@ public class PlayerDisguiseEntity extends ModeledEntity {
      * the first place (e.g. the player already had it from another source).
      */
     public void reapplyInvisibilityIfOurs() {
+        if (isRemoved() || DisguiseManager.getDisguise(disguisedPlayer) != this) return;
         if (!appliedInvisibilityEffect) return;
         if (!disguisedPlayer.isOnline()) return;
         if (disguisedPlayer.hasPotionEffect(PotionEffectType.INVISIBILITY)) return;

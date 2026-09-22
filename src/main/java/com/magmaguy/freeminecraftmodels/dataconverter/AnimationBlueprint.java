@@ -104,7 +104,7 @@ public class AnimationBlueprint {
             }
             // Position, rotation and scale may all have a keyframe at the same time.
             // Deduplicate only after separating those independent tracks below.
-            boneKeyframes.put(boneBlueprint, keyframes);
+            if (!keyframes.isEmpty()) boneKeyframes.put(boneBlueprint, keyframes);
         }
     }
 

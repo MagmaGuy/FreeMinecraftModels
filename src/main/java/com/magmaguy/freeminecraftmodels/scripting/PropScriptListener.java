@@ -37,12 +37,21 @@ public class PropScriptListener implements Listener {
         for (ScriptInstance instance : instances) {
             if (instance != null && !instance.isClosed()) {
                 instance.shutdown();
-                Bukkit.getScheduler().runTaskLater(MetadataHandler.PLUGIN, () -> {
-                    if (!instance.isClosed()) instance.shutdown();
-                }, 200L);
             }
         }
         ScriptableProp.clearGlobalCooldowns(prop);
+    }
+
+    @org.bukkit.event.EventHandler(priority = org.bukkit.event.EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onProjectileHit(com.magmaguy.freeminecraftmodels.api.ModeledEntityHitByProjectileEvent event) {
+        if (!(event.getEntity() instanceof PropEntity prop) || prop.isRemoved()) return;
+        List<ScriptInstance> instances = scriptedProps.get(prop);
+        if (instances == null) return;
+        org.bukkit.entity.LivingEntity shooter = event.getProjectile().getShooter() instanceof org.bukkit.entity.LivingEntity entity
+                ? entity : null;
+        for (ScriptInstance instance : List.copyOf(instances))
+            if (!instance.isClosed()) instance.handleEvent(ScriptableProp.ON_PROJECTILE_HIT,
+                    event, null, shooter);
     }
 
     /**

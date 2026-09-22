@@ -66,6 +66,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
     private MagicEnchantmentCatalog magicEnchantmentCatalog;
     private volatile ItemScriptManager.ItemCatalog pendingItemCatalog;
     private volatile EnchantmentCatalog pendingEnchantmentCatalog;
+    private volatile java.util.Map<String, com.magmaguy.freeminecraftmodels.config.recipes.PropRecipeConfig> pendingRecipes;
     public static final NightbreakPluginSpec NIGHTBREAK_PLUGIN_SPEC = new NightbreakPluginSpec(
             "FreeMinecraftModels",
             "freeminecraftmodels",
@@ -128,6 +129,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
                     public void onInitializationFailure(Throwable throwable) {
                         pendingItemCatalog = null;
                         pendingEnchantmentCatalog = null;
+                        pendingRecipes = null;
                         if (magicEnchantmentCatalog != null) magicEnchantmentCatalog.close();
                         magicEnchantmentCatalog = null;
                         importedContentReloadInProgress.set(false);
@@ -202,6 +204,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         pendingItemCatalog = null;
         if (candidate == null) ModelsFolder.initializeConfig();
         else ModelsFolder.initializeConfig(candidate);
+        if (pendingRecipes == null) pendingRecipes = PropRecipeManager.prepareCatalog();
         initializationContext.step("Content Packages");
         new ContentPackageConfig();
         initializationContext.step("Resource Pack Zip");
@@ -290,7 +293,8 @@ public final class FreeMinecraftModels extends JavaPlugin {
         PropEntity.onStartup();
 
         initializationContext.step("Prop Recipes");
-        PropRecipeManager.initialize();
+        PropRecipeManager.activateCatalog(java.util.Objects.requireNonNull(pendingRecipes, "prepared recipes"));
+        pendingRecipes = null;
 
         initializationContext.step("Metrics");
         new Metrics(this, 19337);
@@ -314,12 +318,14 @@ public final class FreeMinecraftModels extends JavaPlugin {
                         BundledMagicContent.installDefaults(this);
                         ItemScriptManager.ItemCatalog candidate = ItemScriptManager.prepareCatalog(ModelsFolder.resolveModelsFolder());
                         EnchantmentCatalog enchantments = MagicEnchantmentCatalog.prepare(this);
+                        var recipes = PropRecipeManager.prepareCatalog();
                         if (context.isShutdownRequested()) return;
                         Bukkit.getScheduler().callSyncMethod(this, () -> {
                             if (context.isShutdownRequested()) return null;
                             registriesCleared.set(true);
                             clearContentRegistries();
                             pendingEnchantmentCatalog = enchantments;
+                            pendingRecipes = recipes;
                             return null;
                         }).get();
                         if (context.isShutdownRequested()) return;
@@ -343,6 +349,9 @@ public final class FreeMinecraftModels extends JavaPlugin {
                     magicEnchantmentCatalog.reload(java.util.Objects.requireNonNull(
                             pendingEnchantmentCatalog, "prepared enchantment catalog"));
                     pendingEnchantmentCatalog = null;
+                    PropRecipeManager.activateCatalog(java.util.Objects.requireNonNull(pendingRecipes, "prepared recipes"));
+                    pendingRecipes = null;
+                    ModelMenuHelper.initialize();
                     PropScriptManager.initialize();
                     if (magicWeaponRuntime != null) magicWeaponRuntime.resumeAfterContentReload();
                     PropEntity.onStartup();
@@ -357,6 +366,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
                 },
                 failure -> {
                     pendingEnchantmentCatalog = null;
+                    pendingRecipes = null;
                     if (registriesCleared.get()) failImportedContentReload(sender, failure);
                     else rejectContentReload(sender, failure);
                 });
@@ -376,22 +386,34 @@ public final class FreeMinecraftModels extends JavaPlugin {
         }
         if (!beginContentReload(sender)) return;
 
-        // Import and validate authored items while the current catalog remains usable.
-        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
-            try {
-                MagmaCore.initializeImporter(this);
-                BundledMagicContent.installDefaults(this);
-                ItemScriptManager.ItemCatalog candidate = ItemScriptManager.prepareCatalog(ModelsFolder.resolveModelsFolder());
-                EnchantmentCatalog enchantments = MagicEnchantmentCatalog.prepare(this);
-                Bukkit.getScheduler().runTask(this, () -> {
-                    pendingItemCatalog = candidate;
+        MagmaCore.startInitialization(this,
+                new PluginInitializationConfig("FreeMinecraftModels", "freeminecraftmodels.*", 4, List.of()),
+                context -> {
+                    context.step("Validate Full Reload");
+                    MagmaCore.initializeImporter(this);
+                    if (context.isShutdownRequested()) return;
+                    BundledMagicContent.installDefaults(this);
+                    if (context.isShutdownRequested()) return;
+                    var items = ItemScriptManager.prepareCatalog(ModelsFolder.resolveModelsFolder());
+                    EnchantmentCatalog enchantments;
+                    try { enchantments = MagicEnchantmentCatalog.prepare(this); }
+                    catch (java.io.IOException failure) { throw new IllegalStateException("Invalid enchantment catalog", failure); }
+                    var recipes = PropRecipeManager.prepareCatalog();
+                    if (context.isShutdownRequested()) return;
+                    pendingItemCatalog = items;
                     pendingEnchantmentCatalog = enchantments;
-                    NightbreakPluginBootstrap.reloadPlugin(this, sender);
+                    pendingRecipes = recipes;
+                }, context -> {},
+                () -> Bukkit.getScheduler().runTask(this, () -> {
+                    if (isEnabled() && !MagmaCore.isShutdownRequested(this) && importedContentReloadInProgress.get())
+                        NightbreakPluginBootstrap.reloadPlugin(this, sender);
+                }),
+                failure -> {
+                    pendingItemCatalog = null;
+                    pendingEnchantmentCatalog = null;
+                    pendingRecipes = null;
+                    rejectContentReload(sender, failure);
                 });
-            } catch (Exception failure) {
-                Bukkit.getScheduler().runTask(this, () -> rejectContentReload(sender, failure));
-            }
-        });
     }
 
     private boolean beginContentReload(CommandSender sender) {
@@ -418,6 +440,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         if (magicWeaponRuntime != null) magicWeaponRuntime.pauseForContentReload();
         ModeledEntitiesClock.shutdown();
         OBBHitDetection.pauseProjectileDetection();
+        ModelMenuHelper.shutdown();
         ModelItemListener.shutdown();
         DisguiseManager.shutdown();
         PropInventoryListener.shutdown();

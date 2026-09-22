@@ -116,6 +116,36 @@ public final class ModelMenuHelper {
                 .collect(Collectors.toList());
     }
 
+    static Map<String, List<FileModelConverter>> modelsByFolder(Collection<FileModelConverter> models) {
+        Map<String, LinkedHashMap<String, FileModelConverter>> grouped = new HashMap<>();
+        File modelsRoot = ModelsFolder.resolveModelsFolder();
+        models.stream().filter(ModelMenuHelper::isMenuModel).sorted(Comparator.comparing(FileModelConverter::getID))
+                .forEach(model -> {
+                    if (model.getSourceFile() == null) return;
+                    for (File parent = model.getSourceFile().getParentFile(); parent != null && !parent.equals(modelsRoot);
+                         parent = parent.getParentFile())
+                        grouped.computeIfAbsent(parent.getName(), ignored -> new LinkedHashMap<>())
+                                .putIfAbsent(getMenuModelId(model), model);
+                });
+        Map<String, List<FileModelConverter>> result = new HashMap<>();
+        grouped.forEach((name, members) -> result.put(name, List.copyOf(members.values())));
+        return result;
+    }
+
+    static Map<String, List<String>> itemsByFolder(Map<String, File> items) {
+        Map<String, Set<String>> grouped = new HashMap<>();
+        File modelsRoot = ModelsFolder.resolveModelsFolder();
+        items.forEach((id, source) -> {
+            if (source == null) return;
+            for (File parent = source.getParentFile(); parent != null && !parent.equals(modelsRoot);
+                 parent = parent.getParentFile())
+                grouped.computeIfAbsent(parent.getName(), ignored -> new TreeSet<>()).add(id);
+        });
+        Map<String, List<String>> result = new HashMap<>();
+        grouped.forEach((name, members) -> result.put(name, List.copyOf(members)));
+        return result;
+    }
+
     /**
      * Reads the prepared sibling {@code .yml} settings for a model and returns
      * the list of attached script filenames, or an empty list if none.
@@ -223,6 +253,10 @@ public final class ModelMenuHelper {
      * Builds a display {@link ItemStack} representing a content pack in the menu.
      */
     public static ItemStack buildPackItem(FMMPackage pack) {
+        return buildPackItem(pack, getModelsForPack(pack), getItemsForPack(pack));
+    }
+
+    static ItemStack buildPackItem(FMMPackage pack, List<FileModelConverter> packModels, List<String> packItems) {
         String packName = pack.getContentPackageConfigFields().getName();
         String name = "<gradient:#FFD700:#FFA500>" + packName + "</gradient>";
 
@@ -234,9 +268,7 @@ public final class ModelMenuHelper {
             }
         }
         lore.add("");
-        List<String> packItems = getItemsForPack(pack);
         Set<String> packItemIds = new HashSet<>(packItems);
-        List<FileModelConverter> packModels = getModelsForPack(pack);
         int itemCount = packItems.size();
         int propCount = (int) packModels.stream()
                 .filter(m -> !packItemIds.contains(m.getID())).count();
@@ -262,7 +294,32 @@ public final class ModelMenuHelper {
         cachedArrowRight = ItemStackGenerator.generateSkullItemStack("MHF_ArrowRight", " ", List.of());
     }
 
+    public static <T> void openMenu(org.bukkit.entity.Player player, org.bukkit.inventory.Inventory inventory,
+                                    T menu, Map<org.bukkit.inventory.Inventory, T> openMenus) {
+        openMenus.put(inventory, menu);
+        boolean opened = false;
+        try {
+            var view = player.openInventory(inventory);
+            opened = view != null && player.getOpenInventory().getTopInventory() == inventory;
+        } finally {
+            if (!opened) openMenus.remove(inventory, menu);
+        }
+    }
+
+    public static void closeMenus(Map<org.bukkit.inventory.Inventory, ?> openMenus) {
+        for (var inventory : new ArrayList<>(openMenus.keySet()))
+            for (var viewer : new ArrayList<>(inventory.getViewers()))
+                if (viewer.getOpenInventory().getTopInventory() == inventory) viewer.closeInventory();
+        openMenus.clear();
+    }
+
     public static void shutdown() {
+        AdminContentMenu.shutdown();
+        AdminModelListMenu.shutdown();
+        CraftableItemsMenu.shutdown();
+        RecipeDetailMenu.shutdown();
+        com.magmaguy.freeminecraftmodels.shop.ShopMenu.shutdown();
+        com.magmaguy.freeminecraftmodels.listeners.CraftifyListener.shutdown();
         cachedArrowLeft = null;
         cachedArrowRight = null;
     }

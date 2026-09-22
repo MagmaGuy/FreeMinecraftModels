@@ -168,6 +168,10 @@ public class Skeleton {
         }
     }
 
+    void prepareDisplayPose(AbstractPacketBundle packetBundle) {
+        if (rootBone != null) rootBone.prepareDisplayPose(packetBundle);
+    }
+
     public void tint() {
         // start (or restart) the tint animation
         tinting = true;

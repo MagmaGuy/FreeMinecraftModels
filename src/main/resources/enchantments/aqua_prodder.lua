@@ -98,13 +98,6 @@ local function compute_dome_offsets(radius)
     return shell, interior
 end
 
--- Precompute offsets for all candidate radii
-local DOME_DATA = {}
-for _, r in ipairs(DOME_RADII) do
-    local shell, interior = compute_dome_offsets(r)
-    DOME_DATA[r] = { shell = shell, interior = interior }
-end
-
 -- ===================== OBSTRUCTION CHECK =====================
 local function can_place_dome(context, cx, cy, cz, data)
     for _, group in ipairs({data.shell, data.interior}) do
@@ -213,7 +206,8 @@ return {
         local chosen_r = nil
         local chosen_data = nil
         for _, r in ipairs(DOME_RADII) do
-            local data = DOME_DATA[r]
+            local shell, interior = compute_dome_offsets(r)
+            local data = { shell = shell, interior = interior }
             if can_place_dome(context, px, py, pz, data) then
                 chosen_r = r
                 chosen_data = data

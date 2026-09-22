@@ -20,9 +20,15 @@ public class OutputFolder {
         String baseDirectory = path + File.separatorChar + "output";
         File mainFolder = new File(baseDirectory);
         try {
-            if (mainFolder.exists()) FileUtils.deleteDirectory(mainFolder);
-        } catch (Exception e) {
-            Logger.warn("Failed to delete folder " + mainFolder.getAbsolutePath());
+            Files.createDirectories(mainFolder.toPath());
+            try (var generated = Files.list(mainFolder.toPath())) {
+                for (var file : generated.toList()) {
+                    if (!file.getFileName().toString().equals("FreeMinecraftModels.zip"))
+                        FileUtils.forceDelete(file.toFile());
+                }
+            }
+        } catch (IOException failure) {
+            throw new IllegalStateException("Failed to prepare output folder " + mainFolder, failure);
         }
         generateDirectory(mainFolder.getAbsolutePath());
         generateDirectory(baseDirectory + File.separatorChar + "FreeMinecraftModels" + File.separatorChar + "assets" + File.separatorChar + "freeminecraftmodels" + File.separatorChar + "textures");
@@ -41,23 +47,30 @@ public class OutputFolder {
         } catch (IOException e) {
             throw new IllegalStateException("Failed to generate the FreeMinecraftModels blocks atlas", e);
         }
-        ZipFile.zip(
-                resourcePackFolder,
-                MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar + "output" + File.separatorChar + "FreeMinecraftModels.zip");
+        java.nio.file.Path published = resourcePackFolder.toPath().resolveSibling("FreeMinecraftModels.zip");
+        java.nio.file.Path pending = published.resolveSibling("FreeMinecraftModels.zip.pending");
+        try {
+            if (!ZipFile.zip(resourcePackFolder, pending.toString()))
+                throw new IOException("Resource pack archive could not be written");
+            Files.move(pending, published, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException failure) {
+            throw new IllegalStateException("Failed to publish the FreeMinecraftModels resource pack", failure);
+        } finally {
+            try { Files.deleteIfExists(pending); }
+            catch (IOException failure) { Logger.warn("Failed to remove incomplete resource pack " + pending); }
+        }
     }
 
     private static void generateFileFromResources(String filename, String destination) {
         File newFile = new File(destination);
         try (InputStream inputStream = MetadataHandler.PLUGIN.getResource(filename)) {
             if (inputStream == null) {
-                Logger.warn("Failed to generate default resource pack element: missing resource " + filename);
-                return;
+                throw new IOException("Missing resource " + filename);
             }
             Files.createDirectories(newFile.toPath().getParent());
             Files.copy(inputStream, newFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
         } catch (Exception e) {
-            Logger.warn("Failed to generate default resource pack element " + newFile.getAbsolutePath());
-            e.printStackTrace();
+            throw new IllegalStateException("Failed to generate resource pack element " + newFile, e);
         }
     }
 
@@ -65,8 +78,7 @@ public class OutputFolder {
         try {
             Files.createDirectories(new File(path).toPath());
         } catch (Exception e) {
-            Logger.warn("Failed to generate directory " + path);
-            e.printStackTrace();
+            throw new IllegalStateException("Failed to generate directory " + path, e);
         }
     }
 }

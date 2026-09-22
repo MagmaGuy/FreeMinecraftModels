@@ -33,6 +33,18 @@ public class SkeletonBlueprint {
     @Getter
     private HitboxBlueprint hitbox;
 
+    private final Map<String, String> boneAssetNames = new HashMap<>();
+
+    void registerBone(BoneBlueprint bone) {
+        String name = bone.getOriginalBoneName();
+        String asset = com.magmaguy.freeminecraftmodels.utils.StringToResourcePackFilename.convert(name);
+        String previous = boneAssetNames.putIfAbsent(asset, name);
+        if (previous != null)
+            throw new IllegalArgumentException("Model " + modelName + " has conflicting bone names '"
+                    + previous + "' and '" + name + "' for asset " + asset);
+        boneMap.put(name, bone);
+    }
+
     public SkeletonBlueprint(List<ParsedTexture> parsedTextures,
                              List outlinerJSON,
                              HashMap<String, Object> values,
@@ -267,15 +279,9 @@ public class SkeletonBlueprint {
         }
 
         if (sourceIndex >= 0 && targetIndex >= 0) {
-            // Add all bones between source and target (inclusive of source, exclusive of target)
-            int start = Math.min(sourceIndex, targetIndex);
-            int end = Math.max(sourceIndex, targetIndex);
-            for (int i = start; i < end; i++) {
+            int direction = Integer.compare(targetIndex, sourceIndex);
+            for (int i = sourceIndex; i != targetIndex; i += direction) {
                 chain.add(siblings.get(i));
-            }
-            // Reverse if needed so source is first
-            if (sourceIndex > targetIndex) {
-                java.util.Collections.reverse(chain);
             }
         } else {
             // Fallback: just use source

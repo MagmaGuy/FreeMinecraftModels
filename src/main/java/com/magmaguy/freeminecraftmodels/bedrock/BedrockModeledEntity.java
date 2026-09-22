@@ -31,7 +31,8 @@ public final class BedrockModeledEntity {
     private final float width;
     private final float height;
     private FakeCustomEntity fakeCustomEntity;
-    private BukkitCustomEntity bukkitCustomEntity;
+    private volatile BukkitCustomEntity bukkitCustomEntity;
+    private final Map<UUID, Object> displayRequests = new java.util.concurrent.ConcurrentHashMap<>();
     private Location lastLocation;
     private float lastScale = Float.NaN;
     private String activeAnimation;
@@ -145,6 +146,8 @@ public final class BedrockModeledEntity {
 
         FakeCustomEntity previousFake = fakeCustomEntity;
         BukkitCustomEntity previousBukkit = bukkitCustomEntity;
+        previousViewers.addAll(displayRequests.keySet());
+        displayRequests.clear();
         fakeCustomEntity = null;
         bukkitCustomEntity = replacement;
         if (previousFake != null) {
@@ -174,6 +177,7 @@ public final class BedrockModeledEntity {
     }
 
     public void hideFrom(UUID uuid) {
+        displayRequests.remove(uuid);
         if (fakeCustomEntity != null) {
             fakeCustomEntity.hideFrom(uuid);
         }
@@ -185,12 +189,16 @@ public final class BedrockModeledEntity {
                     && MetadataHandler.PLUGIN != null
                     && MetadataHandler.PLUGIN.isEnabled()) {
                 Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN,
-                        () -> player.hideEntity(MetadataHandler.PLUGIN, currentHandle.entity()));
+                        () -> {
+                            if (bukkitCustomEntity == currentHandle && !displayRequests.containsKey(uuid))
+                                player.hideEntity(MetadataHandler.PLUGIN, currentHandle.entity());
+                        });
             }
         }
     }
 
     public void remove() {
+        displayRequests.clear();
         if (fakeCustomEntity != null) {
             fakeCustomEntity.remove();
             fakeCustomEntity = null;
@@ -240,30 +248,32 @@ public final class BedrockModeledEntity {
             return;
         }
         UUID uuid = player.getUniqueId();
+        Object request = new Object();
+        BukkitCustomEntity handle = bukkitCustomEntity;
+        displayRequests.put(uuid, request);
         Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
             Player current = Bukkit.getPlayer(uuid);
-            if (current == null || !current.isOnline() || bukkitCustomEntity == null || !bukkitCustomEntity.isValid()) {
-                return;
-            }
-            bukkitCustomEntity.prepareSpawnFor(current);
+            if (!ownsDisplay(uuid, request, handle) || current == null || !current.isOnline()) return;
+            handle.prepareSpawnFor(current);
             Bukkit.getScheduler().runTaskLater(MetadataHandler.PLUGIN, () -> {
                 Player delayed = Bukkit.getPlayer(uuid);
-                if (delayed == null || !delayed.isOnline() || bukkitCustomEntity == null || !bukkitCustomEntity.isValid()) {
-                    return;
-                }
-                delayed.showEntity(MetadataHandler.PLUGIN, bukkitCustomEntity.entity());
+                if (ownsDisplay(uuid, request, handle) && delayed != null && delayed.isOnline())
+                    delayed.showEntity(MetadataHandler.PLUGIN, handle.entity());
             }, 1L);
-            scheduleUnderlyingSync(uuid, 4L);
-            scheduleUnderlyingSync(uuid, 10L);
+            scheduleUnderlyingSync(uuid, request, handle, 4L);
+            scheduleUnderlyingSync(uuid, request, handle, 10L);
         });
     }
 
-    private void scheduleUnderlyingSync(UUID uuid, long delayTicks) {
+    private boolean ownsDisplay(UUID uuid, Object request, BukkitCustomEntity handle) {
+        return displayRequests.get(uuid) == request && bukkitCustomEntity == handle
+                && handle != null && handle.isValid() && !modeledEntity.isRemoved();
+    }
+
+    private void scheduleUnderlyingSync(UUID uuid, Object request, BukkitCustomEntity handle, long delayTicks) {
         Bukkit.getScheduler().runTaskLater(MetadataHandler.PLUGIN, () -> {
             Player player = Bukkit.getPlayer(uuid);
-            if (player != null && player.isOnline() && bukkitCustomEntity != null && bukkitCustomEntity.isValid()) {
-                bukkitCustomEntity.syncTo(player);
-            }
+            if (ownsDisplay(uuid, request, handle) && player != null && player.isOnline()) handle.syncTo(player);
         }, delayTicks);
     }
 

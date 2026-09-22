@@ -23,20 +23,34 @@ import java.util.*;
 public class CraftifyListener implements Listener {
 
     private static final NamespacedKey CRAFTIFY_KEY = new NamespacedKey(MetadataHandler.PLUGIN, "craftify_output");
-    private static final Map<UUID, String> activeSessions = new HashMap<>();
+    private static final Map<UUID, Session> activeSessions = new HashMap<>();
 
-    public static void startSession(Player player, String modelId) {
-        activeSessions.put(player.getUniqueId(), modelId);
+    private record Session(String modelId, Inventory inventory) {}
+
+    public static void startSession(Player player, String modelId, Inventory inventory) {
+        var view = player.openInventory(inventory);
+        if (view != null && player.getOpenInventory().getTopInventory() == inventory)
+            activeSessions.put(player.getUniqueId(), new Session(modelId, inventory));
     }
 
-    private static boolean isInSession(Player player) {
-        return activeSessions.containsKey(player.getUniqueId());
+    private static boolean isInSession(Player player, Inventory inventory) {
+        Session session = activeSessions.get(player.getUniqueId());
+        return session != null && session.inventory() == inventory;
+    }
+
+    public static void shutdown() {
+        for (UUID playerId : new ArrayList<>(activeSessions.keySet())) {
+            Player player = org.bukkit.Bukkit.getPlayer(playerId);
+            if (player != null && isInSession(player, player.getOpenInventory().getTopInventory()))
+                player.closeInventory();
+        }
+        activeSessions.clear();
     }
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
-        if (!isInSession(player)) return;
+        if (!isInSession(player, event.getInventory())) return;
 
         int slot = event.getRawSlot();
 
@@ -72,7 +86,7 @@ public class CraftifyListener implements Listener {
     @EventHandler
     public void onInventoryDrag(InventoryDragEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
-        if (!isInSession(player)) return;
+        if (!isInSession(player, event.getInventory())) return;
 
         Set<Integer> gridSet = new HashSet<>();
         for (int s : CraftifyCommand.GRID_SLOTS) gridSet.add(s);
@@ -88,8 +102,9 @@ public class CraftifyListener implements Listener {
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
         if (!(event.getPlayer() instanceof Player player)) return;
-        if (!isInSession(player)) return;
+        if (!isInSession(player, event.getInventory())) return;
 
+        activeSessions.remove(player.getUniqueId());
         // Return any items left in the grid to the player
         Inventory inv = event.getInventory();
         for (int slot : CraftifyCommand.GRID_SLOTS) {
@@ -102,12 +117,12 @@ public class CraftifyListener implements Listener {
             }
         }
 
-        activeSessions.remove(player.getUniqueId());
     }
 
     private void handleSave(Player player, Inventory inv) {
-        String modelId = activeSessions.get(player.getUniqueId());
-        if (modelId == null) return;
+        Session session = activeSessions.get(player.getUniqueId());
+        if (session == null || session.inventory() != inv) return;
+        String modelId = session.modelId();
 
         // Read the 3x3 grid
         ItemStack[] grid = new ItemStack[9];

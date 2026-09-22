@@ -28,9 +28,7 @@ public class MountCommand extends AdvancedCommand {
 
     public MountCommand() {
         super(List.of("mount"));
-        List<String> entityIDs = new ArrayList<>();
-        FileModelConverter.getConvertedFileModels().values().forEach(f -> entityIDs.add(f.getID()));
-        addArgument("model", new ListStringCommandArgument(entityIDs, "<model>"));
+        addArgument("model", new com.magmaguy.freeminecraftmodels.commands.arguments.LiveModelIDsArgument("<model>"));
         setDescription("Spawns a rideable model horse");
         setPermission("freeminecraftmodels.*");
         setUsage("/fmm mount <model>");

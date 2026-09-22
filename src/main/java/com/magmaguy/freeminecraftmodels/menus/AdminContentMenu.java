@@ -39,8 +39,7 @@ public class AdminContentMenu {
         this.inventory = Bukkit.createInventory(null, 54,
                 ChatColorConverter.convert("&8FMM Admin - Content"));
         populate();
-        openMenus.put(inventory, this);
-        player.openInventory(inventory);
+        ModelMenuHelper.openMenu(player, inventory, this, openMenus);
     }
 
     /**
@@ -48,6 +47,10 @@ public class AdminContentMenu {
      */
     private static List<ContentEntry> buildEntries() {
         List<ContentEntry> result = new ArrayList<>();
+        Collection<FileModelConverter> modelSnapshot = FileModelConverter.getConvertedFileModels().values();
+        Map<String, File> itemSnapshot = new LinkedHashMap<>(ItemScriptManager.getItemSourceFiles());
+        Map<String, List<FileModelConverter>> packageModels = ModelMenuHelper.modelsByFolder(modelSnapshot);
+        Map<String, List<String>> packageItems = ModelMenuHelper.itemsByFolder(itemSnapshot);
 
         // 1. Collect all models and items claimed by packages
         Set<String> claimedModelIds = new HashSet<>();
@@ -59,8 +62,9 @@ public class AdminContentMenu {
                 .collect(Collectors.toList());
 
         for (FMMPackage pack : enabledPacks) {
-            List<FileModelConverter> packModels = ModelMenuHelper.getModelsForPack(pack);
-            List<String> packItems = ModelMenuHelper.getItemsForPack(pack);
+            String folder = pack.getContentPackageConfigFields().getFolderName();
+            List<FileModelConverter> packModels = packageModels.getOrDefault(folder, List.of());
+            List<String> packItems = packageItems.getOrDefault(folder, List.of());
             if (packModels.isEmpty() && packItems.isEmpty()) {
                 continue;
             }
@@ -69,7 +73,7 @@ public class AdminContentMenu {
                 claimedModelIds.add(model.getID());
             }
             claimedItemIds.addAll(packItems);
-            result.add(new PackageEntry(pack));
+            result.add(new PackageEntry(pack, packModels, packItems));
         }
 
         // Set of model IDs that are also custom items — these will only appear in the items section
@@ -80,7 +84,7 @@ public class AdminContentMenu {
         Map<String, List<FileModelConverter>> folderGroups = new LinkedHashMap<>();
         List<FileModelConverter> rootModels = new ArrayList<>();
 
-        for (FileModelConverter converter : FileModelConverter.getConvertedFileModels().values()) {
+        for (FileModelConverter converter : modelSnapshot) {
             if (claimedModelIds.contains(converter.getID())) continue;
             if (converter.getSourceFile() == null) continue;
             if (itemModelIds.contains(converter.getID())) continue;
@@ -101,7 +105,7 @@ public class AdminContentMenu {
         Map<String, List<String>> itemFolderGroups = new LinkedHashMap<>();
         List<String> rootItems = new ArrayList<>();
 
-        for (Map.Entry<String, File> entry : ItemScriptManager.getItemSourceFiles().entrySet()) {
+        for (Map.Entry<String, File> entry : itemSnapshot.entrySet()) {
             String itemId = entry.getKey();
             if (claimedItemIds.contains(itemId)) continue;
             File sourceFile = entry.getValue();
@@ -166,6 +170,10 @@ public class AdminContentMenu {
         }
     }
 
+    public static void shutdown() {
+        ModelMenuHelper.closeMenus(openMenus);
+    }
+
     public static void registerEvents(Plugin plugin) {
         Bukkit.getPluginManager().registerEvents(new Events(), plugin);
     }
@@ -205,7 +213,6 @@ public class AdminContentMenu {
                 if (ModelMenuHelper.CONTENT_SLOTS[i] == slot) {
                     int entryIndex = start + i;
                     if (entryIndex < menu.entries.size()) {
-                        openMenus.remove(clicked);
                         menu.entries.get(entryIndex).onClick(player);
                     }
                     return;
@@ -232,18 +239,23 @@ public class AdminContentMenu {
     private static class PackageEntry implements ContentEntry {
         private final FMMPackage pack;
 
-        PackageEntry(FMMPackage pack) {
+        private final List<FileModelConverter> models;
+        private final List<String> items;
+
+        PackageEntry(FMMPackage pack, List<FileModelConverter> models, List<String> items) {
             this.pack = pack;
+            this.models = models;
+            this.items = items;
         }
 
         @Override
         public ItemStack buildDisplayItem() {
-            return ModelMenuHelper.buildPackItem(pack);
+            return ModelMenuHelper.buildPackItem(pack, models, items);
         }
 
         @Override
         public void onClick(Player player) {
-            new AdminModelListMenu(player, pack);
+            new AdminModelListMenu(player, pack.getContentPackageConfigFields().getName(), models, items);
         }
     }
 

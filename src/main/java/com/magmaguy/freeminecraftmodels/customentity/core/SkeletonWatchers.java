@@ -303,14 +303,18 @@ public class SkeletonWatchers {
                             + " for " + player.getName());
         }
         // Only show bones if the underlying entity is not invisible
-        AbstractPacketBundle initialDisplayBundle = createInitialDisplayBundle();
-        if (!isUnderlyingEntityInvisible())
-            skeleton.getBones().forEach(bone -> bone.displayTo(player, initialDisplayBundle));
-        if (skeleton.getModeledEntity() instanceof PropEntity propEntity)
-            propEntity.showFakePropBlocksToPlayer(player);
-        // Show the packet interaction entity for click detection (always, even when invisible)
-        skeleton.getModeledEntity().getHitboxComponent().showPacketInteractionEntityTo(player, initialDisplayBundle);
-        if (initialDisplayBundle != null) initialDisplayBundle.send();
+        synchronized (skeleton) {
+            AbstractPacketBundle initialDisplayBundle = createInitialDisplayBundle();
+            if (!isUnderlyingEntityInvisible()) {
+                if (initialDisplayBundle != null) skeleton.prepareDisplayPose(initialDisplayBundle);
+                skeleton.getBones().forEach(bone -> bone.displayTo(player, initialDisplayBundle));
+            }
+            if (skeleton.getModeledEntity() instanceof PropEntity propEntity)
+                propEntity.showFakePropBlocksToPlayer(player);
+            // Interaction remains visible for click detection even when bones are hidden.
+            skeleton.getModeledEntity().getHitboxComponent().showPacketInteractionEntityTo(player, initialDisplayBundle);
+            if (initialDisplayBundle != null) initialDisplayBundle.send();
+        }
         // Bedrock-only: the initial AddEntity → EntityData → Equipment → HeadPose
         // sequence races against Geyser's per-session entity-registration state.
         // When it loses the race, Bedrock binds the attachable to the wrong rotation

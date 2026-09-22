@@ -16,13 +16,10 @@ import java.util.List;
 
 public class ItemifyCommand extends AdvancedCommand {
 
-    private final List<String> entityIDs;
 
     public ItemifyCommand() {
         super(List.of("itemify"));
-        entityIDs = new ArrayList<>();
-        FileModelConverter.getConvertedFileModels().values().forEach(fileModelConverter -> entityIDs.add(fileModelConverter.getID()));
-        addArgument("model", new ListStringCommandArgument(entityIDs, "<model>"));
+        addArgument("model", new com.magmaguy.freeminecraftmodels.commands.arguments.LiveModelIDsArgument("<model>"));
         addArgument("material", new ListStringCommandArgument(
                 List.of(Material.values()).stream().map(Material::name).toList(),
                 "<material>"));
@@ -38,7 +35,7 @@ public class ItemifyCommand extends AdvancedCommand {
         String modelID = commandData.getStringArgument("model");
         String materialName = commandData.getStringArgument("material");
 
-        if (!entityIDs.contains(modelID)) {
+        if (!FileModelConverter.containsModel(modelID)) {
             Logger.sendMessage(commandData.getCommandSender(), "Invalid entity ID!");
             return;
         }

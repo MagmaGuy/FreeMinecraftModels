@@ -69,8 +69,7 @@ public class AdminModelListMenu {
                 ChatColorConverter.convert("&8FMM Admin - " + title));
 
         populateInventory();
-        openMenus.put(inventory, this);
-        player.openInventory(inventory);
+        ModelMenuHelper.openMenu(player, inventory, this, openMenus);
     }
 
     private void populateInventory() {
@@ -100,7 +99,6 @@ public class AdminModelListMenu {
 
     private void handleClick(int slot) {
         if (slot == ModelMenuHelper.BACK_SLOT) {
-            openMenus.remove(inventory);
             new AdminContentMenu(player);
             return;
         }
@@ -132,6 +130,10 @@ public class AdminModelListMenu {
         if (entryIndex >= entries.size()) return;
 
         entries.get(entryIndex).onClick(player);
+    }
+
+    public static void shutdown() {
+        ModelMenuHelper.closeMenus(openMenus);
     }
 
     public static void registerEvents(Plugin plugin) {

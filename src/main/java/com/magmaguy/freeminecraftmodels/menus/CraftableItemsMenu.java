@@ -52,8 +52,7 @@ public class CraftableItemsMenu {
 
         populate(inventory);
 
-        openMenus.put(inventory, this);
-        player.openInventory(inventory);
+        ModelMenuHelper.openMenu(player, inventory, this, openMenus);
     }
 
     private void populate(Inventory inventory) {
@@ -78,6 +77,10 @@ public class CraftableItemsMenu {
             inventory.setItem(ModelMenuHelper.NEXT_SLOT,
                     ModelMenuHelper.buildNextPageItem());
         }
+    }
+
+    public static void shutdown() {
+        ModelMenuHelper.closeMenus(openMenus);
     }
 
     public static void registerEvents(Plugin plugin) {
@@ -118,8 +121,7 @@ public class CraftableItemsMenu {
                     if (ModelMenuHelper.CONTENT_SLOTS[i] == slot) {
                         int modelIndex = start + i;
                         if (modelIndex < menu.craftableModels.size()) {
-                            openMenus.remove(inventory);
-                            new RecipeDetailMenu((Player) event.getWhoClicked(),
+                                            new RecipeDetailMenu((Player) event.getWhoClicked(),
                                     ModelMenuHelper.getMenuModelId(menu.craftableModels.get(modelIndex)));
                         }
                         return;

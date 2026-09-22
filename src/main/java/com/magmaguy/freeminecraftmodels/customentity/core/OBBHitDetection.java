@@ -62,7 +62,7 @@ public class OBBHitDetection implements Listener {
     // One routing ledger is shared by the OBB sweep and the native underlying-
     // entity redirect. The target is part of the key so Piercing arrows can hit
     // several modeled entities without either path double-firing the same pair.
-    private static final Set<ProjectileTarget> routedProjectileHits = ConcurrentHashMap.newKeySet();
+    private static final Map<UUID, Set<UUID>> routedProjectileHits = new ConcurrentHashMap<>();
     private static final Map<UUID, Integer> projectileHitCounts = new ConcurrentHashMap<>();
     private static final Set<UUID> projectilesPendingRemoval = ConcurrentHashMap.newKeySet();
     private static final Set<UUID> projectilesRetiredInBlock = ConcurrentHashMap.newKeySet();
@@ -114,8 +114,6 @@ public class OBBHitDetection implements Listener {
         EquipmentSlot resolve(PlayerAnimationEvent event);
     }
 
-    private record ProjectileTarget(UUID projectileId, UUID targetId) {
-    }
 
     private record ProjectileHitCandidate(ModeledEntity entity, double distance) {
     }
@@ -326,6 +324,7 @@ public class OBBHitDetection implements Listener {
                     // re-filter world membership for every entity/projectile pair.
                     List<ModeledEntity> worldEntities = null;
                     for (ModeledEntity entity : allEntities) {
+                        if (!isTargetable(entity)) continue;
                         if (entity.getWorld() == null) continue;
                         if (!entity.getWorld().equals(world)) continue;
                         if (worldEntities == null) worldEntities = new ArrayList<>();
@@ -334,6 +333,8 @@ public class OBBHitDetection implements Listener {
                     if (worldEntities == null) continue;
 
                     Map<Projectile, List<ProjectileHitCandidate>> candidatesByProjectile = new HashMap<>();
+                    Map<Projectile, ProjectileMotion> motions = new HashMap<>();
+                    for (Projectile projectile : worldProjectiles) motions.put(projectile, captureMotion(projectile));
 
                     // Outer = entities (typically larger), inner = projectiles. This
                     // keeps the OBB update cost (getObbHitbox()) at one call per
@@ -351,7 +352,7 @@ public class OBBHitDetection implements Listener {
                                 if (shooterId != null && shooterId.equals(underlyingId)) continue;
                             }
 
-                            double distance = projectileIntersectionDistance(obb, proj);
+                            double distance = projectileIntersectionDistance(obb, motions.get(proj));
                             if (distance < 0) continue;
 
                             candidatesByProjectile
@@ -433,34 +434,38 @@ public class OBBHitDetection implements Listener {
      * is no stored previous position yet, or the projectile did not move (the
      * instantaneous AABB test already covers the stationary case).
      */
-    private static double projectileIntersectionDistance(OrientedBoundingBox obb, Projectile proj) {
-        org.bukkit.util.Vector last = projectileLastPositions.get(proj.getUniqueId());
-        org.bukkit.util.Vector cur = proj.getLocation().toVector();
-        double segmentLength = 0;
+    private record ProjectileMotion(double x, double y, double z, double startX, double startY, double startZ,
+                                    double directionX, double directionY, double directionZ, double length,
+                                    org.bukkit.util.BoundingBox bounds) {}
 
-        if (last != null) {
-            double dx = cur.getX() - last.getX();
-            double dy = cur.getY() - last.getY();
-            double dz = cur.getZ() - last.getZ();
-            double segmentLengthSquared = dx * dx + dy * dy + dz * dz;
-            if (segmentLengthSquared >= 1e-8) {
-                segmentLength = Math.sqrt(segmentLengthSquared);
-                double inverseLength = 1.0 / segmentLength;
-                double intersection = obb.rayIntersection(
-                        last.getX(), last.getY(), last.getZ(),
-                        dx * inverseLength, dy * inverseLength, dz * inverseLength,
-                        segmentLength);
-                if (intersection >= 0 && intersection <= segmentLength) return intersection;
-            }
+    private static ProjectileMotion captureMotion(Projectile projectile) {
+        org.bukkit.util.Vector last = projectileLastPositions.get(projectile.getUniqueId());
+        Location current = projectile.getLocation();
+        double dx = last == null ? 0 : current.getX() - last.getX();
+        double dy = last == null ? 0 : current.getY() - last.getY();
+        double dz = last == null ? 0 : current.getZ() - last.getZ();
+        double squared = dx * dx + dy * dy + dz * dz;
+        double length = squared >= 1e-8 ? Math.sqrt(squared) : 0;
+        double inverse = length > 0 ? 1 / length : 0;
+        return new ProjectileMotion(current.getX(), current.getY(), current.getZ(),
+                last == null ? current.getX() : last.getX(), last == null ? current.getY() : last.getY(),
+                last == null ? current.getZ() : last.getZ(), dx * inverse, dy * inverse, dz * inverse,
+                length, projectile.getBoundingBox());
+    }
+
+    private static double projectileIntersectionDistance(OrientedBoundingBox obb, ProjectileMotion motion) {
+        if (motion.length() > 0) {
+            double intersection = obb.rayIntersection(motion.startX(), motion.startY(), motion.startZ(),
+                    motion.directionX(), motion.directionY(), motion.directionZ(), motion.length());
+            if (intersection >= 0 && intersection <= motion.length()) return intersection;
         }
+        double centerDistance = obb.centerDistanceIfIntersects(motion.bounds(), motion.x(), motion.y(), motion.z());
+        return centerDistance >= 0 ? motion.length() + centerDistance : -1;
+    }
 
-        // Slow, newly-launched, or resting projectiles still need the exact SAT
-        // overlap path. Sort those endpoint-only hits after swept intersections.
-        org.bukkit.util.BoundingBox projectileBounds = proj.getBoundingBox();
-        double centerDistance = obb.centerDistanceIfIntersects(
-                projectileBounds, cur.getX(), cur.getY(), cur.getZ());
-        if (centerDistance >= 0D) return segmentLength + centerDistance;
-        return -1;
+    static boolean isTargetable(ModeledEntity entity) {
+        return entity != null && !entity.isRemoved() && !entity.isDying()
+                && !(entity instanceof com.magmaguy.freeminecraftmodels.customentity.PlayerDisguiseEntity);
     }
 
     private static void dispatchProjectileHits(Projectile projectile,
@@ -482,8 +487,9 @@ public class OBBHitDetection implements Listener {
 
         for (ProjectileHitCandidate candidate : candidates) {
             ModeledEntity entity = candidate.entity();
-            ProjectileTarget routedHit = new ProjectileTarget(projectileId, entity.getModelInstanceId());
-            if (!routedProjectileHits.add(routedHit)) continue;
+            if (!isTargetable(entity)) continue;
+            if (!routedProjectileHits.computeIfAbsent(projectileId, ignored -> ConcurrentHashMap.newKeySet())
+                    .add(entity.getModelInstanceId())) continue;
 
             try {
                 entity.getInteractionComponent().callModeledEntityHitByProjectileEvent(projectile);
@@ -556,7 +562,7 @@ public class OBBHitDetection implements Listener {
         projectilesPendingRemoval.remove(projectileId);
         projectilesRetiredInBlock.remove(projectileId);
         piercingFlightRestores.remove(projectileId);
-        routedProjectileHits.removeIf(hit -> hit.projectileId().equals(projectileId));
+        routedProjectileHits.remove(projectileId);
     }
 
     private static void retireEmbeddedProjectile(Projectile projectile) {
@@ -565,7 +571,7 @@ public class OBBHitDetection implements Listener {
         projectileLastPositions.remove(projectileId);
         projectileHitCounts.remove(projectileId);
         piercingFlightRestores.remove(projectileId);
-        routedProjectileHits.removeIf(hit -> hit.projectileId().equals(projectileId));
+        routedProjectileHits.remove(projectileId);
         // Keep the Bukkit entity in activeProjectiles solely for cheap validity
         // cleanup. This blocks both the sweep and native backing-entity redirect
         // without removing the embedded arrow/trident players can still pick up.
@@ -612,7 +618,7 @@ public class OBBHitDetection implements Listener {
     private static Optional<ModeledEntity> resolvePacketInteractionTarget(
             Player player,
             ModeledEntity packetOwner) {
-        if (player == null || packetOwner == null || packetOwner.isRemoved()
+        if (player == null || !isTargetable(packetOwner)
                 || !player.isOnline() || !player.isValid()
                 || packetOwner.getWorld() == null
                 || !packetOwner.getWorld().equals(player.getWorld())) {
@@ -651,7 +657,7 @@ public class OBBHitDetection implements Listener {
             @Override
             public void run() {
                 if (!player.isOnline() || !player.isValid()
-                        || target.isRemoved() || target.getWorld() == null
+                        || !isTargetable(target) || target.getWorld() == null
                         || !target.getWorld().equals(player.getWorld())) {
                     return;
                 }
@@ -926,13 +932,15 @@ public class OBBHitDetection implements Listener {
         List<ProjectileHitCandidate> candidates = new ArrayList<>();
         World projectileWorld = projectile.getWorld();
         UUID shooterId = projectileShooterIds.get(projectile.getUniqueId());
+        ProjectileMotion motion = captureMotion(projectile);
         for (ModeledEntity entity : ModeledEntity.getLoadedModeledEntities()) {
+            if (!isTargetable(entity)) continue;
             World entityWorld = entity.getWorld();
             if (entityWorld == null || !entityWorld.equals(projectileWorld)) continue;
             Entity underlying = entity.getUnderlyingEntity();
             if (underlying != null && underlying.getUniqueId().equals(shooterId)) continue;
             double distance = projectileIntersectionDistance(
-                    entity.getHitboxComponent().getObbHitbox(), projectile);
+                    entity.getHitboxComponent().getObbHitbox(), motion);
             if (distance >= 0) {
                 candidates.add(new ProjectileHitCandidate(entity, distance));
             }

@@ -81,10 +81,19 @@ public final class PacketDiagnostics {
      *
      * @param ticks number of ticks to sample (clamped to at least 1)
      */
-    public static synchronized void arm(int ticks) {
-        if (ticks < 1) ticks = 1;
+    public static synchronized java.util.concurrent.CompletableFuture<Sample> arm(int ticks) {
+        if (current != null && !current.result.isDone())
+            throw new IllegalStateException("A packet sample is already running");
         current = new Accumulator();
-        armedTicks = ticks;
+        armedTicks = Math.max(1, ticks);
+        return current.result;
+    }
+
+    public static synchronized void cancel() {
+        if (current != null) current.result.cancel(false);
+        current = null;
+        armedTicks = 0;
+        directSink = null;
     }
 
     /**
@@ -111,12 +120,14 @@ public final class PacketDiagnostics {
      */
     public static synchronized void endTick(CountingPacketBundle wrapper, int loadedEntityCount) {
         Accumulator acc = current;
-        if (acc == null) return;
+        if (acc == null || wrapper.owner != acc) return;
+        if (acc.result.isCancelled()) { cancel(); return; }
         acc.addTick(wrapper, loadedEntityCount);
         armedTicks--;
         if (armedTicks <= 0) {
             lastSample = acc.finish();
             current = null;
+            acc.result.complete(lastSample);
         }
     }
 
@@ -154,6 +165,7 @@ public final class PacketDiagnostics {
      */
     public static final class CountingPacketBundle implements AbstractPacketBundle {
         private final AbstractPacketBundle delegate;
+        private final Accumulator owner;
 
         // entries = addPacket calls (logical packets queued this tick)
         long entries = 0;
@@ -171,6 +183,7 @@ public final class PacketDiagnostics {
 
         CountingPacketBundle(AbstractPacketBundle delegate) {
             this.delegate = delegate;
+            this.owner = current;
         }
 
         /**
@@ -250,6 +263,7 @@ public final class PacketDiagnostics {
     // ------------------------------------------------------------------
 
     private static final class Accumulator {
+        final java.util.concurrent.CompletableFuture<Sample> result = new java.util.concurrent.CompletableFuture<>();
         int ticks = 0;
         long entries = 0;
         long deliveries = 0;

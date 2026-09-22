@@ -80,6 +80,7 @@ public class ModeledEntitiesClock {
 
     public static void shutdown() {
         running = false;
+        PacketDiagnostics.cancel();
         if (clock != null) {
             clock.cancel();
             clock = null;
@@ -173,7 +174,7 @@ public class ModeledEntitiesClock {
                 PacketDiagnostics.beginDirectCapture(counting);
                 try {
                     ModeledEntity.getLoadedModeledEntities().forEach(
-                            modeledEntity -> modeledEntity.tick(counting));
+                            modeledEntity -> tickModel(modeledEntity, counting));
                     counting.send();
                 } finally {
                     PacketDiagnostics.endDirectCapture();
@@ -183,7 +184,7 @@ public class ModeledEntitiesClock {
             }
 
             ModeledEntity.getLoadedModeledEntities().forEach(
-                    modeledEntity -> modeledEntity.tick(realBundle));
+                    modeledEntity -> tickModel(modeledEntity, realBundle));
             realBundle.send();
         } finally {
             lifecycleLock.readLock().unlock();
@@ -194,6 +195,13 @@ public class ModeledEntitiesClock {
      * Refreshes contact-enabled hitboxes and fires contact callbacks on the
      * primary thread every {@value #PRIMARY_STATE_INTERVAL_TICKS} ticks.
      */
+    private static void tickModel(ModeledEntity modeledEntity, AbstractPacketBundle bundle) {
+        // Viewer admission transforms the same bone matrices on the primary thread.
+        synchronized (modeledEntity.getSkeleton()) {
+            if (!modeledEntity.isRemoved()) modeledEntity.tick(bundle);
+        }
+    }
+
     private static void tickHitboxes() {
         if (!running) return;
         ModeledEntity.getLoadedModeledEntities().forEach(modeledEntity -> {

@@ -307,6 +307,24 @@ public class BoneTransforms {
 
     }
 
+    /** Refresh packet-entity state once at admission, even when no viewer existed. */
+    void prepareDisplayPose(AbstractPacketBundle packetBundle) {
+        Location origin = bone.getSkeleton().getCurrentLocation();
+        if (packetArmorStandEntity != null) {
+            readTargetPosition(origin, positionBuffer, true);
+            readTargetRotation(rotationBuffer, true);
+            sendArmorStandUpdatePacket(packetBundle, createTargetLocation(origin, positionBuffer, true),
+                    new EulerAngle(rotationBuffer[0], rotationBuffer[1], rotationBuffer[2]));
+        }
+        if (packetDisplayEntity != null) {
+            readTargetPosition(origin, positionBuffer, false);
+            readTargetRotation(rotationBuffer, false);
+            globalMatrix.getScale(scaleBuffer);
+            sendDisplayEntityUpdatePacket(packetBundle, createTargetLocation(origin, positionBuffer, false),
+                    new EulerAngle(rotationBuffer[0], rotationBuffer[1], rotationBuffer[2]), scaleBuffer);
+        }
+    }
+
     private boolean armorStandChanged(double[] position, double[] rotation) {
         if (!armorStandStateValid) return true;
         return !same(asLx, position[0]) || !same(asLy, position[1]) || !same(asLz, position[2])
