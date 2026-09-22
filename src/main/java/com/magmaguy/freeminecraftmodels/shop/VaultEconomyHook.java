@@ -61,6 +61,26 @@ public final class VaultEconomyHook {
         return economy.withdrawPlayer(player, amount).transactionSuccess();
     }
 
+    static boolean refund(Player player, double amount) {
+        if (!enabled) return false;
+        try {
+            if (economy.depositPlayer(player, amount).transactionSuccess()) return true;
+        } catch (RuntimeException failure) {
+            Logger.warn("[FMM Shop] Refund provider failed: " + failure.getMessage());
+        }
+        // Do not permit further charges after a failed compensation. Reload rebinds
+        // the provider once the administrator has reconciled the reported payment.
+        disableUnresolvedPurchase(player, amount, "Refund failed for undelivered items");
+        return false;
+    }
+
+    static void disableUnresolvedPurchase(Player player, double chargedAmount, String detail) {
+        enabled = false;
+        Logger.warn("[FMM Shop] Disabled after unresolved purchase. Player " + player.getUniqueId()
+                + ", amount requiring review: " + chargedAmount + ". " + detail
+                + ". Reconcile this before reloading.");
+    }
+
     public static String formatAmount(double amount) {
         if (!enabled) return String.valueOf(amount);
         return economy.format(amount);

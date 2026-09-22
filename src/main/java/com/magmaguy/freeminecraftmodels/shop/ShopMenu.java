@@ -179,7 +179,8 @@ public class ShopMenu {
             PurchaseHandler.Outcome outcome = PurchaseHandler.attempt(player, recipe);
             sendOutcomeMessage(player, recipe, outcome);
 
-            if (outcome.result == PurchaseHandler.Result.SHOP_DISABLED) {
+            if (outcome.result == PurchaseHandler.Result.SHOP_DISABLED
+                    || outcome.result == PurchaseHandler.Result.DELIVERY_FAILED_REFUND_PENDING) {
                 player.closeInventory();
             }
         }
@@ -212,6 +213,10 @@ public class ShopMenu {
                         ShopConfig.getInsufficientFundsMessage(), itemName, priceText, balanceText));
                 case NOT_FOR_SALE -> Logger.sendMessage(player, applyPlaceholders(
                         ShopConfig.getItemNotForSaleMessage(), itemName, priceText, balanceText));
+                case DELIVERY_FAILED_REFUNDED -> Logger.sendMessage(player,
+                        "&cThe item could not be delivered. The undelivered amount was refunded.");
+                case DELIVERY_FAILED_REFUND_PENDING -> Logger.sendMessage(player,
+                        "&cThe purchase could not be settled. The shop has been disabled; contact an administrator to review your payment.");
                 case SHOP_DISABLED -> Logger.sendMessage(player,
                         ShopConfig.getShopDisabledMessage());
             }

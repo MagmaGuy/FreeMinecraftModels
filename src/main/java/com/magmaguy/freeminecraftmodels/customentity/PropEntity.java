@@ -10,7 +10,6 @@ import com.magmaguy.freeminecraftmodels.listeners.ArmorStandListener;
 import com.magmaguy.freeminecraftmodels.scripting.LuaPropTable;
 import com.magmaguy.freeminecraftmodels.scripting.PropScriptManager;
 import com.magmaguy.freeminecraftmodels.utils.ImmutableMapSnapshots;
-import com.magmaguy.magmacore.util.ChunkLocationChecker;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 import org.bukkit.*;
@@ -23,7 +22,8 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
-import org.bukkit.event.world.ChunkUnloadEvent;
+import org.bukkit.event.world.EntitiesUnloadEvent;
+import org.bukkit.event.entity.EntityRemoveEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
 import org.bukkit.event.world.EntitiesLoadEvent;
 import org.bukkit.inventory.EquipmentSlot;
@@ -47,7 +47,6 @@ public class PropEntity extends StaticEntity {
     private boolean voxelize = false;
     @Getter
     private boolean solidify = false;
-    private String chunkHash;
     private final long spawnTimeMillis = System.currentTimeMillis();
 
     public void setVoxelizeConfig(boolean voxelize, boolean solidify) {
@@ -109,6 +108,10 @@ public class PropEntity extends StaticEntity {
     }
 
     public PropEntity(String entityID, ArmorStand armorStand) {
+        this(entityID, armorStand, true);
+    }
+
+    private PropEntity(String entityID, ArmorStand armorStand, boolean startScripts) {
         super(requireValidModelId(entityID), armorStand.getLocation());
         initializePropEntity();
 
@@ -116,13 +119,12 @@ public class PropEntity extends StaticEntity {
         // to the asynchronous model clock until its entity and displays are
         // completely initialized.
         super.spawn(armorStand);
-        PropScriptManager.onPropSpawn(this);
+        if (startScripts) PropScriptManager.onPropSpawn(this);
     }
 
     @Override
     protected void onSpawnComplete() {
         if (underlyingEntity == null) return;
-        chunkHash = ChunkLocationChecker.chunkToString(underlyingEntity.getLocation().getChunk());
         propEntities.put(underlyingEntity.getUniqueId(), this);
     }
 
@@ -134,17 +136,29 @@ public class PropEntity extends StaticEntity {
     }
 
     public static void onStartup() {
-        for (World world : Bukkit.getWorlds()) {
-            for (Chunk loadedChunk : world.getLoadedChunks()) {
-                removeDuplicatePropsInChunk(loadedChunk);
-                for (Entity entity : loadedChunk.getEntities()) {
-                    if (entity instanceof ArmorStand armorStand) {
-                        String propEntityID = getPropEntityID(armorStand);
-                        if (propEntityID == null) continue;
-                        respawnPropEntityFromArmorStand(propEntityID, armorStand);
-                    }
-                }
+        for (World world : Bukkit.getWorlds())
+            for (Chunk loadedChunk : world.getLoadedChunks())
+                restoreProps(Arrays.asList(loadedChunk.getEntities()));
+    }
+
+    private static void restoreProps(Collection<? extends Entity> entities) {
+        // Deduplicate once, bind the surviving bodies, then dispatch scripts. A spawn
+        // script can move another prop without invalidating an unbound batch snapshot.
+        List<Entity> snapshot = new ArrayList<>(entities);
+        removeDuplicateProps(snapshot);
+        List<PropEntity> restored = new ArrayList<>();
+        try {
+            for (Entity entity : snapshot) {
+                if (!(entity instanceof ArmorStand stand) || !stand.isValid()) continue;
+                String modelId = getPropEntityID(stand);
+                if (modelId == null) continue;
+                PropEntity previous = propEntities.get(stand.getUniqueId());
+                PropEntity prop = attachRestoredProp(modelId, stand, false);
+                if (prop != null && prop != previous) restored.add(prop);
             }
+        } finally {
+            for (PropEntity prop : restored)
+                if (!prop.isRemoved() && prop.getUnderlyingEntity().isValid()) PropScriptManager.onPropSpawn(prop);
         }
     }
 
@@ -179,23 +193,22 @@ public class PropEntity extends StaticEntity {
      *                           {@code null} to look them up on demand.
      */
     static PropEntity respawnPropEntityFromArmorStand(String entityID, ArmorStand armorStand, Collection<? extends Entity> knownChunkEntities) {
-        FileModelConverter fileModelConverter = FileModelConverter.getModel(entityID);
-        if (fileModelConverter == null || fileModelConverter.getSkeletonBlueprint() == null) {
-            //Intentional design: skip silently. Placed props can reference models from packs that are
-            //currently uninstalled; that is a normal state, and this runs per armor stand per chunk
-            //load, so logging here would spam the console (the prop restores again once the pack is back).
-            return null;
-        }
+        if (!isValidModelId(entityID)) return null;
         if (removeIfDuplicateProp(entityID, armorStand, knownChunkEntities)) return null;
+        return attachRestoredProp(entityID, armorStand, true);
+    }
+
+    private static PropEntity attachRestoredProp(String entityID, ArmorStand armorStand, boolean startScripts) {
+        FileModelConverter fileModelConverter = FileModelConverter.getModel(entityID);
+        // Uninstalled packs are normal: retain their saved props for a later restore.
+        if (fileModelConverter == null || fileModelConverter.getSkeletonBlueprint() == null) return null;
         PropEntity cached = propEntities.get(armorStand.getUniqueId());
         if (cached != null) {
             if (cached.getUnderlyingEntity() == armorStand && !cached.isRemoved()) return cached;
-            // Copied instance worlds reuse saved entity UUIDs. A wrapper for the
-            // previous stand must not prevent attachment to the newly loaded one.
+            // Copied worlds reuse UUIDs; only the exact native body owns this wrapper.
             cached.remove(false);
         }
-        PropEntity propEntity = new PropEntity(entityID, armorStand);
-        return propEntity;
+        return new PropEntity(entityID, armorStand, startScripts);
     }
 
     private static String requireValidModelId(String entityID) {
@@ -613,29 +626,33 @@ public class PropEntity extends StaticEntity {
          */
         @EventHandler(priority = EventPriority.LOWEST)
         public void onEntitiesLoadEvent(EntitiesLoadEvent event) {
-            // Copied because the dedupe pass removes armor stands as it goes.
-            List<Entity> loadedEntities = new ArrayList<>(event.getEntities());
-            removeDuplicateProps(loadedEntities);
-            for (Entity entity : loadedEntities) {
-                if (entity instanceof ArmorStand armorStand) {
-                    if (!armorStand.isValid()) continue;
-                    String propEntityID = getPropEntityID(armorStand);
-                    if (propEntityID == null) continue;
-                    respawnPropEntityFromArmorStand(propEntityID, armorStand, loadedEntities);
-                }
+            restoreProps(event.getEntities());
+        }
+
+        @EventHandler(priority = EventPriority.MONITOR)
+        public void onEntitiesUnloadEvent(EntitiesUnloadEvent event) {
+            // This event precedes entity serialization, so closing the shared prop
+            // inventory still updates the PDC that is about to be saved.
+            Deque<Entity> pending = new ArrayDeque<>(event.getEntities());
+            Set<Entity> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+            while (!pending.isEmpty()) {
+                Entity body = pending.removeFirst();
+                if (!seen.add(body)) continue;
+                pending.addAll(body.getPassengers());
+                removeUnloadingBody(body);
             }
         }
 
-        //todo: well this isn't going to scale well
-        @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-        public void onChunkUnloadEvent(ChunkUnloadEvent event) {
-            String chunkHash = ChunkLocationChecker.chunkToString(event.getChunk());
-            Collection<PropEntity> propEntitiesClone = new ArrayList<>(PropEntity.propEntities.values());
-            for (PropEntity value : propEntitiesClone) {
-                if (value.chunkHash.equals(chunkHash)) {
-                    value.remove(false);
-                }
-            }
+        @EventHandler(priority = EventPriority.MONITOR)
+        public void onEntityRemoved(EntityRemoveEvent event) {
+            // Non-persistent bodies need no save and may be absent from the saved
+            // entity batch. Native removal is their final cleanup boundary.
+            if (event.getCause() == EntityRemoveEvent.Cause.UNLOAD) removeUnloadingBody(event.getEntity());
+        }
+
+        private static void removeUnloadingBody(Entity body) {
+            PropEntity prop = propEntities.get(body.getUniqueId());
+            if (prop != null && prop.getUnderlyingEntity() == body) prop.remove(false);
         }
 
         @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
