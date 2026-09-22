@@ -3,8 +3,10 @@ package com.magmaguy.freeminecraftmodels.config.recipes;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.magmacore.config.ConfigurationEngine;
 import com.magmaguy.magmacore.util.Logger;
+import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.inventory.Recipe;
 
 import java.io.File;
 import java.util.HashMap;
@@ -63,17 +65,27 @@ public class PropRecipeManager {
         loadedRecipes.clear();
     }
 
-    public static void addRecipe(PropRecipeConfig config) {
-        PropRecipeConfig existing = loadedRecipes.get(config.getModelId());
-        if (existing != null) {
-            existing.unregisterRecipe();
-        }
+    public static boolean addRecipe(PropRecipeConfig config) {
+        Recipe previous = null;
+        boolean registered = false;
         try {
-            ConfigurationEngine.fileSaverCustomValues(config.getFileConfiguration(), config.getFile());
+            previous = Bukkit.getRecipe(config.recipeKey());
             config.registerRecipe();
+            registered = true;
+            ConfigurationEngine.fileSaverCustomValues(config.getFileConfiguration(), config.getFile());
             loadedRecipes.put(config.getModelId(), config);
+            return true;
         } catch (Exception e) {
+            if (registered) {
+                try {
+                    config.restoreRecipe(previous);
+                } catch (RuntimeException restorationFailure) {
+                    e.addSuppressed(restorationFailure);
+                    Logger.warn("Could not restore recipe for " + config.getModelId() + ": " + restorationFailure.getMessage());
+                }
+            }
             Logger.warn("Failed to save/register recipe for " + config.getModelId() + ": " + e.getMessage());
+            return false;
         }
     }
 

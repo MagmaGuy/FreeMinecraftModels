@@ -17,13 +17,24 @@ public final class ItemScriptManager {
     public static final NamespacedKey ITEM_ID_KEY = new NamespacedKey(MetadataHandler.PLUGIN, "fmm_item_id");
 
     public record ItemCatalog(Map<String, PropScriptConfigFields> definitions, Map<String, File> sources,
-                              MagicWeaponCatalog weapons) {
-        public ItemCatalog { definitions = Map.copyOf(definitions); sources = Map.copyOf(sources); }
+                              MagicWeaponCatalog weapons, Map<String, PropScriptConfigFields> props) {
+        public ItemCatalog {
+            definitions = Map.copyOf(definitions);
+            sources = Map.copyOf(sources);
+            props = Map.copyOf(props);
+        }
     }
-    private static volatile ItemCatalog catalog = new ItemCatalog(Map.of(), Map.of(), new MagicWeaponCatalog(List.of()));
+    private static volatile ItemCatalog catalog = new ItemCatalog(Map.of(), Map.of(), new MagicWeaponCatalog(List.of()), Map.of());
     public static Map<String, PropScriptConfigFields> getItemDefinitions() { return catalog.definitions(); }
     public static Map<String, File> getItemSourceFiles() { return catalog.sources(); }
     public static MagicWeaponCatalog getWeaponCatalog() { return catalog.weapons(); }
+    /** Prop settings share the same prepared generation as items and change on content reload. */
+    public static PropScriptConfigFields getPropDefinition(File siblingYml) {
+        if (siblingYml == null) return null;
+        String filename = siblingYml.getName();
+        String id = filename.substring(0, filename.length() - 4).toLowerCase(Locale.ROOT);
+        return catalog.props().get(id);
+    }
 
     private ItemScriptManager() { }
 
@@ -44,6 +55,7 @@ public final class ItemScriptManager {
         try {
             var root = directory.toPath().toRealPath();
             Map<String, PropScriptConfigFields> definitions = new LinkedHashMap<>();
+            Map<String, PropScriptConfigFields> props = new LinkedHashMap<>();
             Map<String, File> sources = new LinkedHashMap<>();
             List<File> files;
             try (var walk = java.nio.file.Files.walk(root)) {
@@ -66,6 +78,8 @@ public final class ItemScriptManager {
                 } catch (IllegalArgumentException invalid) {
                     throw new IllegalArgumentException(file + ": " + invalid.getMessage(), invalid);
                 }
+                if (props.putIfAbsent(itemId, fields) != null)
+                    throw new IllegalArgumentException("Duplicate model configuration identity: " + itemId);
                 if (fields.getUnavailableReason() != null) {
                     String message = "[FMM Items] Skipping " + file + ": " + fields.getUnavailableReason()
                             + ". The file was left unchanged; other content will continue loading.";
@@ -84,7 +98,7 @@ public final class ItemScriptManager {
                 sources.put(itemId, bbmodel.isFile() ? bbmodel : fmmodel.isFile() ? fmmodel : file);
             }
             return new ItemCatalog(definitions, sources, new MagicWeaponCatalog(definitions.values().stream()
-                    .map(PropScriptConfigFields::getWeapon).filter(Objects::nonNull).toList()));
+                    .map(PropScriptConfigFields::getWeapon).filter(Objects::nonNull).toList()), props);
         } catch (java.io.IOException | org.bukkit.configuration.InvalidConfigurationException failure) {
             throw new IllegalArgumentException("Invalid FMM item catalog: " + failure.getMessage(), failure);
         }
@@ -96,6 +110,6 @@ public final class ItemScriptManager {
     }
 
     public static void shutdown() {
-        catalog = new ItemCatalog(Map.of(), Map.of(), new MagicWeaponCatalog(List.of()));
+        catalog = new ItemCatalog(Map.of(), Map.of(), new MagicWeaponCatalog(List.of()), Map.of());
     }
 }

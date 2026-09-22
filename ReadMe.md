@@ -83,6 +83,8 @@ Debug commands also exist (`hitboxdebug`, `locationdebug`, `bedrockdebug`, `dele
 
 Special bones/conventions: bones named `hitbox` and `tag_name` are treated as collision/nametag anchors; `mount_`-prefixed bones become rideable seats.
 
+After editing a model's sibling `.yml`, run `/fmm reload` to apply its item and prop settings, including scripts, `voxelize`, and `solidify`. Spawning another prop uses the currently loaded settings. A malformed configuration rejects preparation and keeps the previous catalog active. The first spawn without a definition creates a default file; edit that file and reload before using its settings.
+
 ## Equipment, interactions, and names
 
 FMM also supports custom enchantments, authored weapon abilities, and magic staff and wand projectiles, with EliteMobs combat integration. Custom item definitions and model configuration live in the generated plugin data folder; keep related model, item, and resource-pack files together when sharing content.
