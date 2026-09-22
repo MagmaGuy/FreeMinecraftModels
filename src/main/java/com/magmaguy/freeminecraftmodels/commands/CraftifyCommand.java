@@ -39,12 +39,7 @@ public class CraftifyCommand extends AdvancedCommand {
 
     public CraftifyCommand() {
         super(List.of("craftify"));
-        List<String> entityIDs = FileModelConverter.getConvertedFileModels().values().stream()
-                .filter(ModelMenuHelper::isMenuModel)
-                .map(ModelMenuHelper::getMenuModelId)
-                .sorted(Comparator.naturalOrder())
-                .collect(Collectors.collectingAndThen(Collectors.toCollection(LinkedHashSet::new), ArrayList::new));
-        addArgument("model", new ListStringCommandArgument(entityIDs, "<model>"));
+        addArgument("model", new com.magmaguy.freeminecraftmodels.commands.arguments.LiveModelIDsArgument("<model>", true));
         setDescription("Opens an interactive recipe builder for a model prop");
         setPermission("freeminecraftmodels.*");
         setUsage("/fmm craftify <model>");
@@ -124,8 +119,7 @@ public class CraftifyCommand extends AdvancedCommand {
         }
         inv.setItem(49, instructions);
 
-        CraftifyListener.startSession(player, modelID);
-        player.openInventory(inv);
+        CraftifyListener.startSession(player, modelID, inv);
     }
 
     private static boolean isKnownMenuModel(String modelID) {

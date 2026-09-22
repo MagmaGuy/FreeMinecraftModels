@@ -50,6 +50,7 @@ public class AnimationManager {
                 lastCommitted = previous.getType();
             }
         }
+        modeledEntity.getSkeleton().clearAllIKRotations();
         current = target;
         current.enter();
     }
@@ -115,6 +116,7 @@ public class AnimationManager {
             return;
         }
         if (current != null) current.exit();
+        modeledEntity.getSkeleton().clearAllIKRotations();
         current = null;
     }
 

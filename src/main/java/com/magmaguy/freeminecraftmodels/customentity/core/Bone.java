@@ -97,6 +97,12 @@ public class Bone {
         skeleton.getSkeletonWatchers().sendPackets(this, abstractPacketBundle);
     }
 
+    void prepareDisplayPose(AbstractPacketBundle packetBundle) {
+        boneTransforms.transform();
+        boneTransforms.prepareDisplayPose(packetBundle);
+        for (Bone child : boneChildren) child.prepareDisplayPose(packetBundle);
+    }
+
     public void generateDisplay() {
         boneTransforms.generateDisplay();
         boneChildren.forEach(Bone::generateDisplay);

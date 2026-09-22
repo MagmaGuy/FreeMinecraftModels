@@ -63,9 +63,19 @@ public class MountSeat {
             it.getPersistentDataContainer().set(MOUNT_SEAT_KEY, PersistentDataType.BYTE, (byte) 1);
         });
 
-        vehicle.addPassenger(player);
-        occupant = player;
-        return true;
+        Interaction candidate = vehicle;
+        boolean mounted = false;
+        try {
+            mounted = candidate.addPassenger(player) && player.getVehicle() == candidate
+                    && !modeledEntity.isRemoved() && vehicle == candidate;
+            if (mounted) occupant = player;
+            return mounted;
+        } finally {
+            if (!mounted) {
+                candidate.remove();
+                if (vehicle == candidate) vehicle = null;
+            }
+        }
     }
 
     /**
@@ -88,7 +98,7 @@ public class MountSeat {
      */
     public void tick() {
         if (vehicle == null || occupant == null) return;
-        if (!occupant.isOnline() || !occupant.isValid()) {
+        if (!occupant.isOnline() || !occupant.isValid() || !vehicle.isValid() || occupant.getVehicle() != vehicle) {
             dismount();
             return;
         }

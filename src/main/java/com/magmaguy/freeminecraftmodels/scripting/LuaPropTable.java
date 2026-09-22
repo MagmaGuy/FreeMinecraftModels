@@ -221,24 +221,9 @@ public final class LuaPropTable {
             int size = rows * 9;
             final int finalSize = size;
             Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
-                Inventory inv = Bukkit.createInventory(null, finalSize, com.magmaguy.magmacore.util.ChatColorConverter.convert(title));
-
-                // Load existing contents from PDC
-                String savedData = armorStand.getPersistentDataContainer()
-                        .get(INVENTORY_KEY, PersistentDataType.STRING);
-                if (savedData != null) {
-                    ItemStack[] items = deserializeInventory(savedData);
-                    if (items != null) {
-                        for (int i = 0; i < Math.min(items.length, finalSize); i++) {
-                            if (items[i] != null) inv.setItem(i, items[i]);
-                        }
-                    }
-                }
-
-                // Track this inventory so we can save on close
-                PropInventoryListener.initialize();
-                PropInventoryListener.trackInventory(player.getUniqueId(), inv, armorStand);
-                player.openInventory(inv);
+                if (prop.isRemoved()) return;
+                PropInventoryListener.openInventory(player, armorStand, finalSize,
+                        com.magmaguy.magmacore.util.ChatColorConverter.convert(title));
             });
             return LuaValue.TRUE;
         }));
@@ -420,7 +405,7 @@ public final class LuaPropTable {
         }
     }
 
-    private static ItemStack[] deserializeInventory(String data) {
+    static ItemStack[] deserializeInventory(String data) {
         try {
             ByteArrayInputStream inputStream = new ByteArrayInputStream(Base64.getDecoder().decode(data));
             BukkitObjectInputStream dataInput = new BukkitObjectInputStream(inputStream);

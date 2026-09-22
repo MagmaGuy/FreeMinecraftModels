@@ -72,7 +72,7 @@ public class ParsedTexture {
         isValid = true;
     }
 
-    private static String normalizeTextureFilename(String filename) {
+    static String normalizeTextureFilename(String filename) {
         int extensionIndex = filename.lastIndexOf('.');
         String baseName = extensionIndex >= 0 ? filename.substring(0, extensionIndex) : filename;
         return baseName + ".png";

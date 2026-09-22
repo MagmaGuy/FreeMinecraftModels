@@ -31,6 +31,17 @@ record MagicCast(
         effects = com.magmaguy.magmacore.enchantments.EnchantmentInputs.copySnapshot(effects);
     }
 
+    com.magmaguy.freeminecraftmodels.api.magic.MagicTargetRequest targetRequest(org.bukkit.entity.LivingEntity target) {
+        return new com.magmaguy.freeminecraftmodels.api.magic.MagicTargetRequest(
+                attackId, attackKind, owner, target, weapon);
+    }
+
+    com.magmaguy.freeminecraftmodels.api.magic.MagicAttackRequest attackRequest(org.bukkit.entity.LivingEntity target,
+            com.magmaguy.freeminecraftmodels.api.magic.MagicAttackBalance balance) {
+        return new com.magmaguy.freeminecraftmodels.api.magic.MagicAttackRequest(
+                attackId, attackKind, owner, target, weapon, balance, equipment, resolverFacts);
+    }
+
     @Override
     public ItemStack weapon() {
         return weapon.clone();

@@ -73,6 +73,9 @@ public class ScriptableProp extends ScriptableEntity {
 
     @Override
     public LuaValue resolveExtraContext(String key, ScriptInstance instance) {
+        if ("projectile".equals(key) && instance.getCurrentEvent() instanceof
+                com.magmaguy.freeminecraftmodels.api.ModeledEntityHitByProjectileEvent hit)
+            return com.magmaguy.magmacore.scripting.tables.LuaEntityTable.build(hit.getProjectile());
         return LuaValue.NIL;
     }
 

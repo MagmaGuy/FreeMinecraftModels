@@ -144,6 +144,10 @@ public final class BedrockEntityBundleExporter {
                 .replace('\\', '_');
     }
 
+    private static String animationKey(String name) {
+        return "a_" + java.util.HexFormat.of().formatHex(name.getBytes(StandardCharsets.UTF_8));
+    }
+
     private static void writeMaterials(File root) throws Exception {
         JsonObject materials = new JsonObject();
         JsonObject versioned = new JsonObject();
@@ -450,11 +454,11 @@ public final class BedrockEntityBundleExporter {
                 writeLoopMode(animationJson, animation.getLoopType());
                 animationJson.add("bones", bedrockAnimationBones(
                         animation, visualBones, converter.getBlockBenchVersion()));
-                animations.add("animation.fmm." + modelId + "." + safeName(animationName), animationJson);
+                animations.add("animation.fmm." + modelId + "." + animationKey(animationName), animationJson);
             }
         }
         if (animations.entrySet().isEmpty()) {
-            animations.add("animation.fmm." + modelId + ".idle", noopAnimation(visualBones));
+            animations.add("animation.fmm." + modelId + "." + animationKey("idle"), noopAnimation(visualBones));
         }
 
         JsonObject rootJson = new JsonObject();
@@ -480,7 +484,7 @@ public final class BedrockEntityBundleExporter {
 
             JsonObject playState = new JsonObject();
             JsonArray playAnimations = new JsonArray();
-            playAnimations.add(safeName(animation));
+            playAnimations.add("anim_" + animationKey(animation));
             playState.add("animations", playAnimations);
             playState.addProperty("blend_transition", 0.1);
             JsonArray playTransitions = new JsonArray();
@@ -504,7 +508,7 @@ public final class BedrockEntityBundleExporter {
             JsonObject controller = new JsonObject();
             controller.addProperty("initial_state", "stop");
             controller.add("states", states);
-            controllers.add("controller.animation.fmm." + modelId + "." + safeName(animation), controller);
+            controllers.add("controller.animation.fmm." + modelId + "." + animationKey(animation), controller);
         }
 
         JsonObject rootJson = new JsonObject();
@@ -533,9 +537,9 @@ public final class BedrockEntityBundleExporter {
         List<String> exportedAnimations = exportedAnimationNames(converter);
         JsonObject animations = new JsonObject();
         for (String animation : exportedAnimations) {
-            String safe = safeName(animation);
-            animations.addProperty(safe, "animation.fmm." + modelId + "." + safe);
-            animations.addProperty(safe + "_control", "controller.animation.fmm." + modelId + "." + safe);
+            String safe = animationKey(animation);
+            animations.addProperty("anim_" + safe, "animation.fmm." + modelId + "." + safe);
+            animations.addProperty("control_" + safe, "controller.animation.fmm." + modelId + "." + safe);
         }
         if (!animations.entrySet().isEmpty()) {
             description.add("animations", animations);
@@ -543,7 +547,7 @@ public final class BedrockEntityBundleExporter {
 
         JsonArray animate = new JsonArray();
         for (String animation : exportedAnimations) {
-            animate.add(safeName(animation) + "_control");
+            animate.add("control_" + animationKey(animation));
         }
         if (!animate.isEmpty()) {
             JsonObject scripts = new JsonObject();
@@ -655,63 +659,55 @@ public final class BedrockEntityBundleExporter {
     }
 
     private static JsonObject channel(AnimationFrame[] frames, Channel channel, int blockBenchVersion) {
-        if (allDefault(frames, channel, blockBenchVersion)) {
-            return null;
-        }
-
         JsonObject keyframes = new JsonObject();
-        JsonArray previous = null;
+        double[] current = new double[3], previous = new double[3], retained = new double[3];
+        double defaultValue = channel == Channel.SCALE ? 1 : 0;
+        boolean allDefault = true;
+        int lastEmitted = -1;
         for (int tick = 0; tick < frames.length; tick++) {
-            JsonArray current = vector(frames[tick], channel, blockBenchVersion);
-            boolean last = tick == frames.length - 1;
-            if (tick == 0 || last || !sameVector(previous, current)) {
-                keyframes.add(timeKey(tick), current);
-                previous = current;
+            vector(frames[tick], channel, current);
+            for (double component : current)
+                if (Math.abs(component - defaultValue) > 0.0001) allDefault = false;
+            boolean changed = tick == 0 || !sameVector(retained, current);
+            if (changed) {
+                // Keep the far end of a held pose before the next changed value.
+                if (tick > 0 && lastEmitted < tick - 1)
+                    keyframes.add(timeKey(tick - 1), array(previous[0], previous[1], previous[2]));
+                keyframes.add(timeKey(tick), array(current[0], current[1], current[2]));
+                System.arraycopy(current, 0, retained, 0, 3);
+                lastEmitted = tick;
+            } else if (tick == frames.length - 1) {
+                keyframes.add(timeKey(tick), array(current[0], current[1], current[2]));
+            }
+            System.arraycopy(current, 0, previous, 0, 3);
+        }
+        return allDefault ? null : keyframes;
+    }
+
+    private static void vector(AnimationFrame frame, Channel channel, double[] result) {
+        switch (channel) {
+            case ROTATION -> {
+                result[0] = Math.toDegrees(-frame.xRotation);
+                result[1] = Math.toDegrees(-frame.yRotation);
+                result[2] = Math.toDegrees(frame.zRotation);
+            }
+            case POSITION -> {
+                result[0] = -frame.xPosition * 16.0;
+                result[1] = frame.yPosition * 16.0;
+                result[2] = frame.zPosition * 16.0;
+            }
+            case SCALE -> {
+                result[0] = frame.scaleX == null ? 1.0 : frame.scaleX;
+                result[1] = frame.scaleY == null ? 1.0 : frame.scaleY;
+                result[2] = frame.scaleZ == null ? 1.0 : frame.scaleZ;
             }
         }
-        return keyframes;
+        for (int axis = 0; axis < 3; axis++) result[axis] = round(result[axis]);
     }
 
-    private static boolean allDefault(AnimationFrame[] frames, Channel channel, int blockBenchVersion) {
-        for (AnimationFrame frame : frames) {
-            JsonArray vector = vector(frame, channel, blockBenchVersion);
-            if (!sameVector(vector, defaultVector(channel))) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static JsonArray vector(AnimationFrame frame, Channel channel, int blockBenchVersion) {
-        return switch (channel) {
-            case ROTATION -> array(
-                    Math.toDegrees(-frame.xRotation),
-                    Math.toDegrees(-frame.yRotation),
-                    Math.toDegrees(frame.zRotation));
-            case POSITION -> array(
-                    -frame.xPosition * 16.0,
-                    frame.yPosition * 16.0,
-                    frame.zPosition * 16.0);
-            case SCALE -> array(
-                    frame.scaleX == null ? 1.0 : frame.scaleX,
-                    frame.scaleY == null ? 1.0 : frame.scaleY,
-                    frame.scaleZ == null ? 1.0 : frame.scaleZ);
-        };
-    }
-
-    private static JsonArray defaultVector(Channel channel) {
-        return channel == Channel.SCALE ? array(1, 1, 1) : array(0, 0, 0);
-    }
-
-    private static boolean sameVector(JsonArray left, JsonArray right) {
-        if (left == null || right == null || left.size() != right.size()) {
-            return false;
-        }
-        for (int i = 0; i < left.size(); i++) {
-            if (Math.abs(left.get(i).getAsDouble() - right.get(i).getAsDouble()) > 0.0001) {
-                return false;
-            }
-        }
+    private static boolean sameVector(double[] left, double[] right) {
+        for (int axis = 0; axis < 3; axis++)
+            if (Math.abs(left[axis] - right[axis]) > 0.0001) return false;
         return true;
     }
 

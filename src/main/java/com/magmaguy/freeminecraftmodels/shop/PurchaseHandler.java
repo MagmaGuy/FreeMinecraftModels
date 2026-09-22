@@ -47,10 +47,11 @@ public final class PurchaseHandler {
         if (!ShopConfig.isEnabled() || !VaultEconomyHook.isEnabled()) {
             return new Outcome(Result.SHOP_DISABLED, 0, 0, null);
         }
-        if (!recipe.isShopEnabled()) {
+        if (!recipe.isShopEnabled() || !com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter.containsModel(recipe.getModelId())) {
             return new Outcome(Result.NOT_FOR_SALE, 0, 0, null);
         }
 
+        ItemStack output = ModelItemFactory.createModelItem(recipe.getModelId(), Material.PAPER);
         double price = recipe.getShopPrice();
         double balance = VaultEconomyHook.getBalance(player);
         if (balance < price) {
@@ -62,7 +63,6 @@ public final class PurchaseHandler {
             return new Outcome(Result.INSUFFICIENT_FUNDS, price, balance, null);
         }
 
-        ItemStack output = ModelItemFactory.createModelItem(recipe.getModelId(), Material.PAPER);
         HashMap<Integer, ItemStack> overflow = player.getInventory().addItem(output);
         boolean hadOverflow = !overflow.isEmpty();
         if (hadOverflow) {

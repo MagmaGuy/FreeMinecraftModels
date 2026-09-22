@@ -13,15 +13,22 @@ import java.util.List;
  */
 public class LiveModelIDsArgument implements ICommandArgument {
     private final String hint;
+    private final boolean menuModels;
 
     public LiveModelIDsArgument(String hint) {
+        this(hint, false);
+    }
+
+    public LiveModelIDsArgument(String hint, boolean menuModels) {
         this.hint = hint;
+        this.menuModels = menuModels;
     }
 
     private List<String> ids() {
         return FileModelConverter.getConvertedFileModels().values().stream()
-                .map(FileModelConverter::getID)
-                .toList();
+                .filter(model -> !menuModels || com.magmaguy.freeminecraftmodels.menus.ModelMenuHelper.isMenuModel(model))
+                .map(model -> menuModels ? com.magmaguy.freeminecraftmodels.menus.ModelMenuHelper.getMenuModelId(model) : model.getID())
+                .distinct().sorted().toList();
     }
 
     @Override

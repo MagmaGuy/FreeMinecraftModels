@@ -346,8 +346,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         MagicAttackResolver active = cast.resolver();
         if (active == null) return MagicAttackResolver.defaultTargetPriority(target);
         try {
-            return active.targetPriority(new MagicTargetRequest(
-                    cast.attackId(), cast.attackKind(), cast.owner(), target, cast.weapon()));
+            return active.targetPriority(cast.targetRequest(target));
         } catch (Throwable policyFailure) {
             return MagicAttackResolver.defaultTargetPriority(target);
         }
@@ -441,8 +440,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
                 BuiltInMagicWeapons.STANDALONE_REFERENCE_DAMAGE,
                 cast.definition().basePower(cast.attackKind()),
                 impactScale);
-        MagicAttackRequest request = new MagicAttackRequest(
-                cast.attackId(), cast.attackKind(), cast.owner(), target, cast.weapon(), balance, cast.equipment(), cast.resolverFacts());
+        MagicAttackRequest request = cast.attackRequest(target, balance);
         boolean[] accepted = {false};
         MagicResolutionOutcome outcome = damageResolution.resolve(
                 request, cast.resolver(), damage -> accepted[0] = damageTarget(cast, target, damage));
@@ -463,8 +461,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         MagicAttackResolver active = cast.resolver();
         if (active == null) return true;
         try {
-            return active.isTargetEligible(new MagicTargetRequest(
-                    cast.attackId(), cast.attackKind(), cast.owner(), target, cast.weapon()));
+            return active.isTargetEligible(cast.targetRequest(target));
         } catch (Throwable policyFailure) {
             if (!targetPolicyWarningSent) {
                 targetPolicyWarningSent = true;

@@ -350,30 +350,12 @@ public class FileModelConverter {
             Map<?, ?> textureData = texturesValues.get(i);
             String originalName = (String) textureData.get("name");
 
-            // Make filename unique if there's a collision
-            if (originalName != null && usedNames.contains(originalName.toLowerCase())) {
-                String baseName = originalName;
-                // Remove extension if present
-                if (baseName.contains(".")) {
-                    baseName = baseName.substring(0, baseName.lastIndexOf("."));
-                }
-                String extension = originalName.contains(".") ? originalName.substring(originalName.lastIndexOf(".")) : "";
-
-                int suffix = 1;
-                String newName = baseName + suffix + extension;
-                while (usedNames.contains(newName.toLowerCase())) {
-                    suffix++;
-                    newName = baseName + suffix + extension;
-                }
-
-                // Update the texture data with the unique name
-                ((Map<String, Object>) textureData).put("name", newName);
-                originalName = newName;
-            }
-
-            if (originalName != null) {
-                usedNames.add(originalName.toLowerCase());
-            }
+            String filename = ParsedTexture.normalizeTextureFilename(
+                    com.magmaguy.freeminecraftmodels.utils.StringToResourcePackFilename.convert(originalName));
+            String base = filename.substring(0, filename.length() - 4);
+            int suffix = 1;
+            while (!usedNames.add(filename)) filename = base + "_" + suffix++ + ".png";
+            ((Map<String, Object>) textureData).put("name", filename);
 
             ParsedTexture parsedTexture = new ParsedTexture(textureData, modelName, i);
             if (parsedTexture.isValid()) parsedTextures.add(parsedTexture);

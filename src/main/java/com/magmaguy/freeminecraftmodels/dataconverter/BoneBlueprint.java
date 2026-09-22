@@ -85,7 +85,7 @@ public class BoneBlueprint {
         this.parent = parent;
         this.uuid = null; // Auto-generated root bone has no UUID
         //Add bone to the map
-        skeletonBlueprint.getBoneMap().put(originalBoneName, this);
+        skeletonBlueprint.registerBone(this);
         blueprintModelPivot = new Vector3f();
         blueprintOriginalBoneRotation = new Vector3f();
     }
@@ -124,7 +124,7 @@ public class BoneBlueprint {
         if (originalBoneName.startsWith("m_")) mountPoint = true;
 
         //Add bone to the map
-        skeletonBlueprint.getBoneMap().put(originalBoneName, this);
+        skeletonBlueprint.registerBone(this);
         //Also add by UUID for IK chain lookup
         if (uuid != null) {
             skeletonBlueprint.getBoneByUuidMap().put(uuid, this);
@@ -147,7 +147,7 @@ public class BoneBlueprint {
         nameTag = true;
 
         //Add bone to the map
-        skeletonBlueprint.getBoneMap().put(originalBoneName, this);
+        skeletonBlueprint.registerBone(this);
 
         //Simple center of the bone
         processBoneValues(boneJSON);

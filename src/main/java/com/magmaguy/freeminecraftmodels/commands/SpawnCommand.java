@@ -21,14 +21,11 @@ import java.util.List;
 public class SpawnCommand extends AdvancedCommand {
 
     List<String> spawnTypes = List.of("static", "dynamic", "prop");
-    List<String> entityIDs = new ArrayList<>();
 
     public SpawnCommand() {
         super(List.of("spawn"));
         addArgument("type", new ListStringCommandArgument(List.of("STATIC", "DYNAMIC", "PROP"), "<spawn>"));
-        entityIDs = new ArrayList<>();
-        FileModelConverter.getConvertedFileModels().values().forEach(fileModelConverter -> entityIDs.add(fileModelConverter.getID()));
-        addArgument("model", new ListStringCommandArgument(entityIDs, "<model>"));
+        addArgument("model", new com.magmaguy.freeminecraftmodels.commands.arguments.LiveModelIDsArgument("<model>"));
         setDescription("Spawns custom models or creates props");
         setPermission("freeminecraftmodels.*");
         setUsage("/fmm spawn <static/dynamic/prop> <modelID>");
@@ -40,7 +37,7 @@ public class SpawnCommand extends AdvancedCommand {
         Player player = commandData.getPlayerSender();
         String modelID = commandData.getStringArgument("model");
 
-        if (!entityIDs.contains(modelID)) {
+        if (!FileModelConverter.containsModel(modelID)) {
             Logger.sendMessage(commandData.getCommandSender(), "Invalid entity ID!");
             return;
         }

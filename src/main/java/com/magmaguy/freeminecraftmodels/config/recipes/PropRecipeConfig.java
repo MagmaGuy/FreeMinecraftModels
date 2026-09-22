@@ -64,10 +64,6 @@ public class PropRecipeConfig extends CustomConfigFields {
     public void processConfigFields() {
         this.isEnabled = processBoolean("isEnabled", isEnabled, true, true);
         this.modelId = processString("model_id", modelId, "", true);
-        String baseModelId = BowStateDetector.stripStateSuffix(this.modelId);
-        if (!baseModelId.equals(this.modelId) && DisplayModelRegistry.hasDisplayModel(baseModelId)) {
-            this.modelId = baseModelId;
-        }
         this.shape = processStringList("shape", shape, new ArrayList<>(), true);
 
         // Ingredients are a map section — process manually since CustomConfigFields
@@ -86,6 +82,11 @@ public class PropRecipeConfig extends CustomConfigFields {
         this.shopEnabled = processBoolean("shopEnabled", shopEnabled, true, true);
         double defaultPrice = ShopConfig.getDefaultPrice() > 0 ? ShopConfig.getDefaultPrice() : 100.0;
         this.shopPrice = processDouble("shopPrice", defaultPrice, defaultPrice, true);
+    }
+
+    void resolveModelId() {
+        String baseModelId = BowStateDetector.stripStateSuffix(modelId);
+        if (!baseModelId.equals(modelId) && DisplayModelRegistry.hasDisplayModel(baseModelId)) modelId = baseModelId;
     }
 
     public ShapedRecipe registerRecipe() {
@@ -145,6 +146,7 @@ public class PropRecipeConfig extends CustomConfigFields {
     public void unregisterRecipe() {
         if (modelId == null || modelId.isEmpty()) return;
         NamespacedKey recipeKey = new NamespacedKey(MetadataHandler.PLUGIN, "prop_recipe_" + modelId);
-        Bukkit.removeRecipe(recipeKey);
+        if (Bukkit.getRecipe(recipeKey) != null && !Bukkit.removeRecipe(recipeKey))
+            throw new IllegalStateException("Cannot remove recipe " + recipeKey);
     }
 }

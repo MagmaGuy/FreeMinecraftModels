@@ -36,7 +36,7 @@ public class PacketDebugCommand extends AdvancedCommand {
 
     public PacketDebugCommand() {
         super(List.of("packetdebug"));
-        addArgument("ticks", new ListStringCommandArgument(
+        addOptionalArgument("ticks", new ListStringCommandArgument(
                 List.of("1", "5", "20", "60"),
                 "[ticks]"));
         setDescription("Sample modeled-entity packet load for the next tick(s) and report per-player packet counts.");
@@ -62,10 +62,13 @@ public class PacketDebugCommand extends AdvancedCommand {
         if (ticks < 1) ticks = 1;
         if (ticks > MAX_TICKS) ticks = MAX_TICKS;
 
-        // Capture the previous sample so we can tell when the new one lands.
-        PacketDiagnostics.Sample previous = PacketDiagnostics.getLastSample();
-
-        PacketDiagnostics.arm(ticks);
+        final java.util.concurrent.CompletableFuture<PacketDiagnostics.Sample> requested;
+        try {
+            requested = PacketDiagnostics.arm(ticks);
+        } catch (IllegalStateException busy) {
+            Logger.sendMessage(sender, "&e" + busy.getMessage());
+            return;
+        }
         Logger.sendMessage(sender, "&eSampling modeled-entity packets for the next " + ticks
                 + " tick(s)... stand in the laggy area.");
 
@@ -74,13 +77,19 @@ public class PacketDebugCommand extends AdvancedCommand {
             @Override
             public void run() {
                 polls[0] += 2;
-                PacketDiagnostics.Sample latest = PacketDiagnostics.getLastSample();
-                if (latest != null && latest != previous) {
+                if (requested.isCancelled()) {
+                    cancel();
+                    Logger.sendMessage(sender, "&ePacket sample cancelled because the model clock stopped.");
+                    return;
+                }
+                PacketDiagnostics.Sample latest = requested.getNow(null);
+                if (latest != null) {
                     cancel();
                     latest.toLines().forEach(line -> Logger.sendMessage(sender, line));
                     return;
                 }
                 if (polls[0] >= POLL_LIMIT_TICKS) {
+                    requested.cancel(false);
                     cancel();
                     Logger.sendMessage(sender, "&cPacket sample timed out — is the model clock running? "
                             + "(No modeled entities loaded, or NMS disabled.)");

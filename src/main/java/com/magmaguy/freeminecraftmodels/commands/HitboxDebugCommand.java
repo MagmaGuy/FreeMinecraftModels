@@ -25,7 +25,7 @@ public class HitboxDebugCommand extends AdvancedCommand {
                 List.of("visualize"),
                 "<action>"));
         // Optional duration argument for visualize
-        addArgument("duration", new ListStringCommandArgument(
+        addOptionalArgument("duration", new ListStringCommandArgument(
                 List.of("60", "100", "200", "600"),
                 "[duration]"));
 

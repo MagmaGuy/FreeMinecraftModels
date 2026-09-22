@@ -17,45 +17,65 @@ public class PropRecipeManager {
     private static final Map<String, PropRecipeConfig> loadedRecipes = new HashMap<>();
 
     public static void initialize() {
-        loadedRecipes.clear();
-        File recipesFolder = getRecipesFolder();
-        if (!recipesFolder.exists()) {
-            recipesFolder.mkdirs();
-            return;
-        }
-        scanRecipeDirectory(recipesFolder);
-        if (!loadedRecipes.isEmpty()) {
-            Logger.info("Loaded " + loadedRecipes.size() + " prop recipe(s).");
-        }
+        activateCatalog(prepareCatalog());
     }
 
-    private static void scanRecipeDirectory(File directory) {
-        File[] files = directory.listFiles();
-        if (files == null) return;
-        for (File file : files) {
-            if (file.isDirectory()) {
-                scanRecipeDirectory(file);
-                continue;
+    public static Map<String, PropRecipeConfig> prepareCatalog() {
+        Map<String, PropRecipeConfig> candidate = new java.util.LinkedHashMap<>();
+        File folder = getRecipesFolder();
+        try {
+            java.nio.file.Files.createDirectories(folder.toPath());
+            try (var paths = java.nio.file.Files.walk(folder.toPath())) {
+                for (var path : paths.filter(java.nio.file.Files::isRegularFile)
+                        .filter(file -> file.getFileName().toString().endsWith(".yml")).sorted().toList()) {
+                    PropRecipeConfig config = new PropRecipeConfig(path.getFileName().toString(), true);
+                    YamlConfiguration yaml = new YamlConfiguration();
+                    yaml.load(path.toFile());
+                    config.setFileConfiguration(yaml);
+                    config.setFile(path.toFile());
+                    config.processConfigFields();
+                    if (!config.isEnabled() || config.getModelId().isEmpty()) continue;
+                    PropRecipeConfig previous = candidate.putIfAbsent(config.getModelId(), config);
+                    if (previous != null) throw new IllegalArgumentException("Duplicate recipe model "
+                            + config.getModelId() + " in " + previous.getFile() + " and " + path);
+                }
             }
-            if (!file.getName().endsWith(".yml")) continue;
-
-            PropRecipeConfig config = new PropRecipeConfig(file.getName(), true);
-            FileConfiguration fileConfig = YamlConfiguration.loadConfiguration(file);
-            config.setFileConfiguration(fileConfig);
-            config.setFile(file);
-            config.processConfigFields();
-
-            if (!config.isEnabled() || config.getModelId().isEmpty()) {
-                continue;
-            }
-
-            try {
-                config.registerRecipe();
-                loadedRecipes.put(config.getModelId(), config);
-            } catch (Exception e) {
-                Logger.warn("Failed to register recipe for " + config.getModelId() + ": " + e.getMessage());
-            }
+        } catch (java.io.IOException | org.bukkit.configuration.InvalidConfigurationException failure) {
+            throw new IllegalStateException("Cannot prepare prop recipes", failure);
         }
+        return java.util.Collections.unmodifiableMap(candidate);
+    }
+
+    public static void activateCatalog(Map<String, PropRecipeConfig> prepared) {
+        Map<String, PropRecipeConfig> candidate = new java.util.LinkedHashMap<>();
+        for (PropRecipeConfig config : prepared.values()) {
+            // Model aliases belong to the newly published registry, not the old catalog
+            // that was still live while YAML was prepared on the worker.
+            config.resolveModelId();
+            PropRecipeConfig previous = candidate.putIfAbsent(config.getModelId(), config);
+            if (previous != null) throw new IllegalArgumentException("Duplicate recipe model "
+                    + config.getModelId() + " in " + previous.getFile() + " and " + config.getFile());
+        }
+        Map<org.bukkit.NamespacedKey, Recipe> previous = new java.util.LinkedHashMap<>();
+        for (PropRecipeConfig config : loadedRecipes.values()) previous.put(config.recipeKey(), Bukkit.getRecipe(config.recipeKey()));
+        for (PropRecipeConfig config : candidate.values()) previous.putIfAbsent(config.recipeKey(), Bukkit.getRecipe(config.recipeKey()));
+        try {
+            for (PropRecipeConfig config : loadedRecipes.values()) config.unregisterRecipe();
+            for (PropRecipeConfig config : candidate.values()) config.registerRecipe();
+        } catch (RuntimeException failure) {
+            previous.forEach((key, recipe) -> {
+                try {
+                    if (Bukkit.getRecipe(key) != null && !Bukkit.removeRecipe(key))
+                        throw new IllegalStateException("Cannot remove failed recipe " + key);
+                    if (recipe != null && !Bukkit.addRecipe(recipe))
+                        throw new IllegalStateException("Cannot restore recipe " + key);
+                } catch (RuntimeException cleanupFailure) { failure.addSuppressed(cleanupFailure); }
+            });
+            throw failure;
+        }
+        loadedRecipes.clear();
+        loadedRecipes.putAll(candidate);
+        if (!loadedRecipes.isEmpty()) Logger.info("Loaded " + loadedRecipes.size() + " prop recipe(s).");
     }
 
     public static void shutdown() {
@@ -69,6 +89,7 @@ public class PropRecipeManager {
         Recipe previous = null;
         boolean registered = false;
         try {
+            config.resolveModelId();
             previous = Bukkit.getRecipe(config.recipeKey());
             config.registerRecipe();
             registered = true;

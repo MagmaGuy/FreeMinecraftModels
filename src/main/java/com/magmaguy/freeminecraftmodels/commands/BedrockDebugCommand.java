@@ -34,7 +34,7 @@ public class BedrockDebugCommand extends AdvancedCommand {
         addArgument("subsystem", new ListStringCommandArgument(
                 List.of("bedrock", "props"),
                 "<subsystem>"));
-        addArgument("state", new ListStringCommandArgument(
+        addOptionalArgument("state", new ListStringCommandArgument(
                 List.of("on", "off"),
                 "[on|off]"));
         setDescription("Toggle FMM runtime diagnostic logging (Bedrock display pipeline, stacked-props scan).");

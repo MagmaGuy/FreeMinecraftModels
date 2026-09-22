@@ -474,11 +474,22 @@ public class PropEntity extends StaticEntity {
         remove(true);
     }
 
-    public void remove(boolean showRealBlocks) {
+    @Override
+    protected void shutdownRemove() {
+        remove(false);
+    }
+
+    public synchronized void remove(boolean showRealBlocks) {
+        if (isRemoved()) return;
         UUID underlyingUuid = underlyingEntity != null ? underlyingEntity.getUniqueId() : null;
         boolean removePersistentBackingEntity = persistent && isDying() && underlyingUuid != null;
 
-        PropScriptManager.onPropRemove(this);
+        if (showRealBlocks) PropScriptManager.onPropRemove(this);
+        else {
+            if (underlyingEntity instanceof ArmorStand stand)
+                com.magmaguy.freeminecraftmodels.scripting.PropInventoryListener.closeAndUntrackAll(stand);
+            if (PropScriptManager.getListener() != null) PropScriptManager.getListener().unregister(this);
+        }
         LuaPropTable.invalidate(this);
         super.remove();
         if (showRealBlocks) showRealBlocksToAllPlayers();
