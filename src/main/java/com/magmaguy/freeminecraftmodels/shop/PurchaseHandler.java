@@ -20,7 +20,9 @@ public final class PurchaseHandler {
         SUCCESS_WITH_OVERFLOW,
         INSUFFICIENT_FUNDS,
         NOT_FOR_SALE,
-        SHOP_DISABLED
+        SHOP_DISABLED,
+        DELIVERY_FAILED_REFUNDED,
+        DELIVERY_FAILED_REFUND_PENDING
     }
 
     public static final class Outcome {
@@ -38,6 +40,13 @@ public final class PurchaseHandler {
     }
 
     private PurchaseHandler() {
+    }
+
+    private static int countMatchingItems(Player player, ItemStack purchasedItem) {
+        int count = 0;
+        for (ItemStack stored : player.getInventory().getStorageContents())
+            if (stored != null && stored.isSimilar(purchasedItem)) count += stored.getAmount();
+        return count;
     }
 
     public static Outcome attempt(Player player, PropRecipeConfig recipe) {
@@ -58,20 +67,49 @@ public final class PurchaseHandler {
             return new Outcome(Result.INSUFFICIENT_FUNDS, price, balance, null);
         }
 
+        int quantity = output.getAmount();
+        int previousQuantity = countMatchingItems(player, output);
         if (!VaultEconomyHook.withdraw(player, price)) {
             // Withdrawal can fail if the underlying provider rejects it (race / negative-balance check).
             return new Outcome(Result.INSUFFICIENT_FUNDS, price, balance, null);
         }
 
-        HashMap<Integer, ItemStack> overflow = player.getInventory().addItem(output);
-        boolean hadOverflow = !overflow.isEmpty();
-        if (hadOverflow) {
+        boolean hadOverflow;
+        java.util.List<org.bukkit.entity.Item> droppedItems = new java.util.ArrayList<>();
+        try {
+            HashMap<Integer, ItemStack> overflow = player.getInventory().addItem(output.clone());
+            hadOverflow = !overflow.isEmpty();
             for (ItemStack stack : overflow.values()) {
-                player.getWorld().dropItemNaturally(player.getLocation(), stack);
+                org.bukkit.entity.Item dropped = player.getWorld().dropItemNaturally(
+                        player.getLocation(), stack, droppedItems::add);
+                if (!dropped.isValid()) throw new IllegalStateException("The overflow item spawn was rejected");
             }
+        } catch (RuntimeException deliveryFailure) {
+            int delivered;
+            try {
+                delivered = Math.max(0, countMatchingItems(player, output) - previousQuantity);
+                for (org.bukkit.entity.Item dropped : droppedItems)
+                    if (dropped.isValid()) delivered += dropped.getItemStack().getAmount();
+                delivered = Math.min(quantity, delivered);
+            } catch (RuntimeException uncertainDelivery) {
+                VaultEconomyHook.disableUnresolvedPurchase(player, price,
+                        "Delivery failed and its completed amount could not be read: " + uncertainDelivery.getMessage());
+                return new Outcome(Result.DELIVERY_FAILED_REFUND_PENDING, price, balance - price, output);
+            }
+            double refund = price * (quantity - delivered) / quantity;
+            com.magmaguy.magmacore.util.Logger.warn("[FMM Shop] Item delivery failed for " + player.getUniqueId()
+                    + ": delivered " + delivered + "/" + quantity + ", refund " + refund
+                    + ". Cause: " + deliveryFailure.getMessage());
+            if (refund == 0) return new Outcome(Result.SUCCESS, price, balance - price, output);
+            boolean refunded = VaultEconomyHook.refund(player, refund);
+            return new Outcome(refunded ? Result.DELIVERY_FAILED_REFUNDED : Result.DELIVERY_FAILED_REFUND_PENDING,
+                    price - (refunded ? refund : 0), balance - price + (refunded ? refund : 0), output);
         }
 
-        double newBalance = VaultEconomyHook.getBalance(player);
+        // Delivery has committed; a display-only balance lookup must not turn it into a failed purchase.
+        double newBalance = balance - price;
+        try { newBalance = VaultEconomyHook.getBalance(player); }
+        catch (RuntimeException ignored) {}
         return new Outcome(
                 hadOverflow ? Result.SUCCESS_WITH_OVERFLOW : Result.SUCCESS,
                 price, newBalance, output);

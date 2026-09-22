@@ -40,7 +40,11 @@ public class AnimationBlueprint {
         }
 
         this.skeletonBlueprint = skeletonBlueprint;
-        initializeGlobalValues(animationData);
+        try { initializeGlobalValues(animationData); }
+        catch (IllegalArgumentException malformedDuration) {
+            warnMalformedTimeline(malformedDuration.getMessage());
+            return;
+        }
         if (duration <= 0) {
             //Intentional design: a zero-length animation is a valid authoring choice meaning "no
             //animation" (e.g. a static single-pose idle on furniture models), so it is skipped

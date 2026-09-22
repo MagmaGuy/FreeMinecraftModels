@@ -15,9 +15,12 @@ final class AnimationTimeline {
     }
 
     static int durationInTicks(double seconds) {
-        if (!Double.isFinite(seconds) || seconds <= 0D) return 0;
+        if (!Double.isFinite(seconds)) throw new IllegalArgumentException("Animation length must be finite");
+        if (seconds <= 0D) return 0;
         double ticks = Math.ceil(seconds * TICKS_PER_SECOND);
-        return ticks >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) ticks;
+        if (!Double.isFinite(ticks) || ticks >= Integer.MAX_VALUE)
+            throw new IllegalArgumentException("Animation length exceeds the supported integer frame range");
+        return (int) ticks;
     }
 
     static List<Keyframe> normalize(List<Keyframe> source) {
