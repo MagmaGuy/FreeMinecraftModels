@@ -51,7 +51,7 @@ public class CubeBlueprint {
         cubeJSON.remove("box_uv");
         cubeJSON.remove("render_order");
         cubeJSON.remove("allow_mirror_modeling");
-        cubeJSON.remove("light_emission");
+        normalizeLightEmission();
         // NOTE: don't remove "inflate" here; we will read & bake it in, then remove it.
 
         // 26.3 reads the direction override; older clients read shade and ignore the new key.
@@ -91,6 +91,25 @@ public class CubeBlueprint {
         applyInflate();
 
         validatedData = true;
+    }
+
+    private void normalizeLightEmission() {
+        if (!cubeJSON.containsKey("light_emission")) return;
+
+        Object lightEmission = cubeJSON.get("light_emission");
+        if (lightEmission instanceof Number number) {
+            double level = number.doubleValue();
+            if (Double.isFinite(level) && level >= 0 && level <= 15 && level == Math.rint(level)) {
+                // Gson reads model numbers as doubles; Minecraft expects an integer here.
+                cubeJSON.put("light_emission", (int) level);
+                return;
+            }
+        }
+
+        cubeJSON.remove("light_emission");
+        Logger.warn("Model " + modelName + " has a cube '" + originalCubeJSON.get("name")
+                + "' (" + originalCubeJSON.get("uuid") + ") with invalid light_emission. "
+                + "Expected an integer from 0 to 15; ignoring this value.");
     }
 
     private static Map<String, Object> deepCopyMap(Map<String, Object> source) {
