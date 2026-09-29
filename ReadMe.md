@@ -89,6 +89,15 @@ After editing a model's sibling `.yml`, run `/fmm reload` to apply its item and 
 
 FMM also supports custom enchantments, authored weapon abilities, and magic staff and wand projectiles, with EliteMobs combat integration. Custom item definitions and model configuration live in the generated plugin data folder; keep related model, item, and resource-pack files together when sharing content.
 
+To dye a leather item, use the same `MATERIAL:hex` syntax as EliteMobs equipment in its model-adjacent `.yml`:
+
+```yaml
+material: LEATHER_CHESTPLATE:ff8800
+name: '&6Orange leather chestplate'
+```
+
+The suffix is an RGB hex color without `#`. It works on leather helmets, chestplates, leggings, boots, and horse armor. Omit the suffix to keep the default leather color. Run `/fmm reload`, then `/fmm giveitem <item>` to obtain the updated item. Existing inventory items keep their current color.
+
 Model right-clicks have their own permission decision. `ModeledEntityInteractEvent` lets Bukkit entity-protection listeners check the backing entity before FMM dispatches the cancellable `ModeledEntityRightClickEvent`. Cancelling a block interaction does not by itself grant or deny interaction with a model in front of it.
 
 `ModeledEntity.setDisplayName` accepts explicit newlines, and `setDisplayNameLines` accepts rows in reading order. Additional lines extend above the bottom anchor. A model's nametag bone supplies its anchor when present. Java and Bedrock use different text renderers; native Bedrock labels do not support Java text scaling.

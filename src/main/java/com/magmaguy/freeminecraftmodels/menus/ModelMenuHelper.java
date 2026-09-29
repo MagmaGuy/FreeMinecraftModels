@@ -17,6 +17,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.io.File;
@@ -411,10 +412,14 @@ public final class ModelMenuHelper {
 
         ItemStack item = ItemStackGenerator.generateItemStack(material, displayName, lore);
         ItemMeta meta = item.getItemMeta();
-        if (meta != null
-                && !com.magmaguy.magmacore.util.VersionChecker.serverVersionOlderThan(21, 4)
-                && com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry.hasDisplayModel(itemId)) {
-            meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + itemId));
+        if (meta != null) {
+            if (config != null && config.getLeatherColor() != null && meta instanceof LeatherArmorMeta leatherMeta) {
+                leatherMeta.setColor(config.getLeatherColor());
+            }
+            if (!com.magmaguy.magmacore.util.VersionChecker.serverVersionOlderThan(21, 4)
+                    && com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry.hasDisplayModel(itemId)) {
+                meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + itemId));
+            }
             item.setItemMeta(meta);
         }
         return item;

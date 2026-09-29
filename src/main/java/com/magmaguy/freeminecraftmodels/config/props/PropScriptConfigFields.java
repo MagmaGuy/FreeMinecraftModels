@@ -4,6 +4,7 @@ import com.magmaguy.magmacore.config.CustomConfigFields;
 import lombok.Getter;
 import com.magmaguy.freeminecraftmodels.magic.MagicWeaponConfig;
 import com.magmaguy.freeminecraftmodels.magic.MagicWeaponDefinition;
+import org.bukkit.Color;
 import org.bukkit.Material;
 
 import java.util.ArrayList;
@@ -29,6 +30,8 @@ public class PropScriptConfigFields extends CustomConfigFields {
     // Item-specific fields (optional — if material is set, model is also a custom item)
     @Getter
     private String material = "";
+    @Getter
+    private Color leatherColor;
     @Getter
     private String itemName = "";
     @Getter
@@ -66,6 +69,7 @@ public class PropScriptConfigFields extends CustomConfigFields {
         unavailableReason = null;
         scripts = new ArrayList<>();
         material = "";
+        leatherColor = null;
         if (!isEnabled) return;
         Object rawMaterial = fileConfiguration.get("material");
         if (rawMaterial != null && !(rawMaterial instanceof String))
@@ -73,7 +77,7 @@ public class PropScriptConfigFields extends CustomConfigFields {
         if (rawMaterial instanceof String itemMaterial && !itemMaterial.isBlank()) {
             // Unsupported/retired authored items are isolated content, not a plugin bootstrap failure.
             // Do not rewrite the file, infer a replacement material, or revive its old item script.
-            try { Material.valueOf(itemMaterial.trim().toUpperCase(java.util.Locale.ROOT)); }
+            try { parseBaseMaterial(itemMaterial); }
             catch (IllegalArgumentException unavailable) {
                 unavailableReason = "item material " + itemMaterial + " is unavailable on this server";
                 return;
@@ -113,6 +117,7 @@ public class PropScriptConfigFields extends CustomConfigFields {
             Material parsedMaterial = getParsedMaterial();
             if (parsedMaterial.isAir() || !parsedMaterial.isItem() || weapon != null && parsedMaterial == Material.ENCHANTED_BOOK)
                 throw new IllegalArgumentException(filename + ": invalid material for this item definition");
+            leatherColor = parseLeatherColor(parsedMaterial);
             parsedEnchantments = parseEnchantments(fileConfiguration.get("enchantments"));
         }
     }
@@ -143,12 +148,31 @@ public class PropScriptConfigFields extends CustomConfigFields {
     }
 
     /**
-     * Parses the material string. Returns null only when it is not set.
+     * Parses the base material, excluding an optional leather dye suffix.
+     * Returns null only when it is not set.
      */
     public Material getParsedMaterial() {
         if (material == null || material.isEmpty()) return null;
         try {
-            return Material.valueOf(material.trim().toUpperCase(java.util.Locale.ROOT));
+            return parseBaseMaterial(material);
         } catch (IllegalArgumentException e) { throw new IllegalArgumentException(filename + ": unknown item material " + material, e); }
+    }
+
+    private static Material parseBaseMaterial(String material) {
+        String base = material.split(":", 2)[0];
+        return Material.valueOf(base.trim().toUpperCase(java.util.Locale.ROOT));
+    }
+
+    private Color parseLeatherColor(Material parsedMaterial) {
+        int separator = material.indexOf(':');
+        if (separator < 0) return null;
+        if (!parsedMaterial.name().startsWith("LEATHER_"))
+            throw new IllegalArgumentException(filename + ": a material color suffix requires leather armor");
+        String hex = material.substring(separator + 1).trim();
+        if (!hex.matches("[0-9a-fA-F]{1,6}"))
+            throw new IllegalArgumentException(filename + ": expected a hexadecimal leather color without #, e.g. LEATHER_CHESTPLATE:ff8800");
+        // Match EliteMobs equipment's MATERIAL:hex convention without constructing
+        // Bukkit item metadata during asynchronous catalog preparation.
+        return Color.fromRGB(Integer.parseInt(hex, 16));
     }
 }
