@@ -9,46 +9,60 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * Owns the input claims used to classify an arm swing exactly once.
+ * Owns melee claims from input observation through deferred dispatch.
  *
- * <p>Route-gating claims (melee ownership, the right-click gate) last one tick
- * so back-to-back genuine clicks are never swallowed. The arm-swing fallback
- * suppression written by {@link #observeLeftClick} and {@link #observeRightClick}
- * deliberately outlives them: a click's paired swing packet is processed in a
- * tick's packet phase, which runs after the scheduler heartbeat that would
- * remove a one-tick entry, so under load the swing can arrive one or two ticks
- * after the input that owns it. Suppressing the fallback for
- * {@link #SWING_FALLBACK_SUPPRESSION_TICKS} ticks keeps that late swing from
- * being reclassified as a second click.</p>
+ * <p>The animation closes the current input association. A one-tick expiry
+ * removes associations whose animation never arrives, but does not invalidate
+ * work already reserved against that claim. Deferred callbacks retain their
+ * claim rather than looking up whichever input the player is performing now.
+ * Packet and Bukkit events do not carry a shared physical-click identifier;
+ * pairing an observed input with its following animation is therefore bounded
+ * to this association, not a longer cooldown.</p>
  */
 final class OneTickInteractionLedger {
 
-    /**
-     * How many ticks an observed click keeps suppressing the arm-swing
-     * fallback. A suppression written at the heartbeat of tick N is removed at
-     * the heartbeat of tick N+3, so it covers swings processed in the packet
-     * phases of ticks N through N+2 — one tick of slip was observed in the
-     * wild, plus one tick of headroom. Swing-only clicks never write this
-     * suppression, so consecutive fallback-routed clicks stay unaffected.
-     */
-    private static final int SWING_FALLBACK_SUPPRESSION_TICKS = 3;
+    // Retain the existing use-swing guard separately from melee input ownership.
+    private static final int RIGHT_CLICK_SWING_SUPPRESSION_TICKS = 3;
 
     private final Consumer<Runnable> nextTick;
     private final Map<UUID, MeleeClaim> meleeClaims = new HashMap<>();
     private final Map<UUID, Object> observedRightClicks = new HashMap<>();
-    private final Map<UUID, Object> swingFallbackSuppressions = new HashMap<>();
+    private final Map<UUID, Object> rightClickSwingSuppressions = new HashMap<>();
 
     OneTickInteractionLedger(Consumer<Runnable> nextTick) {
         this.nextTick = Objects.requireNonNull(nextTick, "nextTick");
     }
 
     boolean claimMelee(UUID playerId, UUID targetId) {
-        Objects.requireNonNull(playerId, "playerId");
+        MeleeClaim claim = observeLeftClick(playerId);
+        return reserveMelee(claim, targetId) && dispatchMelee(claim);
+    }
+
+    boolean reserveDeferredMelee(MeleeClaim claim, UUID targetId) {
+        // A packet/native primary already resolved the input, including misses.
+        // Its synthetic interact event must not choose another target later.
+        // Native sweep routing remains eligible through claimMelee instead.
+        Objects.requireNonNull(claim, "claim");
+        return !claim.primary && reserveMelee(claim, targetId);
+    }
+
+    private boolean reserveMelee(MeleeClaim claim, UUID targetId) {
+        Objects.requireNonNull(claim, "claim");
         Objects.requireNonNull(targetId, "targetId");
-        MeleeClaim claim = new MeleeClaim(targetId);
-        if (meleeClaims.putIfAbsent(playerId, claim) != null) return false;
-        nextTick.accept(() -> meleeClaims.remove(playerId, claim));
+        if (claim.denied || claim.targetId != null) return false;
+        claim.targetId = targetId;
         return true;
+    }
+
+    boolean dispatchMelee(MeleeClaim claim) {
+        Objects.requireNonNull(claim, "claim");
+        if (claim.denied || claim.targetId == null || claim.dispatched) return false;
+        claim.dispatched = true;
+        return true;
+    }
+
+    void denyMelee(MeleeClaim claim) {
+        Objects.requireNonNull(claim, "claim").denied = true;
     }
 
     UUID meleeTarget(UUID playerId) {
@@ -56,14 +70,56 @@ final class OneTickInteractionLedger {
         return claim == null ? null : claim.targetId;
     }
 
-    void observeLeftClick(UUID playerId) {
+    MeleeClaim beginPrimaryLeftClick(UUID playerId) {
         Objects.requireNonNull(playerId, "playerId");
-        suppressSwingFallback(playerId);
+        MeleeClaim claim = new MeleeClaim();
+        claim.primary = true;
+        remember(playerId, claim);
+        return claim;
+    }
+
+    MeleeClaim observeLeftClick(UUID playerId) {
+        Objects.requireNonNull(playerId, "playerId");
+        MeleeClaim claim = meleeClaims.get(playerId);
+        if (claim == null) {
+            claim = new MeleeClaim();
+            remember(playerId, claim);
+        }
+        return claim;
+    }
+
+    private void remember(UUID playerId, MeleeClaim claim) {
+        meleeClaims.put(playerId, claim);
+        nextTick.accept(() -> meleeClaims.remove(playerId, claim));
+    }
+
+    /**
+     * Closes bookkeeping even for cancelled animations. Cancellation only
+     * denies an animation-only fallback, not an already allowed interact event.
+     * Spigot reports synthetic air clicks as main-hand before revealing the
+     * actual swing hand, so an offhand animation invalidates that pending route.
+     */
+    MeleeClaim finishAnimation(UUID playerId, boolean mainHand, boolean cancelled) {
+        Objects.requireNonNull(playerId, "playerId");
+        MeleeClaim claim = meleeClaims.get(playerId);
+        if (!mainHand) {
+            if (claim != null && !claim.primary) {
+                claim.denied = true;
+                meleeClaims.remove(playerId, claim);
+            }
+            return null;
+        }
+        if (claim != null) {
+            meleeClaims.remove(playerId, claim);
+            return null;
+        }
+        if (cancelled || rightClickSwingSuppressions.containsKey(playerId)) return null;
+        return new MeleeClaim();
     }
 
     boolean observeRightClick(UUID playerId) {
         Objects.requireNonNull(playerId, "playerId");
-        suppressSwingFallback(playerId);
+        suppressRightClickSwing(playerId);
         Object claim = new Object();
         if (observedRightClicks.putIfAbsent(playerId, claim) != null) return false;
         nextTick.accept(() -> observedRightClicks.remove(playerId, claim));
@@ -82,24 +138,17 @@ final class OneTickInteractionLedger {
         return true;
     }
 
-    boolean shouldRouteAnimation(UUID playerId, String animationType) {
-        Objects.requireNonNull(playerId, "playerId");
-        return "ARM_SWING".equals(animationType)
-                && !meleeClaims.containsKey(playerId)
-                && !swingFallbackSuppressions.containsKey(playerId);
-    }
-
     void forget(UUID playerId) {
         Objects.requireNonNull(playerId, "playerId");
         meleeClaims.remove(playerId);
         observedRightClicks.remove(playerId);
-        swingFallbackSuppressions.remove(playerId);
+        rightClickSwingSuppressions.remove(playerId);
     }
 
     void clear() {
         meleeClaims.clear();
         observedRightClicks.clear();
-        swingFallbackSuppressions.clear();
+        rightClickSwingSuppressions.clear();
     }
 
     /**
@@ -107,11 +156,11 @@ final class OneTickInteractionLedger {
      * restarts the window; the expiry only removes its own token, so an older
      * click's expiry can never end a newer click's suppression early.
      */
-    private void suppressSwingFallback(UUID playerId) {
+    private void suppressRightClickSwing(UUID playerId) {
         Object token = new Object();
-        swingFallbackSuppressions.put(playerId, token);
-        removeAfterTicks(SWING_FALLBACK_SUPPRESSION_TICKS,
-                () -> swingFallbackSuppressions.remove(playerId, token));
+        rightClickSwingSuppressions.put(playerId, token);
+        removeAfterTicks(RIGHT_CLICK_SWING_SUPPRESSION_TICKS,
+                () -> rightClickSwingSuppressions.remove(playerId, token));
     }
 
     private void removeAfterTicks(int remainingTicks, Runnable removal) {
@@ -122,11 +171,10 @@ final class OneTickInteractionLedger {
         }
     }
 
-    private static final class MeleeClaim {
-        private final UUID targetId;
-
-        private MeleeClaim(UUID targetId) {
-            this.targetId = targetId;
-        }
+    static final class MeleeClaim {
+        private UUID targetId;
+        private boolean primary;
+        private boolean denied;
+        private boolean dispatched;
     }
 }

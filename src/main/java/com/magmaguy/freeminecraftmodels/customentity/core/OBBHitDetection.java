@@ -154,12 +154,13 @@ public class OBBHitDetection implements Listener {
                 player != null, event.getCause());
         boolean modeledTarget = RegisterModelEntity.isModelEntity(event.getEntity());
         if (physicalPlayerMelee) {
-            // Some native path already owns this swing — a real entity, or one
-            // of the modeled routes below. Its paired arm-animation packet can
-            // be processed a tick or two later under load, so record the click
-            // now; otherwise that late animation could raytrace a second
-            // modeled hit out of the same physical input.
-            interactionLedger.observeLeftClick(player.getUniqueId());
+            // A primary native attack is a new input, even when another attack
+            // ran in this tick. Sweep damage belongs to that primary input.
+            OneTickInteractionLedger.MeleeClaim claim =
+                    event.getCause() == EntityDamageEvent.DamageCause.ENTITY_ATTACK
+                            ? interactionLedger.beginPrimaryLeftClick(player.getUniqueId())
+                            : interactionLedger.observeLeftClick(player.getUniqueId());
+            if (event.isCancelled()) interactionLedger.denyMelee(claim);
             if (!modeledTarget) return;
         }
         if (!modeledTarget
@@ -168,9 +169,7 @@ public class OBBHitDetection implements Listener {
 
         if (player != null) {
             UUID playerId = player.getUniqueId();
-            // A cancelled event still consumed the physical swing; the
-            // observation above already keeps the animation fallback from
-            // resurrecting the denied input.
+            // Observation still owns the animation when protection denies damage.
             if (event.isCancelled()) return;
             ModeledEntity backingModel = ModeledEntity.getModeledEntity(event.getEntity());
             if (backingModel == null) {
@@ -260,8 +259,7 @@ public class OBBHitDetection implements Listener {
         // Only cancel if the entity is closer than or at the same distance as the block
         if (entityDistance <= blockDistance) {
             event.setCancelled(true);
-            // The dig click's swing packets can trail into later ticks; keep
-            // them from re-routing this click through the animation fallback.
+            // Reuse a reservation made by the preceding LEFT_CLICK_BLOCK event.
             interactionLedger.observeLeftClick(event.getPlayer().getUniqueId());
             routeLeftClick(event.getPlayer(), hitEntity);
         }
@@ -578,13 +576,15 @@ public class OBBHitDetection implements Listener {
         projectilesRetiredInBlock.add(projectileId);
     }
 
-    /**
-     * Routes every non-native left-click source through the same one-tick target
-     * ledger. Packet Interaction entities, OBB raytraces, and block interception
-     * therefore cannot each fire the same click independently.
-     */
+    /** Routes immediate non-native sources through the current input claim. */
     public static void routeLeftClick(Player player, ModeledEntity target) {
         if (!recordMeleeRoute(player, target)) return;
+        target.getInteractionComponent().callLeftClickEvent(player);
+    }
+
+    private static void dispatchCapturedLeftClick(
+            Player player, ModeledEntity target, OneTickInteractionLedger.MeleeClaim claim) {
+        if (!interactionLedger.dispatchMelee(claim)) return;
         target.getInteractionComponent().callLeftClickEvent(player);
     }
 
@@ -596,13 +596,10 @@ public class OBBHitDetection implements Listener {
      */
     public static void routePacketLeftClick(Player player, ModeledEntity packetOwner) {
         if (player == null) return;
-        // The client sends the paired arm-swing packet right behind this
-        // ATTACK packet, but under load it can be processed a tick or two
-        // later — after the one-tick melee claim below has already expired.
-        // Record the click before resolving the ray so the swing can never be
-        // reclassified as a second click, not even when the ray misses here
-        // and would hit a model that moved into it by swing time.
-        interactionLedger.observeLeftClick(player.getUniqueId());
+        // MagmaCore dispatches this in native packet order. Each ATTACK is a new
+        // primary input; its following air/animation events share this claim.
+        // Observe before resolving the ray so animation fallback has an owner on a miss.
+        interactionLedger.beginPrimaryLeftClick(player.getUniqueId());
         resolvePacketInteractionTarget(player, packetOwner)
                 .ifPresent(target -> routeLeftClick(player, target));
     }
@@ -686,15 +683,20 @@ public class OBBHitDetection implements Listener {
                 event.useInteractedBlock(), event.useItemInHand());
 
         if (leftClick) {
-            interactionLedger.observeLeftClick(playerId);
-            if (denied) return;
+            OneTickInteractionLedger.MeleeClaim claim = interactionLedger.observeLeftClick(playerId);
+            if (denied || event.getHand() == EquipmentSlot.OFF_HAND) {
+                interactionLedger.denyMelee(claim);
+                return;
+            }
 
             float attackCooldown = player.getAttackCooldown();
-            OrientedBoundingBox.raytraceFromPlayer(player).ifPresent(target ->
-                    scheduleCapturedInteraction(player, target, () -> {
-                        attackCooldowns.put(playerId, attackCooldown);
-                        routeLeftClick(player, target);
-                    }));
+            OrientedBoundingBox.raytraceFromPlayer(player).ifPresent(target -> {
+                if (!interactionLedger.reserveDeferredMelee(claim, target.getModelInstanceId())) return;
+                scheduleCapturedInteraction(player, target, () -> {
+                    attackCooldowns.put(playerId, attackCooldown);
+                    dispatchCapturedLeftClick(player, target, claim);
+                });
+            });
             return;
         }
 
@@ -757,31 +759,27 @@ public class OBBHitDetection implements Listener {
     /**
      * Spigot/Paper can suppress LEFT_CLICK_AIR when its server-side ray hits a
      * backing entity that the client was told to hide. The arm-swing packet is
-     * then the only surviving evidence of the physical click. Delay its OBB
-     * fallback by one tick so packet-only entity routes can claim the same
-     * input first. Every other route — packet Interaction attacks, native
-     * melee, Bukkit interact and right-click paths — records its click in the
-     * ledger with a multi-tick swing suppression, because this swing packet
-     * can be processed a tick or two after the input that owns it; only a
-     * swing with no recorded owner may be routed as a click of its own.
+     * then the only surviving evidence of the click. Close the input at this
+     * event, retaining any deferred interact reservation. An animation without
+     * an observed owner gets its own captured claim rather than a later lookup
+     * that could consume a different click.
      */
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = false)
     public void onPlayerAnimation(PlayerAnimationEvent event) {
-        if (resolveAnimationHand(event) != EquipmentSlot.HAND) return;
         Player player = event.getPlayer();
         UUID playerId = player.getUniqueId();
-        String animationType = event.getAnimationType().name();
-        if (!interactionLedger.shouldRouteAnimation(playerId, animationType)) return;
+        OneTickInteractionLedger.MeleeClaim claim = interactionLedger.finishAnimation(
+                playerId, resolveAnimationHand(event) == EquipmentSlot.HAND, event.isCancelled());
+        if (claim == null) return;
         Optional<ModeledEntity> fallbackTarget =
                 OrientedBoundingBox.raytraceFromPlayer(player);
         if (fallbackTarget.isEmpty()) return;
         ModeledEntity target = fallbackTarget.get();
+        if (!interactionLedger.reserveDeferredMelee(claim, target.getModelInstanceId())) return;
         float attackCooldown = player.getAttackCooldown();
         scheduleCapturedInteraction(player, target, () -> {
-            if (interactionLedger.shouldRouteAnimation(playerId, animationType)) {
-                attackCooldowns.put(playerId, attackCooldown);
-                routeLeftClick(player, target);
-            }
+            attackCooldowns.put(playerId, attackCooldown);
+            dispatchCapturedLeftClick(player, target, claim);
         });
     }
 
