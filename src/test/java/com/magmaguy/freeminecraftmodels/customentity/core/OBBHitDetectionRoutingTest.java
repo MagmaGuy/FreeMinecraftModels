@@ -77,7 +77,7 @@ class OBBHitDetectionRoutingTest {
         assertEquals(EventPriority.MONITOR, interactHandler.priority());
         assertFalse(interactHandler.ignoreCancelled());
         assertEquals(EventPriority.MONITOR, animationHandler.priority());
-        assertTrue(animationHandler.ignoreCancelled());
+        assertFalse(animationHandler.ignoreCancelled());
     }
 
     @Test
