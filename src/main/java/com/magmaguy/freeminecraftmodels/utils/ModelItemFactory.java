@@ -14,6 +14,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.persistence.PersistentDataType;
 
 import java.util.List;
@@ -67,6 +68,10 @@ public final class ModelItemFactory {
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
         if (meta == null) throw new IllegalArgumentException("Item does not support metadata: " + itemId);
+
+        if (config.getLeatherColor() != null && meta instanceof LeatherArmorMeta leatherMeta) {
+            leatherMeta.setColor(config.getLeatherColor());
+        }
 
         // Name — use config name if set, otherwise generate from ID
         String name = config.getItemName();
