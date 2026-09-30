@@ -18,6 +18,7 @@ public class FileModelConverter {
 
     private static final ConcurrentHashMap<String, FileModelConverter> convertedFileModels = new ConcurrentHashMap<>();
     private static final Set<String> rejectedModelIds = new HashSet<>();
+    private static final Set<String> identicalCopies = new HashSet<>();
     private String modelName;
     @Getter
     private SkeletonBlueprint skeletonBlueprint;
@@ -57,6 +58,7 @@ public class FileModelConverter {
 
         ID = modelName;
         if (rejectedModelIds.contains(modelName)) return;
+        if (identicalCopies.contains(file.getAbsolutePath())) return;
 
         FileModelConverter existing = convertedFileModels.get(modelName);
         if (existing != null) {
@@ -157,7 +159,24 @@ public class FileModelConverter {
         for (Map.Entry<String, List<File>> entry : sourcesById.entrySet()) {
             if (entry.getValue().size() < 2) continue;
             entry.getValue().sort(Comparator.comparing(File::getAbsolutePath));
+            // Content packages that can be installed independently ship the same model under the same ID. Identical
+            // bytes produce identical output, so the first path is parsed and the copies are skipped.
+            if (allIdentical(entry.getValue())) {
+                for (File copy : entry.getValue().subList(1, entry.getValue().size()))
+                    identicalCopies.add(copy.getAbsolutePath());
+                continue;
+            }
             rejectCollision(entry.getKey(), entry.getValue());
+        }
+    }
+
+    private static boolean allIdentical(List<File> files) {
+        try {
+            for (File file : files.subList(1, files.size()))
+                if (java.nio.file.Files.mismatch(files.get(0).toPath(), file.toPath()) != -1L) return false;
+            return true;
+        } catch (java.io.IOException unreadable) {
+            return false;
         }
     }
 
@@ -337,6 +356,7 @@ public class FileModelConverter {
     public static void shutdown() {
         convertedFileModels.clear();
         rejectedModelIds.clear();
+        identicalCopies.clear();
     }
 
     private List<ParsedTexture> parseTextures(Map<?, ?> map) {
