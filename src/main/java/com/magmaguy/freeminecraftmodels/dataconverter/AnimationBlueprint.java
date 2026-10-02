@@ -16,6 +16,9 @@ public class AnimationBlueprint {
     private final HashMap<String, List<Keyframe>> ikKeyframes = new HashMap<>();
     @Getter
     private final HashMap<String, IKAnimationFrame[]> ikAnimationFrames = new HashMap<>();
+    // Particle keyframes from the Blockbench Effects track, sorted by tick
+    @Getter
+    private final List<ParticleKeyframe> particleKeyframes = new ArrayList<>();
     private final int blockBenchVersion;
     @Getter
     private LoopType loopType;
@@ -90,7 +93,12 @@ public class AnimationBlueprint {
             return;
         }
 
-        // Blockbench effect tracks are not skeleton bones and have no FMM runtime animation.
+        if ("effect".equals(type)) {
+            initializeParticleKeyframes(animationData);
+            return;
+        }
+
+        // Other non-bone animators (sound, timeline scripts) have no FMM runtime animation.
         if (type != null && !"bone".equals(type)) return;
 
         // Standard bone animation
@@ -110,6 +118,34 @@ public class AnimationBlueprint {
             // Deduplicate only after separating those independent tracks below.
             if (!keyframes.isEmpty()) boneKeyframes.put(boneBlueprint, keyframes);
         }
+    }
+
+    /**
+     * Reads particle keyframes from a Blockbench Effects track. Sound and timeline keyframes on
+     * the same track are not played by FMM.
+     */
+    private void initializeParticleKeyframes(Map<String, Object> animationData) {
+        if (!(animationData.get("keyframes") instanceof List<?> keyframes)) return;
+        for (Object rawKeyframe : keyframes) {
+            if (!(rawKeyframe instanceof Map<?, ?> keyframe) || !"particle".equals(keyframe.get("channel"))) continue;
+            if (!(keyframe.get("time") instanceof Number time) || !(keyframe.get("data_points") instanceof List<?> points))
+                continue;
+            int tick = (int) Math.max(0, Math.min(duration - 1, Math.floor(20 * time.doubleValue())));
+            for (Object rawPoint : points) {
+                if (!(rawPoint instanceof Map<?, ?> point)) continue;
+                String effect = text(point.get("effect"));
+                if (effect.isBlank()) continue;
+                String file = text(point.get("file")).replace('\\', '/');
+                file = file.substring(file.lastIndexOf('/') + 1);
+                particleKeyframes.add(new ParticleKeyframe(tick, effect, text(point.get("locator")), file,
+                        text(point.get("script"))));
+            }
+        }
+        particleKeyframes.sort(Comparator.comparingInt(ParticleKeyframe::tick));
+    }
+
+    private static String text(Object value) {
+        return value == null ? "" : value.toString();
     }
 
     /**

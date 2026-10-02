@@ -35,6 +35,17 @@ public class SkeletonBlueprint {
 
     private final Map<String, String> boneAssetNames = new HashMap<>();
 
+    /** Finds a locator by its Blockbench name, ignoring case when no exact match exists. */
+    public LocatorBlueprint getLocatorByName(String name) {
+        if (name == null || name.isEmpty()) return null;
+        LocatorBlueprint caseInsensitive = null;
+        for (LocatorBlueprint locator : locatorMap.values()) {
+            if (name.equals(locator.getName())) return locator;
+            if (name.equalsIgnoreCase(locator.getName())) caseInsensitive = locator;
+        }
+        return caseInsensitive;
+    }
+
     void registerBone(BoneBlueprint bone) {
         String name = bone.getOriginalBoneName();
         String asset = com.magmaguy.freeminecraftmodels.utils.StringToResourcePackFilename.convert(name);
@@ -79,6 +90,14 @@ public class SkeletonBlueprint {
         // root bone so they actually render.
         rootBone.appendFreefloatingCubes(parsedTextures, outlinerJSON, values, textureReferences,
                 modelName, resolutionWidth, resolutionHeight);
+
+        // Locators declared at the top of the outliner belong to the auto-generated root bone.
+        for (Object entry : outlinerJSON) {
+            if (!(entry instanceof String uuid) || !locators.containsKey(uuid) || locatorMap.containsKey(uuid)) continue;
+            LocatorBlueprint locator = new LocatorBlueprint(locators.get(uuid));
+            locator.setParentBone(rootBone);
+            locatorMap.put(uuid, locator);
+        }
 
         rootBone.setBoneBlueprintChildren(rootChildren);
         mainModel.add(rootBone);
