@@ -1,6 +1,8 @@
 package com.magmaguy.freeminecraftmodels.dataconverter;
 
 import com.google.gson.Gson;
+import com.magmaguy.freeminecraftmodels.particles.ParticleEffectLibrary;
+import com.magmaguy.freeminecraftmodels.particles.ResolvedParticleEffect;
 import com.magmaguy.freeminecraftmodels.utils.StringToResourcePackFilename;
 import com.magmaguy.freeminecraftmodels.utils.ImmutableMapSnapshots;
 import com.magmaguy.magmacore.util.Logger;
@@ -24,6 +26,9 @@ public class FileModelConverter {
     private SkeletonBlueprint skeletonBlueprint;
     @Getter
     private AnimationsBlueprint animationsBlueprint = null;
+    // Particle effects used by this model's animations, keyed by effect name
+    @Getter
+    private Map<String, ResolvedParticleEffect> particleEffects = Map.of();
     @Getter
     private String ID;
     @Getter
@@ -137,6 +142,7 @@ public class FileModelConverter {
         List animationList = (ArrayList) map.get("animations");
         if (animationList != null)
             animationsBlueprint = new AnimationsBlueprint(animationList, modelName, skeletonBlueprint, blockBenchVersion);
+        particleEffects = ParticleEffectLibrary.resolve(file, animationsBlueprint, skeletonBlueprint);
         convertedFileModels.put(modelName, this);
     }
 
