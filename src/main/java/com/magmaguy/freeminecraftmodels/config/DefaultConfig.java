@@ -123,7 +123,8 @@ public class DefaultConfig extends ConfigurationFile {
         FilmicMode.onConfigLoaded(filmicMode);
         particleEffectsEnabled = ConfigurationEngine.setBoolean(
                 List.of("Sets whether Blockbench particle effects play on models, props and held items.",
-                        "Set to false to switch every particle effect off without editing models."),
+                        "Set to false to switch every particle effect off without editing models.",
+                        "Bedrock players follow the change once the resource pack regenerates (/fmm reload or a restart)."),
                 fileConfiguration, "particleEffectsEnabled", true);
         maxParticlesPerEmitter = ConfigurationEngine.setInt(
                 List.of("Upper limit of live particles for one particle effect on one model.",
