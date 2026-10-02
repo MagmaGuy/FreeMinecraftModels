@@ -68,9 +68,9 @@ class BedrockParticleExporterTest {
         JsonObject description = JsonParser.parseString(Files.readString(root.resolve("particles/lantern_spark.json")))
                 .getAsJsonObject().getAsJsonObject("particle_effect").getAsJsonObject("description");
         assertEquals("fmm:lantern_spark", description.get("identifier").getAsString());
-        assertEquals("textures/fmm_particles/lantern/spark",
+        assertEquals("textures/entity/fmm_particles/lantern/spark",
                 description.getAsJsonObject("basic_render_parameters").get("texture").getAsString());
-        assertTrue(Files.isRegularFile(root.resolve("textures/fmm_particles/lantern/spark.png")));
+        assertTrue(Files.isRegularFile(root.resolve("textures/entity/fmm_particles/lantern/spark.png")));
     }
 
     @Test

@@ -48,12 +48,13 @@ public final class BedrockParticleExporter {
             description.addProperty("identifier", identifier(modelId, effect.name()));
             if (effect.texture() != null) {
                 String key = StringToResourcePackFilename.convert(modelId) + "/" + StringToResourcePackFilename.convert(effect.name());
-                File texture = new File(root, "textures/fmm_particles/" + key + ".png");
+                File texture = new File(root, "textures/entity/fmm_particles/" + key + ".png");
                 Files.createDirectories(texture.getParentFile().toPath());
                 Files.copy(effect.texture().toPath(), texture.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 JsonObject render = description.has("basic_render_parameters")
                         ? description.getAsJsonObject("basic_render_parameters") : new JsonObject();
-                render.addProperty("texture", "textures/fmm_particles/" + key);
+                // ResourcePackManager imports bundle textures only from textures/entity.
+                render.addProperty("texture", "textures/entity/fmm_particles/" + key);
                 description.add("basic_render_parameters", render);
             }
             // Without a texture beside the file, the original path stays: vanilla Bedrock textures resolve natively.
