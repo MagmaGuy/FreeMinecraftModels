@@ -18,6 +18,10 @@ import java.util.Map;
  * {@code textures/entity/fmm_particles} (FMM's atlas generator registers it), one flat quad model
  * per sprite and a tintable item definition for each. Maps are ordered so the bytes are stable
  * across restarts and the pack hash does not change needlessly.
+ *
+ * <p>Only Java item displays show the sprites; Bedrock players get the effect as a native
+ * particle. The effect's {@code rspm_item_java_only} declaration tells ResourcePackManager not to
+ * convert its sprite items into Geyser custom items.
  */
 public final class ParticleSpriteWriter {
     private static final Gson GSON = new Gson();
@@ -48,6 +52,7 @@ public final class ParticleSpriteWriter {
             writeJson(new File(assetsRoot, "items/particle/" + sprites.key() + "/" + index + ".json"),
                     itemDefinition("freeminecraftmodels:particle/" + sprites.key() + "/" + index));
         }
+        writeJson(new File(assetsRoot, "rspm_item_java_only/particle/" + sprites.key() + ".json"), Map.of());
     }
 
     private static Map<String, Object> model(String texture, double[] uv) {
