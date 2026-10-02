@@ -89,4 +89,17 @@ class BedrockParticleExporterTest {
         JsonObject locators = BedrockParticleExporter.locators(owner, converter, visual);
         assertEquals("[-2.0,14.0,16.0]", locators.get("tip").toString(), "Bedrock geometry mirrors X");
     }
+
+    @Test
+    void writesTheHeldItemSidecarForResourcePackManager() throws Exception {
+        Path assets = directory.resolve("assets/freeminecraftmodels");
+        BedrockParticleExporter.writeHeldItemSidecar(assets.toFile(), "lantern", converter);
+        JsonObject sidecar = JsonParser.parseString(Files.readString(assets.resolve("rspm_item_particles/display/lantern.json")))
+                .getAsJsonObject();
+        assertEquals("fmm:lantern_spark", sidecar.getAsJsonObject("effects").get("spark").getAsString());
+        assertEquals("[10.0,14.0,24.0]", sidecar.getAsJsonObject("locators").get("tip").toString(),
+                "Locators are in Java item model pixels");
+        assertEquals(1.0, sidecar.get("length").getAsDouble());
+        assertEquals("spark", sidecar.getAsJsonObject("particle_effects").getAsJsonObject("0.5").get("effect").getAsString());
+    }
 }

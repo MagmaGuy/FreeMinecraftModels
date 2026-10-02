@@ -11,6 +11,7 @@ import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.LocatorBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.ParticleKeyframe;
 import com.magmaguy.freeminecraftmodels.particles.ResolvedParticleEffect;
+import com.magmaguy.freeminecraftmodels.particles.held.HeldItemParticles;
 import com.magmaguy.freeminecraftmodels.utils.StringToResourcePackFilename;
 
 import java.io.File;
@@ -60,6 +61,35 @@ public final class BedrockParticleExporter {
             Files.createDirectories(file.getParentFile().toPath());
             Files.writeString(file.toPath(), GSON.toJson(json), StandardCharsets.UTF_8);
         }
+    }
+
+    /**
+     * Describes a held item's particles for ResourcePackManager, which adds them to the item's
+     * Bedrock attachable: effect identifiers, locators in Java item model pixels and the looping
+     * particle timeline. Written beside the Java pack's item models, not into the Bedrock bundle.
+     */
+    public static void writeHeldItemSidecar(File freeMinecraftModelsAssets, String itemId, FileModelConverter converter)
+            throws IOException {
+        AnimationBlueprint animation = HeldItemParticles.heldAnimation(converter);
+        if (animation == null || converter.getParticleEffects().isEmpty()) return;
+        JsonObject locators = new JsonObject();
+        for (ParticleKeyframe keyframe : animation.getParticleKeyframes()) {
+            LocatorBlueprint locator = converter.getSkeletonBlueprint().getLocatorByName(keyframe.locator());
+            if (locator == null || locators.has(keyframe.locator())) continue;
+            JsonArray position = new JsonArray();
+            position.add(locator.getPosition().x + 8);
+            position.add(locator.getPosition().y);
+            position.add(locator.getPosition().z + 8);
+            locators.add(keyframe.locator(), position);
+        }
+        JsonObject sidecar = new JsonObject();
+        sidecar.add("effects", clientEntityEffects(converter.getID(), converter));
+        sidecar.add("locators", locators);
+        sidecar.addProperty("length", Math.max(0.05, animation.getDuration() / 20.0));
+        sidecar.add("particle_effects", timeline(animation));
+        File file = new File(freeMinecraftModelsAssets, "rspm_item_particles/display/" + itemId + ".json");
+        Files.createDirectories(file.getParentFile().toPath());
+        Files.writeString(file.toPath(), GSON.toJson(sidecar), StandardCharsets.UTF_8);
     }
 
     /** The client entity's effect short names mapped to their bundle identifiers. */
