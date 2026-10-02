@@ -59,11 +59,12 @@ public final class BedrockEntityBundleExporter {
             BedrockTextureInfo textureInfo = writeTextures(root, modelId, converter.getParsedTextures());
 
             writeMaterials(root);
-            writeGeometry(root, modelId, textureInfo, visualBones);
+            writeGeometry(root, modelId, textureInfo, visualBones, converter);
             writeRenderController(root, modelId);
             writeAnimations(root, modelId, converter, visualBones);
             writeAnimationControllers(root, modelId, converter, visualBones);
             writeEntity(root, modelId, textureInfo, converter);
+            BedrockParticleExporter.writeParticles(root, modelId, converter);
         } catch (Exception exception) {
             Logger.warn("Failed to export Bedrock custom entity bundle for "
                     + converter.getID() + ": " + exception.getMessage());
@@ -241,7 +242,7 @@ public final class BedrockEntityBundleExporter {
     }
 
     private static void writeGeometry(File root, String modelId, BedrockTextureInfo textureInfo,
-                                      List<BoneBlueprint> visualBones) throws Exception {
+                                      List<BoneBlueprint> visualBones, FileModelConverter converter) throws Exception {
         JsonObject description = new JsonObject();
         description.addProperty("identifier", "geometry.freeminecraftmodels." + modelId);
         description.addProperty("texture_width", textureInfo.width);
@@ -277,6 +278,10 @@ public final class BedrockEntityBundleExporter {
             }
             if (!cubes.isEmpty()) {
                 bedrockBone.add("cubes", cubes);
+            }
+            JsonObject locators = BedrockParticleExporter.locators(bone, converter, visualBones);
+            if (!locators.entrySet().isEmpty()) {
+                bedrockBone.add("locators", locators);
             }
             bones.add(bedrockBone);
         }
@@ -454,6 +459,10 @@ public final class BedrockEntityBundleExporter {
                 writeLoopMode(animationJson, animation.getLoopType());
                 animationJson.add("bones", bedrockAnimationBones(
                         animation, visualBones, converter.getBlockBenchVersion()));
+                JsonObject particleTimeline = BedrockParticleExporter.timeline(animation);
+                if (!particleTimeline.entrySet().isEmpty()) {
+                    animationJson.add("particle_effects", particleTimeline);
+                }
                 animations.add("animation.fmm." + modelId + "." + animationKey(animationName), animationJson);
             }
         }
@@ -553,6 +562,11 @@ public final class BedrockEntityBundleExporter {
             JsonObject scripts = new JsonObject();
             scripts.add("animate", animate);
             description.add("scripts", scripts);
+        }
+
+        JsonObject particleEffects = BedrockParticleExporter.clientEntityEffects(modelId, converter);
+        if (!particleEffects.entrySet().isEmpty()) {
+            description.add("particle_effects", particleEffects);
         }
 
         JsonArray renderControllers = new JsonArray();
