@@ -106,6 +106,8 @@ public final class ParticleSpriteRenderer {
 
         Location location = new Location(world, position.x, position.y, position.z);
         PacketModelEntity sprite = factory.create(location);
+        // Packet entities are created at the world origin; place it before anyone sees it.
+        sprite.teleport(location);
         entry.sprite = sprite;
         entry.position.set(position);
         entry.spriteIndex = sprites.spriteIndex(particle.uvU(), particle.uvV(), particle.frame());
