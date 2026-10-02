@@ -10,7 +10,15 @@ import java.util.random.RandomGenerator;
  * context: reads fall through to the parent, writes stay local.
  */
 public final class MolangContext {
+    /** Supplies computed names (Snowstorm curves) that are evaluated in the reading context. */
+    @FunctionalInterface
+    public interface Resolver {
+        /** @return the value, or null when the name is not computed by this resolver */
+        Double resolve(String canonicalName, MolangContext readingContext);
+    }
+
     private final Map<String, Double> values = new HashMap<>();
+    private Resolver resolver;
     private final MolangContext parent;
     private final RandomGenerator random;
 
@@ -27,6 +35,10 @@ public final class MolangContext {
         return random;
     }
 
+    public void setResolver(Resolver resolver) {
+        this.resolver = resolver;
+    }
+
     public double get(String name) {
         return getCanonical(canonical(name));
     }
@@ -39,6 +51,11 @@ public final class MolangContext {
         for (MolangContext context = this; context != null; context = context.parent) {
             Double value = context.values.get(name);
             if (value != null) return value;
+        }
+        for (MolangContext context = this; context != null; context = context.parent) {
+            if (context.resolver == null) continue;
+            Double computed = context.resolver.resolve(name, this);
+            if (computed != null) return computed;
         }
         return 0;
     }
