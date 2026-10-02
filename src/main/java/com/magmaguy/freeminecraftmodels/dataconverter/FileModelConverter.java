@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.dataconverter;
 
 import com.google.gson.Gson;
 import com.magmaguy.freeminecraftmodels.particles.ParticleEffectLibrary;
+import com.magmaguy.freeminecraftmodels.particles.ParticleSprites;
 import com.magmaguy.freeminecraftmodels.particles.ResolvedParticleEffect;
 import com.magmaguy.freeminecraftmodels.utils.StringToResourcePackFilename;
 import com.magmaguy.freeminecraftmodels.utils.ImmutableMapSnapshots;
@@ -29,6 +30,9 @@ public class FileModelConverter {
     // Particle effects used by this model's animations, keyed by effect name
     @Getter
     private Map<String, ResolvedParticleEffect> particleEffects = Map.of();
+    // Java sprites for each particle effect, keyed by effect name
+    @Getter
+    private Map<String, ParticleSprites> particleSprites = Map.of();
     @Getter
     private String ID;
     @Getter
@@ -143,6 +147,9 @@ public class FileModelConverter {
         if (animationList != null)
             animationsBlueprint = new AnimationsBlueprint(animationList, modelName, skeletonBlueprint, blockBenchVersion);
         particleEffects = ParticleEffectLibrary.resolve(file, animationsBlueprint, skeletonBlueprint);
+        Map<String, ParticleSprites> sprites = new HashMap<>();
+        particleEffects.forEach((name, effect) -> sprites.put(name, ParticleSprites.of(modelName, effect)));
+        particleSprites = Map.copyOf(sprites);
         convertedFileModels.put(modelName, this);
     }
 

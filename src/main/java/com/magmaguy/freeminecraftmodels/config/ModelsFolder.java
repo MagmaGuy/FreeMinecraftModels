@@ -9,6 +9,8 @@ import com.magmaguy.freeminecraftmodels.bedrock.BedrockEntityBundleExporter;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.ParsedTexture;
+import com.magmaguy.freeminecraftmodels.particles.ParticleSpriteWriter;
+import com.magmaguy.freeminecraftmodels.particles.ParticleSprites;
 import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
 import com.magmaguy.magmacore.util.Logger;
 import com.magmaguy.magmacore.util.VersionChecker;
@@ -176,6 +178,18 @@ public class ModelsFolder {
                             itemDefinitionGson.toJson(modelJson), StandardCharsets.UTF_8);
                 } catch (Exception e) {
                     e.printStackTrace();
+                }
+            }
+        }
+
+        // Particle sprites need item_model definitions, so they only exist in this generation.
+        File freeMinecraftModelsAssets = itemModelsFolder.getParentFile();
+        for (FileModelConverter fileModelConverter : bbModelConverterList) {
+            for (ParticleSprites sprites : fileModelConverter.getParticleSprites().values()) {
+                try {
+                    ParticleSpriteWriter.write(freeMinecraftModelsAssets, sprites, sprites.texture());
+                } catch (IOException exception) {
+                    Logger.warn("Failed to write particle sprites " + sprites.key() + ": " + exception.getMessage());
                 }
             }
         }
