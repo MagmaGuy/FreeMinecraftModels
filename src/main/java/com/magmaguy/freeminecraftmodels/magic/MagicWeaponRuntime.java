@@ -241,6 +241,9 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onDirectMelee(EntityDamageByEntityEvent event) {
         if (isApplyingDamage() || !(event.getDamager() instanceof Player player)) return;
+        // Another plugin dealing damage as the player (a burn, an arc, a counter) is not a swing.
+        // Reading it as one would cancel that damage and fire a free cast in its place.
+        if (com.magmaguy.magmacore.enchantments.EnchantmentInputs.isExplicitDamage(event)) return;
         if (event.getCause() != EntityDamageEvent.DamageCause.ENTITY_ATTACK
                 && event.getCause() != EntityDamageEvent.DamageCause.ENTITY_SWEEP_ATTACK) return;
         ItemStack held = player.getInventory().getItemInMainHand();
