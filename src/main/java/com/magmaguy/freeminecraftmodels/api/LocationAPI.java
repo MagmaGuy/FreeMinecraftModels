@@ -22,6 +22,7 @@ public final class LocationAPI {
 
     // A provider registers again every time its plugin enables. Keying by provider name
     // replaces the previous entry, so FMM stops calling, and holding on to, a reloaded instance.
+    // The swap runs inside compute so concurrent registrations under one name leave exactly one entry.
     private static final Map<String, DungeonLocator> dungeonLocators = new ConcurrentHashMap<>();
     private static final Map<String, RegionProtectionProvider> protectionProviders = new ConcurrentHashMap<>();
 
@@ -30,25 +31,47 @@ public final class LocationAPI {
 
     /**
      * Registers a dungeon predicate. A location is reported as being inside a dungeon
-     * whenever any registered predicate returns {@code true} for it.
+     * whenever any registered predicate returns {@code true} for it. Registering again
+     * under the same provider name replaces the earlier predicate.
      *
-     * @param providerName short identifier for logging (e.g. {@code "EliteMobs"})
+     * @param providerName short identifier for logging and replacement (e.g. {@code "EliteMobs"});
+     *                     a {@code null} name can be neither replaced nor unregistered
      * @param predicate    returns {@code true} if the location is inside a dungeon
      */
     public static void registerDungeonLocator(String providerName, Predicate<Location> predicate) {
         if (predicate == null) return;
         DungeonLocator locator = predicate::test;
-        DungeonLocator previous = providerName == null ? null : dungeonLocators.put(providerName, locator);
-        if (previous != null) LocationQueryRegistry.unregisterDungeonLocator(previous);
-        LocationQueryRegistry.registerDungeonLocator(locator);
+        if (providerName == null) LocationQueryRegistry.registerDungeonLocator(locator);
+        else dungeonLocators.compute(providerName, (name, previous) -> {
+            if (previous != null) LocationQueryRegistry.unregisterDungeonLocator(previous);
+            LocationQueryRegistry.registerDungeonLocator(locator);
+            return locator;
+        });
         Logger.info("[FMM] Registered dungeon locator provider: " + providerName);
     }
 
     /**
-     * Registers a region-protection predicate. A location is reported as protected whenever
-     * any registered predicate returns {@code true} for it.
+     * Removes the dungeon predicate registered under {@code providerName}, if any. Call it
+     * from the providing plugin's {@code onDisable} so FMM stops calling into, and holding
+     * on to, the disabled instance.
      *
-     * @param providerName short identifier for logging and diagnostics
+     * @param providerName the name passed to {@link #registerDungeonLocator}
+     */
+    public static void unregisterDungeonLocator(String providerName) {
+        if (providerName == null) return;
+        dungeonLocators.computeIfPresent(providerName, (name, locator) -> {
+            LocationQueryRegistry.unregisterDungeonLocator(locator);
+            return null;
+        });
+    }
+
+    /**
+     * Registers a region-protection predicate. A location is reported as protected whenever
+     * any registered predicate returns {@code true} for it. Registering again under the same
+     * provider name replaces the earlier predicate.
+     *
+     * @param providerName short identifier for logging, diagnostics and replacement;
+     *                     a {@code null} name can be neither replaced nor unregistered
      * @param predicate    returns {@code true} if the location is inside a protected region
      */
     public static void registerProtectionProvider(String providerName, Predicate<Location> predicate) {
@@ -64,9 +87,27 @@ public final class LocationAPI {
                 return providerName;
             }
         };
-        RegionProtectionProvider previous = providerName == null ? null : protectionProviders.put(providerName, provider);
-        if (previous != null) LocationQueryRegistry.unregisterProtectionProvider(previous);
-        LocationQueryRegistry.registerProtectionProvider(provider);
+        if (providerName == null) LocationQueryRegistry.registerProtectionProvider(provider);
+        else protectionProviders.compute(providerName, (name, previous) -> {
+            if (previous != null) LocationQueryRegistry.unregisterProtectionProvider(previous);
+            LocationQueryRegistry.registerProtectionProvider(provider);
+            return provider;
+        });
         Logger.info("[FMM] Registered protection provider: " + providerName);
+    }
+
+    /**
+     * Removes the protection predicate registered under {@code providerName}, if any. Call it
+     * from the providing plugin's {@code onDisable} so FMM stops calling into, and holding
+     * on to, the disabled instance.
+     *
+     * @param providerName the name passed to {@link #registerProtectionProvider}
+     */
+    public static void unregisterProtectionProvider(String providerName) {
+        if (providerName == null) return;
+        protectionProviders.computeIfPresent(providerName, (name, provider) -> {
+            LocationQueryRegistry.unregisterProtectionProvider(provider);
+            return null;
+        });
     }
 }
