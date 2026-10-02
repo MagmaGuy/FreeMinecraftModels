@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.particles.runtime;
 
 import com.magmaguy.freeminecraftmodels.particles.molang.MolangContext;
+import com.magmaguy.freeminecraftmodels.particles.molang.MolangExpression;
 import com.magmaguy.freeminecraftmodels.particles.snowstorm.ParticleEffectBlueprint;
 import com.magmaguy.freeminecraftmodels.particles.snowstorm.ParticleEffectBlueprint.*;
 import com.magmaguy.freeminecraftmodels.particles.snowstorm.SnowstormParser;
@@ -77,6 +78,16 @@ public final class ParticleEmitter {
         context.set("variable.emitter_lifetime", activeTime);
         effect.emitter().creation().evaluate(context);
         pendingBurst = effect.emitter().rate() instanceof Rate.Instant;
+    }
+
+    /** Runs a Blockbench pre-effect script against the emitter's variables. */
+    public void runScript(MolangExpression script) {
+        script.evaluate(context);
+    }
+
+    /** True when the emitter restarts by itself until told to stop. */
+    public boolean isLooping() {
+        return !(effect.emitter().lifetime() instanceof Lifetime.Once);
     }
 
     /** No further spawning or restarts; the emitter finishes when its particles die. */

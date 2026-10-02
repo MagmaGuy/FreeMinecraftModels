@@ -45,6 +45,7 @@ public class AnimationManager {
         if (target == null || target == current) return;
         IAnimState previous = current;
         if (previous != null) {
+            modeledEntity.getParticleComponent().onAnimationStopped(previous.getAnimation());
             previous.exit();
             if (!(previous instanceof CustomAnimationState)) {
                 lastCommitted = previous.getType();
@@ -115,7 +116,10 @@ public class AnimationManager {
             transitionTo(idle);
             return;
         }
-        if (current != null) current.exit();
+        if (current != null) {
+            modeledEntity.getParticleComponent().onAnimationStopped(current.getAnimation());
+            current.exit();
+        }
         modeledEntity.getSkeleton().clearAllIKRotations();
         current = null;
     }
@@ -169,6 +173,8 @@ public class AnimationManager {
         } else {
             frame = (int) Math.min(counter, duration - 1);
         }
+
+        modeledEntity.getParticleComponent().onAnimationFrame(anim, frame);
 
         // apply rotations/translations/scales in one pass
         anim.getAnimationFrames().forEach((part, frames) -> {
