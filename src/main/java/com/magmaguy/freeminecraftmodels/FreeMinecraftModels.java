@@ -143,8 +143,16 @@ public final class FreeMinecraftModels extends JavaPlugin {
         MagmaCore.createInstance(this);
     }
 
+    private volatile Metrics metrics;
+
     @Override
     public void onDisable() {
+        // bStats runs its own scheduler thread; without this every reload leaves one
+        // reporting for, and holding on to, the previous instance.
+        if (metrics != null) {
+            metrics.shutdown();
+            metrics = null;
+        }
         boolean shutdownDuringInitialization =
                 MagmaCore.getInitializationState(this.getName())
                         == PluginInitializationState.INITIALIZING;
@@ -298,7 +306,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         pendingRecipes = null;
 
         initializationContext.step("Metrics");
-        new Metrics(this, 19337);
+        metrics = new Metrics(this, 19337);
     }
 
     public void reloadImportedContent(CommandSender sender) {

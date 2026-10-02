@@ -1,10 +1,13 @@
 package com.magmaguy.freeminecraftmodels.api;
 
+import com.magmaguy.magmacore.location.DungeonLocator;
 import com.magmaguy.magmacore.location.LocationQueryRegistry;
 import com.magmaguy.magmacore.location.RegionProtectionProvider;
 import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.Location;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 /**
@@ -16,6 +19,11 @@ import java.util.function.Predicate;
  * interface so no shaded types are exchanged across plugin classloaders.
  */
 public final class LocationAPI {
+
+    // A provider registers again every time its plugin enables. Keying by provider name
+    // replaces the previous entry, so FMM stops calling, and holding on to, a reloaded instance.
+    private static final Map<String, DungeonLocator> dungeonLocators = new ConcurrentHashMap<>();
+    private static final Map<String, RegionProtectionProvider> protectionProviders = new ConcurrentHashMap<>();
 
     private LocationAPI() {
     }
@@ -29,7 +37,10 @@ public final class LocationAPI {
      */
     public static void registerDungeonLocator(String providerName, Predicate<Location> predicate) {
         if (predicate == null) return;
-        LocationQueryRegistry.registerDungeonLocator(predicate::test);
+        DungeonLocator locator = predicate::test;
+        DungeonLocator previous = providerName == null ? null : dungeonLocators.put(providerName, locator);
+        if (previous != null) LocationQueryRegistry.unregisterDungeonLocator(previous);
+        LocationQueryRegistry.registerDungeonLocator(locator);
         Logger.info("[FMM] Registered dungeon locator provider: " + providerName);
     }
 
@@ -42,7 +53,7 @@ public final class LocationAPI {
      */
     public static void registerProtectionProvider(String providerName, Predicate<Location> predicate) {
         if (predicate == null) return;
-        LocationQueryRegistry.registerProtectionProvider(new RegionProtectionProvider() {
+        RegionProtectionProvider provider = new RegionProtectionProvider() {
             @Override
             public boolean isProtected(Location location) {
                 return predicate.test(location);
@@ -52,7 +63,10 @@ public final class LocationAPI {
             public String providerName() {
                 return providerName;
             }
-        });
+        };
+        RegionProtectionProvider previous = providerName == null ? null : protectionProviders.put(providerName, provider);
+        if (previous != null) LocationQueryRegistry.unregisterProtectionProvider(previous);
+        LocationQueryRegistry.registerProtectionProvider(provider);
         Logger.info("[FMM] Registered protection provider: " + providerName);
     }
 }
