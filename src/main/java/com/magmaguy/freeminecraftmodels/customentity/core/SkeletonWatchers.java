@@ -26,6 +26,8 @@ import java.util.concurrent.ThreadLocalRandom;
 public class SkeletonWatchers {
     private final Skeleton skeleton;
     private final Set<UUID> viewers = new CopyOnWriteArraySet<>();
+    // Viewers on Java Edition; particle sprites are display entities, which Bedrock cannot show
+    private final Set<UUID> javaViewers = new CopyOnWriteArraySet<>();
     private volatile boolean wasInvisible = false;
 
     public HashSet<UUID> getViewers() {
@@ -40,6 +42,11 @@ public class SkeletonWatchers {
 
     public SkeletonWatchers(Skeleton skeleton) {
         this.skeleton = skeleton;
+    }
+
+    /** Live view of the Java Edition viewers, safe to read from the model clock. */
+    public Set<UUID> getJavaViewers() {
+        return javaViewers;
     }
 
     public boolean hasObservers() {
@@ -294,6 +301,7 @@ public class SkeletonWatchers {
         }
         boolean wasAlreadyViewing = !viewers.add(player.getUniqueId());
         if (!isBedrock) {
+            javaViewers.add(player.getUniqueId());
             hideUnderlyingEntityFromJavaViewer(player);
         }
         if (isBedrock
@@ -402,6 +410,7 @@ public class SkeletonWatchers {
     private void hideFrom(UUID uuid) {
         // Always clean up viewer state, even if player is offline
         viewers.remove(uuid);
+        javaViewers.remove(uuid);
         // Same null guard the other methods in this class use — the skeleton's
         // modeled entity can be null during construction/teardown windows.
         var modeledEntity = skeleton.getModeledEntity();
@@ -409,6 +418,7 @@ public class SkeletonWatchers {
             modeledEntity.getBedrockModeledEntity().hideFrom(uuid);
         }
         if (modeledEntity != null) modeledEntity.getNameplate().hideFrom(uuid);
+        if (modeledEntity != null) modeledEntity.getParticleComponent().hideFrom(uuid);
         skeleton.getBones().forEach(bone -> bone.hideFrom(uuid));
         // Hide the packet interaction entity (uses UUID, works even if player is offline)
         if (modeledEntity != null)

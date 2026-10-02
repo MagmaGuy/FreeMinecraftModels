@@ -51,6 +51,8 @@ public class ModeledEntity {
     @Getter
     private final AnimationComponent animationComponent = new AnimationComponent(this);
     @Getter
+    private final ParticleComponent particleComponent = new ParticleComponent(this);
+    @Getter
     protected Entity underlyingEntity = null;
     private Entity spawnRegistrationEntity = null;
     private String previousSpawnModelRegistration = null;
@@ -72,6 +74,7 @@ public class ModeledEntity {
     private Skeleton skeleton;
     @Getter
     private BedrockModeledEntity bedrockModeledEntity;
+    @Getter
     private final FileModelConverter fileModelConverter;
     @Getter
     private volatile boolean isRemoved = false;
@@ -371,6 +374,7 @@ public class ModeledEntity {
         if (bedrockModeledEntity != null) bedrockModeledEntity.tick();
         hitboxComponent.tick(abstractPacketBundle);
         animationComponent.tick();
+        particleComponent.tick(abstractPacketBundle, skeleton.getSkeletonWatchers().getJavaViewers());
         if (underlyingEntity != null && underlyingEntity.isValid() && underlyingEntity instanceof LivingEntity livingEntity && livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")) != null)
             scaleModifier = livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")).getValue();
     }
@@ -400,6 +404,7 @@ public class ModeledEntity {
         // Remove the packet interaction entity
         hitboxComponent.removePacketInteractionEntity();
         if (bedrockModeledEntity != null) bedrockModeledEntity.remove();
+        particleComponent.remove();
         nameplate.remove();
         skeleton.remove();
         if (underlyingEntity != null) {

@@ -20,6 +20,9 @@ public class DefaultConfig extends ConfigurationFile {
     public static boolean useDeltaMetadataPackets;
     public static int maxModelsForProximityOverride;
     public static boolean filmicMode;
+    public static boolean particleEffectsEnabled = true;
+    public static int maxParticlesPerEmitter = 100;
+    public static int maxParticlesPerViewer = 400;
     private static DefaultConfig instance;
     public static boolean setupDone;
 
@@ -118,6 +121,19 @@ public class DefaultConfig extends ConfigurationFile {
                         "lasts until the server restarts or until this option is changed and FMM reloads."),
                 fileConfiguration, "filmicMode", false);
         FilmicMode.onConfigLoaded(filmicMode);
+        particleEffectsEnabled = ConfigurationEngine.setBoolean(
+                List.of("Sets whether Blockbench particle effects play on models, props and held items.",
+                        "Set to false to switch every particle effect off without editing models."),
+                fileConfiguration, "particleEffectsEnabled", true);
+        maxParticlesPerEmitter = ConfigurationEngine.setInt(
+                List.of("Upper limit of live particles for one particle effect on one model.",
+                        "A particle file's own max_particles is used when it is lower.",
+                        "Each particle a Java player sees is a packet entity, so high values cost bandwidth."),
+                fileConfiguration, "maxParticlesPerEmitter", 100);
+        maxParticlesPerViewer = ConfigurationEngine.setInt(
+                List.of("Upper limit of live particles one Java player is shown across all models.",
+                        "Past it, new particles for that player are skipped until older ones expire."),
+                fileConfiguration, "maxParticlesPerViewer", 400);
         preventPropPlacementInProtectedRegions = ConfigurationEngine.setBoolean(
                 List.of("Sets whether players are prevented from placing props (custom model items) inside protected regions.",
                         "When true, FMM asks MagmaCore's registered protection providers whether the player may build in the target cell.",
