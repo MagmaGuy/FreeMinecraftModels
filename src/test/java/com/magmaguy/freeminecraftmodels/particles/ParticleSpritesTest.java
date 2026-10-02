@@ -103,6 +103,19 @@ class ParticleSpritesTest {
     }
 
     @Test
+    void declaresTheSpriteItemsJavaOnlyForResourcePackManager() throws Exception {
+        ParticleSprites sprites = ParticleSprites.of("wand", effect("{\"size\": [0.1, 0.1]}", texture(16, 16)));
+        Path assets = directory.resolve("assets/freeminecraftmodels");
+        ParticleSpriteWriter.write(assets.toFile(), sprites, sprites.texture());
+
+        // Covers items/particle/wand/spark/<n>.json: Bedrock plays the effect natively, so the
+        // sprites must not become Geyser custom items.
+        Path declaration = assets.resolve("rspm_item_java_only/particle/wand/spark.json");
+        assertTrue(Files.isRegularFile(declaration));
+        assertTrue(JsonParser.parseString(Files.readString(declaration)).isJsonObject());
+    }
+
+    @Test
     void whiteFallbackWritesAPlainTexture() throws Exception {
         ParticleSprites sprites = ParticleSprites.of("wand", dalisWand(null));
         Path assets = directory.resolve("assets/freeminecraftmodels");
