@@ -114,6 +114,21 @@ public class TransformationMatrix {
         }
     }
 
+    /** Applies this matrix to a point: result = M * (x, y, z, 1). */
+    public void transformPoint(double x, double y, double z, double[] result) {
+        if (result.length < 3) throw new IllegalArgumentException("Point output requires at least three elements");
+        result[0] = matrix[0] * x + matrix[1] * y + matrix[2] * z + matrix[3];
+        result[1] = matrix[4] * x + matrix[5] * y + matrix[6] * z + matrix[7];
+        result[2] = matrix[8] * x + matrix[9] * y + matrix[10] * z + matrix[11];
+    }
+
+    /** Writes the rotation with scale removed, as a quaternion. */
+    public org.joml.Quaterniond getRotation(org.joml.Quaterniond result) {
+        // JOML takes the basis column by column; this matrix stores rows.
+        return new org.joml.Matrix3d(matrix[0], matrix[4], matrix[8], matrix[1], matrix[5], matrix[9],
+                matrix[2], matrix[6], matrix[10]).getNormalizedRotation(result);
+    }
+
     /** @return the translation: [x, y, z] */
     public double[] getTranslation() {
         double[] result = new double[3];
