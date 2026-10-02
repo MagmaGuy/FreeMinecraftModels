@@ -6,6 +6,7 @@ import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.core.ModelDensity;
 import com.magmaguy.freeminecraftmodels.debug.PacketDiagnostics;
+import com.magmaguy.freeminecraftmodels.particles.held.HeldItemParticles;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
@@ -67,6 +68,7 @@ public class ModeledEntitiesClock {
                 MetadataHandler.PLUGIN,
                 0,
                 PRIMARY_STATE_INTERVAL_TICKS);
+        HeldItemParticles.start(MetadataHandler.PLUGIN);
         viewerStateClock = new BukkitRunnable() {
             @Override
             public void run() {
@@ -81,6 +83,7 @@ public class ModeledEntitiesClock {
     public static void shutdown() {
         running = false;
         PacketDiagnostics.cancel();
+        HeldItemParticles.shutdown();
         if (clock != null) {
             clock.cancel();
             clock = null;
