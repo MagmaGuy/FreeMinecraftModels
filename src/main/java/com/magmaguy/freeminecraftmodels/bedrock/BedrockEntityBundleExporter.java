@@ -46,6 +46,13 @@ public final class BedrockEntityBundleExporter {
         if (converter == null || converter.getSkeletonBlueprint() == null || converter.getID() == null) {
             return;
         }
+        File bundleRoot = new File(MetadataHandler.PLUGIN.getDataFolder(), "output/FreeMinecraftModels/" + BUNDLE_ROOT);
+        try {
+            // Held items reuse these files through their attachables, so they do not depend on entity export.
+            BedrockParticleExporter.writeParticles(bundleRoot, converter.getID(), converter);
+        } catch (Exception exception) {
+            Logger.warn("Failed to export Bedrock particles for " + converter.getID() + ": " + exception.getMessage());
+        }
         if (converter.getParsedTextures() == null || converter.getParsedTextures().isEmpty()) {
             Logger.warn("Skipping Bedrock custom entity export for " + converter.getID() + ": model has no textures.");
             return;
@@ -64,7 +71,6 @@ public final class BedrockEntityBundleExporter {
             writeAnimations(root, modelId, converter, visualBones);
             writeAnimationControllers(root, modelId, converter, visualBones);
             writeEntity(root, modelId, textureInfo, converter);
-            BedrockParticleExporter.writeParticles(root, modelId, converter);
         } catch (Exception exception) {
             Logger.warn("Failed to export Bedrock custom entity bundle for "
                     + converter.getID() + ": " + exception.getMessage());

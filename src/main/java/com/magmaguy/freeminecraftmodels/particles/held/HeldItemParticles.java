@@ -226,13 +226,8 @@ public final class HeldItemParticles {
         FileModelConverter converter = FileModelConverter.getModel(itemId);
         if (converter == null || converter.getParticleEffects().isEmpty() || converter.getAnimationsBlueprint() == null)
             return Optional.empty();
-        Map<String, AnimationBlueprint> animations = converter.getAnimationsBlueprint().getAnimations();
-        AnimationBlueprint chosen = animations.get("held");
-        if (chosen == null || chosen.getParticleKeyframes().isEmpty()) {
-            chosen = animations.keySet().stream().sorted().map(animations::get)
-                    .filter(animation -> !animation.getParticleKeyframes().isEmpty()).findFirst().orElse(null);
-        }
-        if (chosen == null || chosen.getDuration() <= 0) return Optional.empty();
+        AnimationBlueprint chosen = heldAnimation(converter);
+        if (chosen == null) return Optional.empty();
 
         Map<String, Vector3d> points = new HashMap<>();
         for (ParticleKeyframe keyframe : chosen.getParticleKeyframes()) {
@@ -260,6 +255,21 @@ public final class HeldItemParticles {
         }
         return Optional.of(new Profile(List.copyOf(chosen.getParticleKeyframes()), chosen.getDuration(), Map.copyOf(points),
                 right, left, converter));
+    }
+
+    /**
+     * The animation a held item loops for particles: {@code held} when it has particle keyframes,
+     * otherwise the first animation by name that has some. Null when there is none.
+     */
+    public static AnimationBlueprint heldAnimation(FileModelConverter converter) {
+        if (converter == null || converter.getAnimationsBlueprint() == null) return null;
+        Map<String, AnimationBlueprint> animations = converter.getAnimationsBlueprint().getAnimations();
+        AnimationBlueprint chosen = animations.get("held");
+        if (chosen == null || chosen.getParticleKeyframes().isEmpty()) {
+            chosen = animations.keySet().stream().sorted().map(animations::get)
+                    .filter(animation -> !animation.getParticleKeyframes().isEmpty()).findFirst().orElse(null);
+        }
+        return chosen == null || chosen.getDuration() <= 0 ? null : chosen;
     }
 
     private static HandTipEstimator.ItemTransform transform(JsonObject display, String key) {
