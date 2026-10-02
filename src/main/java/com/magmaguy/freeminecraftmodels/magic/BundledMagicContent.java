@@ -13,9 +13,11 @@ public final class BundledMagicContent {
     public static final String RESOURCE_DIRECTORY = "models/fmm_default_magic";
 
     private static final AssetSet STAFF = new AssetSet(
-            RESOURCE_DIRECTORY, BuiltInMagicWeapons.DEFAULT_STAFF_ID, true);
+            RESOURCE_DIRECTORY, BuiltInMagicWeapons.DEFAULT_STAFF_ID, true, List.of());
+    // Dali's wand: its held animation loops the particle effect at the gem.
     private static final AssetSet WAND = new AssetSet(
-            RESOURCE_DIRECTORY, BuiltInMagicWeapons.DEFAULT_WAND_ID, false);
+            RESOURCE_DIRECTORY, BuiltInMagicWeapons.DEFAULT_WAND_ID, true,
+            List.of("fmm_default_arcane_wand_particles.particle.json", "fmm_default_arcane_wand_particles.png"));
     private static final List<AssetSet> ASSETS = List.of(STAFF, WAND);
 
     private BundledMagicContent() {
@@ -54,17 +56,25 @@ public final class BundledMagicContent {
         return STAFF;
     }
 
+    public static AssetSet wandAssets() {
+        return WAND;
+    }
+
     public static List<AssetSet> assetSets() {
         return ASSETS;
     }
 
-    public record AssetSet(String resourceDirectory, String modelId, boolean modelAssets) {
+    /**
+     * @param extraFiles further files of the model folder, such as particle effects and their textures
+     */
+    public record AssetSet(String resourceDirectory, String modelId, boolean modelAssets, List<String> extraFiles) {
         public AssetSet {
             Objects.requireNonNull(resourceDirectory, "resourceDirectory");
             Objects.requireNonNull(modelId, "modelId");
+            extraFiles = List.copyOf(extraFiles);
         }
 
-        List<String> resources() {
+        public List<String> resources() {
             List<String> paths = new ArrayList<>();
             String prefix = resourceDirectory + "/" + modelId;
             if (modelAssets) {
@@ -72,6 +82,7 @@ public final class BundledMagicContent {
                 paths.add(prefix + ".json");
             }
             paths.add(prefix + ".yml");
+            for (String file : extraFiles) paths.add(resourceDirectory + "/" + file);
             return List.copyOf(paths);
         }
     }

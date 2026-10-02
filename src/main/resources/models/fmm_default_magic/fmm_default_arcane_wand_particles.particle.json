@@ -1,0 +1,60 @@
+{
+	"format_version": "1.10.0",
+	"particle_effect": {
+		"description": {
+			"identifier": "wand_particles",
+			"basic_render_parameters": {
+				"material": "particles_alpha",
+				"texture": "textures/particle/fmm_default_arcane_wand_particles"
+			}
+		},
+		"curves": {
+			"": {
+				"type": "linear",
+				"input": 0,
+				"horizontal_range": 0,
+				"nodes": [0, 1]
+			}
+		},
+		"components": {
+			"minecraft:emitter_rate_steady": {
+				"spawn_rate": 10,
+				"max_particles": 100
+			},
+			"minecraft:emitter_lifetime_looping": {
+				"active_time": 1
+			},
+			"minecraft:emitter_shape_sphere": {
+				"radius": 0.4,
+				"surface_only": true,
+				"direction": ["Math.cos(variable.particle_age*200)*2", 0, "Math.sin(variable.particle_age*200)*2"]
+			},
+			"minecraft:particle_lifetime_expression": {
+				"max_lifetime": 1
+			},
+			"minecraft:particle_initial_speed": 2,
+			"minecraft:particle_motion_parametric": {
+				"direction": ["Math.cos(variable.particle_age * 20000) * 2", 0, "Math.sin(variable.particle_age * 20000) * 2"]
+			},
+			"minecraft:particle_appearance_billboard": {
+				"size": [0.1, 0.1],
+				"facing_camera_mode": "rotate_xyz",
+				"uv": {
+					"texture_width": 16,
+					"texture_height": 128,
+					"flipbook": {
+						"base_UV": ["Math.floor(v.particle_random_3 * 2) * 8", "Math.floor(v.particle_random_4 * 2) * 8"],
+						"size_UV": [8, 8],
+						"step_UV": [0, 16],
+						"frames_per_second": 12,
+						"max_frame": 8,
+						"stretch_to_lifetime": true
+					}
+				}
+			},
+			"minecraft:particle_appearance_tinting": {
+				"color": [1, 1, 1, 1]
+			}
+		}
+	}
+}

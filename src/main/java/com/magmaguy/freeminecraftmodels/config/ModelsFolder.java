@@ -7,6 +7,7 @@ import com.google.gson.JsonParser;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.bedrock.BedrockEntityBundleExporter;
 import com.magmaguy.freeminecraftmodels.bedrock.BedrockParticleExporter;
+import com.magmaguy.freeminecraftmodels.bedrock.ItemBaseDeclaration;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.ParsedTexture;
@@ -291,8 +292,10 @@ public class ModelsFolder {
                         itemDefinitionGson.toJson(itemDef), StandardCharsets.UTF_8);
 
                 DisplayModelRegistry.register(modelId);
-                BedrockParticleExporter.writeHeldItemSidecar(displayModelsFolder.getParentFile().getParentFile(), modelId,
+                File freeMinecraftModelsAssetsFolder = displayModelsFolder.getParentFile().getParentFile();
+                BedrockParticleExporter.writeHeldItemSidecar(freeMinecraftModelsAssetsFolder, modelId,
                         FileModelConverter.getModel(modelId));
+                ItemBaseDeclaration.write(freeMinecraftModelsAssetsFolder, modelId, sourceFile);
 
             } catch (Exception e) {
                 Logger.warn("Failed to process display model JSON for " + modelId + ": " + e.getMessage());
