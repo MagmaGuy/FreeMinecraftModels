@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.AnimationBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
@@ -37,12 +38,21 @@ public final class BedrockParticleExporter {
         return "fmm:" + StringToResourcePackFilename.convert(modelId + "_" + effect);
     }
 
+    /** With particles switched off, nothing particle-related goes into the Bedrock pack either. */
+    private static boolean disabled() {
+        return !DefaultConfig.particleEffectsEnabled;
+    }
+
     /** Writes each effect's particle file (and its texture, when FMM has it) into the bundle. */
     public static void writeParticles(File root, String modelId, FileModelConverter converter) throws IOException {
+        if (disabled()) return;
         for (ResolvedParticleEffect effect : converter.getParticleEffects().values()) {
             JsonObject json = JsonParser.parseString(Files.readString(effect.source().toPath(), StandardCharsets.UTF_8))
                     .getAsJsonObject();
             JsonObject particle = json.getAsJsonObject("particle_effect");
+            // Blockbench saves an unnamed placeholder curve; Bedrock logs an error for it.
+            if (particle.has("curves") && particle.get("curves").isJsonObject())
+                particle.getAsJsonObject("curves").keySet().removeIf(String::isBlank);
             JsonObject description = particle.has("description") ? particle.getAsJsonObject("description") : new JsonObject();
             particle.add("description", description);
             description.addProperty("identifier", identifier(modelId, effect.name()));
@@ -72,7 +82,7 @@ public final class BedrockParticleExporter {
     public static void writeHeldItemSidecar(File freeMinecraftModelsAssets, String itemId, FileModelConverter converter)
             throws IOException {
         AnimationBlueprint animation = HeldItemParticles.heldAnimation(converter);
-        if (animation == null || converter.getParticleEffects().isEmpty()) return;
+        if (disabled() || animation == null || converter.getParticleEffects().isEmpty()) return;
         JsonObject locators = new JsonObject();
         for (ParticleKeyframe keyframe : animation.getParticleKeyframes()) {
             LocatorBlueprint locator = converter.getSkeletonBlueprint().getLocatorByName(keyframe.locator());
@@ -96,6 +106,7 @@ public final class BedrockParticleExporter {
     /** The client entity's effect short names mapped to their bundle identifiers. */
     public static JsonObject clientEntityEffects(String modelId, FileModelConverter converter) {
         JsonObject effects = new JsonObject();
+        if (disabled()) return effects;
         converter.getParticleEffects().keySet().stream().sorted()
                 .forEach(effect -> effects.addProperty(effect, identifier(modelId, effect)));
         return effects;
@@ -107,7 +118,7 @@ public final class BedrockParticleExporter {
      */
     public static JsonObject locators(BoneBlueprint bone, FileModelConverter converter, List<BoneBlueprint> visualBones) {
         JsonObject locators = new JsonObject();
-        if (visualBones.isEmpty()) return locators;
+        if (disabled() || visualBones.isEmpty()) return locators;
         List<LocatorBlueprint> sorted = new ArrayList<>(converter.getSkeletonBlueprint().getLocatorMap().values());
         sorted.sort(Comparator.comparing(LocatorBlueprint::getName));
         for (LocatorBlueprint locator : sorted) {
@@ -127,6 +138,7 @@ public final class BedrockParticleExporter {
     /** The animation's particle keyframes as a Bedrock {@code particle_effects} timeline. */
     public static JsonObject timeline(AnimationBlueprint animation) {
         JsonObject timeline = new JsonObject();
+        if (disabled()) return timeline;
         Map<String, JsonArray> byTime = new TreeMap<>(Comparator.comparingDouble(Double::parseDouble));
         for (ParticleKeyframe keyframe : animation.getParticleKeyframes()) {
             JsonObject point = new JsonObject();

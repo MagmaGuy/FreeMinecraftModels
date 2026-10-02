@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.particles.ParticleEffectLibrary;
@@ -40,6 +41,8 @@ class BedrockParticleExporterTest {
         Files.writeString(directory.resolve("spark.json"), """
                 {"format_version": "1.10.0", "particle_effect": {"description": {"identifier": "",
                   "basic_render_parameters": {"material": "particles_alpha", "texture": "textures/particle/spark"}},
+                  "curves": {"": {"type": "linear", "input": 0, "nodes": [0, 1]},
+                             "v.fade": {"type": "linear", "input": "v.particle_age", "nodes": [1, 0]}},
                   "components": {"minecraft:emitter_rate_steady": {"spawn_rate": 5, "max_particles": 10}}}}""");
         Files.write(directory.resolve("spark.png"), new byte[]{1, 2, 3});
         Files.writeString(directory.resolve("lantern.bbmodel"), new Gson().toJson(Map.of(
@@ -65,9 +68,12 @@ class BedrockParticleExporterTest {
     void writesNamespacedParticleFilesWithTheirTexture() throws Exception {
         Path root = directory.resolve("bundle");
         BedrockParticleExporter.writeParticles(root.toFile(), "lantern", converter);
-        JsonObject description = JsonParser.parseString(Files.readString(root.resolve("particles/lantern_spark.json")))
-                .getAsJsonObject().getAsJsonObject("particle_effect").getAsJsonObject("description");
+        JsonObject effect = JsonParser.parseString(Files.readString(root.resolve("particles/lantern_spark.json")))
+                .getAsJsonObject().getAsJsonObject("particle_effect");
+        JsonObject description = effect.getAsJsonObject("description");
         assertEquals("fmm:lantern_spark", description.get("identifier").getAsString());
+        assertEquals(java.util.Set.of("v.fade"), effect.getAsJsonObject("curves").keySet(),
+                "Blockbench's unnamed placeholder curve is dropped; Bedrock logs an error for it");
         assertEquals("textures/entity/fmm_particles/lantern/spark",
                 description.getAsJsonObject("basic_render_parameters").get("texture").getAsString());
         assertTrue(Files.isRegularFile(root.resolve("textures/entity/fmm_particles/lantern/spark.png")));
@@ -88,6 +94,24 @@ class BedrockParticleExporterTest {
         BoneBlueprint owner = converter.getSkeletonBlueprint().getLocatorByName("tip").getParentBone();
         JsonObject locators = BedrockParticleExporter.locators(owner, converter, visual);
         assertEquals("[-2.0,14.0,16.0]", locators.get("tip").toString(), "Bedrock geometry mirrors X");
+    }
+
+    @Test
+    void exportsNothingWhileParticlesAreSwitchedOff() throws Exception {
+        DefaultConfig.particleEffectsEnabled = false;
+        try {
+            Path root = directory.resolve("bundle");
+            BedrockParticleExporter.writeParticles(root.toFile(), "lantern", converter);
+            assertFalse(Files.exists(root.resolve("particles")));
+            assertTrue(BedrockParticleExporter.clientEntityEffects("lantern", converter).entrySet().isEmpty());
+            assertTrue(BedrockParticleExporter.timeline(converter.getAnimationsBlueprint().getAnimations().get("idle"))
+                    .entrySet().isEmpty());
+            Path assets = directory.resolve("assets/freeminecraftmodels");
+            BedrockParticleExporter.writeHeldItemSidecar(assets.toFile(), "lantern", converter);
+            assertFalse(Files.exists(assets.resolve("rspm_item_particles")));
+        } finally {
+            DefaultConfig.particleEffectsEnabled = true;
+        }
     }
 
     @Test
