@@ -125,4 +125,12 @@ class ParticleImportTest {
         FileModelConverter converter = convert(List.of(particleKeyframe(0, "glow", "tip", "")));
         assertEquals("fmm:glow", converter.getParticleEffects().get("glow").blueprint().identifier());
     }
+
+    @Test
+    void findsParticleJsonFilesByEffectName() throws Exception {
+        Files.writeString(directory.resolve("wand_particles.particle.json"), """
+                {"particle_effect": {"description": {"identifier": "wand_particles"}, "components": {}}}""");
+        FileModelConverter converter = convert(List.of(particleKeyframe(0, "wand_particles", "tip", "")));
+        assertEquals("wand_particles", converter.getParticleEffects().get("wand_particles").blueprint().identifier());
+    }
 }

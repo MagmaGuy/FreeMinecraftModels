@@ -17,8 +17,9 @@ import java.util.function.Consumer;
 
 /**
  * Finds the Snowstorm files a model's particle keyframes use. Blockbench stores only the
- * author's local path, so FMM looks next to the model by that file name and by effect name,
- * in the model's folder and then its {@code particles/} folder. Problems warn and degrade;
+ * author's local path, so FMM looks next to the model by that file name and then by effect name
+ * ({@code <effect>.particle.json}, then {@code <effect>.json}), in the model's folder and then its
+ * {@code particles/} folder. Problems warn and degrade;
  * they never stop the model from loading.
  */
 public final class ParticleEffectLibrary {
@@ -82,8 +83,10 @@ public final class ParticleEffectLibrary {
             candidates.add(new File(modelFolder, keyframe.file()));
             candidates.add(new File(particleFolder, keyframe.file()));
         }
-        candidates.add(new File(modelFolder, keyframe.effect() + ".json"));
-        candidates.add(new File(particleFolder, keyframe.effect() + ".json"));
+        for (String name : List.of(keyframe.effect() + ".particle.json", keyframe.effect() + ".json")) {
+            candidates.add(new File(modelFolder, name));
+            candidates.add(new File(particleFolder, name));
+        }
 
         for (File candidate : candidates) {
             if (!candidate.isFile()) continue;

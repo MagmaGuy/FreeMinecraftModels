@@ -42,6 +42,7 @@ class ParticleSpriteRendererTest {
         final Set<UUID> viewers = new HashSet<>();
         boolean removed;
         Location lastMove;
+        int moves;
         Vector3f lastScale;
         int lastColor = -1;
 
@@ -57,7 +58,10 @@ class ParticleSpriteRendererTest {
                             case "displayTo" -> viewers.add((UUID) args[0]);
                             case "hideFrom" -> viewers.remove((UUID) args[0]);
                             case "remove" -> removed = true;
-                            case "teleport" -> lastMove = (Location) args[0];
+                            case "teleport" -> {
+                                lastMove = (Location) args[0];
+                                moves++;
+                            }
                             case "setTransformation" -> lastScale = (Vector3f) args[2];
                             case "setItemModel" -> lastColor = ((org.bukkit.Color) args[1]).asRGB();
                             case "hasViewers" -> {
@@ -114,6 +118,8 @@ class ParticleSpriteRendererTest {
         FakeSprite sprite = sprites.getFirst();
         assertEquals(Set.of(alice, bob), sprite.viewers);
         assertEquals(10, sprite.spawn.getX(), 1e-9);
+        assertTrue(sprite.calls.indexOf("teleport[" + sprite.spawn + "]") < sprite.calls.indexOf("displayTo[" + alice + "]"),
+                "The sprite is placed before it is shown");
         assertTrue(sprite.calls.contains("initializeModel[" + sprite.spawn + ", freeminecraftmodels:particle/model/spark/0]"));
         assertTrue(sprite.calls.contains("setBillboard[" + Display.Billboard.CENTER + "]"));
         assertTrue(sprite.calls.contains("setBrightness[15, 15]"));
@@ -154,7 +160,8 @@ class ParticleSpriteRendererTest {
                 "minecraft:particle_lifetime_expression": {"max_lifetime": 5}""");
         ParticleSpriteRenderer quiet = renderer(still, 400);
         for (int tick = 1; tick <= 6; tick++) step(still, quiet, List.of(alice), tick);
-        assertNull(sprites.getFirst().lastMove);
+        assertEquals(1, sprites.getFirst().moves, "Only the placement before the first display");
+        assertEquals(sprites.getFirst().spawn, sprites.getFirst().lastMove);
         assertTrue(sprites.getFirst().calls.stream().noneMatch(call -> call.startsWith("queueMetadataUpdate")));
     }
 
