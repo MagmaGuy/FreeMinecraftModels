@@ -187,6 +187,21 @@ public class BoneTransforms {
     }
 
     /**
+     * World offset, relative to the skeleton location, of a model-space point (blocks, Blockbench
+     * axes) that belongs to this bone. Uses the same chain as mount points.
+     */
+    public void globalPoint(Vector3f modelSpacePoint, double[] result) {
+        Vector3f center = bone.getBoneBlueprint().getModelCenter();
+        globalMatrix.transformPoint(modelSpacePoint.x - center.x, modelSpacePoint.y - center.y,
+                modelSpacePoint.z - center.z, result);
+    }
+
+    /** The bone's world rotation with scale removed. */
+    public org.joml.Quaterniond globalRotation(org.joml.Quaterniond result) {
+        return globalMatrix.getRotation(result);
+    }
+
+    /**
      * Returns the bone's world position derived purely from the global
      * transform matrix, with no armor-stand pivot offset. Used for mount
      * points where the raw pivot position is needed.

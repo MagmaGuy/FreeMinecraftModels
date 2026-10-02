@@ -3,12 +3,16 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.IKChainBlueprint;
+import com.magmaguy.freeminecraftmodels.dataconverter.LocatorBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
+import org.joml.Quaterniond;
+import org.joml.Vector3d;
+import org.joml.Vector3f;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -99,6 +103,40 @@ public class Skeleton {
     @Nullable
     public Location getCurrentLocation() {
         return modeledEntity.getBoneTransformLocation();
+    }
+
+    /** Recomputes bone transforms. Packets are only sent to existing viewers. */
+    void transformBones() {
+        if (rootBone != null) rootBone.transform(null);
+    }
+
+    /**
+     * Writes a locator's world position and rotation from the current bone transforms. A null
+     * locator, or one whose bone is missing, resolves to the model origin and root rotation.
+     */
+    public void locatorTransform(LocatorBlueprint locator, Vector3d position, Quaterniond rotation) {
+        Location origin = getCurrentLocation();
+        position.set(origin.getX(), origin.getY(), origin.getZ());
+        Bone bone = null;
+        if (locator != null && locator.getParentBone() != null) {
+            for (Bone candidate : boneMap.values()) {
+                if (candidate.getBoneBlueprint() == locator.getParentBone()) {
+                    bone = candidate;
+                    break;
+                }
+            }
+        }
+        if (bone == null) {
+            if (rootBone != null) rootBone.getBoneTransforms().globalRotation(rotation);
+            else rotation.identity();
+            return;
+        }
+        double[] offset = new double[3];
+        bone.getBoneTransforms().globalPoint(locator.getModelSpacePosition(), offset);
+        position.add(offset[0], offset[1], offset[2]);
+        bone.getBoneTransforms().globalRotation(rotation);
+        Vector3f locatorRotation = locator.getRotation();
+        rotation.mul(new Quaterniond().rotationZYX(locatorRotation.z, locatorRotation.y, locatorRotation.x));
     }
 
     public void generateDisplays() {
