@@ -233,6 +233,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(new DynamicEntity.ModeledEntityEvents(), this);
         Bukkit.getPluginManager().registerEvents(new InteractionComponent.InteractionComponentEvents(), this);
         Bukkit.getPluginManager().registerEvents(new ModelItemListener(), this);
+        Bukkit.getPluginManager().registerEvents(new com.magmaguy.freeminecraftmodels.listeners.ItemModelUpgradeListener(), this);
         Bukkit.getPluginManager().registerEvents(new CraftifyListener(), this);
         Bukkit.getPluginManager().registerEvents(new com.magmaguy.freeminecraftmodels.customentity.DisguiseEffectListener(), this);
         ModelMenuHelper.initialize();
