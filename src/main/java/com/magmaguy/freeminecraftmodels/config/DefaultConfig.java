@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.config;
 
+import com.magmaguy.freeminecraftmodels.customentity.core.FilmicMode;
 import com.magmaguy.magmacore.config.ConfigurationEngine;
 import com.magmaguy.magmacore.config.ConfigurationFile;
 import com.magmaguy.magmacore.nightbreak.NightbreakPluginUpdater;
@@ -18,6 +19,7 @@ public class DefaultConfig extends ConfigurationFile {
     public static boolean skipUnchangedBoneUpdates;
     public static boolean useDeltaMetadataPackets;
     public static int maxModelsForProximityOverride;
+    public static boolean filmicMode;
     private static DefaultConfig instance;
     public static boolean setupDone;
 
@@ -99,6 +101,23 @@ public class DefaultConfig extends ConfigurationFile {
                         "Default 25. Raise very high to effectively restore the always-override behavior;",
                         "set to 0 to always require line-of-sight (never override)."),
                 fileConfiguration, "maxModelsForProximityOverride", 25);
+        filmicMode = ConfigurationEngine.setBoolean(
+                List.of("!!! WARNING: NOT RECOMMENDED. LEAVE THIS OFF UNLESS YOU ARE RECORDING A VIDEO. !!!",
+                        "Filmic mode is for recording trailers and videos with ReplayMod or a similar recording mod.",
+                        "Normally a player only receives a model while it is within maxModelViewDistance and in",
+                        "that player's line of sight. Hidden models are removed from the client and stop animating,",
+                        "which saves a lot of bandwidth and server work. A replay only contains what the recording",
+                        "player's client received, so models that were hidden from that player show up missing or",
+                        "frozen when the replay camera looks at them.",
+                        "When true, every loaded model in the chunks a player has loaded is sent to that player and",
+                        "keeps animating, even behind walls or past maxModelViewDistance. Models in unloaded chunks",
+                        "still don't show.",
+                        "This sends far more packets to every player and makes the server animate every loaded model.",
+                        "Expect lag on busy servers. Turn it on only while recording, then turn it back off.",
+                        "/fmm filmic on|off changes it temporarily without editing this file. That temporary setting",
+                        "lasts until the server restarts or until this option is changed and FMM reloads."),
+                fileConfiguration, "filmicMode", false);
+        FilmicMode.onConfigLoaded(filmicMode);
         preventPropPlacementInProtectedRegions = ConfigurationEngine.setBoolean(
                 List.of("Sets whether players are prevented from placing props (custom model items) inside protected regions.",
                         "When true, FMM asks MagmaCore's registered protection providers whether the player may build in the target cell.",

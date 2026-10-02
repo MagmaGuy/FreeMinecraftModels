@@ -143,12 +143,21 @@ public class SkeletonWatchers {
         // when occluded by floors/walls; disabling it lets isModelInSight() cull them.
         boolean proximityOverride = ModelDensity.proximityOverrideActive(
                 currentLocation.getWorld());
+        // Filmic mode (for ReplayMod recordings) skips the raytrace and shows every
+        // model in the player's sent chunks. It never shows fewer models than normal
+        // mode, so anything inside the view distance stays visible regardless of chunks.
+        boolean filmicMode = FilmicMode.isEnabled();
+        int worldViewDistance = filmicMode ? currentLocation.getWorld().getViewDistance() : 0;
 
         for (Player player : currentLocation.getWorld().getPlayers()) {
             double distance = player.getLocation().distanceSquared(currentLocation);
 
-            if ((proximityOverride && distance < MIN_VIEW_DISTANCE_SQUARED) ||
-                    (distance < maxViewDistanceSquared && isModelInSight(player, currentLocation))) {
+            boolean visible = filmicMode
+                    ? distance < maxViewDistanceSquared
+                            || FilmicMode.isWithinSentChunks(player, currentLocation, worldViewDistance)
+                    : (proximityOverride && distance < MIN_VIEW_DISTANCE_SQUARED)
+                            || (distance < maxViewDistanceSquared && isModelInSight(player, currentLocation));
+            if (visible) {
                 newPlayers.add(player.getUniqueId());
                 if (!viewers.contains(player.getUniqueId())) displayTo(player);
             }
