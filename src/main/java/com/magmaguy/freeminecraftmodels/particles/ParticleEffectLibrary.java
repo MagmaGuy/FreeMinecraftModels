@@ -28,7 +28,7 @@ public final class ParticleEffectLibrary {
     private ParticleEffectLibrary() {
     }
 
-    /** Redirects warnings, for tests. {@code null} restores the plugin logger. */
+    /** Redirects warnings and info notices, for tests. {@code null} restores the plugin logger. */
     public static void setWarningSink(Consumer<String> sink) {
         warningSink = sink;
     }
@@ -37,6 +37,12 @@ public final class ParticleEffectLibrary {
         Consumer<String> sink = warningSink;
         if (sink != null) sink.accept(message);
         else Logger.warn(message);
+    }
+
+    static void info(String message) {
+        Consumer<String> sink = warningSink;
+        if (sink != null) sink.accept(message);
+        else Logger.info(message);
     }
 
     /**
@@ -99,7 +105,8 @@ public final class ParticleEffectLibrary {
                 continue;
             }
             if (!blueprint.unsupportedComponents().isEmpty()) {
-                warn("Particle effect '" + keyframe.effect() + "' (" + candidate.getName() + ") uses "
+                // Informational: the effect still loads, and nothing on the server can fix it.
+                info("Particle effect '" + keyframe.effect() + "' (" + candidate.getName() + ") uses "
                         + String.join(", ", blueprint.unsupportedComponents())
                         + ", which Java players do not see yet. Bedrock players see the full effect.");
             }
