@@ -67,6 +67,8 @@ public final class FreeMinecraftModels extends JavaPlugin {
     private volatile ItemScriptManager.ItemCatalog pendingItemCatalog;
     private volatile EnchantmentCatalog pendingEnchantmentCatalog;
     private volatile java.util.Map<String, com.magmaguy.freeminecraftmodels.config.recipes.PropRecipeConfig> pendingRecipes;
+    private static final String STARTUP_RECIPES_REJECTED = "FreeMinecraftModels continues with no prop recipes or "
+            + "furniture shop entries until the file is fixed and /fmm reload is run.";
     public static final NightbreakPluginSpec NIGHTBREAK_PLUGIN_SPEC = new NightbreakPluginSpec(
             "FreeMinecraftModels",
             "freeminecraftmodels",
@@ -212,7 +214,16 @@ public final class FreeMinecraftModels extends JavaPlugin {
         pendingItemCatalog = null;
         if (candidate == null) ModelsFolder.initializeConfig();
         else ModelsFolder.initializeConfig(candidate);
-        if (pendingRecipes == null) pendingRecipes = PropRecipeManager.prepareCatalog();
+        // Reloads validate recipes before teardown; here no catalog exists to keep, so a bad
+        // recipe file must reject only the recipes instead of failing FMM initialization.
+        if (pendingRecipes == null) {
+            try {
+                pendingRecipes = PropRecipeManager.prepareCatalog();
+            } catch (RuntimeException failure) {
+                PropRecipeManager.logRejectedCatalog(failure, STARTUP_RECIPES_REJECTED);
+                pendingRecipes = java.util.Map.of();
+            }
+        }
         initializationContext.step("Content Packages");
         new ContentPackageConfig();
         initializationContext.step("Resource Pack Zip");
@@ -303,7 +314,12 @@ public final class FreeMinecraftModels extends JavaPlugin {
         PropEntity.onStartup();
 
         initializationContext.step("Prop Recipes");
-        PropRecipeManager.activateCatalog(java.util.Objects.requireNonNull(pendingRecipes, "prepared recipes"));
+        try {
+            PropRecipeManager.activateCatalog(java.util.Objects.requireNonNull(pendingRecipes, "prepared recipes"));
+        } catch (RuntimeException failure) {
+            // The rollback restores the catalog that existed before, which is empty here.
+            PropRecipeManager.logRejectedCatalog(failure, STARTUP_RECIPES_REJECTED);
+        }
         pendingRecipes = null;
 
         initializationContext.step("Metrics");
@@ -351,7 +367,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
                         Thread.currentThread().interrupt();
                         throw new IllegalStateException("Imported-content reload interrupted", interrupted);
                     } catch (Exception failure) {
-                        throw new IllegalStateException("Imported-content reload failed", failure);
+                        throw new IllegalStateException("Imported-content reload failed: " + failure.getMessage(), failure);
                     }
                 },
                 context -> {
@@ -359,7 +375,13 @@ public final class FreeMinecraftModels extends JavaPlugin {
                     magicEnchantmentCatalog.reload(java.util.Objects.requireNonNull(
                             pendingEnchantmentCatalog, "prepared enchantment catalog"));
                     pendingEnchantmentCatalog = null;
-                    PropRecipeManager.activateCatalog(java.util.Objects.requireNonNull(pendingRecipes, "prepared recipes"));
+                    try {
+                        PropRecipeManager.activateCatalog(java.util.Objects.requireNonNull(pendingRecipes, "prepared recipes"));
+                    } catch (RuntimeException failure) {
+                        // Recipes are not cleared with the other registries, so the rollback keeps the
+                        // current catalog; a bad recipe must not disable FMM after models were rebuilt.
+                        PropRecipeManager.logRejectedCatalog(failure, "The previous prop recipes remain active.");
+                    }
                     pendingRecipes = null;
                     ModelMenuHelper.initialize();
                     PropScriptManager.initialize();
@@ -440,7 +462,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         importedContentReloadInProgress.set(false);
         getLogger().warning("Content reload rejected; the current catalog remains active: " + failure.getMessage());
         if (sender != null) com.magmaguy.magmacore.util.Logger.sendMessage(sender,
-                "&cContent reload rejected; the current catalog remains active. " + failure.getMessage());
+                "&cContent reload rejected; the current catalog remains active. " + failure.getMessage() + " Check the console.");
     }
 
     private void clearContentRegistries() {
