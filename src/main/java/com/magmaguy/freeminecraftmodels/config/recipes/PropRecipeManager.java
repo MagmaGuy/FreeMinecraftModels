@@ -20,14 +20,21 @@ public class PropRecipeManager {
         activateCatalog(prepareCatalog());
     }
 
+    /**
+     * Reads every recipe file as one catalog. A broken or duplicate file rejects only this
+     * catalog: the error is logged and an empty catalog is returned, so startup and reloads
+     * continue without prop recipes instead of failing.
+     */
     public static Map<String, PropRecipeConfig> prepareCatalog() {
         Map<String, PropRecipeConfig> candidate = new java.util.LinkedHashMap<>();
         File folder = getRecipesFolder();
+        java.nio.file.Path current = folder.toPath();
         try {
             java.nio.file.Files.createDirectories(folder.toPath());
             try (var paths = java.nio.file.Files.walk(folder.toPath())) {
                 for (var path : paths.filter(java.nio.file.Files::isRegularFile)
                         .filter(file -> file.getFileName().toString().endsWith(".yml")).sorted().toList()) {
+                    current = path;
                     PropRecipeConfig config = new PropRecipeConfig(path.getFileName().toString(), true);
                     YamlConfiguration yaml = new YamlConfiguration();
                     yaml.load(path.toFile());
@@ -40,13 +47,41 @@ public class PropRecipeManager {
                             + config.getModelId() + " in " + previous.getFile() + " and " + path);
                 }
             }
-        } catch (java.io.IOException | org.bukkit.configuration.InvalidConfigurationException failure) {
-            throw new IllegalStateException("Cannot prepare prop recipes", failure);
+        } catch (Exception failure) {
+            logRejectedCatalog("Cannot prepare prop recipes from " + current, failure);
+            return Map.of();
         }
         return java.util.Collections.unmodifiableMap(candidate);
     }
 
+    /**
+     * Registers a prepared catalog. If registration fails, the previous Bukkit recipes are
+     * restored, then the catalog is rejected and left empty, matching a failed preparation.
+     */
     public static void activateCatalog(Map<String, PropRecipeConfig> prepared) {
+        try {
+            registerCatalog(prepared);
+        } catch (RuntimeException failure) {
+            logRejectedCatalog("Cannot activate prop recipes", failure);
+            for (PropRecipeConfig config : loadedRecipes.values()) {
+                try {
+                    config.unregisterRecipe();
+                } catch (RuntimeException removalFailure) {
+                    Logger.warn("Could not remove recipe for " + config.getModelId() + ": " + removalFailure.getMessage());
+                }
+            }
+            loadedRecipes.clear();
+        }
+    }
+
+    private static void logRejectedCatalog(String problem, Exception failure) {
+        String reason = failure.getMessage() != null ? failure.getMessage() : failure.toString();
+        MetadataHandler.PLUGIN.getLogger().severe(problem + ": " + reason);
+        MetadataHandler.PLUGIN.getLogger().severe("The prop recipe catalog was rejected. FreeMinecraftModels "
+                + "continues without prop recipes or furniture shop entries until the file is fixed and /fmm reload is run.");
+    }
+
+    private static void registerCatalog(Map<String, PropRecipeConfig> prepared) {
         Map<String, PropRecipeConfig> candidate = new java.util.LinkedHashMap<>();
         for (PropRecipeConfig config : prepared.values()) {
             // Model aliases belong to the newly published registry, not the old catalog
@@ -61,7 +96,14 @@ public class PropRecipeManager {
         for (PropRecipeConfig config : candidate.values()) previous.putIfAbsent(config.recipeKey(), Bukkit.getRecipe(config.recipeKey()));
         try {
             for (PropRecipeConfig config : loadedRecipes.values()) config.unregisterRecipe();
-            for (PropRecipeConfig config : candidate.values()) config.registerRecipe();
+            for (PropRecipeConfig config : candidate.values()) {
+                try {
+                    config.registerRecipe();
+                } catch (RuntimeException failure) {
+                    throw new IllegalStateException("Recipe " + config.getFile() + " for model "
+                            + config.getModelId() + " was rejected: " + failure.getMessage(), failure);
+                }
+            }
         } catch (RuntimeException failure) {
             previous.forEach((key, recipe) -> {
                 try {
