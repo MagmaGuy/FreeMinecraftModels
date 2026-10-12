@@ -524,8 +524,9 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
      * Every magic impact lands outside the vanilla hurt cooldown and then puts the target's
      * cooldown back. Without that, a target hit in the last 10 ticks by anything that dealt at
      * least as much (a party member's sword, the player's own fireball, the previous bolt of a
-     * multicast) silently swallowed the impact: no damage, no event, no skills. The weapon's own
-     * reload is the rate limit for magic hits.
+     * multicast) silently swallowed the impact. Paper drops it before the damage event; Spigot
+     * fires the event and then leaves the health unchanged. The weapon's own reload is the rate
+     * limit for magic hits.
      */
     private boolean damageTarget(MagicCast cast, LivingEntity target, double damage) {
         int previousDamageCooldown = NMSManager.getAdapter().getDamageCooldownTicks(target);
