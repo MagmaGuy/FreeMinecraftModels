@@ -18,6 +18,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.metadata.MetadataValue;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.util.Vector;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -87,25 +89,70 @@ class MagicWeaponDamageCooldownTest {
     }
 
     @Test
-    void ordinarySingleMissilesKeepTheNativeCooldownAndPreviousHitAmount() throws Throwable {
+    void consecutiveSingleBoltsEachLandWithoutOpeningAHitWindow() throws Throwable {
         TargetState state = new TargetState(0, 7D);
         MagicCast cast = cast(1);
         damage(cast, state, 4D);
         damage(cast, state, 4D);
+        assertEquals(2, state.acceptedHits);
+        assertEquals(92D, state.health);
+        assertEquals(0, state.cooldown);
+        assertEquals(7D, state.lastDamage);
+    }
+
+    /** Another source hit the target for 7 three ticks ago; a weaker bolt used to vanish into that window. */
+    @Test
+    void aSingleBoltLandsInsideAnotherHitsCooldownAndRestoresIt() throws Throwable {
+        TargetState state = new TargetState(17, 7D);
+        damage(cast(1), state, 4D);
         assertEquals(1, state.acceptedHits);
         assertEquals(96D, state.health);
-        assertEquals(20, state.cooldown);
-        assertEquals(4D, state.lastDamage);
+        assertEquals(17, state.cooldown);
+        assertEquals(7D, state.lastDamage);
+    }
+
+    /** A staff strike right after the player's own fireball used to be swallowed while its reload was spent. */
+    @Test
+    void staffMeleeLandsInsideTheFireballsCooldownAndRestoresIt() throws Throwable {
+        TargetState state = new TargetState(15, 5D);
+        damage(staffCast(MagicAttackKind.STAFF_MELEE), state, 1.8D);
+        assertEquals(1, state.acceptedHits);
+        assertEquals(98.2D, state.health, 1.0E-9D);
+        assertEquals(15, state.cooldown);
+        assertEquals(5D, state.lastDamage);
     }
 
     @Test
-    void ordinarySingleMissilesDoNotBypassAnExistingCooldown() throws Throwable {
-        TargetState state = new TargetState(13, 7D);
-        damage(cast(1), state, 4D);
-        assertEquals(0, state.acceptedHits);
-        assertEquals(100D, state.health);
-        assertEquals(13, state.cooldown);
-        assertEquals(7D, state.lastDamage);
+    void aDirectFireballHitDealsFullPowerWhileSplashTargetsKeepTheirFalloff() throws Throwable {
+        List<Entity> nearby = new ArrayList<>();
+        World world = proxy(World.class, (instance, method, args) -> switch (method.getName()) {
+            case "getNearbyEntities" -> List.copyOf(nearby);
+            case "equals" -> instance == args[0];
+            case "hashCode" -> System.identityHashCode(instance);
+            default -> defaultValue(method.getReturnType());
+        });
+        Location impact = new Location(world, 0D, 64D, 0D);
+        // Two-block-tall targets centred 1.04 blocks above their feet: the struck one 1 block from
+        // the impact, the splashed one 2 blocks away.
+        TargetState struck = new TargetState(0, 0D, new Location(world, 1D, 64D - 1.04D, 0D));
+        TargetState splashed = new TargetState(0, 0D, new Location(world, -2D, 64D - 1.04D, 0D));
+        nearby.add(struck.entity);
+        nearby.add(splashed.entity);
+        MagicCast fireball = staffCast(MagicAttackKind.STAFF_FIREBALL);
+        double radius = fireball.definition().traits().impactRadius();
+        double fullDamage = BuiltInMagicWeapons.STANDALONE_REFERENCE_DAMAGE
+                * fireball.definition().basePower(MagicAttackKind.STAFF_FIREBALL);
+
+        var blast = MagicWeaponRuntime.class.getDeclaredMethod(
+                "damageBlast", MagicCast.class, LivingEntity.class, Location.class, Vector.class);
+        blast.setAccessible(true);
+        try { blast.invoke(runtime, fireball, struck.entity, impact, new Vector(1D, 0D, 0D)); }
+        catch (InvocationTargetException failure) { throw failure.getCause(); }
+
+        assertEquals(1, struck.acceptedHits);
+        assertEquals(100D - fullDamage, struck.health, 1.0E-9D);
+        assertEquals(1, splashed.acceptedHits);
+        assertEquals(100D - fullDamage * (.35D + .65D * (1D - 2D / radius)), splashed.health, 1.0E-9D);
     }
 
     @Test
@@ -140,6 +187,12 @@ class MagicWeaponDamageCooldownTest {
                 MagicAttackKind.WAND_MISSILE, null, Map.of(), Map.of(), Map.of());
     }
 
+    private MagicCast staffCast(MagicAttackKind attackKind) {
+        MagicWeaponDefinition definition = BuiltInMagicWeapons.defaults(BuiltInMagicWeapons.DEFAULT_STAFF_ID, MagicWeaponKind.STAFF);
+        return new MagicCast(UUID.randomUUID(), owner, new ItemStack(Material.BLAZE_ROD), definition,
+                attackKind, null, Map.of(), Map.of(), Map.of());
+    }
+
     private boolean damage(MagicCast cast, TargetState state, double amount) throws Throwable {
         var method = MagicWeaponRuntime.class.getDeclaredMethod("damageTarget", MagicCast.class, LivingEntity.class, double.class);
         method.setAccessible(true);
@@ -157,9 +210,20 @@ class MagicWeaponDamageCooldownTest {
         private final LivingEntity entity;
 
         private TargetState(int cooldown, double lastDamage) {
+            this(cooldown, lastDamage, null);
+        }
+
+        private TargetState(int cooldown, double lastDamage, Location feet) {
             this.cooldown = cooldown;
             this.lastDamage = lastDamage;
             entity = proxy(LivingEntity.class, (instance, method, args) -> switch (method.getName()) {
+                case "equals" -> instance == args[0];
+                case "hashCode" -> System.identityHashCode(instance);
+                case "getLocation" -> feet == null ? null : feet.clone();
+                case "getWorld" -> feet == null ? null : feet.getWorld();
+                case "getHeight" -> 2D;
+                case "isValid" -> true;
+                case "getHealth" -> health;
                 case "getNoDamageTicks" -> this.cooldown;
                 case "setNoDamageTicks" -> { this.cooldown = (Integer) args[0]; yield null; }
                 case "getLastDamage" -> this.lastDamage;
