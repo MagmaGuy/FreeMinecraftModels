@@ -383,8 +383,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
             Vector incoming) {
         World world = impact.getWorld();
         if (world == null) return;
-        MagicWeaponTraits traits = cast.definition().traits();
-        double radius = traits.impactRadius();
+        double radius = cast.definition().traits().impactRadius();
         world.spawnParticle(Particle.EXPLOSION, impact, 3, .4, .4, .4, .02);
         world.spawnParticle(Particle.SOUL_FIRE_FLAME, impact, 34, 1.1, .7, 1.1, .08);
         for (int point = 0; point < 32; point++) {
@@ -393,7 +392,24 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
                     Math.sin(angle) * radius), 1, 0, 0, 0, 0);
         }
         world.playSound(impact, Sound.ENTITY_GENERIC_EXPLODE, .85F, 1.05F);
+        damageBlast(cast, directTarget, impact, incoming);
+    }
 
+    /**
+     * The entity the fireball struck takes its full power. The impact point lies on that entity's
+     * hitbox, away from its center, so measuring falloff there would cut every direct hit short.
+     * Everything else in the blast loses power with its center's distance from the impact, down to
+     * 35% at the edge.
+     */
+    private void damageBlast(
+            MagicCast cast,
+            LivingEntity directTarget,
+            Location impact,
+            Vector incoming) {
+        World world = impact.getWorld();
+        if (world == null) return;
+        MagicWeaponTraits traits = cast.definition().traits();
+        double radius = traits.impactRadius();
         if (radius <= 0D) {
             if (targetEligible(cast, directTarget)) {
                 if (applyDamage(cast, directTarget, 1D)) ignite(cast, directTarget, traits.ignitionTicks());
@@ -414,9 +430,12 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
             targets.add(directTarget);
 
         for (LivingEntity target : targets) {
-            double distance = Math.min(radius, MagicProjectileEngine.center(target).distance(impact));
-            if (applyDamage(cast, target, .35D + .65D * (1D - distance / radius)))
-                ignite(cast, target, traits.ignitionTicks());
+            double scale = 1D;
+            if (target != directTarget) {
+                double distance = Math.min(radius, MagicProjectileEngine.center(target).distance(impact));
+                scale = .35D + .65D * (1D - distance / radius);
+            }
+            if (applyDamage(cast, target, scale)) ignite(cast, target, traits.ignitionTicks());
         }
     }
 
@@ -501,14 +520,18 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         return applyOwnedDamage(damage.actor(), damage.target(), false, application);
     }
 
+    /**
+     * Every magic impact lands outside the vanilla hurt cooldown and then puts the target's
+     * cooldown back. Without that, a target hit in the last 10 ticks by anything that dealt at
+     * least as much (a party member's sword, the player's own fireball, the previous bolt of a
+     * multicast) silently swallowed the impact: no damage, no event, no skills. The weapon's own
+     * reload is the rate limit for magic hits.
+     */
     private boolean damageTarget(MagicCast cast, LivingEntity target, double damage) {
         int previousDamageCooldown = NMSManager.getAdapter().getDamageCooldownTicks(target);
         double previousLastDamage = target.getLastDamage();
-        boolean multicast = cast.attackKind() == MagicAttackKind.WAND_MISSILE
-                && cast.definition().traits().missileCount() > 1;
         try {
-            // Separate bolts must each resolve, including when all bolts hit the same enemy.
-            if (multicast) NMSManager.getAdapter().setDamageCooldownTicks(target, 0);
+            NMSManager.getAdapter().setDamageCooldownTicks(target, 0);
             boolean accepted = applyOwnedDamage(cast.owner(), target,
                     cast.attackKind().weaponKind() == MagicWeaponKind.WAND,
                     () -> target.damage(damage, cast.owner()));
@@ -519,10 +542,8 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
                     target, UUID.randomUUID().toString());
             return accepted;
         } finally {
-            if (multicast) {
-                NMSManager.getAdapter().setDamageCooldownTicks(target, previousDamageCooldown);
-                target.setLastDamage(previousLastDamage);
-            }
+            NMSManager.getAdapter().setDamageCooldownTicks(target, previousDamageCooldown);
+            target.setLastDamage(previousLastDamage);
         }
     }
 
