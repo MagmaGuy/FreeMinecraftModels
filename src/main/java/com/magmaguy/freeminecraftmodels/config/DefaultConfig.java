@@ -20,6 +20,7 @@ public class DefaultConfig extends ConfigurationFile {
     public static boolean useDeltaMetadataPackets;
     public static boolean displayBonesRideTheirEntity;
     public static int riddenBoneInterpolationTicks;
+    public static boolean modelViewersTrackHiddenBodies;
     public static int maxModelsForProximityOverride;
     public static boolean filmicMode;
     public static boolean particleEffectsEnabled = true;
@@ -106,6 +107,14 @@ public class DefaultConfig extends ConfigurationFile {
                 List.of("How many ticks Java clients take to glide a ridden bone to each new animation pose.",
                         "0 snaps every tick; 1 (default) glides over one tick, which also smooths rotations."),
                 fileConfiguration, "riddenBoneInterpolationTicks", 1);
+        modelViewersTrackHiddenBodies = ConfigurationEngine.setBoolean(
+                List.of("When true (default), each Java client that can see a model whose entity is hidden also",
+                        "tracks that entity as an invisible, bare body (its equipment is stripped on the way to",
+                        "them), so the model's display bones can ride it the way a mount's bones do and move with",
+                        "the entity's own client-side smoothing instead of trailing it. Everyone else, and Bedrock",
+                        "clients, keep the entity hidden as before. Set to false to keep hidden bodies untracked",
+                        "and their bones on per-bone teleports."),
+                fileConfiguration, "modelViewersTrackHiddenBodies", true);
         maxModelsForProximityOverride = ConfigurationEngine.setInt(
                 List.of("Pseudo load balancer for the close-range visibility override.",
                         "Normally a model within 10 blocks of a player is always shown, skipping the",

@@ -188,6 +188,7 @@ public class Skeleton {
     }
 
     public void remove() {
+        skeletonWatchers.releaseTrackedBodies();
         if (rootBone != null) rootBone.remove();
     }
 
