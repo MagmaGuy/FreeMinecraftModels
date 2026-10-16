@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.easyminecraftgoals.internal.PacketModelEntity;
+import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.utils.TransformationMatrix;
@@ -371,8 +372,12 @@ public class BoneTransforms {
         if (packetDisplayEntity == null || !packetDisplayEntity.supportsRiddenPlacement()) return;
         if (riddenVehicleId == vehicleId) return;
         riddenVehicleId = vehicleId;
-        if (vehicleId == -1) packetDisplayEntity.dismount();
-        else packetDisplayEntity.mountTo(vehicleId);
+        // Mount packets list the vehicle's real passengers, which only the main thread may look up; the model
+        // clock is asynchronous, so the packet goes out on the next tick while the ridden pose starts now.
+        PacketModelEntity display = packetDisplayEntity;
+        Runnable mount = vehicleId == -1 ? display::dismount : () -> display.mountTo(vehicleId);
+        if (org.bukkit.Bukkit.isPrimaryThread() || MetadataHandler.PLUGIN == null || !MetadataHandler.PLUGIN.isEnabled()) mount.run();
+        else org.bukkit.Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, mount);
         // The free pose carries no translation and the ridden pose no position, so neither cache applies.
         displayStateValid = false;
         riddenStateValid = false;
