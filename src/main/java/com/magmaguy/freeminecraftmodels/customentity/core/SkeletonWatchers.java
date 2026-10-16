@@ -95,6 +95,8 @@ public class SkeletonWatchers {
         }
         resync(VIEWER_STATE_INTERVAL_TICKS);
         var modeledEntity = skeleton.getModeledEntity();
+        // The nameplate rides the body whenever the bones do, through MagmaCore's shared text placement.
+        modeledEntity.getNameplate().ride(skeleton.isRidden() ? modeledEntity.getUnderlyingEntity() : null);
         modeledEntity.getNameplate().move(modeledEntity.getNameplateLocation());
         modeledEntity.getNameplate().syncViewers(isInvisible ? List.of()
                 : viewers.stream().map(Bukkit::getPlayer).filter(Objects::nonNull).toList());
