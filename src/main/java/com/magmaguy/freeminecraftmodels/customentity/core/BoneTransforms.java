@@ -3,7 +3,6 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.easyminecraftgoals.internal.PacketModelEntity;
-import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.utils.TransformationMatrix;
@@ -357,9 +356,11 @@ public class BoneTransforms {
     // ---- ridden placement ----------------------------------------------------
     // The display rides the entity as a packet passenger (Skeleton.setRiddenPlacement), so viewers put it at
     // the seat every tick and only its transformation changes. The entity position never enters the pose.
-    private int riddenVehicleId = -1;
+    private volatile int riddenVehicleId = -1;
     private final double[] seatBuffer = new double[3];
     private final Vector3f translationBuffer = new Vector3f();
+    // Reused every pass: the packet layer reads the seat at once and keeps nothing of it.
+    private final Location seatLocation = new Location(null, 0, 0, 0, 180, 0);
     private boolean riddenStateValid = false;
     private double rdTx, rdTy, rdTz, rdRx, rdRy, rdRz, rdSx, rdSy, rdSz;
 
@@ -367,21 +368,20 @@ public class BoneTransforms {
         return riddenVehicleId != -1;
     }
 
-    /** Mounts the display on the vehicle, or frees it with -1. Either way the next pass resends the full pose. */
-    void setRiddenVehicle(int vehicleId) {
-        if (packetDisplayEntity == null || !packetDisplayEntity.supportsRiddenPlacement()) return;
-        if (riddenVehicleId == vehicleId) return;
+    /**
+     * Mounts the display on the vehicle, or frees it with -1; either way the next pass resends the full pose.
+     * Returns the mount packet step for the skeleton to run on the main thread, or null when nothing changes.
+     */
+    Runnable setRiddenVehicle(int vehicleId) {
+        if (packetDisplayEntity == null || !packetDisplayEntity.supportsRiddenPlacement()) return null;
+        if (riddenVehicleId == vehicleId) return null;
         riddenVehicleId = vehicleId;
-        // Mount packets list the vehicle's real passengers, which only the main thread may look up; the model
-        // clock is asynchronous, so the packet goes out on the next tick while the ridden pose starts now.
-        PacketModelEntity display = packetDisplayEntity;
-        Runnable mount = vehicleId == -1 ? display::dismount : () -> display.mountTo(vehicleId);
-        if (org.bukkit.Bukkit.isPrimaryThread() || MetadataHandler.PLUGIN == null || !MetadataHandler.PLUGIN.isEnabled()) mount.run();
-        else org.bukkit.Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, mount);
         // The free pose carries no translation and the ridden pose no position, so neither cache applies.
         displayStateValid = false;
         riddenStateValid = false;
         forceNextUpdate = true;
+        PacketModelEntity display = packetDisplayEntity;
+        return vehicleId == -1 ? display::dismount : () -> display.mountTo(vehicleId);
     }
 
     /**
@@ -408,10 +408,12 @@ public class BoneTransforms {
 
     private void sendRiddenPosePacket(AbstractPacketBundle packetBundle) {
         Location origin = bone.getSkeleton().getCurrentLocation();
-        Location seat = new Location(origin.getWorld(),
-                origin.getX() + seatBuffer[0], origin.getY() + seatBuffer[1], origin.getZ() + seatBuffer[2], 180, 0);
+        seatLocation.setWorld(origin.getWorld());
+        seatLocation.setX(origin.getX() + seatBuffer[0]);
+        seatLocation.setY(origin.getY() + seatBuffer[1]);
+        seatLocation.setZ(origin.getZ() + seatBuffer[2]);
         // Synched entity data keeps the vector it is given, so hand over a copy the next pass cannot change.
-        packetDisplayEntity.generateRiddenTransformationPackets(packetBundle, seat, new Vector3f(translationBuffer),
+        packetDisplayEntity.generateRiddenTransformationPackets(packetBundle, seatLocation, new Vector3f(translationBuffer),
                 new EulerAngle(rotationBuffer[0], rotationBuffer[1], rotationBuffer[2]),
                 (float) scaleBuffer[0] * 2.5f, (float) scaleBuffer[1] * 2.5f, (float) scaleBuffer[2] * 2.5f,
                 Math.max(0, DefaultConfig.riddenBoneInterpolationTicks));

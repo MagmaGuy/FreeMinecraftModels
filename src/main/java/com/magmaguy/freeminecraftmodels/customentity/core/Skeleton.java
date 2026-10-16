@@ -1,12 +1,14 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
+import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.IKChainBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.LocatorBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import lombok.Getter;
 import lombok.Setter;
+import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
@@ -108,8 +110,10 @@ public class Skeleton {
     // Ridden placement: the display bones ride the underlying entity as packet passengers and send only their
     // pose relative to its seat, so viewers place them from the same smoothed entity position as its riders.
     // The model tick publishes this before the bones transform.
-    private int riddenVehicleId = -1;
-    private final double[] seatOffset = new double[3];
+    // The seat is swapped as a whole and only when it changes, so a reader on another thread never sees a
+    // half-written offset.
+    private volatile int riddenVehicleId = -1;
+    private volatile double[] seatOffset = new double[3];
 
     public boolean isRidden() {
         return riddenVehicleId != -1;
@@ -117,21 +121,32 @@ public class Skeleton {
 
     /** World-axis offset from the entity position to the seat viewers put the bones at. */
     void getSeatOffset(double[] result) {
-        result[0] = seatOffset[0];
-        result[1] = seatOffset[1];
-        result[2] = seatOffset[2];
+        double[] seat = seatOffset;
+        result[0] = seat[0];
+        result[1] = seat[1];
+        result[2] = seat[2];
     }
 
     /** Pass -1 to place the bones freely again; the seat is relative to the entity position. */
     public void setRiddenPlacement(int vehicleId, org.bukkit.util.Vector seat) {
         if (vehicleId != -1) {
-            seatOffset[0] = seat.getX();
-            seatOffset[1] = seat.getY();
-            seatOffset[2] = seat.getZ();
+            double[] current = seatOffset;
+            if (current[0] != seat.getX() || current[1] != seat.getY() || current[2] != seat.getZ())
+                seatOffset = new double[]{seat.getX(), seat.getY(), seat.getZ()};
         }
         if (riddenVehicleId == vehicleId) return;
         riddenVehicleId = vehicleId;
-        for (Bone bone : boneMap.values()) bone.getBoneTransforms().setRiddenVehicle(vehicleId);
+        // Mount packets list the vehicle's real passengers, which only the main thread may look up; the model
+        // clock is asynchronous, so every bone mounts in one task on the next tick while its ridden pose starts now.
+        List<Runnable> mounts = new ArrayList<>();
+        for (Bone bone : boneMap.values()) {
+            Runnable mount = bone.getBoneTransforms().setRiddenVehicle(vehicleId);
+            if (mount != null) mounts.add(mount);
+        }
+        if (mounts.isEmpty()) return;
+        Runnable mountAll = () -> mounts.forEach(Runnable::run);
+        if (Bukkit.isPrimaryThread() || MetadataHandler.PLUGIN == null || !MetadataHandler.PLUGIN.isEnabled()) mountAll.run();
+        else Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, mountAll);
     }
 
     /** Recomputes bone transforms. Packets are only sent to existing viewers. */
