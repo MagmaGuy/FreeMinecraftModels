@@ -18,6 +18,9 @@ public class DefaultConfig extends ConfigurationFile {
     public static boolean registerCraftingRecipes;
     public static boolean skipUnchangedBoneUpdates;
     public static boolean useDeltaMetadataPackets;
+    public static boolean displayBonesRideTheirEntity;
+    public static int riddenBoneInterpolationTicks;
+    public static boolean modelViewersTrackHiddenBodies;
     public static int maxModelsForProximityOverride;
     public static boolean filmicMode;
     public static boolean particleEffectsEnabled = true;
@@ -92,6 +95,26 @@ public class DefaultConfig extends ConfigurationFile {
                 fileConfiguration, "useDeltaMetadataPackets", true);
         // Push the value down to the NMS packet layer (config-free by design).
         com.magmaguy.easyminecraftgoals.internal.PacketEntityTuning.useDeltaMetadataUpdates = useDeltaMetadataPackets;
+        displayBonesRideTheirEntity = ConfigurationEngine.setBoolean(
+                List.of("When true (default), the display bones of a model whose entity clients still track",
+                        "(rideable models such as mounts) ride that entity as passengers on Java clients.",
+                        "The client then places every bone from the same smoothed entity position it places",
+                        "riders at, so the model, its rider and its animation stay together instead of trailing",
+                        "or jerking, and bones send no position packets at all. Models whose entity is hidden",
+                        "from clients keep the per-bone teleports. Set to false to restore the old behavior."),
+                fileConfiguration, "displayBonesRideTheirEntity", true);
+        riddenBoneInterpolationTicks = ConfigurationEngine.setInt(
+                List.of("How many ticks Java clients take to glide a ridden bone to each new animation pose.",
+                        "0 snaps every tick; 1 (default) glides over one tick, which also smooths rotations."),
+                fileConfiguration, "riddenBoneInterpolationTicks", 1);
+        modelViewersTrackHiddenBodies = ConfigurationEngine.setBoolean(
+                List.of("When true (default), each Java client that can see a model whose entity is hidden also",
+                        "tracks that entity as an invisible, bare body (its equipment is stripped on the way to",
+                        "them), so the model's display bones can ride it the way a mount's bones do and move with",
+                        "the entity's own client-side smoothing instead of trailing it. Everyone else, and Bedrock",
+                        "clients, keep the entity hidden as before. Set to false to keep hidden bodies untracked",
+                        "and their bones on per-bone teleports."),
+                fileConfiguration, "modelViewersTrackHiddenBodies", true);
         maxModelsForProximityOverride = ConfigurationEngine.setInt(
                 List.of("Pseudo load balancer for the close-range visibility override.",
                         "Normally a model within 10 blocks of a player is always shown, skipping the",

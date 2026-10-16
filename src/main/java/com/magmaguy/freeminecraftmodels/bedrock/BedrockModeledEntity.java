@@ -177,13 +177,17 @@ public final class BedrockModeledEntity {
     }
 
     public void hideFrom(UUID uuid) {
-        displayRequests.remove(uuid);
+        boolean displayed = displayRequests.remove(uuid) != null;
         if (fakeCustomEntity != null) {
             fakeCustomEntity.hideFrom(uuid);
         }
         if (bukkitCustomEntity != null) {
             BukkitCustomEntity currentHandle = bukkitCustomEntity;
             currentHandle.forgetViewer(uuid);
+            // Only undo a visibility this presentation granted. A Java viewer never asked for the real entity
+            // here and may track it through the model's own path (a mount, or a body its bones ride); hiding
+            // it from them on the watchers' periodic resync left riders standing on nothing.
+            if (!displayed) return;
             Player player = Bukkit.getPlayer(uuid);
             if (player != null && player.isOnline()
                     && MetadataHandler.PLUGIN != null

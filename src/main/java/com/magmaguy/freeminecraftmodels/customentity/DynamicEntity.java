@@ -46,6 +46,12 @@ public class DynamicEntity extends ModeledEntity {
      */
     @Getter
     private boolean cosmeticInvisibility = false;
+    /**
+     * When true, the entity stays hidden by default but each Java viewer of the model tracks it as an
+     * invisible, bare body (see SkeletonWatchers), so the display bones can ride it like a mount's.
+     */
+    @Getter
+    private boolean viewerTrackedBody = false;
     private boolean isEvokerAttacking = false;
 
     public DynamicEntity(String entityID, Location targetLocation) {
@@ -92,6 +98,10 @@ public class DynamicEntity extends ModeledEntity {
         // invisible, so only the bone packet armor stands render. Required for FMM
         // disguises on EliteMobs custom bosses to appear correctly on Bedrock.
         livingEntity.setInvisible(!bedrockUsesUnderlyingEntity);
+        // Java viewers of the model track this body so the bones can ride it: it is shown to them at admission
+        // with its equipment emptied and its invisible flag set on the wire, so a mob Bedrock sees in the flesh
+        // still renders nothing for them.
+        dynamicEntity.viewerTrackedBody = DefaultConfig.modelViewersTrackHiddenBodies;
         Bukkit.getOnlinePlayers().forEach(player -> {
             if (player.getWorld().equals(dynamicEntity.getLocation().getWorld())) {
                 player.hideEntity(MetadataHandler.PLUGIN, livingEntity);
@@ -184,6 +194,14 @@ public class DynamicEntity extends ModeledEntity {
             getSkeleton().setCurrentHeadPitch(livingEntity.getEyeLocation().getPitch());
             getSkeleton().setCurrentHeadYaw(livingEntity.getEyeLocation().getYaw());
         }
+    }
+
+    @Override
+    protected boolean ridesUnderlyingEntity() {
+        // Clients only seat passengers on an entity they track: a mount's cosmetically invisible body always is,
+        // a hidden body only for the viewers the watchers show it to.
+        return (cosmeticInvisibility || viewerTrackedBody) && syncMovement && !isDying()
+                && underlyingEntity != null && underlyingEntity.isValid();
     }
 
     @Override
