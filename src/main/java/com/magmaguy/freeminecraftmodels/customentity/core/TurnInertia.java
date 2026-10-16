@@ -8,6 +8,8 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 public final class TurnInertia {
     private static final double VANILLA_MAX_TURN = 90;
     private static final double MIN_SIZE = 0.25;
+    // Degrees from the target that count as on it.
+    private static final double SETTLED = 0.01;
     private float yaw = Float.NaN;
     private double velocity = 0;
 
@@ -43,11 +45,13 @@ public final class TurnInertia {
             return yaw;
         }
         double remaining = wrap(target - yaw);
-        // The fastest speed that can still brake to a stop on the target.
-        double desired = Math.signum(remaining) * Math.min(cap, Math.sqrt(2 * accel * Math.abs(remaining)));
+        // The fastest speed that still brakes to a stop on the target in whole ticks: moving v, v - a, v - 2a, ...
+        // covers v²/2a + v/2, so v = (-a + √(a² + 8ad)) / 2.
+        double brakingSpeed = (-accel + Math.sqrt(accel * accel + 8 * accel * Math.abs(remaining))) / 2;
+        double desired = Math.signum(remaining) * Math.min(cap, brakingSpeed);
         double next = velocity + Math.max(-accel, Math.min(accel, desired - velocity));
         boolean crosses = Math.signum(next) == Math.signum(remaining) && Math.abs(next) >= Math.abs(remaining);
-        boolean settled = Math.abs(remaining) <= accel && Math.abs(velocity) <= accel;
+        boolean settled = Math.abs(remaining) < SETTLED && Math.abs(velocity) <= accel;
         if (crosses || settled) {
             reset(target);
             return yaw;
