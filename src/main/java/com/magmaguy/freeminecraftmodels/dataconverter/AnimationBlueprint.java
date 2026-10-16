@@ -27,6 +27,12 @@ public class AnimationBlueprint {
     private SkeletonBlueprint skeletonBlueprint;
     @Getter
     private int duration;
+    // Blockbench's Override: true replaces the pose of the bones this animation keys, false adds on top (Bedrock rule).
+    @Getter
+    private boolean override;
+    // Blockbench's Blend Weight, numbers only: it scales how strongly this animation applies.
+    @Getter
+    private double blendWeight = 1;
     private String modelName;
     private boolean warnedMalformedTimeline;
 
@@ -81,6 +87,29 @@ public class AnimationBlueprint {
         animationName = (String) animationData.get("name");
         loopType = LoopType.valueOf(((String) animationData.get("loop")).toUpperCase());
         duration = AnimationTimeline.durationInTicks((Double) animationData.get("length"));
+        override = Boolean.TRUE.equals(animationData.get("override"));
+        blendWeight = parseBlendWeight(animationData.get("blend_weight"));
+        List<String> ignored = new ArrayList<>();
+        for (String field : new String[]{"start_delay", "loop_delay", "anim_time_update"})
+            if (!text(animationData.get(field)).isBlank()) ignored.add(field);
+        if (!ignored.isEmpty())
+            Logger.warn("Model " + modelName + ", animation " + animationName + " sets " + String.join(", ", ignored)
+                    + ". FreeMinecraftModels does not support these and plays the animation without them.");
+    }
+
+    private double parseBlendWeight(Object value) {
+        if (value instanceof Number number && Double.isFinite(number.doubleValue())) return number.doubleValue();
+        String raw = text(value).trim();
+        if (raw.isEmpty()) return 1;
+        try {
+            double parsed = Double.parseDouble(raw);
+            if (Double.isFinite(parsed)) return parsed;
+        } catch (NumberFormatException ignored) {
+            // A Molang expression; reported below.
+        }
+        Logger.warn("Model " + modelName + ", animation " + animationName + " has the blend weight '" + raw
+                + "'. FreeMinecraftModels only reads plain numbers and uses 1.");
+        return 1;
     }
 
     private void initializeBones(Map<String, Object> animationData, String modelName, String animationName) {

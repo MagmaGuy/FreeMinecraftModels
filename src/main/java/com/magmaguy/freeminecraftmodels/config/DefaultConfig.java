@@ -21,6 +21,11 @@ public class DefaultConfig extends ConfigurationFile {
     public static boolean displayBonesRideTheirEntity;
     public static int riddenBoneInterpolationTicks;
     public static boolean modelViewersTrackHiddenBodies;
+    public static int idleWalkBlendTicks;
+    public static int deathBlendTicks;
+    public static boolean weightedTurning;
+    public static double turnSpeedCap;
+    public static double turnAcceleration;
     public static int maxModelsForProximityOverride;
     public static boolean filmicMode;
     public static boolean particleEffectsEnabled = true;
@@ -115,6 +120,30 @@ public class DefaultConfig extends ConfigurationFile {
                         "clients, keep the entity hidden as before. Set to false to keep hidden bodies untracked",
                         "and their bones on per-bone teleports."),
                 fileConfiguration, "modelViewersTrackHiddenBodies", true);
+        idleWalkBlendTicks = ConfigurationEngine.setInt(
+                List.of("Experimental. How many ticks a model takes to cross-fade between its idle and walk animations.",
+                        "Both animations keep playing during the fade. 0 switches instantly, as older versions did.",
+                        "Bedrock clients get the same time. Attacks and other one-shot animations never fade."),
+                fileConfiguration, "idleWalkBlendTicks", 5);
+        deathBlendTicks = ConfigurationEngine.setInt(
+                List.of("Experimental. How many ticks a model takes to fade from whatever pose it holds into its",
+                        "death animation. 0 switches instantly, as older versions did. Bedrock clients get the same time."),
+                fileConfiguration, "deathBlendTicks", 4);
+        weightedTurning = ConfigurationEngine.setBoolean(
+                List.of("Experimental. When true (default), a model turns toward its mob's facing with inertia: it spins up,",
+                        "cruises and brakes, and bigger models turn slower. Only the model turns this way; the mob itself",
+                        "still turns and walks exactly as before. Ridden models turn instantly.",
+                        "Set to false to make models turn instantly with their mob, as older versions did."),
+                fileConfiguration, "weightedTurning", true);
+        turnSpeedCap = ConfigurationEngine.setDouble(
+                List.of("Experimental. Top turning speed, in degrees per tick, of a model one block in size.",
+                        "Size is the cube root of the hitbox volume times the mob's scale; the cap is divided by the",
+                        "square root of the size, and never exceeds the vanilla 90 degrees per tick."),
+                fileConfiguration, "turnSpeedCap", 30);
+        turnAcceleration = ConfigurationEngine.setDouble(
+                List.of("Experimental. How many degrees per tick a model one block in size gains or loses in turning",
+                        "speed each tick. It is divided by the size, so bigger models spin up and brake more slowly."),
+                fileConfiguration, "turnAcceleration", 6);
         maxModelsForProximityOverride = ConfigurationEngine.setInt(
                 List.of("Pseudo load balancer for the close-range visibility override.",
                         "Normally a model within 10 blocks of a player is always shown, skipping the",
