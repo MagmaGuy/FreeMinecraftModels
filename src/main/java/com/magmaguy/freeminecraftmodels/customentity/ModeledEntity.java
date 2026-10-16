@@ -85,6 +85,8 @@ public class ModeledEntity {
     private MountPointManager mountPointManager = null;
     @Getter
     private String displayName = null;
+    /** Blocks between the top of a model without a tag bone and its name: four pixels. */
+    private static final double NAMEPLATE_MARGIN = 0.25;
     @Getter
     private final StackedText nameplate = new StackedText();
     private Bone nameplateAnchor;
@@ -220,9 +222,9 @@ public class ModeledEntity {
             return nameplateAnchor.getBoneLocation().subtract(0, BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT() - 0.5, 0);
         Location location = getLocation();
         if (location == null) return null;
-        var hitbox = skeletonBlueprint == null ? null : skeletonBlueprint.getHitbox();
-        double height = hitbox == null ? 2 : hitbox.getHeight() + hitbox.getModelOffset().getY();
-        return location.clone().add(0, height * scaleModifier + 0.3, 0);
+        // No authored tag bone: a few pixels above the model's highest cube at rest, scaled with the entity.
+        double top = skeletonBlueprint == null ? 2 : skeletonBlueprint.getModelTop();
+        return location.clone().add(0, top * scaleModifier + NAMEPLATE_MARGIN, 0);
     }
 
     /**
@@ -369,6 +371,7 @@ public class ModeledEntity {
     public void tick(AbstractPacketBundle abstractPacketBundle) {
         //check if the entity exists, basically
         if (isRemoved || getLocation() == null) return;
+        updateBonePlacement();
         getSkeleton().tick(abstractPacketBundle);
         if (displayName != null && !displayName.isEmpty()) nameplate.move(getNameplateLocation());
         if (bedrockModeledEntity != null) bedrockModeledEntity.tick();
@@ -377,6 +380,28 @@ public class ModeledEntity {
         particleComponent.tick(abstractPacketBundle, skeleton.getSkeletonWatchers().getJavaViewers());
         if (underlyingEntity != null && underlyingEntity.isValid() && underlyingEntity instanceof LivingEntity livingEntity && livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")) != null)
             scaleModifier = livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")).getValue();
+    }
+
+    /**
+     * Display bones ride the underlying entity while Java clients track it, so they move with the entity's own
+     * client-side smoothing instead of trailing it; every other model keeps the per-bone teleports.
+     */
+    private void updateBonePlacement() {
+        int vehicleId = -1;
+        org.bukkit.util.Vector seat = null;
+        if (DefaultConfig.displayBonesRideTheirEntity && ridesUnderlyingEntity()) {
+            com.magmaguy.easyminecraftgoals.NMSAdapter adapter = com.magmaguy.easyminecraftgoals.NMSManager.getAdapter();
+            // Packet passengers follow the real ones, so the bones take the next seat.
+            seat = adapter == null ? null
+                    : adapter.getPassengerSeatOffset(underlyingEntity, underlyingEntity.getPassengers().size());
+            if (seat != null) vehicleId = underlyingEntity.getEntityId();
+        }
+        skeleton.setRiddenPlacement(vehicleId, seat);
+    }
+
+    /** Whether Java clients track the underlying entity, which its bones need in order to ride it. */
+    protected boolean ridesUnderlyingEntity() {
+        return false;
     }
 
     public void removeWithDeathAnimation() {
