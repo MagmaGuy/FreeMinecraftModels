@@ -33,6 +33,12 @@ public class MountPointManager {
         return !seats.isEmpty();
     }
 
+    /** Whether a player sits in any of this model's seats. */
+    public boolean hasOccupant() {
+        for (MountSeat seat : seats) if (seat.isOccupied()) return true;
+        return false;
+    }
+
     /**
      * Attempts to mount the player onto the first available seat.
      *

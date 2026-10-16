@@ -4,7 +4,9 @@ import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
+import com.magmaguy.freeminecraftmodels.customentity.core.TurnInertia;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.freeminecraftmodels.dataconverter.HitboxBlueprint;
 import com.magmaguy.freeminecraftmodels.utils.ImmutableMapSnapshots;
 import lombok.Getter;
 import lombok.Setter;
@@ -53,6 +55,11 @@ public class DynamicEntity extends ModeledEntity {
     @Getter
     private boolean viewerTrackedBody = false;
     private boolean isEvokerAttacking = false;
+    // The model's facing, stepped once per model tick toward the mob's body yaw. Read from any thread.
+    private final TurnInertia turnInertia = new TurnInertia();
+    private volatile float modelYaw = Float.NaN;
+    // Cube root of the hitbox bone's volume at scale 1; 0 when the model has none, -1 until computed.
+    private double hitboxSize = -1;
 
     public DynamicEntity(String entityID, Location targetLocation) {
         super(entityID, targetLocation);
@@ -158,7 +165,43 @@ public class DynamicEntity extends ModeledEntity {
     public void tick(AbstractPacketBundle abstractPacketBundle) {
         //todo: investigate if this is still necessary since everything now updates anyway, at least for animations
         syncSkeletonWithEntity();
+        updateModelYaw();
         super.tick(abstractPacketBundle);
+    }
+
+    /**
+     * Steps the model's facing toward the mob's body yaw once per model tick, before the bones transform, so the
+     * bones, the hitbox, locators and the Bedrock carrier all read one yaw. Ridden models turn instantly: their
+     * rider's camera and body follow the mob itself.
+     */
+    private void updateModelYaw() {
+        if (isDying() || !syncMovement || underlyingEntity == null || !underlyingEntity.isValid()) return;
+        float target = targetBodyYaw(underlyingEntity.getLocation());
+        if (!DefaultConfig.weightedTurning || Float.isNaN(turnInertia.getYaw()) || isRiddenByPlayer())
+            turnInertia.reset(target);
+        else
+            turnInertia.step(target, turnSize(), DefaultConfig.turnSpeedCap, DefaultConfig.turnAcceleration);
+        modelYaw = turnInertia.getYaw();
+    }
+
+    private boolean isRiddenByPlayer() {
+        for (Entity passenger : underlyingEntity.getPassengers()) if (passenger instanceof Player) return true;
+        return getMountPointManager() != null && getMountPointManager().hasOccupant();
+    }
+
+    /**
+     * Size in blocks for turning: the cube root of the hitbox bone's volume times the mob's scale, or of the mob's
+     * own box (already scaled) when the model has no hitbox bone.
+     */
+    private double turnSize() {
+        if (hitboxSize < 0) {
+            HitboxBlueprint hitbox = getSkeletonBlueprint() == null ? null : getSkeletonBlueprint().getHitbox();
+            double volume = hitbox == null ? 0 : hitbox.getWidthX() * hitbox.getWidthZ() * hitbox.getHeight();
+            hitboxSize = volume > 0 ? Math.cbrt(volume) : 0;
+        }
+        if (hitboxSize > 0) return hitboxSize * getScaleModifier();
+        double width = underlyingEntity.getWidth();
+        return Math.cbrt(width * width * underlyingEntity.getHeight());
     }
 
     Evoker getEvokerForWatchdog() {
@@ -254,42 +297,50 @@ public class DynamicEntity extends ModeledEntity {
     }
 
     /**
-     * Gets the location of the model's body, clamped so its yaw never
-     * lags the head yaw by more than ±45°.
+     * Gets the location of the model's body, facing the model's yaw: the mob's body yaw reached with turning
+     * inertia when {@code weightedTurning} is on (see {@link #updateModelYaw()}), otherwise the body yaw itself.
+     */
+    public Location getBodyLocation() {
+        Location bodyLoc = underlyingEntity.getLocation();
+        float yaw = modelYaw;
+        bodyLoc.setYaw(Float.isNaN(yaw) ? targetBodyYaw(bodyLoc) : yaw);
+        bodyLoc.setPitch(0); // assume no body pitch
+        return bodyLoc;
+    }
+
+    /**
+     * The yaw the mob's body faces: toward the look target when one is set, otherwise clamped so it never lags the
+     * head yaw by more than ±45°.
      * <p>
      * Note: this is done because the body rotation is handled by the client after the caching of the body rotation one the living entity stops moving around.
      * This is not a 1:1 recreation of the body rotation, as Minecraft entities have a further behavior that lerps the body rotation to the position they are looking at if they stare at it for about 1 second.
      * That lerping behavior would be unnecessarily demanding, and the is considered to be close enough for 99.99% of cases.
      */
-    public Location getBodyLocation() {
-        Location bodyLoc = underlyingEntity.getLocation().clone();
+    private float targetBodyYaw(Location bodyLoc) {
         Location gaze = getSkeleton().getLookDirection(bodyLoc);
-        if (gaze != null) {
-            bodyLoc.setYaw(gaze.getYaw());
-            bodyLoc.setPitch(0F);
-            return bodyLoc;
-        }
+        if (gaze != null) return gaze.getYaw();
 
         // current body yaw (what Minecraft thinks the body is doing)
         float bodyYaw = NMSManager.getAdapter().getBodyRotation(underlyingEntity);
-        if (underlyingEntity instanceof LivingEntity livingEntity) {
-            // actual head yaw
-            float headYaw = livingEntity.getEyeLocation().getYaw();
-            // compute signed difference in range –180…+180
-            float delta = wrapDegrees(headYaw - bodyYaw);
+        if (!(underlyingEntity instanceof LivingEntity livingEntity)) return bodyLoc.getYaw();
+        // actual head yaw
+        float headYaw = livingEntity.getEyeLocation().getYaw();
+        // compute signed difference in range –180…+180
+        float delta = wrapDegrees(headYaw - bodyYaw);
 
-            // clamp delta to –45…+45
-            if (delta > 45) delta = 45;
-            if (delta < -45) delta = -45;
+        // clamp delta to –45…+45
+        if (delta > 45) delta = 45;
+        if (delta < -45) delta = -45;
 
-            // new body yaw is headYaw minus that clamped delta
-            float newBodyYaw = headYaw - delta;
+        // new body yaw is headYaw minus that clamped delta
+        return headYaw - delta;
+    }
 
-            bodyLoc.setYaw(newBodyYaw);
-        }
-
-        bodyLoc.setPitch(0); // assume no body pitch
-        return bodyLoc;
+    @Override
+    protected Location deathLocation() {
+        // Die facing where the model faces, not where the mob does.
+        if (underlyingEntity != null) return getBodyLocation();
+        return super.deathLocation();
     }
 
     /**

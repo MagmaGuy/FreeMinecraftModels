@@ -15,6 +15,7 @@ import org.joml.Vector3f;
 
 public class BoneTransforms {
 
+    private static final float MAX_HEAD_TWIST = 75;
     private final Bone parent;
     private final Bone bone;
     private final TransformationMatrix localMatrix = new TransformationMatrix();
@@ -50,6 +51,10 @@ public class BoneTransforms {
                 Location gaze = bone.getSkeleton().hasLookTarget()
                         ? bone.getSkeleton().getLookDirection(getMountPointTargetLocation()) : null;
                 float headYaw = gaze == null ? bone.getSkeleton().getCurrentHeadYaw() : gaze.getYaw();
+                // The head leads a slow-turning body but stays within ±75° of it, so the neck never twists around.
+                float bodyYaw = bone.getSkeleton().getCurrentLocation().getYaw();
+                float twist = (float) TurnInertia.wrap(headYaw - bodyYaw);
+                headYaw = bodyYaw + Math.max(-MAX_HEAD_TWIST, Math.min(MAX_HEAD_TWIST, twist));
                 float headPitch = gaze == null ? bone.getSkeleton().getCurrentHeadPitch() : gaze.getPitch();
                 float yaw = -headYaw + 180;
                 globalMatrix.rotateY((float) Math.toRadians(yaw));
