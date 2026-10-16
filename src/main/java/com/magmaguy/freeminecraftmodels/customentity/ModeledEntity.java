@@ -407,8 +407,13 @@ public class ModeledEntity {
     public void removeWithDeathAnimation() {
         isDying = true;
         // Cache the current location so animations can continue after the underlying entity is removed
-        if (underlyingEntity != null) currentLocation = underlyingEntity.getLocation();
+        if (underlyingEntity != null) currentLocation = deathLocation();
         if (!animationComponent.playDeathAnimation()) remove();
+    }
+
+    /** Where the model stays while its death animation plays. */
+    protected Location deathLocation() {
+        return underlyingEntity.getLocation();
     }
 
     public void removeWithMinimizedAnimation() {
