@@ -28,7 +28,7 @@ public final class BuiltInMagicWeapons {
             case STAFF -> new MagicWeaponDefinition(
                     itemId,
                     MagicWeaponKind.STAFF,
-                    new MagicWeaponTraits(1, 0D, 2.75D, 0, .38D, 28D, 74, 0D),
+                    new MagicWeaponTraits(1, 0D, 2.75D, 0, .48D, 28D, 74, 0D),
                     Map.of(
                             MagicAttackKind.STAFF_MELEE, .45D,
                             MagicAttackKind.STAFF_FIREBALL, 1.25D),
