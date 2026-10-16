@@ -85,9 +85,9 @@ public class ModeledEntity {
     private MountPointManager mountPointManager = null;
     @Getter
     private String displayName = null;
-    @Getter
     /** Blocks between the top of a model without a tag bone and its name: four pixels. */
     private static final double NAMEPLATE_MARGIN = 0.25;
+    @Getter
     private final StackedText nameplate = new StackedText();
     private Bone nameplateAnchor;
     private boolean nameplateAnchorResolved;
