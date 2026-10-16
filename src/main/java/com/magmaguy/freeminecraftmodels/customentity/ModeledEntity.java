@@ -86,6 +86,8 @@ public class ModeledEntity {
     @Getter
     private String displayName = null;
     @Getter
+    /** Blocks between the top of a model without a tag bone and its name: four pixels. */
+    private static final double NAMEPLATE_MARGIN = 0.25;
     private final StackedText nameplate = new StackedText();
     private Bone nameplateAnchor;
     private boolean nameplateAnchorResolved;
@@ -220,9 +222,9 @@ public class ModeledEntity {
             return nameplateAnchor.getBoneLocation().subtract(0, BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT() - 0.5, 0);
         Location location = getLocation();
         if (location == null) return null;
-        var hitbox = skeletonBlueprint == null ? null : skeletonBlueprint.getHitbox();
-        double height = hitbox == null ? 2 : hitbox.getHeight() + hitbox.getModelOffset().getY();
-        return location.clone().add(0, height * scaleModifier + 0.3, 0);
+        // No authored tag bone: a few pixels above the model's highest cube at rest, scaled with the entity.
+        double top = skeletonBlueprint == null ? 2 : skeletonBlueprint.getModelTop();
+        return location.clone().add(0, top * scaleModifier + NAMEPLATE_MARGIN, 0);
     }
 
     /**

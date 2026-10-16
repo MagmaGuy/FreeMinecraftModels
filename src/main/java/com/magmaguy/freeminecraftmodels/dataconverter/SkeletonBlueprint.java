@@ -324,4 +324,35 @@ public class SkeletonBlueprint {
         }
         return null;
     }
+
+    private Double modelTop;
+
+    /**
+     * Height of the model's highest cube at rest, in blocks at scale 1 (Blockbench pixels over 16, y 0 at the
+     * entity's feet), skipping the hitbox and name-tag bones. Falls back to 2 for a model without cubes.
+     */
+    public double getModelTop() {
+        if (modelTop != null) return modelTop;
+        double top = Double.NEGATIVE_INFINITY;
+        for (BoneBlueprint root : mainModel) top = Math.max(top, cubeTop(root));
+        modelTop = Double.isFinite(top) ? top / 16d : 2d;
+        return modelTop;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static double cubeTop(BoneBlueprint bone) {
+        double top = Double.NEGATIVE_INFINITY;
+        String name = bone.getBoneName() == null ? "" : bone.getBoneName();
+        if (!name.equalsIgnoreCase("hitbox") && !bone.isNameTag()) {
+            for (CubeBlueprint cube : bone.getCubeBlueprintChildren()) {
+                Map<String, Object> json = cube.getOriginalCubeJSON();
+                for (String key : new String[]{"from", "to"}) {
+                    if (!(json.get(key) instanceof List<?> point) || point.size() < 2 || !(point.get(1) instanceof Number y)) continue;
+                    top = Math.max(top, y.doubleValue());
+                }
+            }
+        }
+        for (BoneBlueprint child : bone.getBoneBlueprintChildren()) top = Math.max(top, cubeTop(child));
+        return top;
+    }
 }
