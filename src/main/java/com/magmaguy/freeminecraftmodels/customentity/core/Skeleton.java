@@ -105,6 +105,35 @@ public class Skeleton {
         return modeledEntity.getBoneTransformLocation();
     }
 
+    // Ridden placement: the display bones ride the underlying entity as packet passengers and send only their
+    // pose relative to its seat, so viewers place them from the same smoothed entity position as its riders.
+    // The model tick publishes this before the bones transform.
+    private int riddenVehicleId = -1;
+    private final double[] seatOffset = new double[3];
+
+    public boolean isRidden() {
+        return riddenVehicleId != -1;
+    }
+
+    /** World-axis offset from the entity position to the seat viewers put the bones at. */
+    void getSeatOffset(double[] result) {
+        result[0] = seatOffset[0];
+        result[1] = seatOffset[1];
+        result[2] = seatOffset[2];
+    }
+
+    /** Pass -1 to place the bones freely again; the seat is relative to the entity position. */
+    public void setRiddenPlacement(int vehicleId, org.bukkit.util.Vector seat) {
+        if (vehicleId != -1) {
+            seatOffset[0] = seat.getX();
+            seatOffset[1] = seat.getY();
+            seatOffset[2] = seat.getZ();
+        }
+        if (riddenVehicleId == vehicleId) return;
+        riddenVehicleId = vehicleId;
+        for (Bone bone : boneMap.values()) bone.getBoneTransforms().setRiddenVehicle(vehicleId);
+    }
+
     /** Recomputes bone transforms. Packets are only sent to existing viewers. */
     void transformBones() {
         if (rootBone != null) rootBone.transform(null);

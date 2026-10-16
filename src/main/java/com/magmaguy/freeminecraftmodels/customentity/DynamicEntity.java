@@ -187,6 +187,13 @@ public class DynamicEntity extends ModeledEntity {
     }
 
     @Override
+    protected boolean ridesUnderlyingEntity() {
+        // Only cosmetic invisibility leaves the entity tracked by clients; a hidden entity cannot carry passengers.
+        return cosmeticInvisibility && syncMovement && !isDying()
+                && underlyingEntity != null && underlyingEntity.isValid();
+    }
+
+    @Override
     public Location getLocation() {
         if (!syncMovement) return currentLocation != null ? currentLocation.clone() : null;
         if (underlyingEntity != null && underlyingEntity.isValid()) return getBodyLocation();
