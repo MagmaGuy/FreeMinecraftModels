@@ -79,34 +79,9 @@ public class OBBHitDetection implements Listener {
                     task.run();
                 }
             }.runTaskLater(MetadataHandler.PLUGIN, 1L));
-    private static final ClassValue<AnimationHandResolver> animationHandResolvers =
-            new ClassValue<>() {
-                @Override
-                protected AnimationHandResolver computeValue(Class<?> eventType) {
-                    try {
-                        Method getHand = eventType.getMethod("getHand");
-                        if (!EquipmentSlot.class.isAssignableFrom(getHand.getReturnType())) {
-                            return ignored -> null;
-                        }
-                        return event -> {
-                            try {
-                                Object hand = getHand.invoke(event);
-                                return hand instanceof EquipmentSlot slot ? slot : null;
-                            } catch (ReflectiveOperationException | RuntimeException ignored) {
-                                // A Paper-style event advertised hand data but it
-                                // could not be read. Fail closed instead of turning
-                                // an unknown/offhand animation into a mainhand hit.
-                                return null;
-                            }
-                        };
-                    } catch (NoSuchMethodException ignored) {
-                        // Spigot exposes the hand through PlayerAnimationType.
-                        return OBBHitDetection::resolveSpigotAnimationHand;
-                    } catch (RuntimeException ignored) {
-                        return event -> null;
-                    }
-                }
-            };
+    // Not a ClassValue: that would store these FMM lambdas on the Bukkit event class, which
+    // outlives FMM, and keep every replaced copy of FMM in memory after a restart-free update.
+    private static final Map<Class<?>, AnimationHandResolver> animationHandResolvers = new ConcurrentHashMap<>();
     private static BukkitTask projectileDetectionTask = null;
 
     @FunctionalInterface
@@ -214,7 +189,33 @@ public class OBBHitDetection implements Listener {
     }
 
     static EquipmentSlot resolveAnimationHand(PlayerAnimationEvent event) {
-        return animationHandResolvers.get(event.getClass()).resolve(event);
+        return animationHandResolvers.computeIfAbsent(event.getClass(), OBBHitDetection::createAnimationHandResolver)
+                .resolve(event);
+    }
+
+    private static AnimationHandResolver createAnimationHandResolver(Class<?> eventType) {
+        try {
+            Method getHand = eventType.getMethod("getHand");
+            if (!EquipmentSlot.class.isAssignableFrom(getHand.getReturnType())) {
+                return ignored -> null;
+            }
+            return event -> {
+                try {
+                    Object hand = getHand.invoke(event);
+                    return hand instanceof EquipmentSlot slot ? slot : null;
+                } catch (ReflectiveOperationException | RuntimeException ignored) {
+                    // A Paper-style event advertised hand data but it
+                    // could not be read. Fail closed instead of turning
+                    // an unknown/offhand animation into a mainhand hit.
+                    return null;
+                }
+            };
+        } catch (NoSuchMethodException ignored) {
+            // Spigot exposes the hand through PlayerAnimationType.
+            return OBBHitDetection::resolveSpigotAnimationHand;
+        } catch (RuntimeException ignored) {
+            return event -> null;
+        }
     }
 
     private static EquipmentSlot resolveSpigotAnimationHand(PlayerAnimationEvent event) {
