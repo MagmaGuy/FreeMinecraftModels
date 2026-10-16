@@ -20,6 +20,7 @@ import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -36,6 +37,7 @@ public final class BedrockModeledEntity {
     private Location lastLocation;
     private float lastScale = Float.NaN;
     private String activeAnimation;
+    private String activeAction;
     private Map<String, Object> lastProperties = new LinkedHashMap<>();
 
     public BedrockModeledEntity(ModeledEntity modeledEntity,
@@ -234,17 +236,22 @@ public final class BedrockModeledEntity {
         }
     }
 
-    public void playAnimation(String animationName) {
-        if (animationName == null || animations.isEmpty() || animationName.equals(activeAnimation)) {
-            return;
-        }
-        activeAnimation = animationName;
-        applyProperties(animationProperties(animationName));
+    /**
+     * Plays the base animation with the action layered over it, matching the Java pose mixer; either may be null.
+     * Called every tick, so an unchanged pair sends nothing.
+     */
+    public void playAnimations(String baseAnimation, String actionAnimation) {
+        if (animations.isEmpty()) return;
+        if (Objects.equals(baseAnimation, activeAnimation) && Objects.equals(actionAnimation, activeAction)) return;
+        activeAnimation = baseAnimation;
+        activeAction = actionAnimation;
+        applyProperties(animationProperties(baseAnimation, actionAnimation));
     }
 
     public void stopAnimations() {
         activeAnimation = null;
-        applyProperties(animationProperties(null));
+        activeAction = null;
+        applyProperties(animationProperties(null, null));
     }
 
     private void displayUnderlyingTo(Player player) {
@@ -290,14 +297,15 @@ public final class BedrockModeledEntity {
     private Map<String, Object> initialProperties() {
         // animationProperties already builds a fresh map; no extra copy needed
         // (applyProperties defensively copies again anyway).
-        return animationProperties(defaultAnimation());
+        return animationProperties(defaultAnimation(), null);
     }
 
-    private Map<String, Object> animationProperties(String animationName) {
+    private Map<String, Object> animationProperties(String baseAnimation, String actionAnimation) {
         Map<String, Object> properties = new LinkedHashMap<>();
         List<Boolean> enabled = new ArrayList<>();
         for (String animation : animations) {
-            enabled.add(animationName != null && animation.equalsIgnoreCase(animationName));
+            enabled.add(baseAnimation != null && animation.equalsIgnoreCase(baseAnimation)
+                    || actionAnimation != null && animation.equalsIgnoreCase(actionAnimation));
         }
         List<Integer> packedAnimations = PackedBooleanPropertySet.packBooleans(enabled);
         for (int i = 0; i < packedAnimations.size(); i++) {

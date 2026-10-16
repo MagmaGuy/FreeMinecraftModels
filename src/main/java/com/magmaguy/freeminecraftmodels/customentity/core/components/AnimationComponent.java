@@ -39,10 +39,8 @@ public class AnimationComponent {
      * Stops all currently playing animations
      */
     public void stopCurrentAnimations() {
+        // The animation manager tells Bedrock clients what plays on its next tick.
         if (animationManager != null) animationManager.stop();
-        if (modeledEntity.getBedrockModeledEntity() != null) {
-            modeledEntity.getBedrockModeledEntity().stopAnimations();
-        }
     }
 
     /**
@@ -58,11 +56,7 @@ public class AnimationComponent {
             warnMissingAnimationManagerOnce(animationName);
             return false;
         }
-        boolean played = animationManager.play(animationName, blendAnimation, loop);
-        if (played && modeledEntity.getBedrockModeledEntity() != null) {
-            modeledEntity.getBedrockModeledEntity().playAnimation(animationName);
-        }
-        return played;
+        return animationManager.play(animationName, blendAnimation, loop);
     }
 
     /**
@@ -84,11 +78,7 @@ public class AnimationComponent {
      */
     public boolean playDeathAnimation() {
         if (animationManager == null) return false;
-        boolean played = animationManager.play("death", false, false);
-        if (played && modeledEntity.getBedrockModeledEntity() != null) {
-            modeledEntity.getBedrockModeledEntity().playAnimation("death");
-        }
-        return played;
+        return animationManager.play("death", false, false);
     }
 
     /**
