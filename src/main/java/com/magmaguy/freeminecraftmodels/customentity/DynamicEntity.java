@@ -98,9 +98,10 @@ public class DynamicEntity extends ModeledEntity {
         // invisible, so only the bone packet armor stands render. Required for FMM
         // disguises on EliteMobs custom bosses to appear correctly on Bedrock.
         livingEntity.setInvisible(!bedrockUsesUnderlyingEntity);
-        // Java viewers of the model track this body (shown to them at admission with its equipment veiled) so
-        // the bones can ride it; that needs the invisible flag, which a Bedrock-visible vanilla mob lacks.
-        dynamicEntity.viewerTrackedBody = DefaultConfig.modelViewersTrackHiddenBodies && !bedrockUsesUnderlyingEntity;
+        // Java viewers of the model track this body so the bones can ride it: it is shown to them at admission
+        // with its equipment emptied and its invisible flag set on the wire, so a mob Bedrock sees in the flesh
+        // still renders nothing for them.
+        dynamicEntity.viewerTrackedBody = DefaultConfig.modelViewersTrackHiddenBodies;
         Bukkit.getOnlinePlayers().forEach(player -> {
             if (player.getWorld().equals(dynamicEntity.getLocation().getWorld())) {
                 player.hideEntity(MetadataHandler.PLUGIN, livingEntity);
