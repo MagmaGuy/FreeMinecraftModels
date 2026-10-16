@@ -668,8 +668,9 @@ public class ModeledEntity {
         animationComponent.stopCurrentAnimations();
     }
 
-    public void updateBedrockAnimation(String animationName) {
-        if (bedrockModeledEntity != null) bedrockModeledEntity.playAnimation(animationName);
+    /** Shows Bedrock clients the base animation and the action layered over it; either may be null. */
+    public void updateBedrockAnimations(String baseAnimation, String actionAnimation) {
+        if (bedrockModeledEntity != null) bedrockModeledEntity.playAnimations(baseAnimation, actionAnimation);
     }
 
     /**

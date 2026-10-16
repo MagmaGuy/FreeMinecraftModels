@@ -1,8 +1,8 @@
 package com.magmaguy.freeminecraftmodels.animation;
 
-import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
 import com.magmaguy.freeminecraftmodels.customentity.core.IKChain;
+import com.magmaguy.freeminecraftmodels.customentity.core.Skeleton;
 import com.magmaguy.freeminecraftmodels.dataconverter.AnimationBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.AnimationFrame;
 import com.magmaguy.freeminecraftmodels.dataconverter.IKAnimationFrame;
@@ -14,48 +14,24 @@ import java.util.Map;
 public class Animation {
     @Getter
     private final AnimationBlueprint animationBlueprint;
+    // Frames per bone in the manager's bone order. A missing track stays null, so that bone rests.
     @Getter
-    private final HashMap<Bone, AnimationFrame[]> animationFrames = new HashMap<>();
+    private final AnimationFrame[][] tracks;
     // IK animation frames keyed by IKChain instance
     @Getter
     private final HashMap<IKChain, IKAnimationFrame[]> ikAnimationFrames = new HashMap<>();
-    @Getter
-    private int counter = 0;
 
-    public void incrementCounter() {
-        counter++;
-    }
-
-    public Animation(AnimationBlueprint animationBlueprint, ModeledEntity modeledEntity) {
+    public Animation(AnimationBlueprint animationBlueprint, Bone[] bones, Skeleton skeleton) {
         this.animationBlueprint = animationBlueprint;
 
-        // A missing track stays null so animation changes reset unanimated bones.
-        modeledEntity.getSkeleton().getBones().forEach(bone -> {
-            animationFrames.put(bone, animationBlueprint.getAnimationFrames().get(bone.getBoneBlueprint()));
-        });
+        tracks = new AnimationFrame[bones.length][];
+        for (int bone = 0; bone < bones.length; bone++)
+            tracks[bone] = animationBlueprint.getAnimationFrames().get(bones[bone].getBoneBlueprint());
 
         // Map IK controller names to IKChain instances
         for (Map.Entry<String, IKAnimationFrame[]> entry : animationBlueprint.getIkAnimationFrames().entrySet()) {
-            String controllerName = entry.getKey();
-            IKAnimationFrame[] frames = entry.getValue();
-
-            IKChain chain = modeledEntity.getSkeleton().getIKChain(controllerName);
-            if (chain != null) {
-                ikAnimationFrames.put(chain, frames);
-            }
+            IKChain chain = skeleton.getIKChain(entry.getKey());
+            if (chain != null) ikAnimationFrames.put(chain, entry.getValue());
         }
-    }
-
-    public void resetCounter() {
-        counter = 0;
-    }
-
-    /**
-     * Checks if this animation has any IK chains to animate.
-     *
-     * @return true if this animation has IK animations
-     */
-    public boolean hasIKAnimations() {
-        return !ikAnimationFrames.isEmpty();
     }
 }
