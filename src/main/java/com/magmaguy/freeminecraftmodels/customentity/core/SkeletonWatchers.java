@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 import com.magmaguy.easyminecraftgoals.NMSAdapter;
 import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
+import com.magmaguy.easyminecraftgoals.internal.PacketEquipmentVeil;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
@@ -28,6 +29,9 @@ public class SkeletonWatchers {
     private final Set<UUID> viewers = new CopyOnWriteArraySet<>();
     // Viewers on Java Edition; particle sprites are display entities, which Bedrock cannot show
     private final Set<UUID> javaViewers = new CopyOnWriteArraySet<>();
+    // Java viewers that track the model's hidden body as an invisible, bare entity so the bones can ride it.
+    private final Set<UUID> bodyViewers = new CopyOnWriteArraySet<>();
+    private int trackedBodyId = -1;
     private volatile boolean wasInvisible = false;
 
     public HashSet<UUID> getViewers() {
@@ -117,7 +121,8 @@ public class SkeletonWatchers {
             // do the actual hide/display (displayTo already respects invisibility)
             Set<UUID> tempViewers = new HashSet<>(viewers);
             tempViewers.forEach(viewer -> {
-                hideFrom(viewer);
+                // Bones only: a tracked body stays shown, or the viewer would see it blink.
+                hideFrom(viewer, false);
                 Player p = Bukkit.getPlayer(viewer);
                 if (p != null) {
                     displayTo(p);
@@ -302,7 +307,7 @@ public class SkeletonWatchers {
         boolean wasAlreadyViewing = !viewers.add(player.getUniqueId());
         if (!isBedrock) {
             javaViewers.add(player.getUniqueId());
-            hideUnderlyingEntityFromJavaViewer(player);
+            syncUnderlyingEntityForJavaViewer(player);
         }
         if (isBedrock
                 && DefaultConfig.sendCustomModelsToBedrockClientsV2
@@ -350,6 +355,45 @@ public class SkeletonWatchers {
         NMSAdapter adapter = NMSManager.getAdapter();
         if (!NMSManager.isEnabled() || adapter == null) return null;
         return adapter.createPacketBundle();
+    }
+
+    /** The hidden entity Java viewers must track for its bones to ride it, or null when this model has none. */
+    private Entity trackedBody() {
+        if (!(skeleton.getModeledEntity() instanceof DynamicEntity de) || !de.isViewerTrackedBody()) return null;
+        Entity underlyingEntity = de.getUnderlyingEntity();
+        return underlyingEntity != null && underlyingEntity.isValid() ? underlyingEntity : null;
+    }
+
+    /**
+     * Shows a tracked body to a new Java viewer of the model, veiled so its equipment never renders, before the
+     * bones mount it. Any other hidden body stays hidden from the viewer as before.
+     */
+    private void syncUnderlyingEntityForJavaViewer(Player player) {
+        Entity body = trackedBody();
+        if (body == null || MetadataHandler.PLUGIN == null) {
+            hideUnderlyingEntityFromJavaViewer(player);
+            return;
+        }
+        if (!bodyViewers.add(player.getUniqueId())) return;
+        trackedBodyId = body.getEntityId();
+        PacketEquipmentVeil.veil(player.getUniqueId(), trackedBodyId);
+        player.showEntity(MetadataHandler.PLUGIN, body);
+    }
+
+    /** Hides the tracked body from a viewer who stops seeing the model, then lifts the veil. */
+    private void releaseTrackedBody(UUID uuid) {
+        if (!bodyViewers.remove(uuid)) return;
+        // Off the main thread the model is being torn down with its entity, which untracks it anyway.
+        Entity body = Bukkit.isPrimaryThread() ? trackedBody() : null;
+        Player player = Bukkit.getPlayer(uuid);
+        if (body != null && player != null && player.isValid() && MetadataHandler.PLUGIN != null)
+            player.hideEntity(MetadataHandler.PLUGIN, body);
+        if (trackedBodyId != -1) PacketEquipmentVeil.unveil(uuid, trackedBodyId);
+    }
+
+    /** Releases every tracked body when the model goes away. */
+    public void releaseTrackedBodies() {
+        for (UUID uuid : bodyViewers) releaseTrackedBody(uuid);
     }
 
     private void hideUnderlyingEntityFromJavaViewer(Player player) {
@@ -413,6 +457,11 @@ public class SkeletonWatchers {
     }
 
     private void hideFrom(UUID uuid) {
+        hideFrom(uuid, true);
+    }
+
+    /** {@code releaseBody} false keeps a tracked body shown to the viewer, for a resync that only re-sends bones. */
+    private void hideFrom(UUID uuid, boolean releaseBody) {
         // Always clean up viewer state, even if player is offline
         viewers.remove(uuid);
         javaViewers.remove(uuid);
@@ -425,6 +474,7 @@ public class SkeletonWatchers {
         if (modeledEntity != null) modeledEntity.getNameplate().hideFrom(uuid);
         if (modeledEntity != null) modeledEntity.getParticleComponent().hideFrom(uuid);
         skeleton.getBones().forEach(bone -> bone.hideFrom(uuid));
+        if (releaseBody) releaseTrackedBody(uuid);
         // Hide the packet interaction entity (uses UUID, works even if player is offline)
         if (modeledEntity != null)
             modeledEntity.getHitboxComponent().hidePacketInteractionEntityFrom(uuid);
