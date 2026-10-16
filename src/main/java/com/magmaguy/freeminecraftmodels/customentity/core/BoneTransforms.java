@@ -309,6 +309,14 @@ public class BoneTransforms {
             }
         }
         if (packetDisplayEntity != null && packetDisplayEntity.hasViewers()) {
+            if (isRidden()) {
+                readRiddenPose();
+                if (force || riddenChanged()) {
+                    if (packetBundle == null) packetBundle = packetDisplayEntity.createPacketBundle();
+                    sendRiddenPosePacket(packetBundle);
+                }
+                return;
+            }
             Location origin = bone.getSkeleton().getCurrentLocation();
             readTargetPosition(origin, positionBuffer, false);
             readTargetRotation(rotationBuffer, false);
@@ -332,12 +340,86 @@ public class BoneTransforms {
                     new EulerAngle(rotationBuffer[0], rotationBuffer[1], rotationBuffer[2]));
         }
         if (packetDisplayEntity != null) {
+            if (isRidden()) {
+                readRiddenPose();
+                sendRiddenPosePacket(packetBundle);
+                return;
+            }
             readTargetPosition(origin, positionBuffer, false);
             readTargetRotation(rotationBuffer, false);
             globalMatrix.getScale(scaleBuffer);
             sendDisplayEntityUpdatePacket(packetBundle, createTargetLocation(origin, positionBuffer, false),
                     new EulerAngle(rotationBuffer[0], rotationBuffer[1], rotationBuffer[2]), scaleBuffer);
         }
+    }
+
+    // ---- ridden placement ----------------------------------------------------
+    // The display rides the entity as a packet passenger (Skeleton.setRiddenPlacement), so viewers put it at
+    // the seat every tick and only its transformation changes. The entity position never enters the pose.
+    private int riddenVehicleId = -1;
+    private final double[] seatBuffer = new double[3];
+    private final Vector3f translationBuffer = new Vector3f();
+    private boolean riddenStateValid = false;
+    private double rdTx, rdTy, rdTz, rdRx, rdRy, rdRz, rdSx, rdSy, rdSz;
+
+    private boolean isRidden() {
+        return riddenVehicleId != -1;
+    }
+
+    /** Mounts the display on the vehicle, or frees it with -1. Either way the next pass resends the full pose. */
+    void setRiddenVehicle(int vehicleId) {
+        if (packetDisplayEntity == null || !packetDisplayEntity.supportsRiddenPlacement()) return;
+        if (riddenVehicleId == vehicleId) return;
+        riddenVehicleId = vehicleId;
+        if (vehicleId == -1) packetDisplayEntity.dismount();
+        else packetDisplayEntity.mountTo(vehicleId);
+        // The free pose carries no translation and the ridden pose no position, so neither cache applies.
+        displayStateValid = false;
+        riddenStateValid = false;
+        forceNextUpdate = true;
+    }
+
+    /**
+     * Pose relative to the seat. Viewers rotate a fixed display by its own yaw before applying the
+     * transformation, and bones face yaw 180 (see createTargetLocation), so x and z flip.
+     */
+    private void readRiddenPose() {
+        globalMatrix.getTranslation(positionBuffer);
+        bone.getSkeleton().getSeatOffset(seatBuffer);
+        translationBuffer.set(
+                (float) -(positionBuffer[0] - seatBuffer[0]),
+                (float) (positionBuffer[1] - seatBuffer[1]),
+                (float) -(positionBuffer[2] - seatBuffer[2]));
+        readTargetRotation(rotationBuffer, false);
+        globalMatrix.getScale(scaleBuffer);
+    }
+
+    private boolean riddenChanged() {
+        if (!riddenStateValid) return true;
+        return !same(rdTx, translationBuffer.x) || !same(rdTy, translationBuffer.y) || !same(rdTz, translationBuffer.z)
+                || !same(rdRx, rotationBuffer[0]) || !same(rdRy, rotationBuffer[1]) || !same(rdRz, rotationBuffer[2])
+                || !same(rdSx, scaleBuffer[0]) || !same(rdSy, scaleBuffer[1]) || !same(rdSz, scaleBuffer[2]);
+    }
+
+    private void sendRiddenPosePacket(AbstractPacketBundle packetBundle) {
+        Location origin = bone.getSkeleton().getCurrentLocation();
+        Location seat = new Location(origin.getWorld(),
+                origin.getX() + seatBuffer[0], origin.getY() + seatBuffer[1], origin.getZ() + seatBuffer[2], 180, 0);
+        // Synched entity data keeps the vector it is given, so hand over a copy the next pass cannot change.
+        packetDisplayEntity.generateRiddenTransformationPackets(packetBundle, seat, new Vector3f(translationBuffer),
+                new EulerAngle(rotationBuffer[0], rotationBuffer[1], rotationBuffer[2]),
+                (float) scaleBuffer[0] * 2.5f, (float) scaleBuffer[1] * 2.5f, (float) scaleBuffer[2] * 2.5f,
+                Math.max(0, DefaultConfig.riddenBoneInterpolationTicks));
+        rdTx = translationBuffer.x;
+        rdTy = translationBuffer.y;
+        rdTz = translationBuffer.z;
+        rdRx = rotationBuffer[0];
+        rdRy = rotationBuffer[1];
+        rdRz = rotationBuffer[2];
+        rdSx = scaleBuffer[0];
+        rdSy = scaleBuffer[1];
+        rdSz = scaleBuffer[2];
+        riddenStateValid = true;
     }
 
     private boolean armorStandChanged(double[] position, double[] rotation) {

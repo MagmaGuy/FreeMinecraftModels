@@ -369,6 +369,7 @@ public class ModeledEntity {
     public void tick(AbstractPacketBundle abstractPacketBundle) {
         //check if the entity exists, basically
         if (isRemoved || getLocation() == null) return;
+        updateBonePlacement();
         getSkeleton().tick(abstractPacketBundle);
         if (displayName != null && !displayName.isEmpty()) nameplate.move(getNameplateLocation());
         if (bedrockModeledEntity != null) bedrockModeledEntity.tick();
@@ -377,6 +378,28 @@ public class ModeledEntity {
         particleComponent.tick(abstractPacketBundle, skeleton.getSkeletonWatchers().getJavaViewers());
         if (underlyingEntity != null && underlyingEntity.isValid() && underlyingEntity instanceof LivingEntity livingEntity && livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")) != null)
             scaleModifier = livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")).getValue();
+    }
+
+    /**
+     * Display bones ride the underlying entity while Java clients track it, so they move with the entity's own
+     * client-side smoothing instead of trailing it; every other model keeps the per-bone teleports.
+     */
+    private void updateBonePlacement() {
+        int vehicleId = -1;
+        org.bukkit.util.Vector seat = null;
+        if (DefaultConfig.displayBonesRideTheirEntity && ridesUnderlyingEntity()) {
+            com.magmaguy.easyminecraftgoals.NMSAdapter adapter = com.magmaguy.easyminecraftgoals.NMSManager.getAdapter();
+            // Packet passengers follow the real ones, so the bones take the next seat.
+            seat = adapter == null ? null
+                    : adapter.getPassengerSeatOffset(underlyingEntity, underlyingEntity.getPassengers().size());
+            if (seat != null) vehicleId = underlyingEntity.getEntityId();
+        }
+        skeleton.setRiddenPlacement(vehicleId, seat);
+    }
+
+    /** Whether Java clients track the underlying entity, which its bones need in order to ride it. */
+    protected boolean ridesUnderlyingEntity() {
+        return false;
     }
 
     public void removeWithDeathAnimation() {
