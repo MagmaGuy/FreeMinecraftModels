@@ -356,6 +356,11 @@ public class SkeletonWatchers {
         if (MetadataHandler.PLUGIN == null || skeleton.getModeledEntity() == null) {
             return;
         }
+        // Mounts made with cosmetic invisibility stay tracked: a client that cannot see the vehicle
+        // never seats its rider, so hiding it here leaves the rider behind.
+        if (skeleton.getModeledEntity() instanceof DynamicEntity de && de.isCosmeticInvisibility()) {
+            return;
+        }
         Entity underlyingEntity = skeleton.getModeledEntity().getUnderlyingEntity();
         if (underlyingEntity == null || !underlyingEntity.isValid()) {
             return;
