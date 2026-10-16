@@ -6,6 +6,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.AnimationBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.AnimationFrame;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
@@ -463,6 +464,9 @@ public final class BedrockEntityBundleExporter {
                 JsonObject animationJson = new JsonObject();
                 animationJson.addProperty("animation_length", Math.max(0.05, animation.getDuration() / 20.0));
                 writeLoopMode(animationJson, animation.getLoopType());
+                // Same rules as the Java pose mixer: override resets the bones this animation keys.
+                if (animation.isOverride()) animationJson.addProperty("override_previous_animation", true);
+                if (animation.getBlendWeight() != 1) animationJson.addProperty("blend_weight", animation.getBlendWeight());
                 animationJson.add("bones", bedrockAnimationBones(
                         animation, visualBones, converter.getBlockBenchVersion()));
                 JsonObject particleTimeline = BedrockParticleExporter.timeline(animation);
@@ -501,7 +505,11 @@ public final class BedrockEntityBundleExporter {
             JsonArray playAnimations = new JsonArray();
             playAnimations.add("anim_" + animationKey(animation));
             playState.add("animations", playAnimations);
-            playState.addProperty("blend_transition", 0.1);
+            // Bedrock blends over the blend_transition of the state being left: leaving play fades this animation
+            // out, leaving stop fades it in. Same times as the Java mixer; other animations switch instantly.
+            double fadeOut = fadeOutSeconds(animation);
+            double fadeIn = fadeInSeconds(animation);
+            if (fadeOut > 0) playState.addProperty("blend_transition", fadeOut);
             JsonArray playTransitions = new JsonArray();
             JsonObject toStop = new JsonObject();
             toStop.addProperty("stop", query + " == 0");
@@ -509,7 +517,7 @@ public final class BedrockEntityBundleExporter {
             playState.add("transitions", playTransitions);
 
             JsonObject stopState = new JsonObject();
-            stopState.addProperty("blend_transition", 0.1);
+            if (fadeIn > 0) stopState.addProperty("blend_transition", fadeIn);
             JsonArray stopTransitions = new JsonArray();
             JsonObject toPlay = new JsonObject();
             toPlay.addProperty("play", query + " == 1");
@@ -561,7 +569,7 @@ public final class BedrockEntityBundleExporter {
         }
 
         JsonArray animate = new JsonArray();
-        for (String animation : exportedAnimations) {
+        for (String animation : animateOrder(exportedAnimations)) {
             animate.add("control_" + animationKey(animation));
         }
         if (!animate.isEmpty()) {
@@ -593,6 +601,34 @@ public final class BedrockEntityBundleExporter {
         try (FileWriter writer = new FileWriter(file, StandardCharsets.UTF_8)) {
             GSON.toJson(json, writer);
         }
+    }
+
+    private static final List<String> BASE_ANIMATIONS = List.of("idle", "walk", "spawn", "death");
+
+    /**
+     * Base animations run first so an action layered after them can add to their pose or, with override, reset
+     * it. Property bits keep the sorted order; only the animate order changes.
+     */
+    static List<String> animateOrder(List<String> exportedAnimations) {
+        List<String> ordered = new ArrayList<>();
+        for (String base : BASE_ANIMATIONS) if (exportedAnimations.contains(base)) ordered.add(base);
+        for (String animation : exportedAnimations) if (!ordered.contains(animation)) ordered.add(animation);
+        return ordered;
+    }
+
+    private static double fadeInSeconds(String animation) {
+        return switch (animation) {
+            case "idle", "walk" -> Math.max(0, DefaultConfig.idleWalkBlendTicks) / 20.0;
+            case "death" -> Math.max(0, DefaultConfig.deathBlendTicks) / 20.0;
+            default -> 0;
+        };
+    }
+
+    private static double fadeOutSeconds(String animation) {
+        return switch (animation) {
+            case "idle", "walk" -> Math.max(0, DefaultConfig.idleWalkBlendTicks) / 20.0;
+            default -> 0;
+        };
     }
 
     private static void writeLoopMode(JsonObject animationJson, LoopType loopType) {
