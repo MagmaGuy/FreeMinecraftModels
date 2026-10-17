@@ -9,6 +9,7 @@ import com.magmaguy.magmacore.enchantments.EnchantmentDefinitions;
 import com.magmaguy.magmacore.enchantments.EnchantmentItems;
 import com.magmaguy.magmacore.enchantments.EnchantmentItemProfile;
 import com.magmaguy.magmacore.enchantments.EnchantmentDefinition;
+import com.magmaguy.magmacore.enchantments.ItemSets;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
 import com.magmaguy.freeminecraftmodels.scripting.PropScriptManager;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 public final class ModelItemFactory {
+    public static final String ITEM_SET_PLACEHOLDER = "$itemSet";
 
     private ModelItemFactory() {}
 
@@ -117,9 +119,13 @@ public final class ModelItemFactory {
         }
 
         item.setItemMeta(meta);
-        if (config.getParsedEnchantments().isEmpty()) return item;
+        if (config.getParsedEnchantments().isEmpty())
+            return lore != null && lore.stream().anyMatch(line -> line.contains(ITEM_SET_PLACEHOLDER))
+                    ? ItemSets.placePresentation(item, ITEM_SET_PLACEHOLDER, EnchantmentDefinitions::resolve) : item;
         EnchantmentItems enchantments = new EnchantmentItems(EnchantmentDefinitions::resolve, ModelItemFactory::enchantmentProfile);
-        return enchantments.previewAuthored(item, config.getParsedEnchantments()).apply(item);
+        ItemStack enchanted = enchantments.previewAuthored(item, config.getParsedEnchantments()).apply(item);
+        // Item set pieces show their set where the lore says $itemSet, or after the lore.
+        return ItemSets.placePresentation(enchanted, ITEM_SET_PLACEHOLDER, EnchantmentDefinitions::resolve);
     }
 
     public static EnchantmentItemProfile enchantmentProfile(ItemStack item) {
