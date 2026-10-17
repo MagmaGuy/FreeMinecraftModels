@@ -36,6 +36,9 @@ public class PropScriptConfigFields extends CustomConfigFields {
     private String itemName = "";
     @Getter
     private List<String> lore = new ArrayList<>();
+    // A lore key, even an empty list, replaces the placement item's default lore.
+    @Getter
+    private boolean loreConfigured = false;
     @Getter
     private List<String> enchantments = new ArrayList<>();
     @Getter
@@ -104,6 +107,7 @@ public class PropScriptConfigFields extends CustomConfigFields {
         this.material = processString("material", material, "", false);
         this.itemName = processString("name", itemName, "", false);
         this.lore = processStringList("lore", lore, new ArrayList<>(), false);
+        this.loreConfigured = fileConfiguration.contains("lore");
         this.enchantments = processStringList("enchantments", enchantments, new ArrayList<>(), false);
         this.voxelize = processBoolean("voxelize", voxelize, false, false);
         this.solidify = processBoolean("solidify", solidify, false, false);
