@@ -388,7 +388,9 @@ public class SkeletonWatchers {
         // Off the main thread the model is being torn down with its entity, which untracks it anyway.
         Entity body = Bukkit.isPrimaryThread() ? trackedBody() : null;
         Player player = Bukkit.getPlayer(uuid);
-        if (body != null && player != null && player.isValid() && MetadataHandler.PLUGIN != null)
+        // Bukkit refuses hideEntity from a plugin that is disabling; the rest of the shutdown must still run.
+        if (body != null && player != null && player.isValid() && MetadataHandler.PLUGIN != null
+                && MetadataHandler.PLUGIN.isEnabled())
             player.hideEntity(MetadataHandler.PLUGIN, body);
         if (trackedBodyId != -1) PacketEquipmentVeil.unveil(uuid, trackedBodyId);
     }
