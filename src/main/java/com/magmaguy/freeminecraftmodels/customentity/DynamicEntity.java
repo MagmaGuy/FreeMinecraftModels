@@ -242,9 +242,10 @@ public class DynamicEntity extends ModeledEntity {
     @Override
     protected boolean ridesUnderlyingEntity() {
         // Clients only seat passengers on an entity they track: a mount's cosmetically invisible body always is,
-        // a hidden body only for the viewers the watchers show it to.
+        // a hidden body only for the viewers the watchers show it to, and either only within tracking range.
         return (cosmeticInvisibility || viewerTrackedBody) && syncMovement && !isDying()
-                && underlyingEntity != null && underlyingEntity.isValid();
+                && underlyingEntity != null && underlyingEntity.isValid()
+                && getSkeleton().getSkeletonWatchers().isEntityTrackedByJavaViewers();
     }
 
     @Override

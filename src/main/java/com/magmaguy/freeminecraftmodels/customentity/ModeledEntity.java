@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.customentity;
 
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
+import com.magmaguy.easyminecraftgoals.internal.PacketEquipmentVeil;
 import com.magmaguy.easyminecraftgoals.internal.StackedText;
 import com.magmaguy.freeminecraftmodels.bedrock.BedrockModeledEntity;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
@@ -506,14 +507,20 @@ public class ModeledEntity {
 
     public void showUnderlyingEntity(Player player) {
         if (underlyingEntity == null || !underlyingEntity.isValid()) return;
+        // A viewer whose client tracks the body for its bones sees it veiled; lift the veil so it shows in the flesh.
+        PacketEquipmentVeil.unveil(player.getUniqueId(), underlyingEntity.getEntityId());
         player.showEntity(MetadataHandler.PLUGIN, underlyingEntity);
         underlyingEntity.setGlowing(true);
+        skeleton.getSkeletonWatchers().refreshEntityTracking();
     }
 
     public void hideUnderlyingEntity(Player player) {
         if (underlyingEntity == null || !underlyingEntity.isValid()) return;
+        skeleton.getSkeletonWatchers().reveilTrackedBody(player);
         player.hideEntity(MetadataHandler.PLUGIN, underlyingEntity);
         underlyingEntity.setGlowing(false);
+        // The bones cannot ride an entity this client no longer has, so they go back to being placed freely.
+        skeleton.getSkeletonWatchers().refreshEntityTracking();
     }
 
     /**

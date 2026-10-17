@@ -32,6 +32,9 @@ public class SkeletonWatchers {
     // Java viewers that track the model's hidden body as an invisible, bare entity so the bones can ride it.
     private final Set<UUID> bodyViewers = new CopyOnWriteArraySet<>();
     private int trackedBodyId = -1;
+    // Whether every Java viewer's client tracks the model's entity, refreshed on the primary thread. A client that
+    // lacks the entity drops the bones' mount and stops drawing them, so the bones ride it only while this holds.
+    private volatile boolean entityTrackedByJavaViewers = true;
     private volatile boolean wasInvisible = false;
 
     public HashSet<UUID> getViewers() {
@@ -57,6 +60,40 @@ public class SkeletonWatchers {
         return !viewers.isEmpty();
     }
 
+    /** Whether every Java viewer's client tracked the model's entity at the last primary-thread check. */
+    public boolean isEntityTrackedByJavaViewers() {
+        return entityTrackedByJavaViewers;
+    }
+
+    /**
+     * Rechecks that every Java viewer's client tracks the model's entity. A viewer can see a model farther away than
+     * the server's entity tracking range (monsters default to 48 blocks, models to 60), and plugins can hide the
+     * entity from a viewer, so being a viewer does not mean the client has the entity the bones would ride.
+     */
+    public void refreshEntityTracking() {
+        var modeledEntity = skeleton.getModeledEntity();
+        Entity entity = modeledEntity == null ? null : modeledEntity.getUnderlyingEntity();
+        if (entity == null || !entity.isValid()) {
+            entityTrackedByJavaViewers = false;
+            return;
+        }
+        Set<Player> trackers = entity.getTrackedBy();
+        for (UUID uuid : javaViewers) {
+            Player player = Bukkit.getPlayer(uuid);
+            if (player != null && !trackers.contains(player)) {
+                entityTrackedByJavaViewers = false;
+                return;
+            }
+        }
+        entityTrackedByJavaViewers = true;
+    }
+
+    /** Restores the veil on a tracked body that {@code showUnderlyingEntity} lifted for this viewer. */
+    public void reveilTrackedBody(Player player) {
+        if (trackedBodyId != -1 && bodyViewers.contains(player.getUniqueId()))
+            PacketEquipmentVeil.veil(player.getUniqueId(), trackedBodyId);
+    }
+
     private boolean isUnderlyingEntityInvisible() {
         if (skeleton.getModeledEntity() == null) return false;
         // Cosmetic invisibility (e.g. mount command) should not hide the model
@@ -78,6 +115,7 @@ public class SkeletonWatchers {
             throw new IllegalStateException("Skeleton watcher state must be refreshed on the primary thread");
         }
         updateWatcherList();
+        refreshEntityTracking();
         boolean isInvisible = isUnderlyingEntityInvisible();
         if (isInvisible != wasInvisible) {
             wasInvisible = isInvisible;
