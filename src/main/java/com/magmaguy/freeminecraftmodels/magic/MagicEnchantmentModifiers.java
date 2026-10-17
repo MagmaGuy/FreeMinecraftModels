@@ -13,26 +13,33 @@ final class MagicEnchantmentModifiers {
     private static final EnchantmentItems ITEMS = new EnchantmentItems(EnchantmentDefinitions::resolve, EnchantmentItemProfile::vanilla);
     private MagicEnchantmentModifiers() { }
 
-    static MagicWeaponDefinition apply(Player player, ItemStack source, MagicWeaponDefinition base, MagicAttackKind attack) {
+    static MagicWeaponDefinition apply(Player player, ItemStack source, Map<String, ItemStack> equipment,
+                                       MagicWeaponDefinition base, MagicAttackKind attack) {
         var levels = ITEMS.inspect(source);
-        if (levels.isEmpty()) return base;
+        // Worn item sets shape casts too: once each, and only while every piece is worn.
+        var sets = ItemSets.active(equipment, EnchantmentDefinitions::resolve);
+        if (levels.isEmpty() && sets.isEmpty()) return base;
         var requests = new ArrayList<EnchantmentQueries.Query>();
         Set<ScriptHook> hooks = switch (attack) {
             case WAND_MISSILE -> Set.of(MagicEnchantmentCatalog.MISSILE_COUNT, MagicEnchantmentCatalog.MISSILE_DAMAGE_FACTOR);
             case STAFF_FIREBALL -> Set.of(MagicEnchantmentCatalog.BLAST_RADIUS_FACTOR, MagicEnchantmentCatalog.IGNITION_TICKS);
             default -> Set.of();
         };
+        java.util.function.BiConsumer<EnchantmentItems.Resolved, Integer> query = (resolved, level) -> {
+            if (!resolved.definition().attackKinds().isEmpty() && !resolved.definition().attackKinds().contains(attack.name())) return;
+            if (!resolved.provider().capabilities().contains(EnchantmentQueries.CAPABILITY)) return;
+            for (ScriptHook hook : hooks.stream().sorted(Comparator.comparing(ScriptHook::getKey)).toList())
+                requests.add(new EnchantmentQueries.Query(resolved.provider(), resolved.definition().id(), hook,
+                        level, Map.of("attack_kind", attack.name()), player.getUniqueId(), null));
+        };
         for (var entry : new TreeMap<>(levels).entrySet()) {
             if (entry.getKey().startsWith("minecraft:")) continue;
             var resolved = EnchantmentDefinitions.resolve(entry.getKey());
             if (resolved == null || !resolved.available())
                 throw new IllegalArgumentException("Unavailable enchantment " + entry.getKey());
-            if (!resolved.definition().attackKinds().isEmpty() && !resolved.definition().attackKinds().contains(attack.name())) continue;
-            if (!resolved.provider().capabilities().contains(EnchantmentQueries.CAPABILITY)) continue;
-            for (ScriptHook hook : hooks.stream().sorted(Comparator.comparing(ScriptHook::getKey)).toList())
-                requests.add(new EnchantmentQueries.Query(resolved.provider(), entry.getKey(), hook,
-                        entry.getValue(), Map.of("attack_kind", attack.name()), player.getUniqueId(), null));
+            if (!resolved.definition().isSet()) query.accept(resolved, entry.getValue());
         }
+        for (var set : sets) query.accept(set.resolved(), set.level());
         if (requests.isEmpty()) return base;
         var result = EnchantmentQueries.evaluate(requests, new EnchantmentQueries.Limits(128, 50_000_000L, 250_000L));
         if (result.status() != EnchantmentQueries.Status.OK)

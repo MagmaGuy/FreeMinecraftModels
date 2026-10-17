@@ -288,7 +288,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         java.util.Map<String,Object> effects;
         java.util.Map<String, Double> resolverFacts;
         try {
-            definition = MagicEnchantmentModifiers.apply(player, capturedWeapon, definition, attackKind);
+            definition = MagicEnchantmentModifiers.apply(player, capturedWeapon, capturedEquipment, definition, attackKind);
             resolverFacts = MagicAttackRequest.copyResolverFacts(resolver == null ? java.util.Map.of()
                     : resolver.capture(player, capturedWeapon.clone(), attackKind));
             effects = com.magmaguy.magmacore.enchantments.EnchantmentInputs.capture(player, capturedWeapon,
@@ -536,11 +536,15 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
             boolean accepted = applyOwnedDamage(cast.owner(), target,
                     cast.attackKind().weaponKind() == MagicWeaponKind.WAND,
                     () -> target.damage(damage, cast.owner()));
-            if (accepted) com.magmaguy.magmacore.enchantments.EnchantmentInputs.dispatch(plugin, cast.effects(),
-                    cast.attackKind() == MagicAttackKind.STAFF_MELEE
-                            ? com.magmaguy.magmacore.enchantments.EnchantmentInputs.ATTACK
-                            : com.magmaguy.magmacore.enchantments.EnchantmentInputs.PROJECTILE_HIT,
-                    target, UUID.randomUUID().toString());
+            if (accepted) {
+                var hook = cast.attackKind() == MagicAttackKind.STAFF_MELEE
+                        ? com.magmaguy.magmacore.enchantments.EnchantmentInputs.ATTACK
+                        : com.magmaguy.magmacore.enchantments.EnchantmentInputs.PROJECTILE_HIT;
+                String stage = UUID.randomUUID().toString();
+                com.magmaguy.magmacore.enchantments.EnchantmentInputs.dispatch(plugin, cast.effects(), hook, target, stage);
+                // Magic hits are owned damage, so worn item sets answer them here rather than through Bukkit's event.
+                com.magmaguy.magmacore.enchantments.EnchantmentInputs.dispatchSets(plugin, cast.owner(), hook, target, stage);
+            }
             return accepted;
         } finally {
             NMSManager.getAdapter().setDamageCooldownTicks(target, previousDamageCooldown);
