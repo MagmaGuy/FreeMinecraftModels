@@ -9,7 +9,9 @@ import com.magmaguy.magmacore.enchantments.EnchantmentDefinitions;
 import com.magmaguy.magmacore.enchantments.EnchantmentItems;
 import com.magmaguy.magmacore.enchantments.EnchantmentItemProfile;
 import com.magmaguy.magmacore.enchantments.EnchantmentDefinition;
+import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
+import com.magmaguy.freeminecraftmodels.scripting.PropScriptManager;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
@@ -33,15 +35,23 @@ public final class ModelItemFactory {
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return item;
 
-        meta.setDisplayName(ChatColorConverter.convert(
-                "&e\u2726 &6" + formatModelName(modelId) + " &e\u2726"));
-        meta.setLore(List.of(
-                "",
-                ChatColorConverter.convert("&7Right-click on a block to place"),
-                ChatColorConverter.convert("&7Punch to pick back up"),
-                "",
-                ChatColorConverter.convert("&8Model: " + modelId)
-        ));
+        // The model's sibling .yml can replace the default name and lore.
+        PropScriptConfigFields settings = propSettings(modelId);
+        String configuredName = settings == null ? "" : settings.getItemName();
+        meta.setDisplayName(ChatColorConverter.convert(configuredName == null || configuredName.isEmpty()
+                ? "&e\u2726 &6" + formatModelName(modelId) + " &e\u2726"
+                : configuredName));
+        if (settings != null && settings.isLoreConfigured()) {
+            meta.setLore(ChatColorConverter.convert(settings.getLore()));
+        } else {
+            meta.setLore(List.of(
+                    "",
+                    ChatColorConverter.convert("&7Right-click on a block to place"),
+                    ChatColorConverter.convert("&7Punch to pick back up"),
+                    "",
+                    ChatColorConverter.convert("&8Model: " + modelId)
+            ));
+        }
 
         // Store model ID in persistent data
         NamespacedKey key = new NamespacedKey(MetadataHandler.PLUGIN, "model_id");
@@ -55,6 +65,14 @@ public final class ModelItemFactory {
 
         item.setItemMeta(meta);
         return item;
+    }
+
+    /** The model's loaded sibling .yml settings, or null when it has none or they are unavailable. */
+    private static PropScriptConfigFields propSettings(String modelId) {
+        PropScriptConfigFields settings = ItemScriptManager.getPropDefinition(
+                PropScriptManager.resolveSiblingYml(FileModelConverter.getModel(modelId)));
+        if (settings == null || !settings.isEnabled() || settings.getUnavailableReason() != null) return null;
+        return settings;
     }
 
     /**
