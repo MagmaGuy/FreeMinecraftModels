@@ -118,15 +118,23 @@ public class ParsedTexture {
 
 
     public boolean isAnimated() {
-        // A texture is animated when its pixel dimensions differ from its UV
-        // dimensions. This only happens when explicit Blockbench metadata
-        // provides separate uv_height / uv_width values indicating that the
-        // image contains stacked animation frames.
         // Without metadata, uvHeight/uvWidth are set equal to height/width so
         // this safely returns false, avoiding false positives on portrait-
         // orientation texture atlases.
-        if (uvHeight <= 0 || uvWidth <= 0) return false;
-        return height != uvHeight || width != uvWidth;
+        return getFrameCount() > 1;
+    }
+
+    /**
+     * Mirrors Blockbench's Texture.frameCount. An image holds stacked animation frames only when it is taller than
+     * its UV aspect ratio implies. A pixel size that differs from the UV size at the same aspect ratio, such as a
+     * 64x32 image over a 128x64 UV space, is a static texture at a different pixel density.
+     */
+    int getFrameCount() {
+        if (uvHeight <= 0 || uvWidth <= 0 || width <= 0 || height <= 0) return 1;
+        double imageRatio = width / height;
+        double uvRatio = uvWidth / uvHeight;
+        if (imageRatio == uvRatio) return 1;
+        return Math.max(1, (int) Math.ceil(uvRatio / imageRatio - 0.05));
     }
 
     /**
