@@ -220,6 +220,16 @@ public class DynamicEntity extends ModeledEntity {
         return seatScale;
     }
 
+    /**
+     * Seats the player on the mob itself when it is a saddled horse nobody rides, as a vanilla rider who steers it.
+     * Returns whether they now ride it.
+     */
+    public boolean seatSteeringRider(Player player) {
+        if (!(underlyingEntity instanceof AbstractHorse horse) || horse.getInventory().getSaddle() == null
+                || !horse.getPassengers().isEmpty()) return false;
+        return horse.addPassenger(player);
+    }
+
     /** The player steering this mob, as vanilla lets the first passenger of a saddled horse do; null otherwise. */
     @Nullable
     private Player steeringRider() {

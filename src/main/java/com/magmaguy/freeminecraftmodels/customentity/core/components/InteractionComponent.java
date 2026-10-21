@@ -6,6 +6,7 @@ import com.magmaguy.freeminecraftmodels.api.ModeledEntityHitboxContactEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityLeftClickEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityRightClickEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityInteractEvent;
+import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntityHitboxContactCallback;
 import com.magmaguy.freeminecraftmodels.customentity.core.MountPointManager;
@@ -199,6 +200,9 @@ public class InteractionComponent {
             rightClickCallback.onRightClick(player, modeledEntity);
             return;
         }
+        // A model on a saddled horse is ridden as the horse, so the rider steers it rather than sitting on a model seat
+        // the horse would carry around without them.
+        if (modeledEntity instanceof DynamicEntity dynamicEntity && dynamicEntity.seatSteeringRider(player)) return;
         // Default behavior: try mounting if the entity has mount points
         MountPointManager mountPointManager = modeledEntity.getMountPointManager();
         if (mountPointManager != null && mountPointManager.hasMountPoints()) {
