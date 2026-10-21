@@ -389,6 +389,14 @@ public class ModeledEntity {
     }
 
     /**
+     * The player steering this model's entity, whose own client turns the ridden bones with their camera instead
+     * of waiting for the server's yaw; null when nobody steers it.
+     */
+    public java.util.UUID cameraRider() {
+        return null;
+    }
+
+    /**
      * Display bones ride the underlying entity while Java clients track it, so they move with the entity's own
      * client-side smoothing instead of trailing it; every other model keeps the per-bone teleports.
      */

@@ -4,6 +4,7 @@ import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.easyminecraftgoals.internal.PacketModelEntity;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
+import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.utils.TransformationMatrix;
 import com.magmaguy.magmacore.util.VersionChecker;
@@ -316,9 +317,12 @@ public class BoneTransforms {
         if (packetDisplayEntity != null && packetDisplayEntity.hasViewers()) {
             if (isRidden()) {
                 readRiddenPose();
-                if (force || riddenChanged()) {
+                java.util.UUID camera = cameraViewer();
+                // A steering rider's view turns with their camera and is resent whole after a re-show, so it goes out
+                // every tick while they steer and once more after they stop.
+                if (force || riddenChanged() || camera != null || riddenCamera != null) {
                     if (packetBundle == null) packetBundle = packetDisplayEntity.createPacketBundle();
-                    sendRiddenPosePacket(packetBundle);
+                    sendRiddenPosePacket(packetBundle, camera);
                 }
                 return;
             }
@@ -347,7 +351,7 @@ public class BoneTransforms {
         if (packetDisplayEntity != null) {
             if (isRidden()) {
                 readRiddenPose();
-                sendRiddenPosePacket(packetBundle);
+                sendRiddenPosePacket(packetBundle, cameraViewer());
                 return;
             }
             readTargetPosition(origin, positionBuffer, false);
@@ -368,6 +372,8 @@ public class BoneTransforms {
     private final Location seatLocation = new Location(null, 0, 0, 0, 180, 0);
     private boolean riddenStateValid = false;
     private double rdTx, rdTy, rdTz, rdRx, rdRy, rdRz, rdSx, rdSy, rdSz;
+    // The camera viewer the last ridden pose went to, so the pass after they stop steering releases their view.
+    private volatile java.util.UUID riddenCamera;
 
     private boolean isRidden() {
         return riddenVehicleId != -1;
@@ -411,17 +417,26 @@ public class BoneTransforms {
                 || !same(rdSx, scaleBuffer[0]) || !same(rdSy, scaleBuffer[1]) || !same(rdSz, scaleBuffer[2]);
     }
 
-    private void sendRiddenPosePacket(AbstractPacketBundle packetBundle) {
+    /** The player steering the model, who gets the ridden pose turned with their camera; null when none. */
+    private java.util.UUID cameraViewer() {
+        if (!packetDisplayEntity.supportsCameraView()) return null;
+        ModeledEntity modeledEntity = bone.getSkeleton().getModeledEntity();
+        return modeledEntity == null ? null : modeledEntity.cameraRider();
+    }
+
+    private void sendRiddenPosePacket(AbstractPacketBundle packetBundle, java.util.UUID camera) {
         Location origin = bone.getSkeleton().getCurrentLocation();
         seatLocation.setWorld(origin.getWorld());
         seatLocation.setX(origin.getX() + seatBuffer[0]);
         seatLocation.setY(origin.getY() + seatBuffer[1]);
         seatLocation.setZ(origin.getZ() + seatBuffer[2]);
-        // Synched entity data keeps the vector it is given, so hand over a copy the next pass cannot change.
+        // Synched entity data keeps the vector it is given, so hand over a copy the next pass cannot change. The yaw
+        // is the one the pose was built at (see rotateByEntityYaw).
         packetDisplayEntity.generateRiddenTransformationPackets(packetBundle, seatLocation, new Vector3f(translationBuffer),
                 new EulerAngle(rotationBuffer[0], rotationBuffer[1], rotationBuffer[2]),
                 (float) scaleBuffer[0] * 2.5f, (float) scaleBuffer[1] * 2.5f, (float) scaleBuffer[2] * 2.5f,
-                Math.max(0, DefaultConfig.riddenBoneInterpolationTicks));
+                Math.max(0, DefaultConfig.riddenBoneInterpolationTicks), camera, origin.getYaw());
+        riddenCamera = camera;
         rdTx = translationBuffer.x;
         rdTy = translationBuffer.y;
         rdTz = translationBuffer.z;

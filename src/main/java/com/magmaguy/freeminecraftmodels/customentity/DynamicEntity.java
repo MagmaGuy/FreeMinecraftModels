@@ -67,6 +67,8 @@ public class DynamicEntity extends ModeledEntity {
     private double hitboxSize = -1;
     // The part of the mob's scale that only lifts its saddle onto the model's seat bone (see liftSaddleTo).
     private volatile double seatScale = 1;
+    // The player steering the mob this tick, read once per model tick (see steeringRider).
+    private volatile UUID steeringRiderId;
 
     public DynamicEntity(String entityID, Location targetLocation) {
         super(entityID, targetLocation);
@@ -170,6 +172,8 @@ public class DynamicEntity extends ModeledEntity {
 
     @Override
     public void tick(AbstractPacketBundle abstractPacketBundle) {
+        Player rider = underlyingEntity == null ? null : steeringRider();
+        steeringRiderId = rider == null ? null : rider.getUniqueId();
         //todo: investigate if this is still necessary since everything now updates anyway, at least for animations
         syncSkeletonWithEntity();
         updateModelYaw();
@@ -218,6 +222,11 @@ public class DynamicEntity extends ModeledEntity {
     @Override
     protected double seatScale() {
         return seatScale;
+    }
+
+    @Override
+    public UUID cameraRider() {
+        return steeringRiderId;
     }
 
     /** The player steering this mob, as vanilla lets the first passenger of a saddled horse do; null otherwise. */
@@ -280,8 +289,11 @@ public class DynamicEntity extends ModeledEntity {
 
         // Update skeleton position and rotation
         if (underlyingEntity instanceof LivingEntity livingEntity) {
-            getSkeleton().setCurrentHeadPitch(livingEntity.getEyeLocation().getPitch());
-            getSkeleton().setCurrentHeadYaw(livingEntity.getEyeLocation().getYaw());
+            // A steered mount looks where its rider steers and stays level: following the mob's pitch would tilt its
+            // head with every look the rider takes up or down.
+            Player rider = steeringRider();
+            getSkeleton().setCurrentHeadPitch(rider != null ? 0 : livingEntity.getEyeLocation().getPitch());
+            getSkeleton().setCurrentHeadYaw(rider != null ? rider.getLocation().getYaw() : livingEntity.getEyeLocation().getYaw());
         }
     }
 
