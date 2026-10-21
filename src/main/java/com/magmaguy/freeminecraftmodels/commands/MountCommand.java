@@ -9,13 +9,17 @@ import com.magmaguy.magmacore.command.CommandData;
 import com.magmaguy.magmacore.command.SenderType;
 import com.magmaguy.magmacore.command.arguments.ListStringCommandArgument;
 import com.magmaguy.magmacore.util.Logger;
+import com.magmaguy.magmacore.util.VersionChecker;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Horse;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.components.EquippableComponent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,7 +50,7 @@ public class MountCommand extends AdvancedCommand {
         horse.setTamed(true);
         horse.setOwner(player);
         horse.setAdult();
-        horse.getInventory().setSaddle(new ItemStack(Material.SADDLE));
+        horse.getInventory().setSaddle(unseenSaddle());
         horse.setRemoveWhenFarAway(false);
         horse.getAttribute(Attribute.MOVEMENT_SPEED).setBaseValue(0.3);
         horse.getAttribute(Attribute.JUMP_STRENGTH).setBaseValue(0.7);
@@ -68,5 +72,22 @@ public class MountCommand extends AdvancedCommand {
             if (mounts != null && mounts.hasMountPoints()) dynamicEntity.liftSaddleTo(mounts.getSeats().get(0).getBone());
             horse.addPassenger(player);
         }, 1);
+    }
+
+    /**
+     * A saddle that steers the horse but draws nothing. Since 1.21.5 a saddle renders as equipment, which the
+     * invisibility effect does not hide, so the horse's saddle and reins would show around the model. A horse counts
+     * as saddled while the item can be equipped in its saddle slot, which needs no equipment model.
+     */
+    private static ItemStack unseenSaddle() {
+        ItemStack saddle = new ItemStack(Material.SADDLE);
+        if (VersionChecker.serverVersionOlderThan(21, 5)) return saddle;
+        ItemMeta meta = saddle.getItemMeta();
+        EquippableComponent equippable = meta.getEquippable();
+        equippable.setSlot(EquipmentSlot.SADDLE);
+        equippable.setModel(null);
+        meta.setEquippable(equippable);
+        saddle.setItemMeta(meta);
+        return saddle;
     }
 }
