@@ -185,8 +185,15 @@ public class DynamicEntity extends ModeledEntity {
     }
 
     private boolean isRiddenByPlayer() {
-        for (Entity passenger : underlyingEntity.getPassengers()) if (passenger instanceof Player) return true;
+        if (carriesPlayer(underlyingEntity)) return true;
         return getMountPointManager() != null && getMountPointManager().hasOccupant();
+    }
+
+    /** Whether a player rides this entity directly or on top of other passengers, such as a seat entity. */
+    private static boolean carriesPlayer(Entity vehicle) {
+        for (Entity passenger : vehicle.getPassengers())
+            if (passenger instanceof Player || carriesPlayer(passenger)) return true;
+        return false;
     }
 
     /**
