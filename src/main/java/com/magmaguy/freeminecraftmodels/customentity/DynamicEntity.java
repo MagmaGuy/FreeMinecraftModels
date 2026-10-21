@@ -27,6 +27,7 @@ import org.bukkit.potion.PotionEffectType;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -219,6 +220,14 @@ public class DynamicEntity extends ModeledEntity {
         return seatScale;
     }
 
+    /** The player steering this mob, as vanilla lets the first passenger of a saddled horse do; null otherwise. */
+    @Nullable
+    private Player steeringRider() {
+        if (!(underlyingEntity instanceof AbstractHorse horse) || horse.getInventory().getSaddle() == null) return null;
+        List<Entity> passengers = horse.getPassengers();
+        return !passengers.isEmpty() && passengers.get(0) instanceof Player player ? player : null;
+    }
+
     /** Whether a player rides this entity directly or on top of other passengers, such as a seat entity. */
     private static boolean carriesPlayer(Entity vehicle) {
         for (Entity passenger : vehicle.getPassengers())
@@ -355,6 +364,11 @@ public class DynamicEntity extends ModeledEntity {
      * That lerping behavior would be unnecessarily demanding, and the is considered to be close enough for 99.99% of cases.
      */
     private float targetBodyYaw(Location bodyLoc) {
+        // A player steering the mob turns it to their own facing on their client every tick. The server's copy of
+        // the body can trail that by a tick or more (Paper), so the model follows the rider instead.
+        Player rider = steeringRider();
+        if (rider != null) return rider.getLocation().getYaw();
+
         Location gaze = getSkeleton().getLookDirection(bodyLoc);
         if (gaze != null) return gaze.getYaw();
 
