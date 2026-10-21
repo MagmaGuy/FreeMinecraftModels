@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.commands;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
+import com.magmaguy.freeminecraftmodels.customentity.core.MountPointManager;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.magmacore.command.AdvancedCommand;
 import com.magmaguy.magmacore.command.CommandData;
@@ -59,9 +60,12 @@ public class MountCommand extends AdvancedCommand {
         }
 
         // The player rides the horse directly: a horse only takes steering from a player that is its first
-        // passenger, so a seat entity in between would leave the rider unable to move it.
+        // passenger, so a seat entity in between would leave the rider unable to move it. The horse's saddle is
+        // lifted onto the model's first m_ bone instead, so the rider sits on the model's seat.
         Bukkit.getScheduler().scheduleSyncDelayedTask(MetadataHandler.PLUGIN, () -> {
             if (!horse.isValid() || !player.isOnline()) return;
+            MountPointManager mounts = dynamicEntity.getMountPointManager();
+            if (mounts != null && mounts.hasMountPoints()) dynamicEntity.liftSaddleTo(mounts.getSeats().get(0).getBone());
             horse.addPassenger(player);
         }, 1);
     }
