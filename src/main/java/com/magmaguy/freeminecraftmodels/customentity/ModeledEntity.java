@@ -380,7 +380,12 @@ public class ModeledEntity {
         animationComponent.tick();
         particleComponent.tick(abstractPacketBundle, skeleton.getSkeletonWatchers().getJavaViewers());
         if (underlyingEntity != null && underlyingEntity.isValid() && underlyingEntity instanceof LivingEntity livingEntity && livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")) != null)
-            scaleModifier = livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")).getValue();
+            scaleModifier = livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")).getValue() / seatScale();
+    }
+
+    /** The part of the underlying entity's scale that only moves its rider's seat, which the model leaves out. */
+    protected double seatScale() {
+        return 1;
     }
 
     /**

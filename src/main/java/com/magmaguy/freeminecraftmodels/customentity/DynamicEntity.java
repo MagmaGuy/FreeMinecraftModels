@@ -4,15 +4,19 @@ import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
+import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
 import com.magmaguy.freeminecraftmodels.customentity.core.TurnInertia;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.HitboxBlueprint;
 import com.magmaguy.freeminecraftmodels.utils.ImmutableMapSnapshots;
+import com.magmaguy.magmacore.util.AttributeManager;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -60,6 +64,8 @@ public class DynamicEntity extends ModeledEntity {
     private volatile float modelYaw = Float.NaN;
     // Cube root of the hitbox bone's volume at scale 1; 0 when the model has none, -1 until computed.
     private double hitboxSize = -1;
+    // The part of the mob's scale that only lifts its saddle onto the model's seat bone (see liftSaddleTo).
+    private volatile double seatScale = 1;
 
     public DynamicEntity(String entityID, Location targetLocation) {
         super(entityID, targetLocation);
@@ -187,6 +193,30 @@ public class DynamicEntity extends ModeledEntity {
     private boolean isRiddenByPlayer() {
         if (carriesPlayer(underlyingEntity)) return true;
         return getMountPointManager() != null && getMountPointManager().hasOccupant();
+    }
+
+    /**
+     * Scales the mob so its saddle, the seat a vanilla rider steers it from, lands on the given seat bone. The model
+     * leaves that scale out and keeps its size. Does nothing when the server cannot report the saddle height.
+     */
+    public void liftSaddleTo(Bone seat) {
+        Attribute scaleAttribute = AttributeManager.getAttribute("generic_scale");
+        if (scaleAttribute == null || !(underlyingEntity instanceof LivingEntity livingEntity)) return;
+        AttributeInstance scale = livingEntity.getAttribute(scaleAttribute);
+        org.bukkit.util.Vector saddle = NMSManager.getAdapter().getPassengerSeatOffset(underlyingEntity, 0);
+        Location seatLocation = seat.getBoneLocation();
+        if (scale == null || saddle == null || saddle.getY() <= 0 || seatLocation == null) return;
+        double seatHeight = seatLocation.getY() - underlyingEntity.getLocation().getY();
+        if (seatHeight <= 0) return;
+        // The saddle height grows with the mob's scale, which the attribute caps at 1/16 to 16.
+        double target = Math.max(0.0625, Math.min(16, scale.getBaseValue() * seatHeight / saddle.getY()));
+        seatScale *= target / scale.getBaseValue();
+        scale.setBaseValue(target);
+    }
+
+    @Override
+    protected double seatScale() {
+        return seatScale;
     }
 
     /** Whether a player rides this entity directly or on top of other passengers, such as a seat entity. */
