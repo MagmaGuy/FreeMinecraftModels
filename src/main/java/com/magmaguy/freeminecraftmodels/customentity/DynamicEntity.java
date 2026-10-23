@@ -59,6 +59,14 @@ public class DynamicEntity extends ModeledEntity {
      */
     @Getter
     private boolean viewerTrackedBody = false;
+    /**
+     * When true and the model has a {@code hitbox} bone, clients get an invisible Interaction entity the size of that
+     * bone, so players click the model they see instead of the body's own box. Off by default: a box that covers a
+     * long or rotated model would also catch clicks in its empty corners. Takes effect within two ticks.
+     */
+    @Getter
+    @Setter
+    private volatile boolean clickSurface = false;
     private boolean isEvokerAttacking = false;
     // The model's facing, stepped once per model tick toward the mob's body yaw. Read from any thread.
     private final TurnInertia turnInertia = new TurnInertia();
