@@ -51,6 +51,20 @@ class MolangParserTest {
     }
 
     @Test
+    void returningLastLineReadsAProgramAsBlockbenchDoes() {
+        String program = "v.t = q.anim_time * 60;\nv.w = math.sin(v.t);\nmath.atan2(1, 1) * 2\n";
+        String explicit = MolangParser.returningLastLine(program);
+        assertEquals("v.t = q.anim_time * 60;\nv.w = math.sin(v.t);\nreturn math.atan2(1, 1) * 2\n", explicit);
+        assertEquals(0, eval(program), "Bedrock gives a program without return 0");
+        assertEquals(90, eval(explicit), 1e-9, "Blockbench gives it its last line");
+        assertEquals("v.a = 1; v.b = 2;", MolangParser.returningLastLine("v.a = 1; v.b = 2;"), "an assignment stays last");
+        assertEquals("v.a = 1; return v.a;", MolangParser.returningLastLine("v.a = 1; return v.a;"), "already returns");
+        assertEquals("math.sin(30)", MolangParser.returningLastLine("math.sin(30)"), "a single expression");
+        assertEquals("loop(2, {v.i = v.i + 1;}); return v.i",
+                MolangParser.returningLastLine("loop(2, {v.i = v.i + 1;}); v.i"), "semicolons inside braces are not lines");
+    }
+
+    @Test
     void unknownNamesReadAsZeroAndDivisionByZeroIsZero() {
         assertEquals(0, eval("query.anything + variable.missing"));
         assertEquals(0, eval("1 / 0"));

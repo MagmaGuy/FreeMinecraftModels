@@ -75,6 +75,8 @@ public class Keyframe {
         } catch (NumberFormatException notANumber) {
             // Anything Blockbench accepts that is not a number is MoLang.
         }
+        // Written and previewed in Blockbench, where a program's last line is its value even without return.
+        source = MolangParser.returningLastLine(source);
         try {
             expressions[axis] = MolangParser.parse(source);
             sources[axis] = source;

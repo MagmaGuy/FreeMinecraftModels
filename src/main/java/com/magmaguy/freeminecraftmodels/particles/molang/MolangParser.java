@@ -47,6 +47,43 @@ public final class MolangParser {
         return new MolangParser(source).program();
     }
 
+    /**
+     * The program as Blockbench reads it, made explicit for Bedrock. Blockbench gives a program without
+     * {@code return} the value of its last line; Bedrock, and {@link #parse}, give it 0. Animation keyframes are
+     * authored and previewed in Blockbench, so this puts {@code return} before that last line. A single
+     * expression, a program that already returns and one whose last line is an assignment (worth 0 in both)
+     * come back unchanged, as does a source that does not tokenize.
+     */
+    public static String returningLastLine(String source) {
+        if (source == null || source.indexOf(';') < 0) return source;
+        List<Token> tokens;
+        try {
+            tokens = tokenize(source);
+        } catch (MolangParseException malformed) {
+            return source;
+        }
+        int depth = 0, statementStart = 0, lastStart = -1;
+        for (int index = 0; index < tokens.size(); index++) {
+            Token token = tokens.get(index);
+            boolean separator = token.kind == Kind.END || (token.kind == Kind.OPERATOR && token.text.equals(";") && depth == 0);
+            if (token.kind == Kind.OPERATOR) {
+                if (token.text.equals("(") || token.text.equals("{") || token.text.equals("[")) depth++;
+                else if (token.text.equals(")") || token.text.equals("}") || token.text.equals("]")) depth--;
+            }
+            if (!separator) continue;
+            if (index > statementStart) {
+                Token first = tokens.get(statementStart);
+                if (first.kind == Kind.NAME && first.text.equals("return")) return source;
+                lastStart = statementStart;
+            }
+            statementStart = index + 1;
+        }
+        if (lastStart < 0) return source;
+        Token first = tokens.get(lastStart), second = tokens.get(lastStart + 1);
+        if (first.kind == Kind.NAME && second.kind == Kind.OPERATOR && second.text.equals("=")) return source;
+        return source.substring(0, first.offset) + "return " + source.substring(first.offset);
+    }
+
     private MolangExpression program() {
         List<Statement> statements = new ArrayList<>();
         boolean complex = false;
@@ -310,7 +347,7 @@ public final class MolangParser {
             throw new MolangParseException("Expected '" + operator + "'", source, token.offset);
     }
 
-    private List<Token> tokenize(String text) {
+    private static List<Token> tokenize(String text) {
         List<Token> result = new ArrayList<>();
         int position = 0;
         while (position < text.length()) {
