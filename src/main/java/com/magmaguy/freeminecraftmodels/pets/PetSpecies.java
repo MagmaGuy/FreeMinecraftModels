@@ -82,6 +82,7 @@ public final class PetSpecies {
     private final WildSpawn wildSpawn;
     private final MindBodyLocomotion locomotion;
     private final TravelOrientation orientation;
+    private final boolean centerOnBody;
     private final PetInteractions interactions;
 
     private PetSpecies(File file, YamlConfiguration config) {
@@ -146,6 +147,7 @@ public final class PetSpecies {
         }
         this.locomotion = movement;
         this.orientation = orientation(section(config, "orientation"), filename);
+        this.centerOnBody = centerOnBody(config, movement);
         this.interactions = PetInteractions.read(config, filename, model);
     }
 
@@ -162,6 +164,15 @@ public final class PetSpecies {
         return new TravelOrientation(style, section.getDouble("startSpeed", defaults.startSpeed()),
                 section.getDouble("fullSpeed", defaults.fullSpeed()), section.getDouble("maxTilt", defaults.maxTilt()),
                 section.getDouble("turnSpeed", defaults.turnSpeed()));
+    }
+
+    /**
+     * Whether the model is drawn centred on its hidden body. Flying and swimming bodies are much smaller than the
+     * creatures they carry, so those species centre by default; walkers stand on their body's feet.
+     */
+    static boolean centerOnBody(ConfigurationSection config, MindBodyLocomotion locomotion) {
+        return config.getBoolean("centerOnBody",
+                locomotion == MindBodyLocomotion.FLYING || locomotion == MindBodyLocomotion.AQUATIC);
     }
 
     /** The species a pet file defines, or null when the file is disabled or unreadable. */
@@ -375,5 +386,10 @@ public final class PetSpecies {
     /** How the model leans with its travel. */
     public TravelOrientation orientation() {
         return orientation;
+    }
+
+    /** Whether the model is drawn centred on its hidden body rather than standing on its feet. */
+    public boolean centerOnBody() {
+        return centerOnBody;
     }
 }

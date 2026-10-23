@@ -387,6 +387,8 @@ public class HitboxComponent {
         if (location == null) return;
 
         InteractionDimensions dimensions = interactionDimensions();
+        double lift = modeledEntity.getBoxLift(dimensions.height());
+        if (lift != 0D) location = location.clone().add(0, lift, 0);
         if (Float.compare(lastInteractionWidth, dimensions.width()) != 0
                 || Float.compare(lastInteractionHeight, dimensions.height()) != 0) {
             entity.setSize(dimensions.width(), dimensions.height());

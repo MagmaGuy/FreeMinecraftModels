@@ -295,6 +295,12 @@ public class OrientedBoundingBox {
     /**
      * Updates the half extents based on current scale
      */
+    /** Blocks above the entity's feet where the box starts: higher or lower for a model centred on its body. */
+    private double lift() {
+        ModeledEntity entity = associatedEntity;
+        return entity == null ? 0D : entity.getBoxLift(2D * halfExtents.y);
+    }
+
     private void updateHalfExtents() {
         if (scaleDirty) {
             halfExtents.set(baseHalfExtents).mul(scaleModifier);
@@ -338,7 +344,7 @@ public class OrientedBoundingBox {
                 // stationary must recompute both — otherwise the box keeps the old
                 // height offset until the entity next moves past the epsilon.
                 updateHalfExtents();
-                center.set(x, y + halfExtents.y, z);
+                center.set(x, y + lift() + halfExtents.y, z);
             }
             return this;
         }
@@ -354,7 +360,7 @@ public class OrientedBoundingBox {
         // Update position - account for scale in Y offset
         center.set(
                 x,
-                y + halfExtents.y,            // ← use scaled half-extents
+                y + lift() + halfExtents.y,   // ← use scaled half-extents
                 z
         );
 

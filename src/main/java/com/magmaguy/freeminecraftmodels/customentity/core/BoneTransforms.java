@@ -88,21 +88,26 @@ public class BoneTransforms {
     }
 
     /**
-     * Leans the whole model by its body tilt: a world-space rotation about the middle of its height, applied to the
-     * root after everything else, so every bone, locator and mount point follows.
+     * Places the whole model on its body: raised or lowered by its body offset (a model centred on its body) and
+     * leaned by its body tilt, a world-space rotation about the middle of its cubes. Applied to the root after
+     * everything else, so every bone, locator and mount point follows.
      */
     private void tiltBody() {
         if (parent != null) return;
         ModeledEntity modeledEntity = bone.getSkeleton().getModeledEntity();
-        Quaterniondc tilt = modeledEntity == null ? null : modeledEntity.getBodyTilt();
-        if (tilt == null) return;
+        if (modeledEntity == null) return;
+        Quaterniondc tilt = modeledEntity.getBodyTilt();
+        double offset = modeledEntity.getBodyOffset();
+        if (tilt == null && offset == 0D) return;
         if (tiltMatrix == null) tiltMatrix = new TransformationMatrix();
-        float pivot = (float) modeledEntity.getBodyTiltPivotHeight();
-        tilt.getEulerAnglesZYX(tiltAngles);
+        float middle = (float) modeledEntity.getModelMiddleHeight();
         tiltMatrix.resetToIdentityMatrix();
-        tiltMatrix.translateLocal(0, pivot, 0);
-        tiltMatrix.rotateLocal(tiltAngles.x, tiltAngles.y, tiltAngles.z);
-        tiltMatrix.translateLocal(0, -pivot, 0);
+        tiltMatrix.translateLocal(0, (float) (middle + offset), 0);
+        if (tilt != null) {
+            tilt.getEulerAnglesZYX(tiltAngles);
+            tiltMatrix.rotateLocal(tiltAngles.x, tiltAngles.y, tiltAngles.z);
+        }
+        tiltMatrix.translateLocal(0, -middle, 0);
         TransformationMatrix.multiplyMatrices(tiltMatrix, localMatrix, localMatrix);
     }
 

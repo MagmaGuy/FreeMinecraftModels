@@ -104,6 +104,9 @@ final class DayPerchBehavior implements MindBehavior {
         PetSpecies species = control.species();
         int depth = (int) Math.ceil(species.hoverHeight() + species.hoverVariance()) + 3;
         int radius = settings.searchRadius();
+        // A model centred on its body hangs below the body's feet; lift the body so the model, not the body, rests
+        // at the perch height.
+        double sink = control.modeled() == null ? 0D : Math.max(0D, -control.modeled().getModelBottomHeight());
         Location leaves = null;
         double leavesScore = Double.MAX_VALUE;
         Location ground = null;
@@ -118,13 +121,13 @@ final class DayPerchBehavior implements MindBehavior {
                     if (type.isAir() || block.isPassable()) continue;
                     if (Tag.LEAVES.isTagged(type)) {
                         double score = dx * dx + dz * dz + (from.getY() - y) * 0.5D;
-                        Location top = new Location(world, x + 0.5D, y + 1D + settings.height(), z + 0.5D);
+                        Location top = new Location(world, x + 0.5D, y + 1D + settings.height() + sink, z + 0.5D);
                         if (score < leavesScore && withinLeash(top)) {
                             leavesScore = score;
                             leaves = top;
                         }
                     } else if (dx == 0 && dz == 0 && type.isSolid()) {
-                        ground = new Location(world, from.getX(), y + 1D + settings.height(), from.getZ());
+                        ground = new Location(world, from.getX(), y + 1D + settings.height() + sink, from.getZ());
                     }
                     break;
                 }
