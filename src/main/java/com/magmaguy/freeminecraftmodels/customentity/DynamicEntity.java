@@ -60,9 +60,10 @@ public class DynamicEntity extends ModeledEntity {
     @Getter
     private boolean viewerTrackedBody = false;
     /**
-     * When true and the model has a {@code hitbox} bone, clients get an invisible Interaction entity the size of that
-     * bone, so players click the model they see instead of the body's own box. Off by default: a box that covers a
-     * long or rotated model would also catch clicks in its empty corners. Takes effect within two ticks.
+     * When true, clients get an invisible Interaction entity over the model, so players click the model they see
+     * instead of the body's own box. It takes the size of the model's {@code hitbox} bone, or of the model's own
+     * bounds when it has none. Off by default: a box that covers a long or rotated model would also catch clicks in
+     * its empty corners. Takes effect within two ticks.
      */
     @Getter
     @Setter

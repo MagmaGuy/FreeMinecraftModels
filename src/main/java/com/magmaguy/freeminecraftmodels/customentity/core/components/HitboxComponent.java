@@ -10,6 +10,8 @@ import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.OBBHitDetection;
 import com.magmaguy.freeminecraftmodels.customentity.core.OrientedBoundingBox;
+import com.magmaguy.freeminecraftmodels.dataconverter.HitboxBlueprint;
+import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import com.magmaguy.freeminecraftmodels.packets.PacketEntityDisplayHelper;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -35,7 +37,7 @@ public class HitboxComponent {
     // the primary thread; the interaction is hidden while a player steers, or their crosshair would never leave it.
     private volatile boolean steerableMount;
     private boolean mountInteractionHidden;
-    // Whether the last primary-thread sync found this model asking for a click surface it can size (see
+    // Whether the last primary-thread sync found this model asking for a click surface (see
     // DynamicEntity#setClickSurface), so withdrawing the request can take that surface away again.
     private boolean clickSurfaceApplied;
     private final InteractionAliasRegistry interactionAliases = new InteractionAliasRegistry(
@@ -107,12 +109,12 @@ public class HitboxComponent {
     private void syncClickSurface() {
         if (!(modeledEntity instanceof DynamicEntity dynamicEntity)) return;
         steerableMount = dynamicEntity.isSteerableMount();
-        boolean clickSurface = dynamicEntity.isClickSurface() && hasHitboxBone();
+        boolean clickSurface = dynamicEntity.isClickSurface();
         boolean withdrawn = clickSurfaceApplied && !clickSurface;
         clickSurfaceApplied = clickSurface;
         if (withdrawn && !takesPacketInteraction()) discardPacketInteractionEntity();
         if (packetInteractionEntity == null) {
-            if (bodiedModelTakesInteraction(steerableMount, clickSurface, true) && !modeledEntity.isRemoved())
+            if (bodiedModelTakesInteraction(steerableMount, clickSurface) && !modeledEntity.isRemoved())
                 createPacketInteractionEntity();
             if (packetInteractionEntity == null) return;
         }
@@ -171,8 +173,9 @@ public class HitboxComponent {
      * axis-aligned square large enough to cover a long or rotated OBB would
      * swallow unrelated clicks in its empty corners. A steerable mount is the
      * exception: every click on it is meant to seat the rider. So is a dynamic
-     * model that asks for a click surface ({@link DynamicEntity#setClickSurface})
-     * and has a hitbox bone, which gives the surface its size.
+     * model that asks for a click surface ({@link DynamicEntity#setClickSurface}).
+     * Either is sized from its hitbox bone, or from the model's own bounds when it
+     * has none.
      */
     public void createPacketInteractionEntity() {
         if (packetInteractionEntity != null) return;
@@ -180,7 +183,7 @@ public class HitboxComponent {
         steerableMount = modeledEntity instanceof DynamicEntity dynamicEntity && dynamicEntity.isSteerableMount();
         if (!takesPacketInteraction()) return;
 
-        InteractionDimensions dimensions = interactionDimensions(modeledEntity.getLocation());
+        InteractionDimensions dimensions = interactionDimensions();
 
         try {
             packetInteractionEntity = NMSManager.getAdapter().createPacketInteractionEntity(
@@ -221,22 +224,20 @@ public class HitboxComponent {
     /** Whether this model gets a packet Interaction entity now; see {@link #createPacketInteractionEntity()}. */
     private boolean takesPacketInteraction() {
         if (modeledEntity.getUnderlyingEntity() == null || modeledEntity instanceof PropEntity) return true;
-        return bodiedModelTakesInteraction(steerableMount,
-                modeledEntity instanceof DynamicEntity dynamicEntity && dynamicEntity.isClickSurface(),
-                hasHitboxBone());
+        return bodiedModelTakesInteraction(steerableMount, requestsClickSurface());
+    }
+
+    private boolean requestsClickSurface() {
+        return modeledEntity instanceof DynamicEntity dynamicEntity && dynamicEntity.isClickSurface();
     }
 
     /**
-     * Whether a model with a body gets a packet Interaction entity. Otherwise its clicks reach it through the body's
-     * own box and the exact OBB routing. A mount takes every click to seat its rider. A model that asks for a click
-     * surface gets one only when its hitbox bone gives the size.
+     * Whether a model with a body gets a packet Interaction entity over the whole model. Otherwise its clicks reach
+     * it through the body's own box and the exact OBB routing. A mount takes every click to seat its rider, and a
+     * model can ask for one with {@link DynamicEntity#setClickSurface}.
      */
-    static boolean bodiedModelTakesInteraction(boolean steerableMount, boolean clickSurface, boolean hasHitboxBone) {
-        return steerableMount || clickSurface && hasHitboxBone;
-    }
-
-    private boolean hasHitboxBone() {
-        return modeledEntity.getSkeletonBlueprint().getHitbox() != null;
+    static boolean bodiedModelTakesInteraction(boolean steerableMount, boolean clickSurface) {
+        return steerableMount || clickSurface;
     }
 
     /**
@@ -385,7 +386,7 @@ public class HitboxComponent {
         Location location = modeledEntity.getLocation();
         if (location == null) return;
 
-        InteractionDimensions dimensions = interactionDimensions(location);
+        InteractionDimensions dimensions = interactionDimensions();
         if (Float.compare(lastInteractionWidth, dimensions.width()) != 0
                 || Float.compare(lastInteractionHeight, dimensions.height()) != 0) {
             entity.setSize(dimensions.width(), dimensions.height());
@@ -412,21 +413,25 @@ public class HitboxComponent {
         lastInteractionLocation = location.clone();
     }
 
-    private InteractionDimensions interactionDimensions(Location location) {
-        double scale = modeledEntity.getScaleModifier();
+    private InteractionDimensions interactionDimensions() {
+        SkeletonBlueprint blueprint = modeledEntity.getSkeletonBlueprint();
+        return interactionDimensions(blueprint.getHitbox(), blueprint.getModelWidth(), blueprint.getModelTop(),
+                bodiedModelTakesInteraction(steerableMount, requestsClickSurface()), modeledEntity.getScaleModifier());
+    }
+
+    /**
+     * The client Interaction box, scaled with the model: the hitbox bone when the model has one, otherwise the
+     * model's own bounds for a model clicked as a whole, otherwise one block wide and two tall.
+     */
+    static InteractionDimensions interactionDimensions(HitboxBlueprint hitbox, double modelWidth, double modelTop,
+                                                       boolean wholeModel, double scale) {
         if (!Double.isFinite(scale) || scale <= 0D) scale = 1D;
-        if (modeledEntity.getSkeletonBlueprint().getHitbox() == null) {
-            // A mount's click surface is its whole body.
-            if (steerableMount) return new InteractionDimensions(
-                    (float) (modeledEntity.getSkeletonBlueprint().getModelWidth() * scale),
-                    (float) (modeledEntity.getSkeletonBlueprint().getModelTop() * scale));
+        if (hitbox == null) {
+            if (wholeModel) return new InteractionDimensions((float) (modelWidth * scale), (float) (modelTop * scale));
             return new InteractionDimensions((float) scale, (float) (2D * scale));
         }
-        float width = compactPacketInteractionWidth(
-                modeledEntity.getSkeletonBlueprint().getHitbox().getWidthX(),
-                modeledEntity.getSkeletonBlueprint().getHitbox().getWidthZ());
-        float height = (float) Math.abs(
-                modeledEntity.getSkeletonBlueprint().getHitbox().getHeight());
+        float width = compactPacketInteractionWidth(hitbox.getWidthX(), hitbox.getWidthZ());
+        float height = (float) Math.abs(hitbox.getHeight());
         return new InteractionDimensions(width * (float) scale, height * (float) scale);
     }
 
@@ -474,6 +479,6 @@ public class HitboxComponent {
         lastInteractionHeight = Float.NaN;
     }
 
-    private record InteractionDimensions(float width, float height) {
+    record InteractionDimensions(float width, float height) {
     }
 }

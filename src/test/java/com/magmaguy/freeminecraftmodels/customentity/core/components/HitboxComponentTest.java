@@ -2,10 +2,14 @@ package com.magmaguy.freeminecraftmodels.customentity.core.components;
 
 import com.magmaguy.easyminecraftgoals.internal.PacketEntityInteractionManager;
 import com.magmaguy.easyminecraftgoals.internal.PacketInteractionContext;
+import com.magmaguy.freeminecraftmodels.dataconverter.HitboxBlueprint;
 import org.bukkit.inventory.EquipmentSlot;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -32,21 +36,52 @@ class HitboxComponentTest {
 
     @Test
     void bodiedModelKeepsClicksOnItsBodyAndObbUnlessItAsksForAClickSurface() {
-        assertFalse(HitboxComponent.bodiedModelTakesInteraction(false, false, true),
+        assertFalse(HitboxComponent.bodiedModelTakesInteraction(false, false),
                 "an ordinary boss must not gain an axis-aligned box over its rotated OBB");
-        assertTrue(HitboxComponent.bodiedModelTakesInteraction(false, true, true),
-                "a model that asks for a click surface gets one sized from its hitbox bone");
+        assertTrue(HitboxComponent.bodiedModelTakesInteraction(false, true),
+                "a model that asks for a click surface gets one, with or without a hitbox bone");
     }
 
     @Test
-    void clickSurfaceNeedsAHitboxBoneToSizeIt() {
-        assertFalse(HitboxComponent.bodiedModelTakesInteraction(false, true, false));
+    void steerableMountTakesAClickSurface() {
+        assertTrue(HitboxComponent.bodiedModelTakesInteraction(true, false));
     }
 
     @Test
-    void steerableMountTakesAClickSurfaceWithOrWithoutAHitboxBone() {
-        assertTrue(HitboxComponent.bodiedModelTakesInteraction(true, false, false));
-        assertTrue(HitboxComponent.bodiedModelTakesInteraction(true, false, true));
+    void clickSurfaceWithoutAHitboxBoneCoversTheModelsOwnBounds() {
+        HitboxComponent.InteractionDimensions dimensions =
+                HitboxComponent.interactionDimensions(null, 1.5D, 2.25D, true, 2D);
+        assertEquals(3F, dimensions.width(), 1.0E-6F);
+        assertEquals(4.5F, dimensions.height(), 1.0E-6F);
+    }
+
+    @Test
+    void hitboxBoneSizesTheClickSurfaceWhenTheModelHasOne() {
+        HitboxComponent.InteractionDimensions dimensions =
+                HitboxComponent.interactionDimensions(hitbox(-4, 5, -6, 4, 34, 6), 9D, 9D, true, 1D);
+        // The narrower of the cube's 8 and 12 pixel sides, and its 29 pixel height.
+        assertEquals(.5F, dimensions.width(), 1.0E-6F);
+        assertEquals(29F / 16F, dimensions.height(), 1.0E-4F);
+    }
+
+    @Test
+    void modelNotClickedAsAWholeKeepsTheDefaultBoxWithoutAHitboxBone() {
+        HitboxComponent.InteractionDimensions dimensions =
+                HitboxComponent.interactionDimensions(null, 9D, 9D, false, 1D);
+        assertEquals(1F, dimensions.width(), 1.0E-6F);
+        assertEquals(2F, dimensions.height(), 1.0E-6F);
+    }
+
+    private static HitboxBlueprint hitbox(double fromX, double fromY, double fromZ,
+                                          double toX, double toY, double toZ) {
+        Map<String, Object> cube = new HashMap<>();
+        cube.put("from", new ArrayList<>(List.of(fromX, fromY, fromZ)));
+        cube.put("to", new ArrayList<>(List.of(toX, toY, toZ)));
+        HashMap<String, Object> values = new HashMap<>();
+        values.put("cube", cube);
+        Map<String, Object> bone = new HashMap<>();
+        bone.put("children", new ArrayList<>(List.of("cube")));
+        return new HitboxBlueprint(bone, values, "test_model", null);
     }
 
     @Test
