@@ -339,6 +339,36 @@ public class SkeletonBlueprint {
         return modelTop;
     }
 
+    private Double modelBottom;
+
+    /**
+     * Height of the model's lowest cube at rest, in blocks at scale 1, skipping the hitbox and name-tag bones.
+     * Falls back to 0 for a model without cubes.
+     */
+    public double getModelBottom() {
+        if (modelBottom != null) return modelBottom;
+        double bottom = Double.POSITIVE_INFINITY;
+        for (BoneBlueprint root : mainModel) bottom = Math.min(bottom, cubeBottom(root));
+        modelBottom = Double.isFinite(bottom) ? bottom / 16d : 0d;
+        return modelBottom;
+    }
+
+    private static double cubeBottom(BoneBlueprint bone) {
+        double bottom = Double.POSITIVE_INFINITY;
+        String name = bone.getBoneName() == null ? "" : bone.getBoneName();
+        if (!name.equalsIgnoreCase("hitbox") && !bone.isNameTag()) {
+            for (CubeBlueprint cube : bone.getCubeBlueprintChildren()) {
+                Map<String, Object> json = cube.getOriginalCubeJSON();
+                for (String key : new String[]{"from", "to"}) {
+                    if (!(json.get(key) instanceof List<?> point) || point.size() < 2 || !(point.get(1) instanceof Number y)) continue;
+                    bottom = Math.min(bottom, y.doubleValue());
+                }
+            }
+        }
+        for (BoneBlueprint child : bone.getBoneBlueprintChildren()) bottom = Math.min(bottom, cubeBottom(child));
+        return bottom;
+    }
+
     private Double modelWidth;
 
     /**

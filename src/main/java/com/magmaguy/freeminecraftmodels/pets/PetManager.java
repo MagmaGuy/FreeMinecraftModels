@@ -268,6 +268,7 @@ public final class PetManager {
         control.attach(entity, modeled, mind);
         // Clicks land on the model players see, not on the small body hidden inside it.
         modeled.setClickSurface(true);
+        modeled.setTravelOrientation(pet.orientation());
         modeled.setDisplayName(displayName(control));
         byBody.put(entity.getUniqueId(), control);
         if (owner != null && record != null) ownedBodies.computeIfAbsent(owner, ignored -> new HashMap<>()).put(record.id, control);

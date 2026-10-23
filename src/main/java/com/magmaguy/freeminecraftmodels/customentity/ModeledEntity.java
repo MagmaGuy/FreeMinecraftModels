@@ -25,6 +25,9 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.*;
 import org.bukkit.persistence.PersistentDataType;
+import org.checkerframework.checker.nullness.qual.Nullable;
+import org.joml.Quaterniond;
+import org.joml.Quaterniondc;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -98,6 +101,9 @@ public class ModeledEntity {
     // Fixed light for every display bone; -1 while the bones take the light where they are.
     private volatile int brightnessBlockLight = -1;
     private volatile int brightnessSkyLight = -1;
+    // World-space lean of the whole model about its middle, after its facing; null while upright. Never mutated
+    // after publication, so the model clock and viewer admission read it without locking.
+    private volatile Quaterniondc bodyTilt;
 
     public ModeledEntity(String entityID, Location spawnLocation) {
         this.entityID = entityID;
@@ -498,6 +504,28 @@ public class ModeledEntity {
         if (underlyingEntity != null) return underlyingEntity.getLocation();
         if (currentLocation != null) return currentLocation.clone();
         return null;
+    }
+
+    /** The world-space lean the whole model takes about its middle, or null while it stands upright. */
+    @Nullable
+    public Quaterniondc getBodyTilt() {
+        return bodyTilt;
+    }
+
+    /**
+     * Leans the whole model: a world-space rotation about the middle of its height, applied after it faces its
+     * heading and after its animations. Pass null to stand it upright. A {@link DynamicEntity} with a travel
+     * orientation other than upright sets this every tick from its travel.
+     */
+    public void setBodyTilt(@Nullable Quaterniondc tilt) {
+        bodyTilt = tilt == null ? null : new Quaterniond(tilt);
+    }
+
+    /** Blocks above the model's feet that a body tilt turns about: the middle of its cubes at its current scale. */
+    public double getBodyTiltPivotHeight() {
+        SkeletonBlueprint blueprint = getSkeletonBlueprint();
+        if (blueprint == null) return 0D;
+        return (blueprint.getModelBottom() + blueprint.getModelTop()) / 2D * scaleModifier;
     }
 
     /**
