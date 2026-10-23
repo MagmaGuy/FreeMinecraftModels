@@ -164,6 +164,8 @@ public final class FreeMinecraftModels extends JavaPlugin {
         magicWeaponRuntime = null;
         if (magicEnchantmentCatalog != null) magicEnchantmentCatalog.close();
         magicEnchantmentCatalog = null;
+        com.magmaguy.freeminecraftmodels.pets.PetManager.stop();
+        com.magmaguy.freeminecraftmodels.pets.PetsMenu.shutdown();
         ModeledEntitiesClock.shutdown();
         OBBHitDetection.shutdown();
         Bukkit.getServer().getScheduler().cancelTasks(MetadataHandler.PLUGIN);
@@ -196,6 +198,8 @@ public final class FreeMinecraftModels extends JavaPlugin {
         new DefaultConfig();
         initializationContext.step("Shop Config");
         new ShopConfig();
+        initializationContext.step("Pets Config");
+        new com.magmaguy.freeminecraftmodels.config.PetsConfig();
         initializationContext.step("Content Importer");
         MagmaCore.initializeImporter(this);
         initializationContext.step("Output Folder");
@@ -287,6 +291,8 @@ public final class FreeMinecraftModels extends JavaPlugin {
         manager.registerCommand(new CraftifyCommand());
         manager.registerCommand(new AdminCommand());
         manager.registerCommand(new GiveItemCommand());
+        manager.registerCommand(new com.magmaguy.freeminecraftmodels.commands.PetsCommand());
+        manager.registerCommand(new com.magmaguy.freeminecraftmodels.commands.PetAdminCommand());
 
         VaultEconomyHook.initialize();
         if (ShopConfig.isEnabled() && VaultEconomyHook.isEnabled()) {
@@ -324,6 +330,11 @@ public final class FreeMinecraftModels extends JavaPlugin {
             PropRecipeManager.logRejectedCatalog(failure, STARTUP_RECIPES_REJECTED);
         }
         pendingRecipes = null;
+
+        initializationContext.step("Pets");
+        Bukkit.getPluginManager().registerEvents(new com.magmaguy.freeminecraftmodels.pets.PetListeners(), this);
+        Bukkit.getPluginManager().registerEvents(new com.magmaguy.freeminecraftmodels.pets.PetsMenu.Events(), this);
+        com.magmaguy.freeminecraftmodels.pets.PetManager.start(this);
 
         initializationContext.step("Metrics");
         metrics = new Metrics(this, 19337);
@@ -392,6 +403,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
                     PropEntity.onStartup();
                     ModeledEntitiesClock.start();
                     OBBHitDetection.startProjectileDetection();
+                    com.magmaguy.freeminecraftmodels.pets.PetManager.initialize();
                 },
                 () -> {
                     notifyResourcePackManager();
@@ -473,6 +485,9 @@ public final class FreeMinecraftModels extends JavaPlugin {
         // before clearing them. In particular, the one-tick model clock is
         // asynchronous and otherwise races this teardown.
         if (magicWeaponRuntime != null) magicWeaponRuntime.pauseForContentReload();
+        // Pets go before the models they wear; they come back once the new models are active.
+        com.magmaguy.freeminecraftmodels.pets.PetManager.shutdown();
+        com.magmaguy.freeminecraftmodels.pets.PetsMenu.shutdown();
         ModeledEntitiesClock.shutdown();
         OBBHitDetection.pauseProjectileDetection();
         ModelMenuHelper.shutdown();
