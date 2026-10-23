@@ -213,7 +213,28 @@ public final class PetManager {
         return spawn(pet, owner.getUniqueId(), record, record.model, record.baby, at, null);
     }
 
+    /**
+     * Puts a wild pet on a migration route: an ordinary wild pet of the species, wearing its full model, flying the
+     * route at the top of its Mind program. It is sizeMultiplier times the species' size, seen from viewDistance blocks
+     * and lit fully bright. A player who reaches it can tame it like any wild pet.
+     */
+    public PetControl spawnMigrant(PetSpecies pet, Location at, String model, double sizeMultiplier, int viewDistance,
+                                   MigrationRoute route) {
+        PetControl control = spawn(pet, null, null, model != null ? model : pet.pickVariant(ThreadLocalRandom.current()), false,
+                at, at, sizeMultiplier);
+        if (control == null) return null;
+        control.setRoute(route);
+        control.modeled().setViewDistanceOverride(viewDistance);
+        control.modeled().setBrightnessOverride(15, 15);
+        return control;
+    }
+
     private PetControl spawn(PetSpecies pet, UUID owner, PetRecord record, String model, boolean baby, Location at, Location home) {
+        return spawn(pet, owner, record, model, baby, at, home, 1D);
+    }
+
+    private PetControl spawn(PetSpecies pet, UUID owner, PetRecord record, String model, boolean baby, Location at, Location home,
+                             double sizeMultiplier) {
         if (host == null || at.getWorld() == null) return null;
         String variant = model == null || FileModelConverter.getModel(model) == null ? pet.model() : model;
         String modelId = baby && pet.babyModel() != null ? pet.babyModel() : variant;
@@ -223,7 +244,7 @@ public final class PetManager {
         }
         PetControl control = new PetControl(pet, owner, record, variant, baby, home);
         MindHandle mind = host.open(UUID.randomUUID(), PetMindProgramFactory.create(MetadataHandler.PLUGIN, control));
-        double scale = pet.scale() * (baby ? pet.babyScale() : 1D);
+        double scale = pet.scale() * (baby ? pet.babyScale() : 1D) * sizeMultiplier;
         MindBodyProfile profile = new MindBodyProfile(pet.locomotion(), scale, false, pet.body().getKey().toString());
         MobBody body;
         try {
@@ -541,6 +562,8 @@ public final class PetManager {
         for (PetControl control : new ArrayList<>(byBody.values())) {
             if (!control.isWild()) continue;
             LivingEntity body = control.body();
+            // A migrant's flock decides when it leaves, whatever the mode or the distance.
+            if (control.route() != null && body != null && body.isValid()) continue;
             if (body == null || !body.isValid() || PetsConfig.mode != PetsConfig.Mode.CREATURES
                     || nearestPlayerDistance(body.getLocation()) > despawnDistance)
                 despawn(control);
@@ -576,7 +599,8 @@ public final class PetManager {
     private int wildNear(Location location, double radius, PetSpecies only) {
         int count = 0;
         for (PetControl control : byBody.values()) {
-            if (!control.isWild() || (only != null && control.species() != only)) continue;
+            // Migrants pass through; they do not fill the wild caps.
+            if (!control.isWild() || control.route() != null || (only != null && control.species() != only)) continue;
             LivingEntity body = control.body();
             if (body != null && body.getWorld() == location.getWorld() && body.getLocation().distance(location) <= radius) count++;
         }

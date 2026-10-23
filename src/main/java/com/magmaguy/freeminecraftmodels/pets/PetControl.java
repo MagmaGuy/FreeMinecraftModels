@@ -30,6 +30,8 @@ public final class PetControl {
     private Location home;
     private long loveUntilTick;
     private long lastInteractionTick = Long.MIN_VALUE / 2;
+    // Set on a wild pet flying a migration; null for every other pet.
+    private MigrationRoute route;
 
     PetControl(PetSpecies species, UUID owner, PetRecord record, String model, boolean baby, Location home) {
         this.species = species;
@@ -93,6 +95,15 @@ public final class PetControl {
         this.body = body;
         this.modeled = modeled;
         this.mind = mind;
+    }
+
+    /** The migration this wild pet is flying, or null. */
+    public MigrationRoute route() {
+        return route;
+    }
+
+    void setRoute(MigrationRoute route) {
+        this.route = route;
     }
 
     void setModeled(DynamicEntity modeled) {

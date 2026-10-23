@@ -33,6 +33,7 @@ final class PetMindProgramFactory {
     static MindProgram create(Plugin plugin, PetControl control) {
         String owner = control.isWild() ? "wild" : "owned";
         MindProgram.Builder builder = MindProgram.builder(new NamespacedKey(plugin, "pet/" + control.species().id() + "/" + owner).toString(), 1L)
+                .behavior(new MigrationBehavior(control))
                 .behavior(new StayBehavior(control))
                 .behavior(new FollowOwnerBehavior(control))
                 .behavior(new DriftBehavior(control))
@@ -89,6 +90,48 @@ final class PetMindProgramFactory {
         // Only a flying body takes a velocity; a walking or swimming species paths there natively instead.
         if (!context.actuator().steerFlight(current.add(change)) && distance >= 0.5D)
             context.actuator().moveTo(target, Math.max(0.6D, cruise * 4D));
+    }
+
+    /** On a migration: fly the flock's route ahead of everything else, until it ends or the pet is tamed. */
+    private static final class MigrationBehavior implements MindBehavior {
+        private final PetControl control;
+
+        private MigrationBehavior(PetControl control) {
+            this.control = control;
+        }
+
+        @Override
+        public String identifier() {
+            return "freeminecraftmodels:pet/migrate";
+        }
+
+        @Override
+        public int priority() {
+            return 1;
+        }
+
+        @Override
+        public Set<MindControl> controls() {
+            return MOVE_AND_LOOK;
+        }
+
+        @Override
+        public boolean canStart(MindContext context) {
+            MigrationRoute route = control.route();
+            return route != null && route.target(control) != null;
+        }
+
+        @Override
+        public void tick(MindContext context) {
+            MigrationRoute route = control.route();
+            Location target = route == null ? null : route.target(control);
+            if (target != null) steer(context, target, route.cruise());
+        }
+
+        @Override
+        public void stop(MindContext context, MindStopReason reason) {
+            context.actuator().stopMoving();
+        }
     }
 
     /** Told to stay: hold the spot, with a gentle bob so it never looks parked. */

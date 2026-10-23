@@ -21,8 +21,9 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * Night migrations: now and then a flock of a migrating species crosses the sky over a player, drawn only with
- * packets, and is gone after a minute. Each player gets one roll per night, the first time the schedule sees them in
+ * Night migrations: now and then a flock of a migrating species crosses the sky over a player and is gone after the
+ * crossing. The members are wild pets of the species on a migration route, so they look and animate like the pets,
+ * and a player who reaches one can tame it. Each player gets one roll per night, the first time the schedule sees them in
  * that night; a won roll picks a moment in the rest of the night, and the flock starts then if the player is under
  * open sky (otherwise it tries again until the night runs out). Species take part through a {@code migration:}
  * section in their pet file; the schedule's own settings live in pets.yml.
@@ -37,7 +38,7 @@ public final class PetMigrations {
     }
 
     private static final int SCHEDULE_TICKS = 100;
-    private static Settings settings = new Settings(true, 0.15D, 8, 14, 28D, 0.3D, 1200, 160, 3, List.of());
+    private static Settings settings = new Settings(true, 0.15D, 8, 14, 28D, 0.15D, 1800, 160, 3, List.of());
 
     private final Plugin plugin;
     private final Map<UUID, Roll> rolls = new HashMap<>();
@@ -51,7 +52,8 @@ public final class PetMigrations {
     public static void loadSettings(FileConfiguration config) {
         boolean enabled = ConfigurationEngine.setBoolean(
                 List.of("Night migrations: rare flocks of a migrating pet species crossing the night sky over players.",
-                        "They are drawn with packets only, never mobs, and leave after durationSeconds.",
+                        "The members are wild pets of the species flying a migration route: same model and animations,",
+                        "and in CREATURES mode a player who reaches one can tame it. They leave after durationSeconds.",
                         "A species migrates when its pet file has a migration: section."),
                 config, "migrations.enabled", true);
         double chance = ConfigurationEngine.setDouble(
@@ -64,11 +66,11 @@ public final class PetMigrations {
                 List.of("Blocks above the higher of the player and the ground under them that the flock flies at."),
                 config, "migrations.altitude", 28D);
         double speed = ConfigurationEngine.setDouble(
-                List.of("Flock speed in blocks per tick (0.3 is 6 blocks a second)."),
-                config, "migrations.speed", 0.3D);
+                List.of("Flock speed in blocks per tick (0.15 is 3 blocks a second)."),
+                config, "migrations.speed", 0.15D);
         double duration = ConfigurationEngine.setDouble(
                 List.of("Seconds from the flock appearing to its removal. It passes over the player halfway through."),
-                config, "migrations.durationSeconds", 60D);
+                config, "migrations.durationSeconds", 90D);
         int viewDistance = ConfigurationEngine.setInt(
                 List.of("Blocks from which players see a flock; well past the usual model view distance.",
                         "Clients still need the chunks the flock flies over within their render distance."),
@@ -145,7 +147,7 @@ public final class PetMigrations {
         PetSpecies chosen = species != null ? species : pick(manager, current);
         if (chosen == null) return null;
         PetInteractions.Migration look = chosen.interactions().migration();
-        if (look == null) look = new PetInteractions.Migration(chosen.model(), null, 1D, null, 1D);
+        if (look == null) look = new PetInteractions.Migration(null, 1D, null, 1D);
         MigrationFlock flock = MigrationFlock.launch(plugin, player, chosen, look, current);
         if (flock != null) flocks.add(flock);
         return flock;
