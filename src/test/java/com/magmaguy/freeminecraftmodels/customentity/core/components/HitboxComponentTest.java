@@ -31,6 +31,25 @@ class HitboxComponentTest {
     }
 
     @Test
+    void bodiedModelKeepsClicksOnItsBodyAndObbUnlessItAsksForAClickSurface() {
+        assertFalse(HitboxComponent.bodiedModelTakesInteraction(false, false, true),
+                "an ordinary boss must not gain an axis-aligned box over its rotated OBB");
+        assertTrue(HitboxComponent.bodiedModelTakesInteraction(false, true, true),
+                "a model that asks for a click surface gets one sized from its hitbox bone");
+    }
+
+    @Test
+    void clickSurfaceNeedsAHitboxBoneToSizeIt() {
+        assertFalse(HitboxComponent.bodiedModelTakesInteraction(false, true, false));
+    }
+
+    @Test
+    void steerableMountTakesAClickSurfaceWithOrWithoutAHitboxBone() {
+        assertTrue(HitboxComponent.bodiedModelTakesInteraction(true, false, false));
+        assertTrue(HitboxComponent.bodiedModelTakesInteraction(true, false, true));
+    }
+
+    @Test
     void nativeBackingAliasAlwaysPassesToTheCancellableBukkitPath() {
         assertEquals(PacketEntityInteractionManager.RoutingDecision.PASS,
                 HitboxComponent.aliasRoutingDecision(

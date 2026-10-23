@@ -35,6 +35,9 @@ public class HitboxComponent {
     // the primary thread; the interaction is hidden while a player steers, or their crosshair would never leave it.
     private volatile boolean steerableMount;
     private boolean mountInteractionHidden;
+    // Whether the last primary-thread sync found this model asking for a click surface it can size (see
+    // DynamicEntity#setClickSurface), so withdrawing the request can take that surface away again.
+    private boolean clickSurfaceApplied;
     private final InteractionAliasRegistry interactionAliases = new InteractionAliasRegistry(
             PacketEntityInteractionManager.getInstance());
 
@@ -88,7 +91,7 @@ public class HitboxComponent {
             throw new IllegalStateException(
                     "Model hitbox contacts must run on the primary thread");
         }
-        syncMountInteraction();
+        syncClickSurface();
         if (modeledEntity.getInteractionComponent()
                 .getHitboxContactCallback() == null) return;
         Location location = modeledEntity.getLocation();
@@ -97,12 +100,20 @@ public class HitboxComponent {
         checkPlayerCollisions();
     }
 
-    /** Gives a mount its click surface once it can be ridden, and keeps it off while a player steers. */
-    private void syncMountInteraction() {
+    /**
+     * Gives a dynamic model its click surface once it can be ridden or asks for one, takes away a surface it only had
+     * because it asked once it stops asking, and keeps a mount's off while a player steers.
+     */
+    private void syncClickSurface() {
         if (!(modeledEntity instanceof DynamicEntity dynamicEntity)) return;
         steerableMount = dynamicEntity.isSteerableMount();
+        boolean clickSurface = dynamicEntity.isClickSurface() && hasHitboxBone();
+        boolean withdrawn = clickSurfaceApplied && !clickSurface;
+        clickSurfaceApplied = clickSurface;
+        if (withdrawn && !takesPacketInteraction()) discardPacketInteractionEntity();
         if (packetInteractionEntity == null) {
-            if (steerableMount && !modeledEntity.isRemoved()) createPacketInteractionEntity();
+            if (bodiedModelTakesInteraction(steerableMount, clickSurface, true) && !modeledEntity.isRemoved())
+                createPacketInteractionEntity();
             if (packetInteractionEntity == null) return;
         }
         boolean hide = steerableMount && dynamicEntity.hasSteeringRider();
@@ -159,14 +170,15 @@ public class HitboxComponent {
      * stay on exact OBB air/block routing plus their backing-ID alias: a single
      * axis-aligned square large enough to cover a long or rotated OBB would
      * swallow unrelated clicks in its empty corners. A steerable mount is the
-     * exception: every click on it is meant to seat the rider.
+     * exception: every click on it is meant to seat the rider. So is a dynamic
+     * model that asks for a click surface ({@link DynamicEntity#setClickSurface})
+     * and has a hitbox bone, which gives the surface its size.
      */
     public void createPacketInteractionEntity() {
         if (packetInteractionEntity != null) return;
         if (modeledEntity.getLocation() == null) return;
         steerableMount = modeledEntity instanceof DynamicEntity dynamicEntity && dynamicEntity.isSteerableMount();
-        if (modeledEntity.getUnderlyingEntity() != null
-                && !(modeledEntity instanceof PropEntity) && !steerableMount) return;
+        if (!takesPacketInteraction()) return;
 
         InteractionDimensions dimensions = interactionDimensions(modeledEntity.getLocation());
 
@@ -204,6 +216,27 @@ public class HitboxComponent {
             removePacketInteractionEntity();
             throw activationFailure;
         }
+    }
+
+    /** Whether this model gets a packet Interaction entity now; see {@link #createPacketInteractionEntity()}. */
+    private boolean takesPacketInteraction() {
+        if (modeledEntity.getUnderlyingEntity() == null || modeledEntity instanceof PropEntity) return true;
+        return bodiedModelTakesInteraction(steerableMount,
+                modeledEntity instanceof DynamicEntity dynamicEntity && dynamicEntity.isClickSurface(),
+                hasHitboxBone());
+    }
+
+    /**
+     * Whether a model with a body gets a packet Interaction entity. Otherwise its clicks reach it through the body's
+     * own box and the exact OBB routing. A mount takes every click to seat its rider. A model that asks for a click
+     * surface gets one only when its hitbox bone gives the size.
+     */
+    static boolean bodiedModelTakesInteraction(boolean steerableMount, boolean clickSurface, boolean hasHitboxBone) {
+        return steerableMount || clickSurface && hasHitboxBone;
+    }
+
+    private boolean hasHitboxBone() {
+        return modeledEntity.getSkeletonBlueprint().getHitbox() != null;
     }
 
     /**
@@ -426,10 +459,16 @@ public class HitboxComponent {
      */
     public void removePacketInteractionEntity() {
         interactionAliases.clear();
+        discardPacketInteractionEntity();
+    }
+
+    /** Removes the client Interaction entity from every viewer and keeps the model's entity ID aliases. */
+    private void discardPacketInteractionEntity() {
         if (packetInteractionEntity != null) {
             packetInteractionEntity.remove();
             packetInteractionEntity = null;
         }
+        mountInteractionHidden = false;
         lastInteractionLocation = null;
         lastInteractionWidth = Float.NaN;
         lastInteractionHeight = Float.NaN;
