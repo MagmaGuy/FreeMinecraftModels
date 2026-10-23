@@ -14,6 +14,7 @@ import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
+import org.joml.Quaterniondc;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -39,6 +40,8 @@ public final class BedrockModeledEntity {
     private String activeAnimation;
     private String activeAction;
     private Map<String, Object> lastProperties = new LinkedHashMap<>();
+    // Null when the carrier has no room for the lean properties.
+    private final BedrockBodyLean bodyLean;
 
     public BedrockModeledEntity(ModeledEntity modeledEntity,
                                 FileModelConverter converter,
@@ -49,6 +52,9 @@ public final class BedrockModeledEntity {
 
         CustomEntityPropertySchema.Builder schema = CustomEntityPropertySchema.builder()
                 .addPackedBooleans(BedrockEntityBundleExporter.PROPERTY_NAMESPACE + ":anim", animations.size());
+        boolean leans = BedrockEntityBundleExporter.leans(animations.size());
+        if (leans) BedrockEntityBundleExporter.LEAN_PROPERTIES.forEach(schema::addInt);
+        this.bodyLean = leans ? new BedrockBodyLean() : null;
         float computedWidth = 1.0f;
         float computedHeight = 2.0f;
         if (modeledEntity.getSkeletonBlueprint().getHitbox() != null) {
@@ -219,10 +225,11 @@ public final class BedrockModeledEntity {
         if (!isAvailable()) {
             return;
         }
+        Location location = null;
         if (fakeCustomEntity != null) {
             // Only compute the carrier location when there is a fake carrier to move
             // (the bukkit-entity backend follows its underlying entity on its own).
-            Location location = bedrockCarrierLocation(modeledEntity.getLocation());
+            location = bedrockCarrierLocation(modeledEntity.getLocation());
             if (location != null && hasCarrierMoved(location)) {
                 fakeCustomEntity.teleport(location);
                 lastLocation = location.clone();
@@ -234,6 +241,21 @@ public final class BedrockModeledEntity {
             if (bukkitCustomEntity != null) bukkitCustomEntity.setScale(scale);
             lastScale = scale;
         }
+        tickLean(location);
+    }
+
+    /**
+     * Sends the model's body tilt to the carrier when it changed. The lean is sent in the model's own frame, so it
+     * takes the yaw the model faces: the fake carrier's own, or the model's for a carrier that is its mob.
+     */
+    private void tickLean(Location carrierLocation) {
+        if (bodyLean == null) return;
+        Quaterniondc tilt = modeledEntity.getBodyTilt();
+        if (tilt == null && !bodyLean.isLeaning()) return;
+        Location facing = carrierLocation != null ? carrierLocation : modeledEntity.getLocation();
+        if (facing == null) return;
+        Map<String, Object> lean = bodyLean.update(tilt, facing.getYaw());
+        if (lean != null) applyProperties(lean);
     }
 
     /**
@@ -288,10 +310,16 @@ public final class BedrockModeledEntity {
         }, delayTicks);
     }
 
+    /**
+     * Sets these properties and keeps the others as they were: the animation flags and the lean change apart. The
+     * merged copy replaces the last one whole, so a rebinding carrier reads a complete set.
+     */
     private void applyProperties(Map<String, Object> properties) {
-        lastProperties = new LinkedHashMap<>(properties);
-        if (fakeCustomEntity != null) fakeCustomEntity.setProperties(lastProperties);
-        if (bukkitCustomEntity != null) bukkitCustomEntity.setProperties(lastProperties);
+        Map<String, Object> merged = new LinkedHashMap<>(lastProperties);
+        merged.putAll(properties);
+        lastProperties = merged;
+        if (fakeCustomEntity != null) fakeCustomEntity.setProperties(properties);
+        if (bukkitCustomEntity != null) bukkitCustomEntity.setProperties(properties);
     }
 
     private Map<String, Object> initialProperties() {
