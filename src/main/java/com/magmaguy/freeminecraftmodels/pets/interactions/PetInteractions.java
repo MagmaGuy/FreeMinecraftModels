@@ -52,7 +52,8 @@ public final class PetInteractions {
     }
 
     /** The species' look in a night migration flock. A bone draws each member as that one bone, the cheap way. */
-    public record Migration(String model, String bone, double scale, String animation, double weight) {
+    /** model is a fixed model for every member, null to pick from the species' variants; scale multiplies its size. */
+    public record Migration(String model, double scale, String animation, double weight) {
     }
 
     public static final PetInteractions NONE = new PetInteractions(null, null, null, null, null, null, null);
@@ -178,9 +179,9 @@ public final class PetInteractions {
     private static Migration migration(ConfigurationSection config, String model) {
         ConfigurationSection section = enabled(config, "migration");
         if (section == null) return null;
-        String bone = section.getString("bone", "");
+        String fixed = section.getString("model", "");
         String animation = section.getString("animation", "");
-        return new Migration(section.getString("model", model), bone == null || bone.isBlank() ? null : bone,
+        return new Migration(fixed == null || fixed.isBlank() ? null : fixed,
                 Math.max(0.05D, section.getDouble("scale", 1D)),
                 animation == null || animation.isBlank() ? null : animation,
                 Math.max(0D, section.getDouble("weight", 1D)));
