@@ -144,6 +144,9 @@ public class SkeletonWatchers {
 
     // Clients gets a bit of drift due to some inaccuracies, this resyncs the skeleton
     private void resync(int elapsedTicks) {
+        // Viewers place ridden bones from the entity they ride, so nothing drifts; the hide+show would only blink
+        // the mount under its rider.
+        if (skeleton.isRidden()) return;
         long now = System.currentTimeMillis();
 
         // throttle: if we ran <1s ago, skip entirely

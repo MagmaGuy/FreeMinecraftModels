@@ -6,6 +6,8 @@ import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
 import com.magmaguy.freeminecraftmodels.customentity.core.IKChain;
 import com.magmaguy.freeminecraftmodels.dataconverter.AnimationsBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.IKAnimationFrame;
+import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
+import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.util.Vector;
 
@@ -62,6 +64,8 @@ public class AnimationManager {
     private Playback action;
     private boolean actionCustom = false;
     private boolean moving = false;
+    // Where a steered mount was last seen; its client moves it with absolute positions, so it has no velocity here.
+    private double lastX = Double.NaN, lastZ = Double.NaN;
 
     // Cross-fade into the base: from an outgoing animation that keeps playing, or from a frozen pose.
     private Playback fadeFrom;
@@ -163,6 +167,17 @@ public class AnimationManager {
         // Horizontal motion only, so gravity alone never starts the walk.
         Vector velocity = entity.getVelocity();
         moving = velocity.getX() != 0 || velocity.getZ() != 0;
+        if (!(modeledEntity instanceof DynamicEntity dynamicEntity) || !dynamicEntity.hasSteeringRider()) {
+            lastX = Double.NaN;
+            return;
+        }
+        // A player's client moves the mob it steers and the server only snaps it there, leaving its velocity at
+        // zero, so a steered mount walks when it has actually moved since the last tick.
+        Location at = entity.getLocation();
+        double dx = at.getX() - lastX, dz = at.getZ() - lastZ;
+        moving = !Double.isNaN(lastX) && dx * dx + dz * dz > 1.0E-6;
+        lastX = at.getX();
+        lastZ = at.getZ();
     }
 
     private void finishPlaybacks() {
