@@ -11,10 +11,13 @@ import com.magmaguy.freeminecraftmodels.dataconverter.AnimationBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.AnimationFrame;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.CubeBlueprint;
+import com.magmaguy.freeminecraftmodels.dataconverter.ExpressionTrack;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.freeminecraftmodels.dataconverter.Keyframe;
 import com.magmaguy.freeminecraftmodels.dataconverter.ParsedTexture;
 import com.magmaguy.freeminecraftmodels.utils.LoopType;
 import com.magmaguy.freeminecraftmodels.utils.StringToResourcePackFilename;
+import com.magmaguy.freeminecraftmodels.utils.TransformationType;
 import com.magmaguy.magmacore.util.Logger;
 import org.joml.Vector3f;
 
@@ -685,16 +688,17 @@ public final class BedrockEntityBundleExporter {
                         return;
                     }
 
+                    List<ExpressionTrack> expressions = animation.getExpressionTracks().get(entry.getKey());
                     JsonObject bone = new JsonObject();
-                    JsonObject rotation = channel(frames, Channel.ROTATION, blockBenchVersion);
+                    JsonObject rotation = channel(frames, expressions, TransformationType.ROTATION, blockBenchVersion);
                     if (rotation != null) {
                         bone.add("rotation", rotation);
                     }
-                    JsonObject position = channel(frames, Channel.POSITION, blockBenchVersion);
+                    JsonObject position = channel(frames, expressions, TransformationType.POSITION, blockBenchVersion);
                     if (position != null) {
                         bone.add("position", position);
                     }
-                    JsonObject scale = channel(frames, Channel.SCALE, blockBenchVersion);
+                    JsonObject scale = channel(frames, expressions, TransformationType.SCALE, blockBenchVersion);
                     if (scale != null) {
                         bone.add("scale", scale);
                     }
@@ -708,16 +712,40 @@ public final class BedrockEntityBundleExporter {
         return bones;
     }
 
-    private enum Channel {
-        ROTATION,
-        POSITION,
-        SCALE
+    /** A bone's channel: its authored keyframes when MoLang keys it, otherwise its baked frames. */
+    private static JsonObject channel(AnimationFrame[] frames, List<ExpressionTrack> expressions,
+                                      TransformationType channel, int blockBenchVersion) {
+        if (expressions != null)
+            for (ExpressionTrack track : expressions)
+                if (track.channel() == channel) return expressionChannel(track);
+        return channel(frames, channel, blockBenchVersion);
     }
 
-    private static JsonObject channel(AnimationFrame[] frames, Channel channel, int blockBenchVersion) {
+    /**
+     * Writes an expression channel as the artist keyed it: Bedrock evaluates MoLang natively, so each axis goes
+     * through unchanged, numbers included, and the keys blend linearly whatever interpolation was authored. The
+     * baked channels below instead export the Java pose with FMM's format-5 mirroring undone, which on a format
+     * 4 model negates x and y rotation and x position relative to the authored numbers; an expression axis on
+     * such a model may therefore differ in sign between the Java path and Bedrock.
+     */
+    private static JsonObject expressionChannel(ExpressionTrack track) {
+        JsonObject keyframes = new JsonObject();
+        for (Keyframe keyframe : track.keyframes()) {
+            JsonArray values = new JsonArray();
+            for (int axis = 0; axis < 3; axis++) {
+                String source = keyframe.getSource(axis);
+                if (source != null) values.add(source);
+                else values.add(round(keyframe.getData(axis)));
+            }
+            keyframes.add(timeKey(keyframe.getExactTimeInTicks() / 20.0), values);
+        }
+        return keyframes;
+    }
+
+    private static JsonObject channel(AnimationFrame[] frames, TransformationType channel, int blockBenchVersion) {
         JsonObject keyframes = new JsonObject();
         double[] current = new double[3], previous = new double[3], retained = new double[3];
-        double defaultValue = channel == Channel.SCALE ? 1 : 0;
+        double defaultValue = channel == TransformationType.SCALE ? 1 : 0;
         boolean allDefault = true;
         int lastEmitted = -1;
         for (int tick = 0; tick < frames.length; tick++) {
@@ -740,7 +768,7 @@ public final class BedrockEntityBundleExporter {
         return allDefault ? null : keyframes;
     }
 
-    private static void vector(AnimationFrame frame, Channel channel, double[] result) {
+    private static void vector(AnimationFrame frame, TransformationType channel, double[] result) {
         switch (channel) {
             case ROTATION -> {
                 result[0] = Math.toDegrees(-frame.xRotation);
@@ -768,7 +796,10 @@ public final class BedrockEntityBundleExporter {
     }
 
     private static String timeKey(int tick) {
-        double seconds = tick / 20.0;
+        return timeKey(tick / 20.0);
+    }
+
+    private static String timeKey(double seconds) {
         String text = String.format(Locale.ROOT, "%.4f", seconds);
         return text.replaceAll("0+$", "").replaceAll("\\.$", "");
     }

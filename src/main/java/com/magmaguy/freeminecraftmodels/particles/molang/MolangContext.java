@@ -18,6 +18,8 @@ public final class MolangContext {
     }
 
     private final Map<String, Double> values = new HashMap<>();
+    // temp. names live apart so a caller can scope them to one evaluation without walking the variables.
+    private final Map<String, Double> temporaries = new HashMap<>();
     private Resolver resolver;
     private final MolangContext parent;
     private final RandomGenerator random;
@@ -47,9 +49,15 @@ public final class MolangContext {
         setCanonical(canonical(name), value);
     }
 
+    /** Drops every temp. value. Bedrock scopes them to one expression, so keyframes clear them per evaluation. */
+    public void clearTemporaries() {
+        temporaries.clear();
+    }
+
     double getCanonical(String name) {
         for (MolangContext context = this; context != null; context = context.parent) {
             Double value = context.values.get(name);
+            if (value == null && !context.temporaries.isEmpty()) value = context.temporaries.get(name);
             if (value != null) return value;
         }
         for (MolangContext context = this; context != null; context = context.parent) {
@@ -62,13 +70,13 @@ public final class MolangContext {
 
     boolean hasCanonical(String name) {
         for (MolangContext context = this; context != null; context = context.parent) {
-            if (context.values.containsKey(name)) return true;
+            if (context.values.containsKey(name) || context.temporaries.containsKey(name)) return true;
         }
         return false;
     }
 
     void setCanonical(String name, double value) {
-        values.put(name, value);
+        (name.startsWith("temp.") ? temporaries : values).put(name, value);
     }
 
     /** Lowercases a name and expands the v./t./q./c. short prefixes. */

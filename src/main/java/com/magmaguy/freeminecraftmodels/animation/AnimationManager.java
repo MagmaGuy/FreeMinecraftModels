@@ -5,8 +5,10 @@ import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
 import com.magmaguy.freeminecraftmodels.customentity.core.IKChain;
 import com.magmaguy.freeminecraftmodels.dataconverter.AnimationsBlueprint;
+import com.magmaguy.freeminecraftmodels.dataconverter.ExpressionTrack;
 import com.magmaguy.freeminecraftmodels.dataconverter.IKAnimationFrame;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
+import com.magmaguy.freeminecraftmodels.particles.molang.MolangContext;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.util.Vector;
@@ -14,6 +16,7 @@ import org.bukkit.util.Vector;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.SplittableRandom;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.IntSupplier;
 import java.util.function.Predicate;
@@ -79,6 +82,14 @@ public class AnimationManager {
     private final Pose finalPose;
     private boolean restWritten = false;
 
+    // MoLang state for expression keyframes, null for a model without any. Only the clock thread touches it.
+    // Queries resolve lazily from these fields; the expressions' own variables live in the context.
+    private final MolangContext molang;
+    private int lifeTicks = 0;
+    private double distanceMoved = 0;
+    private double animTime = 0;
+    private final IKAnimationFrame expressionGoal = new IKAnimationFrame();
+
     public AnimationManager(ModeledEntity modeledEntity, AnimationsBlueprint bp) {
         this.modeledEntity = modeledEntity;
         this.bones = modeledEntity.getSkeleton().getBones().toArray(new Bone[0]);
@@ -91,6 +102,16 @@ public class AnimationManager {
         fromPose = new Pose(bones.length);
         frozenPose = new Pose(bones.length);
         finalPose = new Pose(bones.length);
+
+        boolean expressions = animations.getAnimations().values().stream().anyMatch(Animation::usesExpressions);
+        molang = expressions ? new MolangContext(new SplittableRandom()) : null;
+        if (molang != null) molang.setResolver((name, reading) -> switch (name) {
+            case "query.anim_time" -> animTime;
+            case "query.life_time" -> lifeTicks / 20.0;
+            case "query.modified_distance_moved" -> distanceMoved;
+            case "query.is_moving" -> moving ? 1.0 : 0.0;
+            default -> null;
+        });
 
         locomotion = spawn != null ? Base.SPAWN : Base.IDLE;
         base = locomotionPlayback(locomotion);
@@ -156,6 +177,7 @@ public class AnimationManager {
         finishPlaybacks();
         runTransitions();
         render();
+        lifeTicks++;
     }
 
     private void observe() {
@@ -169,6 +191,7 @@ public class AnimationManager {
         moving = velocity.getX() != 0 || velocity.getZ() != 0;
         if (!(modeledEntity instanceof DynamicEntity dynamicEntity) || !dynamicEntity.hasSteeringRider()) {
             lastX = Double.NaN;
+            travel(velocity.getX(), velocity.getZ());
             return;
         }
         // A player's client moves the mob it steers and the server only snaps it there, leaving its velocity at
@@ -176,8 +199,14 @@ public class AnimationManager {
         Location at = entity.getLocation();
         double dx = at.getX() - lastX, dz = at.getZ() - lastZ;
         moving = !Double.isNaN(lastX) && dx * dx + dz * dz > 1.0E-6;
+        if (moving) travel(dx, dz);
         lastX = at.getX();
         lastZ = at.getZ();
+    }
+
+    /** Accumulates query.modified_distance_moved from this tick's horizontal step, in blocks. */
+    private void travel(double dx, double dz) {
+        if (molang != null) distanceMoved += Math.sqrt(dx * dx + dz * dz);
     }
 
     private void finishPlaybacks() {
@@ -318,7 +347,7 @@ public class AnimationManager {
             return;
         }
 
-        if (base != null) basePose.sample(base);
+        if (base != null) basePose.sample(base, sampling(base));
         else basePose.setRest();
         if (fadeActive()) {
             fadeElapsed++;
@@ -326,12 +355,12 @@ public class AnimationManager {
             float weight = t * t * (3 - 2 * t);
             if (fadeFromFrozen) basePose.blendFrom(frozenPose, weight);
             else {
-                fromPose.sample(fadeFrom);
+                fromPose.sample(fadeFrom, sampling(fadeFrom));
                 basePose.blendFrom(fromPose, weight);
             }
         }
         finalPose.copyFrom(basePose);
-        if (action != null) finalPose.applyAction(action);
+        if (action != null) finalPose.applyAction(action, sampling(action));
         finalPose.writeTo(bones);
         restWritten = !playing;
 
@@ -363,12 +392,26 @@ public class AnimationManager {
         }
     }
 
-    private static IKAnimationFrame ikGoal(Playback playback, IKChain chain) {
+    private IKAnimationFrame ikGoal(Playback playback, IKChain chain) {
         if (playback == null) return null;
-        IKAnimationFrame[] frames = playback.animation.getIkAnimationFrames().get(chain);
         int frame = playback.frame();
-        if (frames == null || frame < 0 || frame >= frames.length) return null;
-        return frames[frame];
+        if (frame < 0) return null;
+        IKAnimationFrame[] frames = playback.animation.getIkAnimationFrames().get(chain);
+        if (frames != null) return frame < frames.length ? frames[frame] : null;
+        ExpressionTrack track = playback.animation.getIkExpressionTracks().get(chain);
+        if (track == null) return null;
+        // One scratch goal serves every chain: the solver reads it before the next lookup.
+        MolangContext context = sampling(playback);
+        expressionGoal.goalX = track.sample(0, frame, context);
+        expressionGoal.goalY = track.sample(1, frame, context);
+        expressionGoal.goalZ = track.sample(2, frame, context);
+        return expressionGoal;
+    }
+
+    /** The entity's context with query.anim_time at this playback's frame; null for a model without expressions. */
+    private MolangContext sampling(Playback playback) {
+        animTime = playback.frame() / 20.0;
+        return molang;
     }
 
     private Animation animationFor(Base state) {

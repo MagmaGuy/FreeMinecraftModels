@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.dataconverter;
 
 import com.magmaguy.freeminecraftmodels.utils.LoopType;
+import com.magmaguy.freeminecraftmodels.utils.TransformationType;
 import com.magmaguy.magmacore.util.Logger;
 import lombok.Getter;
 
@@ -11,11 +12,17 @@ public class AnimationBlueprint {
     private final HashMap<BoneBlueprint, List<Keyframe>> boneKeyframes = new HashMap<>();
     @Getter
     private final HashMap<BoneBlueprint, AnimationFrame[]> animationFrames = new HashMap<>();
+    // Channels with a MoLang keyframe, sampled per entity at runtime. Their bone still gets baked frames holding
+    // the rest values of those channels, so it counts as keyed: an override animation resets it like any other.
+    @Getter
+    private final HashMap<BoneBlueprint, List<ExpressionTrack>> expressionTracks = new HashMap<>();
     // IK animation frames keyed by controller (null object) name
     @Getter
     private final HashMap<String, List<Keyframe>> ikKeyframes = new HashMap<>();
     @Getter
     private final HashMap<String, IKAnimationFrame[]> ikAnimationFrames = new HashMap<>();
+    @Getter
+    private final HashMap<String, ExpressionTrack> ikExpressionTracks = new HashMap<>();
     // Particle keyframes from the Blockbench Effects track, sorted by tick
     @Getter
     private final List<ParticleKeyframe> particleKeyframes = new ArrayList<>();
@@ -230,11 +237,52 @@ public class AnimationBlueprint {
             animationFramesArray[i] = new AnimationFrame();
 
         //Interpolation time
-        interpolateRotations(animationFramesArray, AnimationTimeline.normalize(rotationKeyframes));
-        interpolateTranslations(animationFramesArray, AnimationTimeline.normalize(positionKeyframes));
-        interpolateScales(animationFramesArray, AnimationTimeline.normalize(scaleKeyframes));
+        bake(boneBlueprint, animationFramesArray, TransformationType.ROTATION,
+                AnimationTimeline.normalize(rotationKeyframes));
+        bake(boneBlueprint, animationFramesArray, TransformationType.POSITION,
+                AnimationTimeline.normalize(positionKeyframes));
+        bake(boneBlueprint, animationFramesArray, TransformationType.SCALE,
+                AnimationTimeline.normalize(scaleKeyframes));
 
         this.animationFrames.put(boneBlueprint, animationFramesArray);
+    }
+
+    /** Bakes a channel of plain numbers into the frames; a channel with a MoLang keyframe stays a runtime track. */
+    private void bake(BoneBlueprint bone, AnimationFrame[] frames, TransformationType channel, List<Keyframe> keyframes) {
+        if (keyframes.isEmpty()) return;
+        if (keyframes.stream().anyMatch(Keyframe::isDynamic)) {
+            expressionTracks.computeIfAbsent(bone, keyed -> new ArrayList<>())
+                    .add(new ExpressionTrack(channel, keyframes, blockBenchVersion));
+            return;
+        }
+        for (int tick = 0; tick < frames.length; tick++) {
+            AnimationFrame frame = frames[tick];
+            float x = poseValue(keyframes, channel, 0, tick);
+            float y = poseValue(keyframes, channel, 1, tick);
+            float z = poseValue(keyframes, channel, 2, tick);
+            switch (channel) {
+                case ROTATION -> {
+                    frame.xRotation = x;
+                    frame.yRotation = y;
+                    frame.zRotation = z;
+                }
+                case POSITION -> {
+                    frame.xPosition = x;
+                    frame.yPosition = y;
+                    frame.zPosition = z;
+                }
+                case SCALE -> {
+                    frame.scaleX = x;
+                    frame.scaleY = y;
+                    frame.scaleZ = z;
+                }
+            }
+        }
+    }
+
+    private float poseValue(List<Keyframe> keyframes, TransformationType channel, int axis, int tick) {
+        return AnimationTimeline.toPoseUnits(channel, axis,
+                AnimationTimeline.sample(keyframes, tick, axis, null), blockBenchVersion);
     }
 
     private void warnMalformedTimeline(String detail) {
@@ -242,37 +290,6 @@ public class AnimationBlueprint {
         warnedMalformedTimeline = true;
         Logger.warn("Malformed animation timeline for model " + modelName + ", animation "
                 + animationName + ": " + detail + ". Other model animations will continue converting.");
-    }
-
-    private void interpolateRotations(AnimationFrame[] animationFramesArray, List<Keyframe> rotationKeyframes) {
-        if (rotationKeyframes.isEmpty()) return;
-        for (int tick = 0; tick < animationFramesArray.length; tick++) {
-            float x = AnimationTimeline.sample(rotationKeyframes, tick, Keyframe::getDataX);
-            float y = AnimationTimeline.sample(rotationKeyframes, tick, Keyframe::getDataY);
-            float z = AnimationTimeline.sample(rotationKeyframes, tick, Keyframe::getDataZ);
-            animationFramesArray[tick].xRotation = (float) Math.toRadians(blockBenchVersion < 5 ? x : -x);
-            animationFramesArray[tick].yRotation = (float) Math.toRadians(blockBenchVersion < 5 ? y : -y);
-            animationFramesArray[tick].zRotation = (float) Math.toRadians(z);
-        }
-    }
-
-    private void interpolateTranslations(AnimationFrame[] animationFramesArray, List<Keyframe> positionKeyframes) {
-        if (positionKeyframes.isEmpty()) return;
-        for (int tick = 0; tick < animationFramesArray.length; tick++) {
-            float x = AnimationTimeline.sample(positionKeyframes, tick, Keyframe::getDataX) / 16F;
-            animationFramesArray[tick].xPosition = blockBenchVersion < 5 ? x : -x;
-            animationFramesArray[tick].yPosition = AnimationTimeline.sample(positionKeyframes, tick, Keyframe::getDataY) / 16F;
-            animationFramesArray[tick].zPosition = AnimationTimeline.sample(positionKeyframes, tick, Keyframe::getDataZ) / 16F;
-        }
-    }
-
-    private void interpolateScales(AnimationFrame[] animationFramesArray, List<Keyframe> scaleKeyframes) {
-        if (scaleKeyframes.isEmpty()) return;
-        for (int tick = 0; tick < animationFramesArray.length; tick++) {
-            animationFramesArray[tick].scaleX = AnimationTimeline.sample(scaleKeyframes, tick, Keyframe::getDataX);
-            animationFramesArray[tick].scaleY = AnimationTimeline.sample(scaleKeyframes, tick, Keyframe::getDataY);
-            animationFramesArray[tick].scaleZ = AnimationTimeline.sample(scaleKeyframes, tick, Keyframe::getDataZ);
-        }
     }
 
     /**
@@ -290,18 +307,23 @@ public class AnimationBlueprint {
     }
 
     /**
-     * Interpolates position keyframes for an IK controller into per-frame goal offsets.
+     * Interpolates position keyframes for an IK controller into per-frame goal offsets, or keeps a controller
+     * keyed with MoLang as a runtime track.
      */
     private void interpolateIKControllerKeyframes(String controllerName, List<Keyframe> keyframes) {
         if (keyframes.isEmpty()) return;
+        if (keyframes.stream().anyMatch(Keyframe::isDynamic)) {
+            ikExpressionTracks.put(controllerName,
+                    new ExpressionTrack(TransformationType.POSITION, keyframes, blockBenchVersion));
+            return;
+        }
 
         IKAnimationFrame[] frames = new IKAnimationFrame[duration];
         for (int tick = 0; tick < frames.length; tick++) {
-            float x = AnimationTimeline.sample(keyframes, tick, Keyframe::getDataX) / 16F;
             frames[tick] = new IKAnimationFrame(
-                    blockBenchVersion < 5 ? x : -x,
-                    AnimationTimeline.sample(keyframes, tick, Keyframe::getDataY) / 16F,
-                    AnimationTimeline.sample(keyframes, tick, Keyframe::getDataZ) / 16F);
+                    poseValue(keyframes, TransformationType.POSITION, 0, tick),
+                    poseValue(keyframes, TransformationType.POSITION, 1, tick),
+                    poseValue(keyframes, TransformationType.POSITION, 2, tick));
         }
 
         ikAnimationFrames.put(controllerName, frames);
@@ -313,6 +335,6 @@ public class AnimationBlueprint {
      * @return true if this animation has IK controllers
      */
     public boolean hasIKAnimations() {
-        return !ikAnimationFrames.isEmpty();
+        return !ikAnimationFrames.isEmpty() || !ikExpressionTracks.isEmpty();
     }
 }

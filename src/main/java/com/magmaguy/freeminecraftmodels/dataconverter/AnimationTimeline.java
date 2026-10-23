@@ -1,12 +1,13 @@
 package com.magmaguy.freeminecraftmodels.dataconverter;
 
+import com.magmaguy.freeminecraftmodels.particles.molang.MolangContext;
 import com.magmaguy.freeminecraftmodels.utils.InterpolationType;
+import com.magmaguy.freeminecraftmodels.utils.TransformationType;
 import com.magmaguy.magmacore.util.MathToolkit;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.function.ToDoubleFunction;
 
 final class AnimationTimeline {
     private static final double TICKS_PER_SECOND = 20D;
@@ -41,11 +42,16 @@ final class AnimationTimeline {
         return normalized;
     }
 
-    static float sample(List<Keyframe> keyframes, int tick, ToDoubleFunction<Keyframe> value) {
+    /**
+     * The track's value on one axis at a tick: the first keyframe before it starts, the last after it ends, and
+     * between two keyframes both evaluated now and blended by the next one's interpolation. The context is only
+     * read by expression keyframes, so a track of plain numbers may pass null.
+     */
+    static float sample(List<Keyframe> keyframes, int tick, int axis, MolangContext context) {
         if (keyframes.isEmpty()) throw new IllegalArgumentException("Cannot sample an empty animation track");
 
         Keyframe first = keyframes.get(0);
-        if (tick <= first.getExactTimeInTicks()) return (float) value.applyAsDouble(first);
+        if (tick <= first.getExactTimeInTicks()) return (float) first.value(axis, context);
 
         int low = 0;
         int high = keyframes.size() - 1;
@@ -56,15 +62,28 @@ final class AnimationTimeline {
         }
 
         Keyframe previous = keyframes.get(low);
-        if (low == keyframes.size() - 1) return (float) value.applyAsDouble(previous);
+        if (low == keyframes.size() - 1) return (float) previous.value(axis, context);
 
         Keyframe next = keyframes.get(low + 1);
         double range = next.getExactTimeInTicks() - previous.getExactTimeInTicks();
         float progress = (float) ((tick - previous.getExactTimeInTicks()) / range);
         return interpolate(next.getInterpolationType(),
-                (float) value.applyAsDouble(previous),
-                (float) value.applyAsDouble(next),
+                (float) previous.value(axis, context),
+                (float) next.value(axis, context),
                 progress);
+    }
+
+    /**
+     * Converts a Blockbench value into what the pose mixer reads: degrees to radians, pixels to blocks, scale as
+     * is. Format 5 files mirror x and y rotation and x position relative to FMM's internal convention.
+     */
+    static float toPoseUnits(TransformationType channel, int axis, float value, int blockBenchVersion) {
+        boolean mirrored = blockBenchVersion >= 5;
+        return switch (channel) {
+            case ROTATION -> (float) Math.toRadians(mirrored && axis < 2 ? -value : value);
+            case POSITION -> (mirrored && axis == 0 ? -value : value) / 16F;
+            case SCALE -> value;
+        };
     }
 
     private static float interpolate(InterpolationType type, float start, float end, float progress) {
