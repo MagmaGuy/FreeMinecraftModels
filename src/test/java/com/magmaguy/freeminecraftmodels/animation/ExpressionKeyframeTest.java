@@ -82,6 +82,20 @@ class ExpressionKeyframeTest {
     }
 
     @Test
+    void aProgramWithoutReturnPlaysItsLastLineAsInBlockbench() throws Exception {
+        // Dali's jellyfish tumbles through a rotation written this way; Bedrock's rule would hold it at 0.
+        load(animation("tumble", List.of(rotation(0, "v.a = 10;\nv.b = v.a * 3;\nv.b + 5\n"))));
+        assertTrue(animation.playAnimation("tumble", false, true));
+
+        animation.tick();
+        assertEquals(-Math.toRadians(35), body.getAnimationRotation().x, 1e-6);
+        Keyframe keyframe = converter.getAnimationsBlueprint().getAnimations().get("tumble")
+                .getBoneKeyframes().values().iterator().next().get(0);
+        assertEquals("v.a = 10;\nv.b = v.a * 3;\nreturn v.b + 5", keyframe.getSource(0),
+                "the Bedrock export gets the return Bedrock needs");
+    }
+
+    @Test
     void aBrokenExpressionWarnsAndPlaysAsZero() throws Exception {
         List<String> warnings = captureWarnings();
         load(animation("broken", List.of(rotation(0, "math.nope(1)"), rotation(1.0, 20))));
