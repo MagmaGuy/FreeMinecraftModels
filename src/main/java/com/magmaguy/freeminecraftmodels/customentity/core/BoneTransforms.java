@@ -381,6 +381,10 @@ public class BoneTransforms {
         if (packetDisplayEntity == null || !packetDisplayEntity.supportsRiddenPlacement()) return null;
         if (riddenVehicleId == vehicleId) return null;
         riddenVehicleId = vehicleId;
+        // A ridden display is placed by its viewers, never teleported, and the rotation MagmaCore puts back after
+        // every passenger packet (a horse turns each passenger it takes to its own view) must land at once; a free
+        // display glides one tick between its per-tick teleports. This pass's pose packet carries the change.
+        packetDisplayEntity.setTeleportDuration(vehicleId == -1 ? 1 : 0);
         // The free pose carries no translation and the ridden pose no position, so neither cache applies.
         displayStateValid = false;
         riddenStateValid = false;

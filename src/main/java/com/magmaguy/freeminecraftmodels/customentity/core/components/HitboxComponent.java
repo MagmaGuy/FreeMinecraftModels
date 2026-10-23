@@ -5,6 +5,7 @@ import com.magmaguy.easyminecraftgoals.internal.PacketEntityInteractionManager;
 import com.magmaguy.easyminecraftgoals.internal.PacketInteractionContext;
 import com.magmaguy.easyminecraftgoals.internal.PacketInteractionEntity;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
+import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.OBBHitDetection;
@@ -29,6 +30,11 @@ public class HitboxComponent {
     private final ModeledEntity modeledEntity;
     private OrientedBoundingBox obbHitbox = null;
     private PacketInteractionEntity packetInteractionEntity = null;
+    // A steerable mount is clicked to be ridden, so its whole body takes the click: an empty-hand click on air
+    // sends nothing a server could route, and the horse's own box is scaled down to its seat. Both are read on
+    // the primary thread; the interaction is hidden while a player steers, or their crosshair would never leave it.
+    private volatile boolean steerableMount;
+    private boolean mountInteractionHidden;
     private final InteractionAliasRegistry interactionAliases = new InteractionAliasRegistry(
             PacketEntityInteractionManager.getInstance());
 
@@ -82,12 +88,33 @@ public class HitboxComponent {
             throw new IllegalStateException(
                     "Model hitbox contacts must run on the primary thread");
         }
+        syncMountInteraction();
         if (modeledEntity.getInteractionComponent()
                 .getHitboxContactCallback() == null) return;
         Location location = modeledEntity.getLocation();
         if (location == null) return;
         getObbHitbox().update(location);
         checkPlayerCollisions();
+    }
+
+    /** Gives a mount its click surface once it can be ridden, and keeps it off while a player steers. */
+    private void syncMountInteraction() {
+        if (!(modeledEntity instanceof DynamicEntity dynamicEntity)) return;
+        steerableMount = dynamicEntity.isSteerableMount();
+        if (packetInteractionEntity == null) {
+            if (steerableMount && !modeledEntity.isRemoved()) createPacketInteractionEntity();
+            if (packetInteractionEntity == null) return;
+        }
+        boolean hide = steerableMount && dynamicEntity.hasSteeringRider();
+        if (hide == mountInteractionHidden) return;
+        mountInteractionHidden = hide;
+        for (UUID viewerUUID : modeledEntity.getViewers()) {
+            if (hide) packetInteractionEntity.hideFrom(viewerUUID);
+            else {
+                Player viewer = Bukkit.getPlayer(viewerUUID);
+                if (viewer != null) PacketEntityDisplayHelper.displayToPlayer(packetInteractionEntity, viewer);
+            }
+        }
     }
 
     /**
@@ -131,13 +158,15 @@ public class HitboxComponent {
      * input that Bukkit may not otherwise expose. Dynamic models deliberately
      * stay on exact OBB air/block routing plus their backing-ID alias: a single
      * axis-aligned square large enough to cover a long or rotated OBB would
-     * swallow unrelated clicks in its empty corners.
+     * swallow unrelated clicks in its empty corners. A steerable mount is the
+     * exception: every click on it is meant to seat the rider.
      */
     public void createPacketInteractionEntity() {
         if (packetInteractionEntity != null) return;
         if (modeledEntity.getLocation() == null) return;
+        steerableMount = modeledEntity instanceof DynamicEntity dynamicEntity && dynamicEntity.isSteerableMount();
         if (modeledEntity.getUnderlyingEntity() != null
-                && !(modeledEntity instanceof PropEntity)) return;
+                && !(modeledEntity instanceof PropEntity) && !steerableMount) return;
 
         InteractionDimensions dimensions = interactionDimensions(modeledEntity.getLocation());
 
@@ -354,6 +383,10 @@ public class HitboxComponent {
         double scale = modeledEntity.getScaleModifier();
         if (!Double.isFinite(scale) || scale <= 0D) scale = 1D;
         if (modeledEntity.getSkeletonBlueprint().getHitbox() == null) {
+            // A mount's click surface is its whole body.
+            if (steerableMount) return new InteractionDimensions(
+                    (float) (modeledEntity.getSkeletonBlueprint().getModelWidth() * scale),
+                    (float) (modeledEntity.getSkeletonBlueprint().getModelTop() * scale));
             return new InteractionDimensions((float) scale, (float) (2D * scale));
         }
         float width = compactPacketInteractionWidth(
@@ -373,7 +406,7 @@ public class HitboxComponent {
     }
 
     public void showPacketInteractionEntityTo(Player player, com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle packetBundle) {
-        if (packetInteractionEntity == null) return;
+        if (packetInteractionEntity == null || mountInteractionHidden) return;
         PacketEntityDisplayHelper.displayToPlayer(packetInteractionEntity, player, packetBundle);
     }
 

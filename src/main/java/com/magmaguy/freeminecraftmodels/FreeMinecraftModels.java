@@ -242,6 +242,8 @@ public final class FreeMinecraftModels extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(new EntityTeleportEvent(), this);
         Bukkit.getPluginManager().registerEvents(new ArmorStandListener(), this);
         Bukkit.getPluginManager().registerEvents(new DynamicEntity.ModeledEntityEvents(), this);
+        Bukkit.getPluginManager().registerEvents(new com.magmaguy.freeminecraftmodels.commands.MountCommand.MountHorseEvents(), this);
+        com.magmaguy.freeminecraftmodels.commands.MountCommand.removeLoadedOrphans();
         Bukkit.getPluginManager().registerEvents(new InteractionComponent.InteractionComponentEvents(), this);
         Bukkit.getPluginManager().registerEvents(new ModelItemListener(), this);
         Bukkit.getPluginManager().registerEvents(new com.magmaguy.freeminecraftmodels.listeners.ItemModelUpgradeListener(), this);

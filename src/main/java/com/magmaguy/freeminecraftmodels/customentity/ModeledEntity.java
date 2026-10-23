@@ -82,6 +82,7 @@ public class ModeledEntity {
     @Getter
     @Setter
     private double scaleModifier = 1.0;
+    private volatile org.bukkit.attribute.AttributeInstance scaleAttribute;
     @Getter
     private MountPointManager mountPointManager = null;
     @Getter
@@ -183,6 +184,10 @@ public class ModeledEntity {
 
     public void setUnderlyingEntity(Entity underlyingEntity) {
         this.underlyingEntity = underlyingEntity;
+        // Resolved here, on the main thread: Bukkit's getAttribute inserts the instance into the mob's attribute map
+        // on first use, and the model clock reading it off-thread raced the server saving that map.
+        org.bukkit.attribute.Attribute scale = AttributeManager.getAttribute("generic_scale");
+        scaleAttribute = scale != null && underlyingEntity instanceof LivingEntity livingEntity ? livingEntity.getAttribute(scale) : null;
         spawnRegistrationEntity = underlyingEntity;
         previousSpawnModelRegistration = underlyingEntity.getPersistentDataContainer()
                 .get(RegisterModelEntity.ENTITY_KEY, PersistentDataType.STRING);
@@ -379,8 +384,8 @@ public class ModeledEntity {
         hitboxComponent.tick(abstractPacketBundle);
         animationComponent.tick();
         particleComponent.tick(abstractPacketBundle, skeleton.getSkeletonWatchers().getJavaViewers());
-        if (underlyingEntity != null && underlyingEntity.isValid() && underlyingEntity instanceof LivingEntity livingEntity && livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")) != null)
-            scaleModifier = livingEntity.getAttribute(AttributeManager.getAttribute("generic_scale")).getValue() / seatScale();
+        org.bukkit.attribute.AttributeInstance scale = scaleAttribute;
+        if (scale != null && underlyingEntity != null && underlyingEntity.isValid()) scaleModifier = scale.getValue() / seatScale();
     }
 
     /** The part of the underlying entity's scale that only moves its rider's seat, which the model leaves out. */

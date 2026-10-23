@@ -339,6 +339,37 @@ public class SkeletonBlueprint {
         return modelTop;
     }
 
+    private Double modelWidth;
+
+    /**
+     * Width of the model at rest, in blocks at scale 1: twice the furthest any cube corner lies from the model's
+     * vertical axis, skipping the hitbox and name-tag bones. Falls back to 1 for a model without cubes.
+     */
+    public double getModelWidth() {
+        if (modelWidth != null) return modelWidth;
+        double reach = Double.NEGATIVE_INFINITY;
+        for (BoneBlueprint root : mainModel) reach = Math.max(reach, cubeReach(root));
+        modelWidth = Double.isFinite(reach) ? 2d * reach / 16d : 1d;
+        return modelWidth;
+    }
+
+    private static double cubeReach(BoneBlueprint bone) {
+        double reach = Double.NEGATIVE_INFINITY;
+        String name = bone.getBoneName() == null ? "" : bone.getBoneName();
+        if (!name.equalsIgnoreCase("hitbox") && !bone.isNameTag()) {
+            for (CubeBlueprint cube : bone.getCubeBlueprintChildren()) {
+                Map<String, Object> json = cube.getOriginalCubeJSON();
+                for (String key : new String[]{"from", "to"}) {
+                    if (!(json.get(key) instanceof List<?> point) || point.size() < 3) continue;
+                    for (int axis : new int[]{0, 2})
+                        if (point.get(axis) instanceof Number coordinate) reach = Math.max(reach, Math.abs(coordinate.doubleValue()));
+                }
+            }
+        }
+        for (BoneBlueprint child : bone.getBoneBlueprintChildren()) reach = Math.max(reach, cubeReach(child));
+        return reach;
+    }
+
     @SuppressWarnings("unchecked")
     private static double cubeTop(BoneBlueprint bone) {
         double top = Double.NEGATIVE_INFINITY;

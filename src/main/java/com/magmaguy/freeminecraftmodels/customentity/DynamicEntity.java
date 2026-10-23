@@ -197,17 +197,20 @@ public class DynamicEntity extends ModeledEntity {
     }
 
     /**
-     * Scales the mob so its saddle, the seat a vanilla rider steers it from, lands on the given seat bone. The model
-     * leaves that scale out and keeps its size. Does nothing when the server cannot report the saddle height.
+     * Scales the mob so its saddle, the seat a vanilla rider steers it from, lands on the given seat bone at the
+     * model's rest pose: the bone's Blockbench origin, in blocks from the model's feet, at the model's own scale. A
+     * live bone position would depend on whether the model clock has posed the skeleton yet and on the animation
+     * playing. The model leaves that scale out and keeps its size. Does nothing when the server cannot report the
+     * saddle height.
      */
     public void liftSaddleTo(Bone seat) {
         Attribute scaleAttribute = AttributeManager.getAttribute("generic_scale");
         if (scaleAttribute == null || !(underlyingEntity instanceof LivingEntity livingEntity)) return;
         AttributeInstance scale = livingEntity.getAttribute(scaleAttribute);
         org.bukkit.util.Vector saddle = NMSManager.getAdapter().getPassengerSeatOffset(underlyingEntity, 0);
-        Location seatLocation = seat.getBoneLocation();
-        if (scale == null || saddle == null || saddle.getY() <= 0 || seatLocation == null) return;
-        double seatHeight = seatLocation.getY() - underlyingEntity.getLocation().getY();
+        if (scale == null || saddle == null || saddle.getY() <= 0) return;
+        // The model's scale as the clock computes it, read here rather than waiting for the clock to publish it.
+        double seatHeight = seat.getBoneBlueprint().getOriginalOrigin().y / 16d * (scale.getValue() / seatScale);
         if (seatHeight <= 0) return;
         // The saddle height grows with the mob's scale, which the attribute caps at 1/16 to 16.
         double target = Math.max(0.0625, Math.min(16, scale.getBaseValue() * seatHeight / saddle.getY()));
@@ -228,6 +231,15 @@ public class DynamicEntity extends ModeledEntity {
         if (!(underlyingEntity instanceof AbstractHorse horse) || horse.getInventory().getSaddle() == null
                 || !horse.getPassengers().isEmpty()) return false;
         return horse.addPassenger(player);
+    }
+
+    /** Whether a player could steer this mob: vanilla lets the first passenger of a saddled horse ride it. */
+    public boolean isSteerableMount() {
+        return underlyingEntity instanceof AbstractHorse horse && horse.getInventory().getSaddle() != null;
+    }
+
+    public boolean hasSteeringRider() {
+        return steeringRider() != null;
     }
 
     /** The player steering this mob, as vanilla lets the first passenger of a saddled horse do; null otherwise. */
@@ -350,6 +362,9 @@ public class DynamicEntity extends ModeledEntity {
         super.remove();
         // Null guard: a DynamicEntity constructed but never spawned has no underlying entity.
         if (underlyingEntity != null) dynamicEntities.remove(underlyingEntity.getUniqueId());
+        // A horse /fmm mount spawned exists for its model; without it, it is an invisible saddled horse.
+        if (underlyingEntity != null && com.magmaguy.freeminecraftmodels.commands.MountCommand.isMountHorse(underlyingEntity))
+            underlyingEntity.remove();
     }
 
     public static void shutdown() {
