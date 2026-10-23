@@ -95,6 +95,9 @@ public class ModeledEntity {
     private boolean nameplateAnchorResolved;
     private int viewDistanceOverride = -1;
     private Color persistentTint = null;
+    // Fixed light for every display bone; -1 while the bones take the light where they are.
+    private volatile int brightnessBlockLight = -1;
+    private volatile int brightnessSkyLight = -1;
 
     public ModeledEntity(String entityID, Location spawnLocation) {
         this.entityID = entityID;
@@ -750,6 +753,54 @@ public class ModeledEntity {
      */
     public Color getTintColor() {
         return persistentTint;
+    }
+
+    /**
+     * Lights every display bone at a fixed level instead of the light where it stands, as a glowing creature or a
+     * lantern needs. 15 and 15 is fully bright day and night. Java display bones only: Bedrock and armor stand bones
+     * keep their world light. Viewers get the change with the next bone update.
+     *
+     * @param blockLight 0 to 15
+     * @param skyLight   0 to 15
+     * @return the current {@code ModeledEntity} instance, allowing for method chaining
+     */
+    public ModeledEntity setBrightnessOverride(int blockLight, int skyLight) {
+        int block = Math.max(0, Math.min(15, blockLight));
+        int sky = Math.max(0, Math.min(15, skyLight));
+        if (block == brightnessBlockLight && sky == brightnessSkyLight) return this;
+        brightnessBlockLight = block;
+        brightnessSkyLight = sky;
+        if (skeleton != null) skeleton.applyBrightnessOverride(block, sky);
+        return this;
+    }
+
+    /**
+     * Drops the fixed light set by {@link #setBrightnessOverride(int, int)}, so the bones take the light where they
+     * are again.
+     *
+     * @return the current {@code ModeledEntity} instance, allowing for method chaining
+     */
+    public ModeledEntity clearBrightnessOverride() {
+        if (brightnessBlockLight < 0) return this;
+        brightnessBlockLight = -1;
+        brightnessSkyLight = -1;
+        if (skeleton != null) skeleton.applyBrightnessOverride(-1, -1);
+        return this;
+    }
+
+    /** Whether {@link #setBrightnessOverride(int, int)} lights the bones at a fixed level. */
+    public boolean hasBrightnessOverride() {
+        return brightnessBlockLight >= 0;
+    }
+
+    /** The fixed block light of the bones, or -1 without an override. */
+    public int getBrightnessOverrideBlockLight() {
+        return brightnessBlockLight;
+    }
+
+    /** The fixed sky light of the bones, or -1 without an override. */
+    public int getBrightnessOverrideSkyLight() {
+        return brightnessSkyLight;
     }
 
 }

@@ -197,6 +197,15 @@ public class Bone {
         boneTransforms.markDirty();
     }
 
+    /** Fixed light for this bone's display, 0 to 15 each; a negative block light drops the override. */
+    public void setBrightnessOverride(int blockLight, int skyLight) {
+        if (boneBlueprint.isMountPoint() || boneTransforms.getPacketDisplayEntity() == null) return;
+        if (blockLight < 0) boneTransforms.getPacketDisplayEntity().clearBrightness();
+        else boneTransforms.getPacketDisplayEntity().setBrightness(blockLight, skyLight);
+        // The light rides the metadata packet, which still bones only resend when told to.
+        boneTransforms.markDirty();
+    }
+
     public void spawnParticles(Particle particle, double speed) {
         Location boneLocation;
         if (boneTransforms.getPacketDisplayEntity() != null) {
