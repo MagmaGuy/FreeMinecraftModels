@@ -9,17 +9,20 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Shows a model's body tilt on its Bedrock carrier. The exported lean bone, parent of every root bone and pivoted
- * where Java turns the tilt, takes the lean as its rotation (see {@link BedrockEntityBundleExporter#LEAN_BONE}).
+ * Shows a model's body tilt and body offset on its Bedrock carrier. The exported lean bone, parent of every root
+ * bone and pivoted at the middle of the model's cubes, takes the lean as its rotation and the offset as its position
+ * (see {@link BedrockEntityBundleExporter#LEAN_BONE}). Bedrock moves a bone after turning it about its pivot, so the
+ * model turns about its own middle and is then raised or lowered, as on Java.
  * <p>
  * The tilt is a world-space rotation, but a bone turns in the model's own frame, which Bedrock then turns to the
  * carrier's yaw: a model facing yaw φ has its Blockbench axes turned by 180° − φ about up, its front (−z) toward its
  * heading. So the tilt is first taken into that frame, then split into the Z·Y·X Euler angles a Bedrock bone rotation
  * applies, with the x and y signs Bedrock uses (the export writes rotations as (−x, −y, z) for the same reason). The
- * angles go out in hundredths of a degree as integer properties: the RSPM Geyser bridge registers every property a
- * pack's controllers query as an integer.
+ * angles go out in hundredths of a degree and the offset in hundredths of a model pixel, which the carrier's scale
+ * then scales as it does the rest of the model. Both are integer properties: the RSPM Geyser bridge registers every
+ * property a pack's controllers query as an integer.
  * <p>
- * One instance belongs to one carrier and is only stepped by its model tick. A lean the carrier already shows sends
+ * One instance belongs to one carrier and is only stepped by its model tick. What the carrier already shows sends
  * nothing.
  */
 final class BedrockBodyLean {
@@ -31,31 +34,49 @@ final class BedrockBodyLean {
     private final Quaterniond local = new Quaterniond();
     private final Vector3d angles = new Vector3d();
     private boolean leaning;
+    private int sentOffset;
 
-    /** Whether the carrier was last sent a lean, so a tilt that ends still has to stand it upright. */
-    boolean isLeaning() {
-        return leaning;
+    /** Whether the carrier was last sent a lean or an offset, so one that ends still has to be undone. */
+    boolean isPlaced() {
+        return leaning || sentOffset != 0;
     }
 
     /**
-     * The properties that bring the carrier to this tilt, or null when it already shows it.
+     * The properties that bring the carrier to this tilt and offset, or null when it already shows them.
      *
-     * @param tilt the model's world-space body tilt, or null while it stands upright
-     * @param yaw  the yaw the carrier faces, in degrees (Minecraft yaw: 0 is south, 90 west)
+     * @param tilt   the model's world-space body tilt, or null while it stands upright
+     * @param yaw    the yaw the carrier faces, in degrees (Minecraft yaw: 0 is south, 90 west); unread while upright
+     * @param offset blocks the model is drawn above its entity's feet, at its current scale
+     * @param scale  the model's current scale, which the carrier draws it at
      */
-    Map<String, Object> update(Quaterniondc tilt, float yaw) {
-        if (tilt == null) {
-            if (!leaning) return null;
-            leaning = false;
-            sent.identity();
-            return properties(0, 0, 0);
+    Map<String, Object> update(Quaterniondc tilt, float yaw, double offset, double scale) {
+        Map<String, Object> changes = new LinkedHashMap<>();
+        int pixels = offsetHundredths(offset, scale);
+        if (pixels != sentOffset) {
+            sentOffset = pixels;
+            changes.put(BedrockEntityBundleExporter.BODY_OFFSET_PROPERTY, pixels);
         }
-        modelFrame(tilt, yaw, local);
-        if (leaning && degreesBetween(sent, local) < RESEND_DEGREES) return null;
-        leaning = true;
-        sent.set(local);
-        boneRotation(local, angles);
-        return properties(hundredths(angles.x), hundredths(angles.y), hundredths(angles.z));
+        if (tilt == null) {
+            if (leaning) {
+                leaning = false;
+                sent.identity();
+                putLean(changes, 0, 0, 0);
+            }
+        } else {
+            modelFrame(tilt, yaw, local);
+            if (!leaning || degreesBetween(sent, local) >= RESEND_DEGREES) {
+                leaning = true;
+                sent.set(local);
+                boneRotation(local, angles);
+                putLean(changes, hundredths(angles.x), hundredths(angles.y), hundredths(angles.z));
+            }
+        }
+        return changes.isEmpty() ? null : changes;
+    }
+
+    /** The offset in hundredths of a model pixel: blocks at this scale, back at scale 1, times 16. */
+    static int offsetHundredths(double offset, double scale) {
+        return scale > 0D ? hundredths(offset / scale * 16D) : 0;
     }
 
     /** The tilt as the model's own frame sees it: Ry(φ − 180°) · tilt · Ry(180° − φ). */
@@ -91,17 +112,15 @@ final class BedrockBodyLean {
         return result.set(-Math.toDegrees(aroundX), -Math.toDegrees(aroundY), Math.toDegrees(aroundZ));
     }
 
-    private static Map<String, Object> properties(int x, int y, int z) {
+    private static void putLean(Map<String, Object> changes, int x, int y, int z) {
         List<String> names = BedrockEntityBundleExporter.LEAN_PROPERTIES;
-        Map<String, Object> properties = new LinkedHashMap<>();
-        properties.put(names.get(0), x);
-        properties.put(names.get(1), y);
-        properties.put(names.get(2), z);
-        return properties;
+        changes.put(names.get(0), x);
+        changes.put(names.get(1), y);
+        changes.put(names.get(2), z);
     }
 
-    private static int hundredths(double degrees) {
-        return (int) Math.round(degrees * 100D);
+    private static int hundredths(double value) {
+        return (int) Math.round(value * 100D);
     }
 
     private static double degreesBetween(Quaterniondc a, Quaterniondc b) {

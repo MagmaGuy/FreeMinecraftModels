@@ -13,9 +13,10 @@ import java.util.Random;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * The Bedrock lean turns the model in the world exactly as the Java body tilt does, whatever way it faces. Bedrock's
- * side is modelled as Blockbench shows a Bedrock model: a bone rotation (x, y, z) is Rz(z) · Ry(−y) · Rx(−x) on
- * Blockbench axes, and a model facing yaw φ has those axes turned by 180° − φ about up.
+ * The Bedrock lean turns the model in the world exactly as the Java body tilt does, whatever way it faces, and the
+ * body offset goes out in the model's own pixels. Bedrock's side is modelled as Blockbench shows a Bedrock model: a
+ * bone rotation (x, y, z) is Rz(z) · Ry(−y) · Rx(−x) on Blockbench axes, and a model facing yaw φ has those axes
+ * turned by 180° − φ about up.
  */
 class BedrockBodyLeanTest {
     private static final List<String> LEAN = BedrockEntityBundleExporter.LEAN_PROPERTIES;
@@ -23,7 +24,7 @@ class BedrockBodyLeanTest {
 
     @Test
     void anUprightModelSendsNothing() {
-        assertNull(new BedrockBodyLean().update(null, 30F));
+        assertNull(new BedrockBodyLean().update(null, 30F, 0D, 1D));
     }
 
     @Test
@@ -33,7 +34,7 @@ class BedrockBodyLeanTest {
         for (float yaw : YAWS) {
             Vector3d heading = heading(yaw);
             Quaterniond tilt = new Quaterniond().rotationAxis(Math.toRadians(90), heading.z, 0, -heading.x);
-            assertLean(new BedrockBodyLean().update(tilt, yaw), 9000, 0, 0, "yaw " + yaw);
+            assertLean(new BedrockBodyLean().update(tilt, yaw, 0D, 1D), 9000, 0, 0, "yaw " + yaw);
         }
     }
 
@@ -43,7 +44,7 @@ class BedrockBodyLeanTest {
         for (float yaw : YAWS) {
             Vector3d heading = heading(yaw);
             Quaterniond tilt = new Quaterniond().rotationAxis(Math.toRadians(30), heading.x, 0, heading.z);
-            assertLean(new BedrockBodyLean().update(tilt, yaw), 0, 0, -3000, "yaw " + yaw);
+            assertLean(new BedrockBodyLean().update(tilt, yaw, 0D, 1D), 0, 0, -3000, "yaw " + yaw);
         }
     }
 
@@ -62,7 +63,7 @@ class BedrockBodyLeanTest {
         }
         for (Quaterniond tilt : tilts) {
             for (float yaw : YAWS) {
-                Map<String, Object> lean = new BedrockBodyLean().update(tilt, yaw);
+                Map<String, Object> lean = new BedrockBodyLean().update(tilt, yaw, 0D, 1D);
                 assertNotNull(lean);
                 Matrix3d turn = bedrockWorldTurn(degrees(lean, 0), degrees(lean, 1), degrees(lean, 2), yaw);
                 for (Vector3d axis : List.of(new Vector3d(1, 0, 0), new Vector3d(0, 1, 0), new Vector3d(0, 0, 1))) {
@@ -78,16 +79,39 @@ class BedrockBodyLeanTest {
     void anUnchangedLeanSendsNothing() {
         BedrockBodyLean lean = new BedrockBodyLean();
         Quaterniond tilt = new Quaterniond().rotationX(Math.toRadians(40));
-        assertNotNull(lean.update(tilt, 10F));
-        assertNull(lean.update(tilt, 10F));
-        assertNull(lean.update(new Quaterniond(tilt).rotateX(Math.toRadians(0.2)), 10F), "under half a degree");
+        assertNotNull(lean.update(tilt, 10F, 0D, 1D));
+        assertNull(lean.update(tilt, 10F, 0D, 1D));
+        assertNull(lean.update(new Quaterniond(tilt).rotateX(Math.toRadians(0.2)), 10F, 0D, 1D), "under half a degree");
         Quaterniond further = new Quaterniond(tilt).rotateX(Math.toRadians(1));
-        assertNotNull(lean.update(further, 10F));
-        assertNotNull(lean.update(further, 25F), "the same world lean is another turn in a model that faces elsewhere");
-        assertTrue(lean.isLeaning());
-        assertLean(lean.update(null, 25F), 0, 0, 0, "standing up sends an upright lean once");
-        assertFalse(lean.isLeaning());
-        assertNull(lean.update(null, 25F));
+        assertNotNull(lean.update(further, 10F, 0D, 1D));
+        assertNotNull(lean.update(further, 25F, 0D, 1D), "the same world lean is another turn in a model that faces elsewhere");
+        assertTrue(lean.isPlaced());
+        assertLean(lean.update(null, 25F, 0D, 1D), 0, 0, 0, "standing up sends an upright lean once");
+        assertFalse(lean.isPlaced());
+        assertNull(lean.update(null, 25F, 0D, 1D));
+    }
+
+    @Test
+    void anOffsetGoesOutInHundredthsOfAModelPixel() {
+        assertEquals(-800, BedrockBodyLean.offsetHundredths(-0.5D, 1D));
+        assertEquals(-400, BedrockBodyLean.offsetHundredths(-0.5D, 2D), "the carrier's scale doubles it again");
+        assertEquals(0, BedrockBodyLean.offsetHundredths(-0.5D, 0D));
+    }
+
+    @Test
+    void anOffsetIsSentWhenItChangesAndClearedWhenItEnds() {
+        BedrockBodyLean lean = new BedrockBodyLean();
+        assertEquals(Map.of(BedrockEntityBundleExporter.BODY_OFFSET_PROPERTY, -1456),
+                lean.update(null, Float.NaN, -0.91D, 1D), "a jellyfish hung on a 0.6-block body");
+        assertTrue(lean.isPlaced());
+        assertNull(lean.update(null, Float.NaN, -0.91D, 1D));
+        assertNull(lean.update(null, Float.NaN, -1.82D, 2D), "the same offset at twice the scale");
+        Map<String, Object> leaning = lean.update(new Quaterniond().rotationX(Math.toRadians(40)), 0F, -1.82D, 2D);
+        assertEquals(LEAN, List.copyOf(leaning.keySet()), "a lean alone leaves the offset as it was");
+        lean.update(null, Float.NaN, -1.82D, 2D);
+        assertEquals(Map.of(BedrockEntityBundleExporter.BODY_OFFSET_PROPERTY, 0), lean.update(null, Float.NaN, 0D, 2D));
+        assertFalse(lean.isPlaced());
+        assertNull(lean.update(null, Float.NaN, 0D, 2D));
     }
 
     /** The world turn Bedrock gives a model that faces this yaw for this lean bone rotation. */

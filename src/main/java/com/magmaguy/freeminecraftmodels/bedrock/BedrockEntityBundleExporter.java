@@ -44,12 +44,18 @@ public final class BedrockEntityBundleExporter {
     public static final String BUNDLE_ROOT = "assets/freeminecraftmodels/rspm_bedrock_pack";
     /**
      * The bone every root bone hangs from, pivoted at the middle of the model's cubes: turning it leans the whole
-     * model, as the body tilt does on Java (see {@link BedrockBodyLean}).
+     * model, as the body tilt does on Java, and moving it raises or lowers the model by its body offset (see
+     * {@link BedrockBodyLean}).
      */
     public static final String LEAN_BONE = "freeminecraftmodels_lean";
     /** The lean bone's rotation on x, y and z, in hundredths of a degree. */
     public static final List<String> LEAN_PROPERTIES = List.of(
             PROPERTY_NAMESPACE + ":lean_x", PROPERTY_NAMESPACE + ":lean_y", PROPERTY_NAMESPACE + ":lean_z");
+    /** The lean bone's height, in hundredths of a model pixel: the body offset of a model centred on its body. */
+    public static final String BODY_OFFSET_PROPERTY = PROPERTY_NAMESPACE + ":body_offset";
+    /** Every property the lean bone reads. */
+    public static final List<String> LEAN_BONE_PROPERTIES = List.of(
+            LEAN_PROPERTIES.get(0), LEAN_PROPERTIES.get(1), LEAN_PROPERTIES.get(2), BODY_OFFSET_PROPERTY);
     private static final String LEAN_KEY = "lean";
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
@@ -152,11 +158,11 @@ public final class BedrockEntityBundleExporter {
     }
 
     /**
-     * Whether a carrier with this many animations has room for the lean properties beside its packed animation
-     * flags. One without stays upright on Bedrock.
+     * Whether a carrier with this many animations has room for the lean bone's properties beside its packed animation
+     * flags. One without stays upright and on its feet on Bedrock.
      */
     public static boolean leans(int animationCount) {
-        return PackedBooleanPropertySet.requiredPropertyCount(animationCount) + LEAN_PROPERTIES.size()
+        return PackedBooleanPropertySet.requiredPropertyCount(animationCount) + LEAN_BONE_PROPERTIES.size()
                 <= CustomEntityPropertySchema.MAX_PROPERTIES;
     }
 
@@ -697,12 +703,20 @@ public final class BedrockEntityBundleExporter {
         return null;
     }
 
-    /** Turns the lean bone by the lean properties, which the server only sends when the lean changes. */
+    /**
+     * Turns the lean bone by the lean properties and moves it up or down by the body offset, which the server only
+     * sends when they change.
+     */
     private static JsonObject leanAnimation() {
         JsonArray rotation = new JsonArray();
         for (String property : LEAN_PROPERTIES) rotation.add(propertyQuery(property) + " / 100");
+        JsonArray position = new JsonArray();
+        position.add(0);
+        position.add(propertyQuery(BODY_OFFSET_PROPERTY) + " / 100");
+        position.add(0);
         JsonObject bone = new JsonObject();
         bone.add("rotation", rotation);
+        bone.add("position", position);
         JsonObject bones = new JsonObject();
         bones.add(LEAN_BONE, bone);
         JsonObject animation = new JsonObject();
@@ -712,28 +726,29 @@ public final class BedrockEntityBundleExporter {
     }
 
     /**
-     * Plays the lean only while the model leans. Its conditions also put the lean properties in a controller, which
-     * is where the RSPM Geyser bridge finds the properties to register when it reads the pack at startup.
+     * Plays the lean only while the model leans or is drawn off its feet. Its conditions also put the lean bone's
+     * properties in a controller, which is where the RSPM Geyser bridge finds the properties to register when it
+     * reads the pack at startup.
      */
     private static JsonObject leanController() {
-        List<String> leaning = new ArrayList<>(), upright = new ArrayList<>();
-        for (String property : LEAN_PROPERTIES) {
-            leaning.add(propertyQuery(property) + " != 0");
-            upright.add(propertyQuery(property) + " == 0");
+        List<String> placed = new ArrayList<>(), standing = new ArrayList<>();
+        for (String property : LEAN_BONE_PROPERTIES) {
+            placed.add(propertyQuery(property) + " != 0");
+            standing.add(propertyQuery(property) + " == 0");
         }
-        JsonObject uprightState = new JsonObject();
-        uprightState.add("transitions", transition("leaning", String.join(" || ", leaning)));
-        JsonObject leaningState = new JsonObject();
+        JsonObject standingState = new JsonObject();
+        standingState.add("transitions", transition("placed", String.join(" || ", placed)));
+        JsonObject placedState = new JsonObject();
         JsonArray animations = new JsonArray();
         animations.add("anim_" + LEAN_KEY);
-        leaningState.add("animations", animations);
-        leaningState.add("transitions", transition("upright", String.join(" && ", upright)));
+        placedState.add("animations", animations);
+        placedState.add("transitions", transition("standing", String.join(" && ", standing)));
 
         JsonObject states = new JsonObject();
-        states.add("upright", uprightState);
-        states.add("leaning", leaningState);
+        states.add("standing", standingState);
+        states.add("placed", placedState);
         JsonObject controller = new JsonObject();
-        controller.addProperty("initial_state", "upright");
+        controller.addProperty("initial_state", "standing");
         controller.add("states", states);
         return controller;
     }
