@@ -104,6 +104,8 @@ public class ModeledEntity {
     // World-space lean of the whole model about its middle, after its facing; null while upright. Never mutated
     // after publication, so the model clock and viewer admission read it without locking.
     private volatile Quaterniondc bodyTilt;
+    // Whether the model is drawn with its middle on its entity's middle instead of standing on the entity's feet.
+    private volatile boolean centeredOnBody;
 
     public ModeledEntity(String entityID, Location spawnLocation) {
         this.entityID = entityID;
@@ -239,7 +241,7 @@ public class ModeledEntity {
         if (location == null) return null;
         // No authored tag bone: a few pixels above the model's highest cube at rest, scaled with the entity.
         double top = skeletonBlueprint == null ? 2 : skeletonBlueprint.getModelTop();
-        return location.clone().add(0, top * scaleModifier + NAMEPLATE_MARGIN, 0);
+        return location.clone().add(0, top * scaleModifier + getBodyOffset() + NAMEPLATE_MARGIN, 0);
     }
 
     /**
@@ -521,11 +523,65 @@ public class ModeledEntity {
         bodyTilt = tilt == null ? null : new Quaterniond(tilt);
     }
 
-    /** Blocks above the model's feet that a body tilt turns about: the middle of its cubes at its current scale. */
+    /**
+     * Blocks above the entity's feet that a body tilt turns about: the middle of the model's cubes at its current
+     * scale, where it is drawn. For a model centred on its body that is the body's middle.
+     */
     public double getBodyTiltPivotHeight() {
+        return getModelMiddleHeight() + getBodyOffset();
+    }
+
+    /** Blocks above the model's own feet of the middle of its cubes, at its current scale. */
+    public double getModelMiddleHeight() {
         SkeletonBlueprint blueprint = getSkeletonBlueprint();
         if (blueprint == null) return 0D;
         return blueprint.getBodyTiltPivot() * scaleModifier;
+    }
+
+    public boolean isCenteredOnBody() {
+        return centeredOnBody;
+    }
+
+    /**
+     * Draws the model with the middle of its cubes on the middle of its entity instead of standing on the entity's
+     * feet. A flying or swimming creature whose model is much bigger than its hidden body then moves, turns and
+     * leans around that body, and its nameplate, click box and hit box move with it.
+     */
+    public void setCenteredOnBody(boolean centered) {
+        centeredOnBody = centered;
+    }
+
+    /**
+     * Blocks the model is drawn above its entity's feet: none while it stands on them; for a model centred on its
+     * body, whatever puts the middle of its cubes on the body's middle, below the feet when the model is the taller.
+     */
+    public double getBodyOffset() {
+        if (!centeredOnBody) return 0D;
+        double body = bodyHeight();
+        return body <= 0D ? 0D : body / 2D - getModelMiddleHeight();
+    }
+
+    /** Blocks above the entity's feet of the model's lowest cube as drawn, at its current scale. */
+    public double getModelBottomHeight() {
+        SkeletonBlueprint blueprint = getSkeletonBlueprint();
+        if (blueprint == null) return 0D;
+        return blueprint.getModelBottom() * scaleModifier + getBodyOffset();
+    }
+
+    /**
+     * Blocks above the entity's feet where a box of this height standing for the model starts: at the feet, or for
+     * a model centred on its body, wherever centres the box on the body too.
+     */
+    public double getBoxLift(double height) {
+        if (!centeredOnBody) return 0D;
+        double body = bodyHeight();
+        return body <= 0D ? 0D : body / 2D - height / 2D;
+    }
+
+    /** Height of the entity the model is on, in blocks, or 0 without one. */
+    protected double bodyHeight() {
+        Entity body = underlyingEntity;
+        return body == null || !body.isValid() ? 0D : body.getHeight();
     }
 
     /**

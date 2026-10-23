@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.pets;
 
 import com.magmaguy.freeminecraftmodels.customentity.core.TravelOrientation;
+import com.magmaguy.magmacore.ai.MindBodyLocomotion;
 import org.bukkit.Bukkit;
 import org.bukkit.Server;
 import org.bukkit.configuration.ConfigurationSection;
@@ -17,6 +18,7 @@ import java.util.logging.Handler;
 import java.util.logging.LogRecord;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -100,6 +102,21 @@ class PetSpeciesOrientationTest {
         }
         assertTrue(warnings.stream().anyMatch(message -> message.contains("sideways") && message.contains("jellyfish.pet.yml")),
                 "the file's author is told which value was wrong: " + warnings);
+    }
+
+    @Test
+    void flyingAndSwimmingSpeciesCentreOnTheirBodyUnlessTheFileSaysNot() throws InvalidConfigurationException {
+        YamlConfiguration empty = new YamlConfiguration();
+        assertTrue(PetSpecies.centerOnBody(empty, MindBodyLocomotion.FLYING));
+        assertTrue(PetSpecies.centerOnBody(empty, MindBodyLocomotion.AQUATIC));
+        assertFalse(PetSpecies.centerOnBody(empty, MindBodyLocomotion.GROUNDED));
+        assertFalse(PetSpecies.centerOnBody(empty, MindBodyLocomotion.AMPHIBIOUS));
+        YamlConfiguration off = new YamlConfiguration();
+        off.loadFromString("centerOnBody: false");
+        assertFalse(PetSpecies.centerOnBody(off, MindBodyLocomotion.FLYING));
+        YamlConfiguration on = new YamlConfiguration();
+        on.loadFromString("centerOnBody: true");
+        assertTrue(PetSpecies.centerOnBody(on, MindBodyLocomotion.GROUNDED));
     }
 
     @Test
