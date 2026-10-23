@@ -185,6 +185,15 @@ public class Skeleton {
 
     public void generateDisplays() {
         rootBone.generateDisplay();
+        // A light override set before the displays existed reaches them now.
+        if (modeledEntity != null && modeledEntity.hasBrightnessOverride())
+            applyBrightnessOverride(modeledEntity.getBrightnessOverrideBlockLight(),
+                    modeledEntity.getBrightnessOverrideSkyLight());
+    }
+
+    /** Fixed light for every display bone, 0 to 15 each; a negative block light drops the override. */
+    public void applyBrightnessOverride(int blockLight, int skyLight) {
+        for (Bone bone : boneMap.values()) bone.setBrightnessOverride(blockLight, skyLight);
     }
 
     public void remove() {
