@@ -7,6 +7,7 @@ import com.magmaguy.freeminecraftmodels.config.ModelsFolder;
 import com.magmaguy.freeminecraftmodels.config.PetsConfig;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.freeminecraftmodels.pets.interactions.PetInteractionRuntime;
 import com.magmaguy.magmacore.ai.MindBodyProfile;
 import com.magmaguy.magmacore.ai.MindHandle;
 import com.magmaguy.magmacore.ai.MindHost;
@@ -105,10 +106,12 @@ public final class PetManager {
         ticks = 0;
         clock = Bukkit.getScheduler().runTaskTimer(plugin, PetManager::tickAll, 1L, 1L);
         initialize();
+        PetInteractionRuntime.start(plugin);
     }
 
     /** Despawns every pet and lets go of the host; NMSManager's shutdown closes the host itself. */
     public static void stop() {
+        PetInteractionRuntime.stop();
         shutdown();
         if (clock != null) clock.cancel();
         clock = null;

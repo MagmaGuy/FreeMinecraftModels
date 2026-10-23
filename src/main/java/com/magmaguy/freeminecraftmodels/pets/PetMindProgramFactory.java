@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.pets;
 
+import com.magmaguy.freeminecraftmodels.pets.interactions.PetInteractionRuntime;
 import com.magmaguy.magmacore.ai.MindBehavior;
 import com.magmaguy.magmacore.ai.MindContext;
 import com.magmaguy.magmacore.ai.MindControl;
@@ -31,12 +32,14 @@ final class PetMindProgramFactory {
 
     static MindProgram create(Plugin plugin, PetControl control) {
         String owner = control.isWild() ? "wild" : "owned";
-        return MindProgram.builder(new NamespacedKey(plugin, "pet/" + control.species().id() + "/" + owner).toString(), 1L)
+        MindProgram.Builder builder = MindProgram.builder(new NamespacedKey(plugin, "pet/" + control.species().id() + "/" + owner).toString(), 1L)
                 .behavior(new StayBehavior(control))
                 .behavior(new FollowOwnerBehavior(control))
                 .behavior(new DriftBehavior(control))
-                .behavior(new HoverBehavior(control))
-                .build();
+                .behavior(new HoverBehavior(control));
+        // Campfire gathering, day perch and rain bloom drifts, when the species' pet file asks for them.
+        PetInteractionRuntime.addBehaviors(builder, control);
+        return builder.build();
     }
 
     private static final Set<MindControl> MOVE_AND_LOOK = EnumSet.of(MindControl.MOVE, MindControl.LOOK);

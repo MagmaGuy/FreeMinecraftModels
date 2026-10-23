@@ -1,7 +1,9 @@
 package com.magmaguy.freeminecraftmodels.pets;
 
+import com.magmaguy.freeminecraftmodels.api.ModeledEntityHitboxContactEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityRightClickEvent;
 import com.magmaguy.freeminecraftmodels.config.PetsConfig;
+import com.magmaguy.freeminecraftmodels.pets.interactions.PetSting;
 import org.bukkit.Material;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
@@ -98,6 +100,12 @@ public final class PetListeners implements Listener {
         event.getDrops().clear();
         event.setDroppedExp(0);
         manager.bodyDied(pet);
+    }
+
+    /** A pet's model touched a player: wild pets sting, and no pet deals FMM's contact attack. */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onModelContact(ModeledEntityHitboxContactEvent event) {
+        PetSting.onContact(event);
     }
 
     /** Pet bodies are never saved, but a crash can leave one in a chunk; nothing would drive or show it. */
