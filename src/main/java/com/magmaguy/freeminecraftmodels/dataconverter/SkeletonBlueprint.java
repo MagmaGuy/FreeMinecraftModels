@@ -353,6 +353,14 @@ public class SkeletonBlueprint {
         return modelBottom;
     }
 
+    /**
+     * Height a body tilt turns the model about, in blocks at scale 1: the middle of its cubes. Java and Bedrock lean
+     * about this same point.
+     */
+    public double getBodyTiltPivot() {
+        return (getModelBottom() + getModelTop()) / 2d;
+    }
+
     private static double cubeBottom(BoneBlueprint bone) {
         double bottom = Double.POSITIVE_INFINITY;
         String name = bone.getBoneName() == null ? "" : bone.getBoneName();

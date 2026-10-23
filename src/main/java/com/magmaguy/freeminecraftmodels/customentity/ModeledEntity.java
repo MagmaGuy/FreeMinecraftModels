@@ -525,7 +525,7 @@ public class ModeledEntity {
     public double getBodyTiltPivotHeight() {
         SkeletonBlueprint blueprint = getSkeletonBlueprint();
         if (blueprint == null) return 0D;
-        return (blueprint.getModelBottom() + blueprint.getModelTop()) / 2D * scaleModifier;
+        return blueprint.getBodyTiltPivot() * scaleModifier;
     }
 
     /**

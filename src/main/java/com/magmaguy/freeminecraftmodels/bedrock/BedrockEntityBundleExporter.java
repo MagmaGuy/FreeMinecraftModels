@@ -5,6 +5,8 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.magmaguy.easyminecraftgoals.customentity.CustomEntityPropertySchema;
+import com.magmaguy.easyminecraftgoals.customentity.PackedBooleanPropertySet;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.AnimationBlueprint;
@@ -40,6 +42,15 @@ import java.util.Set;
 public final class BedrockEntityBundleExporter {
     public static final String PROPERTY_NAMESPACE = "freeminecraftmodels";
     public static final String BUNDLE_ROOT = "assets/freeminecraftmodels/rspm_bedrock_pack";
+    /**
+     * The bone every root bone hangs from, pivoted at the middle of the model's cubes: turning it leans the whole
+     * model, as the body tilt does on Java (see {@link BedrockBodyLean}).
+     */
+    public static final String LEAN_BONE = "freeminecraftmodels_lean";
+    /** The lean bone's rotation on x, y and z, in hundredths of a degree. */
+    public static final List<String> LEAN_PROPERTIES = List.of(
+            PROPERTY_NAMESPACE + ":lean_x", PROPERTY_NAMESPACE + ":lean_y", PROPERTY_NAMESPACE + ":lean_z");
+    private static final String LEAN_KEY = "lean";
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
@@ -138,6 +149,19 @@ public final class BedrockEntityBundleExporter {
 
     public static String identifier(String modelId) {
         return PROPERTY_NAMESPACE + ":" + modelId;
+    }
+
+    /**
+     * Whether a carrier with this many animations has room for the lean properties beside its packed animation
+     * flags. One without stays upright on Bedrock.
+     */
+    public static boolean leans(int animationCount) {
+        return PackedBooleanPropertySet.requiredPropertyCount(animationCount) + LEAN_PROPERTIES.size()
+                <= CustomEntityPropertySchema.MAX_PROPERTIES;
+    }
+
+    private static boolean leans(FileModelConverter converter) {
+        return leans(exportedAnimationNames(converter).size());
     }
 
     public static String safeBoneName(BoneBlueprint bone) {
@@ -262,11 +286,20 @@ public final class BedrockEntityBundleExporter {
         description.add("visible_bounds_offset", array(0, 2, 0));
 
         JsonArray bones = new JsonArray();
+        boolean lean = leans(converter);
+        if (lean) {
+            JsonObject leanBone = new JsonObject();
+            leanBone.addProperty("name", LEAN_BONE);
+            leanBone.add("pivot", bedrockPosition(0, converter.getSkeletonBlueprint().getBodyTiltPivot() * 16D, 0));
+            bones.add(leanBone);
+        }
         for (BoneBlueprint bone : visualBones) {
             JsonObject bedrockBone = new JsonObject();
             bedrockBone.addProperty("name", safeBoneName(bone));
             if (bone.getParent() != null && visualBones.contains(bone.getParent())) {
                 bedrockBone.addProperty("parent", safeBoneName(bone.getParent()));
+            } else if (lean) {
+                bedrockBone.addProperty("parent", LEAN_BONE);
             }
             Vector3f pivot = bone.getOriginalOrigin();
             if (pivot.lengthSquared() > 0.000001f) {
@@ -482,6 +515,7 @@ public final class BedrockEntityBundleExporter {
         if (animations.entrySet().isEmpty()) {
             animations.add("animation.fmm." + modelId + "." + animationKey("idle"), noopAnimation(visualBones));
         }
+        if (leans(converter)) animations.add("animation.fmm." + modelId + "." + LEAN_KEY, leanAnimation());
 
         JsonObject rootJson = new JsonObject();
         rootJson.addProperty("format_version", "1.8.0");
@@ -536,6 +570,7 @@ public final class BedrockEntityBundleExporter {
             controller.add("states", states);
             controllers.add("controller.animation.fmm." + modelId + "." + animationKey(animation), controller);
         }
+        if (leans(converter)) controllers.add("controller.animation.fmm." + modelId + "." + LEAN_KEY, leanController());
 
         JsonObject rootJson = new JsonObject();
         rootJson.addProperty("format_version", "1.10.0");
@@ -567,6 +602,11 @@ public final class BedrockEntityBundleExporter {
             animations.addProperty("anim_" + safe, "animation.fmm." + modelId + "." + safe);
             animations.addProperty("control_" + safe, "controller.animation.fmm." + modelId + "." + safe);
         }
+        boolean lean = leans(converter);
+        if (lean) {
+            animations.addProperty("anim_" + LEAN_KEY, "animation.fmm." + modelId + "." + LEAN_KEY);
+            animations.addProperty("control_" + LEAN_KEY, "controller.animation.fmm." + modelId + "." + LEAN_KEY);
+        }
         if (!animations.entrySet().isEmpty()) {
             description.add("animations", animations);
         }
@@ -575,6 +615,7 @@ public final class BedrockEntityBundleExporter {
         for (String animation : animateOrder(exportedAnimations)) {
             animate.add("control_" + animationKey(animation));
         }
+        if (lean) animate.add("control_" + LEAN_KEY);
         if (!animate.isEmpty()) {
             JsonObject scripts = new JsonObject();
             scripts.add("animate", animate);
@@ -654,6 +695,59 @@ public final class BedrockEntityBundleExporter {
             return "idle";
         }
         return null;
+    }
+
+    /** Turns the lean bone by the lean properties, which the server only sends when the lean changes. */
+    private static JsonObject leanAnimation() {
+        JsonArray rotation = new JsonArray();
+        for (String property : LEAN_PROPERTIES) rotation.add(propertyQuery(property) + " / 100");
+        JsonObject bone = new JsonObject();
+        bone.add("rotation", rotation);
+        JsonObject bones = new JsonObject();
+        bones.add(LEAN_BONE, bone);
+        JsonObject animation = new JsonObject();
+        animation.addProperty("loop", true);
+        animation.add("bones", bones);
+        return animation;
+    }
+
+    /**
+     * Plays the lean only while the model leans. Its conditions also put the lean properties in a controller, which
+     * is where the RSPM Geyser bridge finds the properties to register when it reads the pack at startup.
+     */
+    private static JsonObject leanController() {
+        List<String> leaning = new ArrayList<>(), upright = new ArrayList<>();
+        for (String property : LEAN_PROPERTIES) {
+            leaning.add(propertyQuery(property) + " != 0");
+            upright.add(propertyQuery(property) + " == 0");
+        }
+        JsonObject uprightState = new JsonObject();
+        uprightState.add("transitions", transition("leaning", String.join(" || ", leaning)));
+        JsonObject leaningState = new JsonObject();
+        JsonArray animations = new JsonArray();
+        animations.add("anim_" + LEAN_KEY);
+        leaningState.add("animations", animations);
+        leaningState.add("transitions", transition("upright", String.join(" && ", upright)));
+
+        JsonObject states = new JsonObject();
+        states.add("upright", uprightState);
+        states.add("leaning", leaningState);
+        JsonObject controller = new JsonObject();
+        controller.addProperty("initial_state", "upright");
+        controller.add("states", states);
+        return controller;
+    }
+
+    private static JsonArray transition(String state, String condition) {
+        JsonObject transition = new JsonObject();
+        transition.addProperty(state, condition);
+        JsonArray transitions = new JsonArray();
+        transitions.add(transition);
+        return transitions;
+    }
+
+    private static String propertyQuery(String property) {
+        return "query.property('" + property + "')";
     }
 
     private static JsonObject noopAnimation(List<BoneBlueprint> visualBones) {
