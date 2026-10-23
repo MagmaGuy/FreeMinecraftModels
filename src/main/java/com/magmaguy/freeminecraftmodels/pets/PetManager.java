@@ -377,7 +377,6 @@ public final class PetManager {
         if (control.isWild()) {
             if (PetsConfig.mode != PetsConfig.Mode.CREATURES || control.isBaby() || !pet.isTamingFood(held)) return held.getType() != Material.LEAD;
             consume(player, held);
-            playInteract(control);
             if (ThreadLocalRandom.current().nextDouble() < pet.tameChance()) {
                 tame(player, control);
             } else {
@@ -395,7 +394,6 @@ public final class PetManager {
             consume(player, held);
             control.setLoveUntil(ticks + pet.loveTicks());
             particles(control, Particle.HEART, 7);
-            playInteract(control);
             tryBreed(control);
             return true;
         }
@@ -408,7 +406,6 @@ public final class PetManager {
             player.sendMessage(ChatColorConverter.convert((stay ? PetsConfig.stayMessage : PetsConfig.followMessage)
                     .replace("$pet", displayName(control.record()))));
         }
-        playInteract(control);
         particles(control, Particle.HEART, 2);
         return true;
     }
@@ -464,6 +461,9 @@ public final class PetManager {
         collection.add(baby);
         particles(mother, Particle.HEART, 10);
         particles(father, Particle.HEART, 10);
+        // The interact animation marks a success (a tame, a birth), not every feeding, which made it spam.
+        playInteract(mother);
+        playInteract(father);
         if (baby.equipped) {
             LivingEntity body = mother.body();
             spawn(pet, owner.getUniqueId(), baby, model, true, body == null ? owner.getLocation() : body.getLocation(), null);
