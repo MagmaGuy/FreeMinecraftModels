@@ -5,6 +5,8 @@ import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
+import com.magmaguy.freeminecraftmodels.customentity.core.TravelOrientation;
+import com.magmaguy.freeminecraftmodels.customentity.core.TravelTilt;
 import com.magmaguy.freeminecraftmodels.customentity.core.TurnInertia;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.HitboxBlueprint;
@@ -72,6 +74,16 @@ public class DynamicEntity extends ModeledEntity {
     // The model's facing, stepped once per model tick toward the mob's body yaw. Read from any thread.
     private final TurnInertia turnInertia = new TurnInertia();
     private volatile float modelYaw = Float.NaN;
+    /**
+     * How the model leans with its travel; upright by default. A flying or swimming creature can lead with its
+     * top or its front instead (see {@link TravelOrientation}).
+     */
+    @Getter
+    private volatile TravelOrientation travelOrientation = TravelOrientation.UPRIGHT;
+    // Stepped only by the model tick, under the skeleton's lock.
+    private final TravelTilt travelTilt = new TravelTilt();
+    // Whether the body tilt is the travel lean's, still easing out; a tilt set through setBodyTilt is left alone.
+    private boolean travelLeaning;
     // Cube root of the hitbox bone's volume at scale 1; 0 when the model has none, -1 until computed.
     private double hitboxSize = -1;
     // The part of the mob's scale that only lifts its saddle onto the model's seat bone (see liftSaddleTo).
@@ -182,7 +194,32 @@ public class DynamicEntity extends ModeledEntity {
         //todo: investigate if this is still necessary since everything now updates anyway, at least for animations
         syncSkeletonWithEntity();
         updateModelYaw();
+        updateTravelTilt();
         super.tick(abstractPacketBundle);
+    }
+
+    /** Sets how the model leans with its travel; null stands it upright again. */
+    public void setTravelOrientation(@Nullable TravelOrientation orientation) {
+        travelOrientation = orientation == null ? TravelOrientation.UPRIGHT : orientation;
+    }
+
+    /**
+     * Leans the model with its travel, after its facing and before the bones transform. An upright model skips
+     * the work, and leaves alone any tilt set through {@link #setBodyTilt}; one that just turned upright again
+     * eases out of its last lean like any other stop.
+     */
+    private void updateTravelTilt() {
+        TravelOrientation orientation = travelOrientation;
+        if (orientation.style() == TravelOrientation.Style.UPRIGHT && !travelLeaning) {
+            travelTilt.reset();
+            return;
+        }
+        if (underlyingEntity == null || !underlyingEntity.isValid()) return;
+        Location at = underlyingEntity.getLocation();
+        boolean free = !isDying() && syncMovement && !isRiddenByPlayer();
+        org.joml.Quaterniond lean = travelTilt.step(at.getX(), at.getY(), at.getZ(), modelYaw, orientation, free);
+        travelLeaning = lean != null;
+        setBodyTilt(lean);
     }
 
     /**

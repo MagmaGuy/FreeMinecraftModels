@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.pets;
 
+import com.magmaguy.freeminecraftmodels.customentity.core.TravelOrientation;
 import com.magmaguy.freeminecraftmodels.pets.interactions.PetInteractions;
 import com.magmaguy.magmacore.ai.MindBodyLocomotion;
 import com.magmaguy.magmacore.util.Logger;
@@ -80,6 +81,7 @@ public final class PetSpecies {
     private final double hoverVariance;
     private final WildSpawn wildSpawn;
     private final MindBodyLocomotion locomotion;
+    private final TravelOrientation orientation;
     private final PetInteractions interactions;
 
     private PetSpecies(File file, YamlConfiguration config) {
@@ -143,7 +145,23 @@ public final class PetSpecies {
             Logger.warn("Unknown locomotion " + locomotionName + " in " + filename + "; using FLYING");
         }
         this.locomotion = movement;
+        this.orientation = orientation(section(config, "orientation"), filename);
         this.interactions = PetInteractions.read(config, filename, model);
+    }
+
+    /** How the model leans with its travel; upright unless the file asks for a top-first or front-first lean. */
+    static TravelOrientation orientation(ConfigurationSection section, String filename) {
+        TravelOrientation.Style style = TravelOrientation.Style.UPRIGHT;
+        String styleName = section.getString("style", "UPRIGHT");
+        try {
+            style = TravelOrientation.Style.valueOf(styleName.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ignored) {
+            Logger.warn("Unknown orientation.style " + styleName + " in " + filename + "; using UPRIGHT");
+        }
+        TravelOrientation defaults = TravelOrientation.UPRIGHT;
+        return new TravelOrientation(style, section.getDouble("startSpeed", defaults.startSpeed()),
+                section.getDouble("fullSpeed", defaults.fullSpeed()), section.getDouble("maxTilt", defaults.maxTilt()),
+                section.getDouble("turnSpeed", defaults.turnSpeed()));
     }
 
     /** The species a pet file defines, or null when the file is disabled or unreadable. */
@@ -352,5 +370,10 @@ public final class PetSpecies {
 
     public MindBodyLocomotion locomotion() {
         return locomotion;
+    }
+
+    /** How the model leans with its travel. */
+    public TravelOrientation orientation() {
+        return orientation;
     }
 }

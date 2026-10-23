@@ -4,6 +4,7 @@ import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.easyminecraftgoals.internal.PacketModelEntity;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
+import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.utils.TransformationMatrix;
 import com.magmaguy.magmacore.util.VersionChecker;
@@ -11,6 +12,8 @@ import lombok.Getter;
 import org.bukkit.Location;
 import org.bukkit.util.EulerAngle;
 import org.bukkit.util.Vector;
+import org.joml.Quaterniondc;
+import org.joml.Vector3d;
 import org.joml.Vector3f;
 
 public class BoneTransforms {
@@ -26,6 +29,9 @@ public class BoneTransforms {
     private final double[] positionBuffer = new double[3];
     private final double[] rotationBuffer = new double[3];
     private TransformationMatrix globalMatrix = new TransformationMatrix();
+    // The root's body tilt about its pivot; created the first time the model leans.
+    private TransformationMatrix tiltMatrix;
+    private final Vector3d tiltAngles = new Vector3d();
     @Getter
     private PacketModelEntity packetArmorStandEntity = null;
     @Getter
@@ -78,6 +84,26 @@ public class BoneTransforms {
         scaleAnimation();
         shiftPivotPointBack();
         rotateByEntityYaw();
+        tiltBody();
+    }
+
+    /**
+     * Leans the whole model by its body tilt: a world-space rotation about the middle of its height, applied to the
+     * root after everything else, so every bone, locator and mount point follows.
+     */
+    private void tiltBody() {
+        if (parent != null) return;
+        ModeledEntity modeledEntity = bone.getSkeleton().getModeledEntity();
+        Quaterniondc tilt = modeledEntity == null ? null : modeledEntity.getBodyTilt();
+        if (tilt == null) return;
+        if (tiltMatrix == null) tiltMatrix = new TransformationMatrix();
+        float pivot = (float) modeledEntity.getBodyTiltPivotHeight();
+        tilt.getEulerAnglesZYX(tiltAngles);
+        tiltMatrix.resetToIdentityMatrix();
+        tiltMatrix.translateLocal(0, pivot, 0);
+        tiltMatrix.rotateLocal(tiltAngles.x, tiltAngles.y, tiltAngles.z);
+        tiltMatrix.translateLocal(0, -pivot, 0);
+        TransformationMatrix.multiplyMatrices(tiltMatrix, localMatrix, localMatrix);
     }
 
     private void scaleAnimation() {
