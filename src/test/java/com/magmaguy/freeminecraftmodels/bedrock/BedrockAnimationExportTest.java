@@ -46,9 +46,12 @@ class BedrockAnimationExportTest {
         DefaultConfig.deathBlendTicks = 4;
         Map<String, Object> keyframe = Map.of("channel", "position", "interpolation", "linear", "time", 0,
                 "data_points", List.of(Map.of("x", 0, "y", 4, "z", 0)));
+        Map<String, Object> expression = Map.of("channel", "rotation", "interpolation", "linear", "time", 0.25,
+                "data_points", List.of(Map.of("x", "q.anim_time * 10", "y", "", "z", 5)));
         List<Object> animations = List.of(
                 animation("walk", false, "", keyframe), animation("idle", false, "", keyframe),
-                animation("death", false, "", keyframe), animation("attack", true, "0.5", keyframe));
+                animation("death", false, "", keyframe), animation("attack", true, "0.5", keyframe),
+                animation("spin", false, "", expression));
         Path source = directory.resolve("blend_export.bbmodel");
         Files.writeString(source, new Gson().toJson(Map.of(
                 "meta", Map.of("format_version", "5.0", "model_format", "free"),
@@ -79,6 +82,20 @@ class BedrockAnimationExportTest {
         assertEquals(0.5, attack.get("blend_weight").getAsDouble(), 1e-9);
         assertFalse(idle.has("override_previous_animation"));
         assertFalse(idle.has("blend_weight"));
+    }
+
+    @Test
+    void expressionKeyframesAreWrittenAsAuthored() throws Exception {
+        Path root = directory.resolve("bundle");
+        invoke("writeAnimations", root);
+        JsonObject animations = read(root.resolve("animations/" + converter.getID() + ".animation.json"))
+                .getAsJsonObject("animations");
+        JsonObject rotation = find(animations, "spin").getAsJsonObject("bones").getAsJsonObject("body")
+                .getAsJsonObject("rotation");
+        assertEquals(List.of("0.25"), List.copyOf(rotation.keySet()), "the authored time, not every tick");
+        assertEquals("q.anim_time * 10", rotation.getAsJsonArray("0.25").get(0).getAsString());
+        assertEquals(0, rotation.getAsJsonArray("0.25").get(1).getAsDouble(), 1e-9, "a blank axis is 0");
+        assertEquals(5, rotation.getAsJsonArray("0.25").get(2).getAsDouble(), 1e-9, "a number stays as written");
     }
 
     @Test

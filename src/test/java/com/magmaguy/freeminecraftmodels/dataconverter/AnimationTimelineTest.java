@@ -16,7 +16,7 @@ class AnimationTimelineTest {
                 frame(20D / 24D, 10F),
                 frame(40D / 24D, 20F)));
 
-        assertEquals(12F, AnimationTimeline.sample(track, 1, Keyframe::getDataX), 0.00001F);
+        assertEquals(12F, AnimationTimeline.sample(track, 1, 0, null), 0.00001F);
     }
 
     @Test
@@ -28,7 +28,7 @@ class AnimationTimelineTest {
                 frame(2D, 20F)));
 
         assertEquals(3, track.size());
-        assertEquals(15F, AnimationTimeline.sample(track, 1, Keyframe::getDataX));
+        assertEquals(15F, AnimationTimeline.sample(track, 1, 0, null));
     }
 
     @Test
@@ -37,7 +37,7 @@ class AnimationTimelineTest {
                 frame(0D, 0F),
                 frame(20D, 20F)));
 
-        assertEquals(19F, AnimationTimeline.sample(track, 19, Keyframe::getDataX));
+        assertEquals(19F, AnimationTimeline.sample(track, 19, 0, null));
     }
 
     @Test

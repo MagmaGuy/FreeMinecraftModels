@@ -2,12 +2,15 @@ package com.magmaguy.freeminecraftmodels.animation;
 
 import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
 import com.magmaguy.freeminecraftmodels.dataconverter.AnimationFrame;
+import com.magmaguy.freeminecraftmodels.dataconverter.ExpressionTrack;
+import com.magmaguy.freeminecraftmodels.particles.molang.MolangContext;
 
 import java.util.Arrays;
 
 /**
  * Animation rotation (radians), translation and scale for every bone of one model, in the manager's bone order.
- * Buffers are reused every tick, so mixing allocates nothing.
+ * Buffers are reused every tick, so mixing allocates nothing. Channels keyed with MoLang are sampled in the
+ * entity's context on top of the baked frames, which hold those channels at rest.
  */
 final class Pose {
     private final float[] rotation;
@@ -33,8 +36,11 @@ final class Pose {
         System.arraycopy(other.scale, 0, scale, 0, scale.length);
     }
 
-    /** The animation's current frame scaled by its blend weight. A bone it does not key rests. */
-    void sample(Playback playback) {
+    /**
+     * The animation's current frame scaled by its blend weight. A bone it does not key rests. The context is
+     * positioned at this playback's time and is only read when the animation has expression keyframes.
+     */
+    void sample(Playback playback, MolangContext context) {
         int frame = playback.frame();
         AnimationFrame[][] tracks = playback.animation.getTracks();
         float weight = (float) playback.animation.getAnimationBlueprint().getBlendWeight();
@@ -55,6 +61,7 @@ final class Pose {
             scale[i + 1] = weighted(keyed.scaleY, weight);
             scale[i + 2] = weighted(keyed.scaleZ, weight);
         }
+        addExpressions(playback, context, weight);
     }
 
     /** Fades from another pose: weight 0 is all of {@code from}, 1 is all of this pose. */
@@ -68,7 +75,7 @@ final class Pose {
      * Layers an action over this pose on the bones it keys, by the Bedrock rule: an override animation replaces
      * those bones' pose, any other adds its rotation and translation and multiplies its scale.
      */
-    void applyAction(Playback action) {
+    void applyAction(Playback action, MolangContext context) {
         int frame = action.frame();
         AnimationFrame[][] tracks = action.animation.getTracks();
         float weight = (float) action.animation.getAnimationBlueprint().getBlendWeight();
@@ -87,6 +94,32 @@ final class Pose {
             scale[i] *= weighted(keyed.scaleX, weight);
             scale[i + 1] *= weighted(keyed.scaleY, weight);
             scale[i + 2] *= weighted(keyed.scaleZ, weight);
+        }
+        addExpressions(action, context, weight);
+    }
+
+    /**
+     * Layers the expression channels over the frame just applied. Their baked values are the rest pose, so adding
+     * rotation and translation and multiplying scale gives the same result whether the frame was set or added.
+     */
+    private void addExpressions(Playback playback, MolangContext context, float weight) {
+        ExpressionTrack[][] expressions = playback.animation.getExpressionTracks();
+        int frame = playback.frame();
+        if (expressions == null || frame < 0) return;
+        for (int bone = 0; bone < expressions.length; bone++) {
+            ExpressionTrack[] channels = expressions[bone];
+            if (channels == null) continue;
+            int i = bone * 3;
+            for (ExpressionTrack track : channels) {
+                for (int axis = 0; axis < 3; axis++) {
+                    float value = track.sample(axis, frame, context);
+                    switch (track.channel()) {
+                        case ROTATION -> rotation[i + axis] += value * weight;
+                        case POSITION -> translation[i + axis] += value * weight;
+                        case SCALE -> scale[i + axis] *= weighted(value, weight);
+                    }
+                }
+            }
         }
     }
 
@@ -113,8 +146,11 @@ final class Pose {
     }
 
     private static float weighted(Float value, float weight) {
-        float raw = value != null ? value : 1f;
-        return 1 + (raw - 1) * weight;
+        return weighted(value != null ? value : 1f, weight);
+    }
+
+    private static float weighted(float value, float weight) {
+        return 1 + (value - 1) * weight;
     }
 
     private static void lerp(float[] from, float[] to, float weight) {
