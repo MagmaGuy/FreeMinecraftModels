@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.config;
 
+import com.magmaguy.freeminecraftmodels.pets.migration.PetMigrations;
 import com.magmaguy.magmacore.config.ConfigurationEngine;
 import com.magmaguy.magmacore.config.ConfigurationFile;
 
@@ -100,5 +101,6 @@ public class PetsConfig extends ConfigurationFile {
         breedingCooldownMessage = ConfigurationEngine.setString(fileConfiguration, "breedingCooldownMessage",
                 "&7Your $pet &7is not ready to breed again yet.");
         bornMessage = ConfigurationEngine.setString(fileConfiguration, "bornMessage", "&aA $pet &awas born!");
+        PetMigrations.loadSettings(fileConfiguration);
     }
 }

@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.pets;
 
+import com.magmaguy.freeminecraftmodels.pets.interactions.PetInteractions;
 import com.magmaguy.magmacore.ai.MindBodyLocomotion;
 import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.Location;
@@ -79,6 +80,7 @@ public final class PetSpecies {
     private final double hoverVariance;
     private final WildSpawn wildSpawn;
     private final MindBodyLocomotion locomotion;
+    private final PetInteractions interactions;
 
     private PetSpecies(File file, YamlConfiguration config) {
         this.file = file;
@@ -141,6 +143,7 @@ public final class PetSpecies {
             Logger.warn("Unknown locomotion " + locomotionName + " in " + filename + "; using FLYING");
         }
         this.locomotion = movement;
+        this.interactions = PetInteractions.read(config, filename, model);
     }
 
     /** The species a pet file defines, or null when the file is disabled or unreadable. */
@@ -340,6 +343,11 @@ public final class PetSpecies {
 
     public WildSpawn wildSpawn() {
         return wildSpawn;
+    }
+
+    /** Campfire, rain bloom, glow, sting, day perch, drizzle and migration settings; each null when off. */
+    public PetInteractions interactions() {
+        return interactions;
     }
 
     public MindBodyLocomotion locomotion() {
