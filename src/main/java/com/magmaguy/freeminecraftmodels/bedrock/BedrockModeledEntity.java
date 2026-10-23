@@ -40,7 +40,7 @@ public final class BedrockModeledEntity {
     private String activeAnimation;
     private String activeAction;
     private Map<String, Object> lastProperties = new LinkedHashMap<>();
-    // Null when the carrier has no room for the lean properties.
+    // Null when the carrier has no room for the lean bone's properties.
     private final BedrockBodyLean bodyLean;
 
     public BedrockModeledEntity(ModeledEntity modeledEntity,
@@ -53,7 +53,7 @@ public final class BedrockModeledEntity {
         CustomEntityPropertySchema.Builder schema = CustomEntityPropertySchema.builder()
                 .addPackedBooleans(BedrockEntityBundleExporter.PROPERTY_NAMESPACE + ":anim", animations.size());
         boolean leans = BedrockEntityBundleExporter.leans(animations.size());
-        if (leans) BedrockEntityBundleExporter.LEAN_PROPERTIES.forEach(schema::addInt);
+        if (leans) BedrockEntityBundleExporter.LEAN_BONE_PROPERTIES.forEach(schema::addInt);
         this.bodyLean = leans ? new BedrockBodyLean() : null;
         float computedWidth = 1.0f;
         float computedHeight = 2.0f;
@@ -241,21 +241,27 @@ public final class BedrockModeledEntity {
             if (bukkitCustomEntity != null) bukkitCustomEntity.setScale(scale);
             lastScale = scale;
         }
-        tickLean(location);
+        tickLeanBone(location);
     }
 
     /**
-     * Sends the model's body tilt to the carrier when it changed. The lean is sent in the model's own frame, so it
-     * takes the yaw the model faces: the fake carrier's own, or the model's for a carrier that is its mob.
+     * Sends the model's body tilt and body offset to the carrier when they changed. The lean is sent in the model's
+     * own frame, so it takes the yaw the model faces: the fake carrier's own, or the model's for a carrier that is
+     * its mob.
      */
-    private void tickLean(Location carrierLocation) {
+    private void tickLeanBone(Location carrierLocation) {
         if (bodyLean == null) return;
         Quaterniondc tilt = modeledEntity.getBodyTilt();
-        if (tilt == null && !bodyLean.isLeaning()) return;
-        Location facing = carrierLocation != null ? carrierLocation : modeledEntity.getLocation();
-        if (facing == null) return;
-        Map<String, Object> lean = bodyLean.update(tilt, facing.getYaw());
-        if (lean != null) applyProperties(lean);
+        double offset = modeledEntity.getBodyOffset();
+        if (tilt == null && offset == 0D && !bodyLean.isPlaced()) return;
+        float yaw = Float.NaN;
+        if (tilt != null) {
+            Location facing = carrierLocation != null ? carrierLocation : modeledEntity.getLocation();
+            if (facing == null) return;
+            yaw = facing.getYaw();
+        }
+        Map<String, Object> changes = bodyLean.update(tilt, yaw, offset, modeledEntity.getScaleModifier());
+        if (changes != null) applyProperties(changes);
     }
 
     /**

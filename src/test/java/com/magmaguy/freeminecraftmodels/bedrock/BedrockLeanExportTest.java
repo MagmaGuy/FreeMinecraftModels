@@ -32,7 +32,10 @@ import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** Every Bedrock model hangs from a lean bone, pivoted where Java tilts, that its lean properties turn. */
+/**
+ * Every Bedrock model hangs from a lean bone, pivoted where Java tilts, that its lean properties turn and its body
+ * offset moves.
+ */
 class BedrockLeanExportTest {
     // The pattern the RSPM Geyser bridge reads a pack's controllers with to register their properties at startup.
     private static final Pattern RSPM_PROPERTY_QUERY = Pattern.compile("query\\.property\\(['\"]([^'\"]+)['\"]\\)");
@@ -121,19 +124,24 @@ class BedrockLeanExportTest {
     }
 
     @Test
-    void theLeanAnimationTurnsTheLeanBoneByItsProperties() throws Exception {
+    void theLeanAnimationTurnsAndMovesTheLeanBoneByItsProperties() throws Exception {
         Path root = directory.resolve("bundle");
         invokeAnimationWriter("writeAnimations", root);
         JsonObject lean = read(root.resolve("animations/" + converter.getID() + ".animation.json"))
                 .getAsJsonObject("animations").getAsJsonObject("animation.fmm." + converter.getID() + ".lean");
         assertNotNull(lean);
         assertTrue(lean.get("loop").getAsBoolean());
-        JsonArray rotation = lean.getAsJsonObject("bones").getAsJsonObject(BedrockEntityBundleExporter.LEAN_BONE)
-                .getAsJsonArray("rotation");
+        JsonObject bone = lean.getAsJsonObject("bones").getAsJsonObject(BedrockEntityBundleExporter.LEAN_BONE);
+        JsonArray rotation = bone.getAsJsonArray("rotation");
         for (int axis = 0; axis < 3; axis++) {
             assertEquals("query.property('" + BedrockEntityBundleExporter.LEAN_PROPERTIES.get(axis) + "') / 100",
                     rotation.get(axis).getAsString());
         }
+        JsonArray position = bone.getAsJsonArray("position");
+        assertEquals(0D, position.get(0).getAsDouble(), 1e-9);
+        assertEquals("query.property('" + BedrockEntityBundleExporter.BODY_OFFSET_PROPERTY + "') / 100",
+                position.get(1).getAsString(), "only up and down");
+        assertEquals(0D, position.get(2).getAsDouble(), 1e-9);
     }
 
     @Test
@@ -144,15 +152,19 @@ class BedrockLeanExportTest {
         JsonObject controller = read(root.resolve("animation_controllers/" + converter.getID()
                 + ".animation_controllers.json")).getAsJsonObject("animation_controllers").getAsJsonObject(controllerId);
         assertNotNull(controller);
-        assertEquals("upright", controller.get("initial_state").getAsString());
+        assertEquals("standing", controller.get("initial_state").getAsString());
         JsonObject states = controller.getAsJsonObject("states");
-        assertFalse(states.getAsJsonObject("upright").has("animations"), "an upright model plays nothing");
-        assertEquals("anim_lean", states.getAsJsonObject("leaning").getAsJsonArray("animations").get(0).getAsString());
+        assertFalse(states.getAsJsonObject("standing").has("animations"), "an upright model on its feet plays nothing");
+        assertEquals("anim_lean", states.getAsJsonObject("placed").getAsJsonArray("animations").get(0).getAsString());
+        String toPlaced = states.getAsJsonObject("standing").getAsJsonArray("transitions").get(0).getAsJsonObject()
+                .get("placed").getAsString();
+        for (String property : BedrockEntityBundleExporter.LEAN_BONE_PROPERTIES)
+            assertTrue(toPlaced.contains("query.property('" + property + "') != 0"), "a lean or an offset alone plays it");
 
         Set<String> queried = new LinkedHashSet<>();
         Matcher matcher = RSPM_PROPERTY_QUERY.matcher(controller.toString());
         while (matcher.find()) queried.add(matcher.group(1));
-        assertEquals(Set.copyOf(BedrockEntityBundleExporter.LEAN_PROPERTIES), queried);
+        assertEquals(Set.copyOf(BedrockEntityBundleExporter.LEAN_BONE_PROPERTIES), queried);
 
         Method writer = BedrockEntityBundleExporter.class.getDeclaredMethod("writeEntity", File.class, String.class,
                 textureInfoClass(), FileModelConverter.class);
@@ -167,9 +179,9 @@ class BedrockLeanExportTest {
 
     @Test
     void aCarrierFullOfAnimationFlagsLeavesTheLeanOut() {
-        // 24 flags per property, 32 properties: 29 flag properties leave room for the three lean properties.
-        assertTrue(BedrockEntityBundleExporter.leans(29 * 24));
-        assertFalse(BedrockEntityBundleExporter.leans(29 * 24 + 1));
+        // 24 flags per property, 32 properties: 28 flag properties leave room for the lean bone's four.
+        assertTrue(BedrockEntityBundleExporter.leans(28 * 24));
+        assertFalse(BedrockEntityBundleExporter.leans(28 * 24 + 1));
     }
 
     private void invokeAnimationWriter(String method, Path root) throws Exception {
