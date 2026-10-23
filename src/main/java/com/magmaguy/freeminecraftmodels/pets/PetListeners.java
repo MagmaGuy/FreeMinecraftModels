@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.pets;
 
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityHitboxContactEvent;
+import com.magmaguy.freeminecraftmodels.api.ModeledEntityLeftClickEvent;
 import com.magmaguy.freeminecraftmodels.api.ModeledEntityRightClickEvent;
 import com.magmaguy.freeminecraftmodels.config.PetsConfig;
 import com.magmaguy.freeminecraftmodels.pets.interactions.PetSting;
@@ -65,6 +66,25 @@ public final class PetListeners implements Listener {
         Entity body = event.getEntity().getUnderlyingEntity();
         PetControl pet = body == null ? null : manager.pet(body);
         if (pet != null && manager.interact(event.getPlayer(), pet)) event.setCancelled(true);
+    }
+
+    /**
+     * A left-click on a pet that cannot be hurt never becomes an attack. Cancelling only the damage still let FMM
+     * swing at the body and flash the model red, which looked like hitting it.
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onModelLeftClick(ModeledEntityLeftClickEvent event) {
+        PetManager manager = PetManager.get();
+        if (manager == null) return;
+        Entity body = event.getEntity().getUnderlyingEntity();
+        PetControl pet = body == null ? null : manager.pet(body);
+        if (pet != null && protectedFrom(pet, event.getPlayer())) event.setCancelled(true);
+    }
+
+    /** Owned pets are safe from their owner, from everyone in COSMETIC mode, and from players when so configured. */
+    private static boolean protectedFrom(PetControl pet, Player attacker) {
+        if (pet.isWild()) return false;
+        return PetsConfig.mode == PetsConfig.Mode.COSMETIC || pet.isOwnedBy(attacker) || PetsConfig.petsInvulnerableToPlayers;
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
