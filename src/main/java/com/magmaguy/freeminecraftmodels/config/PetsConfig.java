@@ -75,9 +75,9 @@ public class PetsConfig extends ConfigurationFile {
                 fileConfiguration, "petsDiePermanently", false);
         wildGenerationChance = ConfigurationEngine.setDouble(
                 List.of("CREATURES mode: wild pets live like vanilla's farm animals. They come with the world, stay where",
-                        "they are, wait while their chunk is unloaded and never despawn. This is the chance, 0 to 1, that a",
-                        "newly generated chunk gets a group of wild pets, rolled again after each group (vanilla's animals",
-                        "use 0.1, shared by every animal of the biome)."),
+                        "they are, wait while their chunk is unloaded and never despawn. This is the chance, 0 to 0.9, that",
+                        "a newly generated chunk gets a group of wild pets, rolled again after each group (vanilla's",
+                        "animals use 0.1, shared by every animal of the biome)."),
                 fileConfiguration, "wildGenerationChance", 0.01D);
         wildSpawnIntervalTicks = ConfigurationEngine.setInt(
                 List.of("CREATURES mode: ticks between top-up passes, which add wild pets around players where there are",

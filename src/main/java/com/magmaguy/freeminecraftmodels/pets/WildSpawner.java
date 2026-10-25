@@ -43,6 +43,8 @@ final class WildSpawner {
     static final int PACK_STEP = 6;
     /** A chunk's stocking: each member gets 4 spots, stepping nextInt(5) - nextInt(5) and staying in the chunk. */
     static final int GENERATION_TRIES = 4, GENERATION_STEP = 5;
+    /** The roll repeats after every group, so a chance of 1 would never stop; vanilla caps it just under 1 too. */
+    static final double MAX_GENERATION_CHANCE = 0.9D;
 
     private WildSpawner() {
     }
@@ -62,7 +64,8 @@ final class WildSpawner {
             if (pet.wildSpawn().enabled() && pet.wildSpawn().weight() > 0 && pet.wildSpawn().allowsWorld(world)) candidates.add(pet);
         if (candidates.isEmpty()) return;
         int minX = cx << 4, minZ = cz << 4;
-        while (random.nextDouble() < PetsConfig.wildGenerationChance) {
+        double chance = Math.min(PetsConfig.wildGenerationChance, MAX_GENERATION_CHANCE);
+        while (random.nextDouble() < chance) {
             int x = minX + random.nextInt(16), z = minZ + random.nextInt(16);
             List<PetSpecies> fitting = new ArrayList<>();
             for (PetSpecies pet : candidates) if (surfaceSpot(pet, world, x, z) != null) fitting.add(pet);
