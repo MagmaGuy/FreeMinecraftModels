@@ -19,7 +19,7 @@ import java.util.function.Predicate;
  * caller's search interval and shared by every pet, so a crowd of pets scans a chunk once per interval. Server
  * thread only.
  */
-final class CampfireIndex {
+public final class CampfireIndex {
     private record Entry(long expiresAt, int[] positions) {
     }
 
@@ -29,7 +29,7 @@ final class CampfireIndex {
     }
 
     /** The nearest campfire within the radius the filter accepts, or null. */
-    static Block nearest(Location centre, double radius, int keepTicks, Predicate<Block> accepts) {
+    public static Block nearest(Location centre, double radius, int keepTicks, Predicate<Block> accepts) {
         World world = centre.getWorld();
         if (world == null) return null;
         long now = PetInteractionRuntime.ticks();
