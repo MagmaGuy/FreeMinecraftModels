@@ -218,7 +218,7 @@ public final class PetManager {
     // ---- spawning --------------------------------------------------------------------------------------------
 
     public PetControl spawnWild(PetSpecies pet, Location location) {
-        Location at = PetMindProgramFactory.hoverPoint(new PetControl(pet, null, null, null, false, location), location, 0D);
+        Location at = PetMotion.hoverPoint(new PetControl(pet, null, null, null, false, location), location, 0D);
         return spawn(pet, null, null, pet.pickVariant(ThreadLocalRandom.current()), false, at, location);
     }
 
@@ -227,7 +227,7 @@ public final class PetManager {
         PetSpecies pet = species(record.species);
         if (pet == null) return null;
         unspawnOwned(owner.getUniqueId(), record);
-        Location at = PetMindProgramFactory.hoverPoint(new PetControl(pet, owner.getUniqueId(), record, record.model, record.baby, null),
+        Location at = PetMotion.hoverPoint(new PetControl(pet, owner.getUniqueId(), record, record.model, record.baby, null),
                 owner.getLocation(), 2D);
         return spawn(pet, owner.getUniqueId(), record, record.model, record.baby, at, null);
     }
