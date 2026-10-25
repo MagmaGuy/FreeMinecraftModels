@@ -126,8 +126,8 @@ class PetBehaviorSettingsTest {
     @Test
     void numbersAndTrueOrFalseAreTakenAsText() {
         List<String> warnings = new ArrayList<>();
-        for (Map.Entry<Object, String> given : Map.<Object, String>of(12, "12", 0.5D, "0.5", 12D, "12", true, "true")
-                .entrySet())
+        for (Map.Entry<Object, String> given : Map.<Object, String>of(12, "12", 0.5D, "0.5", 12D, "12", true, "true",
+                false, "false", Double.NaN, ".nan").entrySet())
             assertEquals(given.getValue(), PetBehaviorSettings.merge("campfire", DEFAULTS, Map.of("effect", given.getKey()),
                     "x.pet.yml", warnings::add).get("effect"), given.getKey().toString());
         assertEquals(List.of(), warnings);
@@ -136,9 +136,25 @@ class PetBehaviorSettingsTest {
     @Test
     void aSingleWordIsAOneItemList() {
         List<String> warnings = new ArrayList<>();
-        assertEquals(List.of("SOUL_CAMPFIRE"), PetBehaviorSettings.merge("campfire", DEFAULTS,
-                Map.of("blocks", "SOUL_CAMPFIRE"), "x.pet.yml", warnings::add).get("blocks"));
+        for (String word : List.of("SOUL_CAMPFIRE", " SOUL_CAMPFIRE "))
+            assertEquals(List.of("SOUL_CAMPFIRE"), PetBehaviorSettings.merge("campfire", DEFAULTS,
+                    Map.of("blocks", word), "x.pet.yml", warnings::add).get("blocks"), word);
         assertEquals(List.of(), warnings);
+    }
+
+    @Test
+    void textOfSeveralWordsOrNoneForAListIsReportedWithHowToWriteAList() {
+        List<String> warnings = new ArrayList<>();
+        for (String text : List.of("CAMPFIRE, SOUL_CAMPFIRE", "CAMPFIRE SOUL_CAMPFIRE", ""))
+            assertEquals(DEFAULTS, PetBehaviorSettings.merge("campfire", DEFAULTS, Map.of("blocks", text), "x.pet.yml",
+                    warnings::add), text);
+        assertEquals(List.of(
+                "x.pet.yml: campfire.blocks must be a list of text, one per line starting with \"- \" or written "
+                        + "[CAMPFIRE, SOUL_CAMPFIRE], not \"CAMPFIRE, SOUL_CAMPFIRE\"; using [\"CAMPFIRE\"].",
+                "x.pet.yml: campfire.blocks must be a list of text, one per line starting with \"- \" or written "
+                        + "[CAMPFIRE, SOUL_CAMPFIRE], not \"CAMPFIRE SOUL_CAMPFIRE\"; using [\"CAMPFIRE\"].",
+                "x.pet.yml: campfire.blocks must be a list of text, one per line starting with \"- \" or written "
+                        + "[CAMPFIRE], not \"\"; using [\"CAMPFIRE\"]."), warnings);
     }
 
     /** "blocks: []" is taken as asking for none, not as a mistake: a module reads an empty list as nothing to match. */
