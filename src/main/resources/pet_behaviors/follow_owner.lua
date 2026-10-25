@@ -32,11 +32,12 @@ return ai.module {
                 if distance > species.leash_distance then urgency = c.settings.leash_urgency end
                 -- A flying body steers by velocity, which only fails while something else holds its movement, so
                 -- in practice only walking and swimming bodies count stuck ticks.
+                local stuck = c.memory:get('follow_owner_stuck') or 0
                 if c.pet:steer_to(target, c.settings.speed * urgency * species.speed) then
-                    c.memory:set('follow_owner_stuck', 0)
+                    if stuck ~= 0 then c.memory:set('follow_owner_stuck', 0) end
                     return
                 end
-                local stuck = (c.memory:get('follow_owner_stuck') or 0) + 1
+                stuck = stuck + 1
                 if stuck >= c.settings.stuck_ticks then
                     c.pet:teleport_near_owner(2)
                     stuck = 0

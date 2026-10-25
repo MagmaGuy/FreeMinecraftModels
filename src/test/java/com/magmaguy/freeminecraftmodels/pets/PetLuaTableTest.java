@@ -166,6 +166,18 @@ class PetLuaTableTest {
         assertThrows(LuaError.class, () -> PetLuaTable.whole(args(LuaValue.valueOf(Double.NaN)), 1, 0, 4));
     }
 
+    @Test
+    void anInfiniteCruiseIsTheFlightCap() {
+        double cap = MindActuator.MAX_FLIGHT_SPEED;
+        assertEquals(cap, PetLuaTable.cruise(args(LuaValue.valueOf(Double.POSITIVE_INFINITY)), 1));
+        assertEquals(cap, PetLuaTable.cruise(args(LuaValue.valueOf(1e300)), 1));
+        assertEquals(0.25D, PetLuaTable.cruise(args(LuaValue.valueOf(0.25)), 1));
+        assertEquals(0D, PetLuaTable.cruise(args(LuaValue.valueOf(-5)), 1));
+        for (double refused : new double[]{Double.NaN, Double.NEGATIVE_INFINITY})
+            assertThrows(LuaError.class, () -> PetLuaTable.cruise(args(LuaValue.valueOf(refused)), 1));
+        assertThrows(LuaError.class, () -> PetLuaTable.cruise(args(LuaValue.NIL), 1));
+    }
+
     private static LuaTable location(Object world, double x, double y, double z) {
         LuaTable table = new LuaTable();
         if (world != null) table.set("world", world.toString());
