@@ -8,9 +8,10 @@ local SWELL_TICKS = 2
 return ai.module {
     id = 'fmm:pet/rain_bloom', revision = 1,
     -- speed is in blocks per tick at species speed 1, before speed_multiplier. A bloom drift gives up after
-    -- drift_ticks, or after stuck_ticks without moving.
+    -- drift_ticks, or after stuck_ticks without moving. The pause after it is a plain drift's rest (rest_ticks plus up
+    -- to rest_random_ticks more) made drift_frequency times shorter, but never under 10 ticks.
     settings = { speed_multiplier = 1.4, scale_multiplier = 1.25, drift_frequency = 2.5, rise = 1, scale_seconds = 3,
-                 speed = 0.06, drift_ticks = 120, stuck_ticks = 20 },
+                 speed = 0.06, drift_ticks = 120, stuck_ticks = 20, rest_ticks = 60, rest_random_ticks = 80 },
     memories = { rain_bloom_to = 'position', rain_bloom_next = 'integer', rain_bloom_until = 'integer',
                  rain_bloom_last = 'position', rain_bloom_stuck = 'integer' },
     sensors = {
@@ -20,7 +21,7 @@ return ai.module {
                 local s = c.settings
                 local target = 1
                 if c.pet.raining then target = s.scale_multiplier end
-                -- scale_seconds in ticks, kept finite however large the setting; c.pet takes at least 2.
+                -- scale_seconds in ticks: at least 2, and finite however large the setting.
                 local ticks = math.max(2, math.min(s.scale_seconds * 20, 2147483647))
                 c.pet:scale_toward(target, s.scale_multiplier, ticks, SWELL_TICKS)
             end
@@ -70,9 +71,9 @@ return ai.module {
             end,
             stop = function(c)
                 c.memory:forget('rain_bloom_to')
-                -- A rest of 60 to 139 ticks, as the plain drift takes, made drift_frequency times shorter but never
-                -- under 10.
-                local pause = (60 + math.random(0, 79)) / math.max(0.1, c.settings.drift_frequency)
+                local s = c.settings
+                local rest = s.rest_ticks + math.floor(math.random() * math.max(0, s.rest_random_ticks))
+                local pause = rest / math.max(0.1, s.drift_frequency)
                 c.memory:set('rain_bloom_next', c.tick + math.max(10, math.floor(pause)))
             end
         }

@@ -39,7 +39,10 @@ return ai.module {
                 local search = search_ticks(c)
                 c.memory:set('campfire_next_search', c.tick + search)
                 local fire = c.pet:nearest_campfire(s.radius, search, s.blocks, s.soul_variants, s.height)
-                if fire == nil then return false end
+                if fire == nil then
+                    c.memory:forget('campfire_at')
+                    return false
+                end
                 c.memory:set('campfire_at', fire)
                 return true
             end,
