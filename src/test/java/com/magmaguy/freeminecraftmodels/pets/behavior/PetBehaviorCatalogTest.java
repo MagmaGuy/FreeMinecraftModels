@@ -18,6 +18,7 @@ import java.nio.file.attribute.AclFileAttributeView;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -115,6 +116,7 @@ class PetBehaviorCatalogTest {
         try (PetBehaviorCatalog catalog = load(List.of("drift"))) {
             assertEquals(List.of(), written);
             assertTrue(catalog.names().isEmpty());
+            assertEquals(Optional.of(folder.getFileName() + "/drift.lua"), catalog.failedFile("drift"));
         }
         assertEquals(1, warnings.size(), warnings.toString());
         assertTrue(warnings.getFirst().startsWith(folder.getFileName() + "/drift.lua: links to a file that is missing"),
@@ -234,6 +236,23 @@ class PetBehaviorCatalogTest {
         assertTrue(warnings.get(1).contains("fmm:pet/broken (it failed to load too, see above)"), warnings.get(1));
         assertTrue(warnings.get(2).contains("fmm:pet/c2 (it failed to load too, see below)"), warnings.get(2));
         assertTrue(warnings.get(3).contains("fmm:pet/c1 (it failed to load too, see above)"), warnings.get(3));
+    }
+
+    @Test
+    void remembersTheFileOfEachModuleThatFailedToLoad() {
+        write("broken.lua", "return ai.module { id = ");
+        write("mine/wrong.lua", module("other", "radius = 5"));
+        write("a.lua", "return ai.module { id = 'fmm:pet/a', revision = 1, dependencies = { 'fmm:pet/broken' } }");
+        write("hover.lua", module("hover", "height = 1"));
+        try (PetBehaviorCatalog catalog = load(List.of())) {
+            String shown = folder.getFileName() + "/";
+            assertEquals(Optional.of(shown + "broken.lua"), catalog.failedFile("broken"));
+            assertEquals(Optional.of(shown + "mine/wrong.lua"), catalog.failedFile("Wrong"));
+            assertEquals(Optional.of(shown + "a.lua"), catalog.failedFile("a"));
+            assertEquals(Optional.empty(), catalog.failedFile("hover"));
+            assertEquals(Optional.empty(), catalog.failedFile("dance"));
+        }
+        assertEquals(3, warnings.size(), warnings.toString());
     }
 
     @Test
