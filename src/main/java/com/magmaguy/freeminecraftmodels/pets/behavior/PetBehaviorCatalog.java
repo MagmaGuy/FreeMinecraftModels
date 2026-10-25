@@ -21,6 +21,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -56,6 +57,8 @@ public final class PetBehaviorCatalog implements AutoCloseable {
     private final LuaMindModuleRegistry registry = new LuaMindModuleRegistry();
     private final LuaMindModuleRegistry.OwnerScope owner = registry.openOwner(NAMESPACE);
     private final Map<String, LuaMindModuleDescriptor> modules = new TreeMap<>();
+    /** Each file name a module was found under but did not load from, with that file as its warning names it. */
+    private final Map<String, String> failed = new HashMap<>();
 
     private PetBehaviorCatalog() {
     }
@@ -79,12 +82,12 @@ public final class PetBehaviorCatalog implements AutoCloseable {
                     + describe(failure, "write") + "); no pet behaviors load.");
             return catalog;
         }
-        Found found = luaFiles(folder, warn);
+        // Every file name that failed to load, so a module needing one of them, or a pet file listing one, can say so.
+        Map<String, String> failed = catalog.failed;
+        Found found = luaFiles(folder, warn, failed);
         List<File> files = found.files();
         if (found.complete()) writeMissingDefaults(folder, defaults, writeDefault, warn, files);
 
-        // Every file name that failed to load, so a module needing one of them can say so.
-        Set<String> failed = new HashSet<>();
         Map<String, Pending> pending = new LinkedHashMap<>();
         for (File file : ContentFileSelector.select(files, name -> name.toLowerCase(Locale.ROOT))) {
             String where = display(folder, file.toPath());
@@ -92,6 +95,7 @@ public final class PetBehaviorCatalog implements AutoCloseable {
             if (!NAME.matcher(name).matches()) {
                 warn.accept(where + ": a pet behavior's file name may use only letters, digits, '.', '_' and '-';"
                         + " this module is skipped.");
+                failed.put(name, where);
                 continue;
             }
             String source;
@@ -100,7 +104,7 @@ public final class PetBehaviorCatalog implements AutoCloseable {
             } catch (IOException failure) {
                 warn.accept(where + ": could not read this file (" + describe(failure, "read")
                         + "); this module is skipped.");
-                failed.add(name);
+                failed.put(name, where);
                 continue;
             }
             try {
@@ -110,13 +114,13 @@ public final class PetBehaviorCatalog implements AutoCloseable {
                     warn.accept(where + ": declares id " + declared.identifier() + ", but a module's id is "
                             + ID_PREFIX + " followed by its file name, so it must be " + expected
                             + "; this module is skipped.");
-                    failed.add(name);
+                    failed.put(name, where);
                     continue;
                 }
                 pending.put(name, new Pending(where, source, declared.revision(), declared.dependencies()));
             } catch (RuntimeException failure) {
                 warn.accept(where + ": " + reason(where, failure) + "; this module is skipped.");
-                failed.add(name);
+                failed.put(name, where);
             }
         }
         // A module may depend on another, which must register first; register in passes until no registration advances.
@@ -138,13 +142,13 @@ public final class PetBehaviorCatalog implements AutoCloseable {
                 }
             }
         }
-        failed.addAll(failures.keySet());
-        Set<String> reported = new HashSet<>(failed);
+        failures.keySet().forEach(name -> failed.put(name, pending.get(name).where()));
+        Set<String> reported = new HashSet<>(failed.keySet());
         reported.removeAll(failures.keySet());
         failures.forEach((name, reason) -> {
             Pending module = pending.get(name);
             String missing = missingDependency(name, module, catalog.modules.keySet());
-            String note = missing == null || !failed.contains(missing) ? ""
+            String note = missing == null || !failed.containsKey(missing) ? ""
                     : " (it failed to load too, see " + (reported.contains(missing) ? "above" : "below") + ")";
             warn.accept(module.where() + ": " + reason + note + "; this module is skipped.");
             reported.add(name);
@@ -193,9 +197,10 @@ public final class PetBehaviorCatalog implements AutoCloseable {
      * Every .lua file under the folder, following links, that really lies inside it, and whether the whole folder was
      * read. A folder or file that links out of the folder, or a folder that links back into one already read, is
      * reported and skipped. A folder or file that cannot be read is reported and skipped too, and leaves the read
-     * incomplete, since it may hold an edited default. The rest are still read.
+     * incomplete, since it may hold an edited default. The rest are still read. Each .lua file skipped goes into
+     * {@code failed} by its file name.
      */
-    private static Found luaFiles(Path folder, Consumer<String> warn) {
+    private static Found luaFiles(Path folder, Consumer<String> warn, Map<String, String> failed) {
         List<File> files = new ArrayList<>();
         Path root;
         try {
@@ -241,16 +246,21 @@ public final class PetBehaviorCatalog implements AutoCloseable {
                     warn.accept(where + (attributes.isSymbolicLink()
                             ? ": links to a file that is missing or cannot be reached" : ": is not a regular file")
                             + "; this module is skipped.");
+                    failed.put(stem(file.toFile()), where);
                     return FileVisitResult.CONTINUE;
                 }
                 // A linked file arrives with its target's attributes, so check where it really lies.
                 try {
                     if (file.toRealPath().startsWith(root)) files.add(file.toFile());
-                    else warn.accept(where + ": links to a file outside the pet behaviors folder;"
-                            + " this module is skipped.");
+                    else {
+                        warn.accept(where + ": links to a file outside the pet behaviors folder;"
+                                + " this module is skipped.");
+                        failed.put(stem(file.toFile()), where);
+                    }
                 } catch (IOException failure) {
                     warn.accept(where + ": could not read this file (" + describe(failure, "read")
                             + "); this module is skipped" + UNTIL_READ);
+                    failed.put(stem(file.toFile()), where);
                     complete = false;
                 }
                 return FileVisitResult.CONTINUE;
@@ -269,6 +279,7 @@ public final class PetBehaviorCatalog implements AutoCloseable {
                 } else if (isLua(file)) {
                     warn.accept(where + ": could not read this file (" + describe(failure, "read")
                             + "); this module is skipped" + UNTIL_READ);
+                    failed.put(stem(file.toFile()), where);
                     complete = false;
                 }
                 return FileVisitResult.CONTINUE;
@@ -355,6 +366,15 @@ public final class PetBehaviorCatalog implements AutoCloseable {
     /** The file names of every module that loaded. */
     public Set<String> names() {
         return Collections.unmodifiableSet(modules.keySet());
+    }
+
+    /**
+     * The file a module of this name was found in but did not load from, as the warning about it names it; empty when
+     * the module loaded or no file of its name was found.
+     */
+    Optional<String> failedFile(String name) {
+        String key = name.toLowerCase(Locale.ROOT);
+        return modules.containsKey(key) ? Optional.empty() : Optional.ofNullable(failed.get(key));
     }
 
     /** The owner the modules are registered under, for composing them into programs. */
