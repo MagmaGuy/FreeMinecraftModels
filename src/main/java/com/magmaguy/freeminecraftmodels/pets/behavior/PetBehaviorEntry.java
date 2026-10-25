@@ -100,8 +100,8 @@ public record PetBehaviorEntry(String module, Map<String, Object> settings) {
 
     /**
      * A variant's entries over its species' list: a module both lists name keeps its place and takes the variant's
-     * settings on top of the species', except settings the variant leaves without a value; the variant's other
-     * modules follow the species' own.
+     * settings on top of the species', except that a setting the variant leaves without a value keeps the species'
+     * value when it has one; the variant's other modules follow the species' own.
      */
     public static List<PetBehaviorEntry> overlay(List<PetBehaviorEntry> species, List<PetBehaviorEntry> variant) {
         if (variant.isEmpty()) return List.copyOf(species);
@@ -114,8 +114,11 @@ public record PetBehaviorEntry(String module, Map<String, Object> settings) {
                 continue;
             }
             Map<String, Object> settings = new LinkedHashMap<>(base.settings());
-            for (Map.Entry<String, Object> setting : entry.settings().entrySet())
+            for (Map.Entry<String, Object> setting : entry.settings().entrySet()) {
+                // A valueless setting keeps the species' value; one the species lacks stays for the merge to report.
                 if (setting.getValue() != null) settings.put(setting.getKey(), setting.getValue());
+                else settings.putIfAbsent(setting.getKey(), null);
+            }
             merged.put(entry.module(), new PetBehaviorEntry(entry.module(), settings));
         }
         return List.copyOf(merged.values());
