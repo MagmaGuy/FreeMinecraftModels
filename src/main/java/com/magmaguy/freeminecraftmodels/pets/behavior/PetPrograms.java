@@ -97,11 +97,13 @@ public final class PetPrograms {
         try {
             definition = validate(label, id, kept);
         } catch (RuntimeException clash) {
-            // Something in the list does not fit; find what, one module at a time, from a program with none.
+            // Something in the list does not fit; find what, one module at a time, from a program with none. The
+            // warnings name the pet file without the variant, so a clash in the species' list is said once, not once
+            // per variant; the module's name locates the entry.
             try {
                 definition = validate(label, id, List.of());
             } catch (RuntimeException failure) {
-                warn.accept(label + ": could not build its pet behaviors (" + reason(failure)
+                warn.accept(where + ": could not build its pet behaviors (" + reason(failure)
                         + "); the creature runs none of them.");
                 // A program without modules needs no catalog, and its source is generated here, so this fails only
                 // when that generated source is wrong.
@@ -115,8 +117,9 @@ public final class PetPrograms {
                 } catch (RuntimeException failure) {
                     kept.removeLast();
                     String name = module.entry().module();
-                    warn.accept(label + ": the pet behavior " + name + (kept.isEmpty() ? " could not be built"
-                            : " cannot run alongside the ones listed before it") + " (" + reason(failure)
+                    String problem = kept.isEmpty() ? "could not be built" : "cannot run alongside the ones listed before it";
+                    if (failsThroughDependencies(label, id, kept, module)) problem = "needs pet behaviors that " + problem;
+                    warn.accept(where + ": the pet behavior " + name + " " + problem + " (" + reason(failure)
                             + "); the creature runs without " + name + ".");
                 }
             }
@@ -134,6 +137,22 @@ public final class PetPrograms {
     private LuaMindDefinition validate(String label, String id, List<Listed> modules) {
         return catalog.owner().validateProgram(label,
                 source(id, modules.stream().map(module -> module.descriptor().identifier()).toList()));
+    }
+
+    /**
+     * Whether the modules a left-out module needs fail beside the kept ones without it, so its warning can say the
+     * trouble came through them: MagmaCore's reason then names those modules, not this one.
+     */
+    private boolean failsThroughDependencies(String label, String id, List<Listed> kept, Listed module) {
+        if (module.descriptor().dependencies().isEmpty()) return false;
+        List<String> ids = new ArrayList<>(kept.stream().map(entry -> entry.descriptor().identifier()).toList());
+        for (String dependency : module.descriptor().dependencies()) if (!ids.contains(dependency)) ids.add(dependency);
+        try {
+            catalog.owner().validateProgram(label, source(id, ids));
+            return false;
+        } catch (RuntimeException failure) {
+            return true;
+        }
     }
 
     /** Why a listed module is not there: it failed to load, or no file has its name. */
