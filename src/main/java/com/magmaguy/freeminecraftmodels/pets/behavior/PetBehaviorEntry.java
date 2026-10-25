@@ -1,7 +1,6 @@
 package com.magmaguy.freeminecraftmodels.pets.behavior;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -65,7 +64,7 @@ public record PetBehaviorEntry(String module, Map<String, Object> settings) {
             Object value = map.get(name);
             if (value == null) return new PetBehaviorEntry(name, Map.of());
             if (!(value instanceof Map<?, ?> values)) {
-                warn.accept(where + ": skipping " + describe(item) + " in behaviors; write " + name
+                warn.accept(where + ": skipping " + PetBehaviorYaml.describe(item) + " in behaviors; write " + name
                         + "'s settings as \"- " + name + ": { setting: value }\".");
                 return null;
             }
@@ -73,16 +72,9 @@ public record PetBehaviorEntry(String module, Map<String, Object> settings) {
             for (Map.Entry<?, ?> setting : values.entrySet()) settings.put(String.valueOf(setting.getKey()), setting.getValue());
             return new PetBehaviorEntry(name, settings);
         }
-        warn.accept(where + ": skipping " + describe(item) + " in behaviors; each entry is a module name or \"name: { settings }\".");
+        warn.accept(where + ": skipping " + PetBehaviorYaml.describe(item)
+                + " in behaviors; each entry is a module name or \"name: { settings }\".");
         return null;
-    }
-
-    /** A bad item as its author would recognize it: quoted as YAML read it, since YAML turns {@code on} into true. */
-    private static String describe(Object item) {
-        if (item == null || item instanceof String text && text.isBlank() || item instanceof Map<?, ?> map && map.isEmpty()
-                || item instanceof Collection<?> list && list.isEmpty())
-            return "an empty entry";
-        return "\"" + (item instanceof Map<?, ?> map ? PetBehaviorYaml.plainPairs(map) : PetBehaviorYaml.plain(item)) + "\"";
     }
 
     /**

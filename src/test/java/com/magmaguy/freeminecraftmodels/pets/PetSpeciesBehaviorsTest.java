@@ -125,12 +125,99 @@ class PetSpeciesBehaviorsTest {
                 "jellyfish.pet.yml: skipping \":3\" in variants; it names no model.",
                 "jellyfish.pet.yml: skipping \"weight: 2, behaviors: [glow]\" in variants; a variant written as a map needs "
                         + "\"model: <model name>\".",
-                "jellyfish.pet.yml: skipping \"model: , weight: 2\" in variants; its model must be a model's name.",
+                "jellyfish.pet.yml: skipping \"model: \"\", weight: 2\" in variants; its model must be a model's name.",
                 "jellyfish.pet.yml: skipping \"em_pet_jellyfish_gold: 3\" in variants; write \"- em_pet_jellyfish_gold:<weight>\" "
                         + "with no space after the colon, or \"- model: em_pet_jellyfish_gold\" with weight and behaviors "
                         + "lined up below it.",
                 "jellyfish.pet.yml: skipping \"[em_pet_jellyfish_red, 2]\" in variants; each entry is a model name, "
                         + "\"model:weight\", or a map with model, weight and behaviors."), warnings);
+    }
+
+    @Test
+    void anEmptyVariantsListHasNoVariantsAndSaysNothing() throws InvalidConfigurationException {
+        List<String> warnings = new ArrayList<>();
+        assertEquals(List.of(), variants("variants: []\n", warnings));
+        assertEquals(List.of(), warnings);
+    }
+
+    @Test
+    void aKeyYamlReadsAsNullWarnsInsteadOfStoppingTheLoad() throws InvalidConfigurationException {
+        List<String> warnings = new ArrayList<>();
+        assertEquals(List.of(new PetSpecies.Variant("em_pet_jellyfish_gold", 1D, List.of())), variants("""
+                variants:
+                - model: em_pet_jellyfish_gold
+                  ~: 3
+                - null: 2
+                """, warnings));
+        assertEquals(List.of("jellyfish.pet.yml, variant em_pet_jellyfish_gold: a variant has no setting null (its "
+                        + "settings are model, weight and behaviors); ignored.",
+                "jellyfish.pet.yml: skipping \"null: 2\" in variants; a variant written as a map needs \"model: <model name>\"."),
+                warnings);
+    }
+
+    @Test
+    void aWordYamlReadsAsTrueOrFalseIsSkippedWithAHintToQuoteIt() throws InvalidConfigurationException {
+        List<String> warnings = new ArrayList<>();
+        assertEquals(List.of(new PetSpecies.Variant("on", 1D, List.of())), variants("""
+                variants:
+                - yes
+                - "on"
+                """, warnings));
+        assertEquals(List.of("jellyfish.pet.yml: skipping \"true\" in variants; YAML reads true, false, yes, no, on and off "
+                + "as true or false, so put a model with such a name in quotes."), warnings);
+    }
+
+    @Test
+    void aBlankBehaviorsInAVariantAddsNothingAndSaysNothing() throws InvalidConfigurationException {
+        List<String> warnings = new ArrayList<>();
+        assertEquals(List.of(new PetSpecies.Variant("em_pet_jellyfish_gold", 1D, List.of())), variants("""
+                variants:
+                - model: em_pet_jellyfish_gold
+                  behaviors:
+                """, warnings));
+        assertEquals(List.of(), warnings);
+    }
+
+    @Test
+    void aModelListedMoreThanOnceIsKeptAndReported() throws InvalidConfigurationException {
+        List<String> warnings = new ArrayList<>();
+        List<PetSpecies.Variant> variants = variants("""
+                variants:
+                - em_pet_gold:2
+                - model: em_pet_gold
+                  behaviors: [night_glow]
+                - EM_Pet_Gold
+                - em_pet_gold
+                """, warnings);
+        assertEquals(List.of("em_pet_gold", "em_pet_gold", "EM_Pet_Gold", "em_pet_gold"),
+                variants.stream().map(PetSpecies.Variant::model).toList(), "picking still takes every entry by its weight");
+        assertEquals(List.of("jellyfish.pet.yml: variants lists em_pet_gold more than once; its weights add up and the "
+                        + "first entry's behaviors apply.",
+                "jellyfish.pet.yml: variants lists em_pet_gold and EM_Pet_Gold, which name the same model; pets wear it "
+                        + "only from the entry written as the model's name, in lower case with _ for spaces, so keep that one."),
+                warnings);
+        assertEquals(List.of(STAY), PetSpecies.behaviors(List.of(STAY), MindBodyLocomotion.FLYING, variants, "em_pet_gold"),
+                "the first entry, which lists no behaviors, decides");
+    }
+
+    @Test
+    void aVariantNamedExactlyAsTheModelComesBeforeOneThatOnlyMatchesInAnotherCase() {
+        PetBehaviorEntry glow = new PetBehaviorEntry("night_glow", Map.of());
+        List<PetSpecies.Variant> variants = List.of(new PetSpecies.Variant("EM_Pet_Gold", 1D, List.of(glow)),
+                new PetSpecies.Variant("em_pet_gold", 1D, List.of(DRIFT)));
+        assertEquals(List.of(STAY, DRIFT), PetSpecies.behaviors(List.of(STAY), MindBodyLocomotion.FLYING, variants, "em_pet_gold"));
+        assertEquals(List.of(STAY, glow), PetSpecies.behaviors(List.of(STAY), MindBodyLocomotion.FLYING, variants, "EM_Pet_Gold"));
+        assertEquals(List.of(STAY, glow), PetSpecies.behaviors(List.of(STAY), MindBodyLocomotion.FLYING, variants, "em_pet_GOLD"),
+                "without an exact match, the first that matches as a model name");
+    }
+
+    @Test
+    void aVariantKeepsItsOwnCopyOfItsBehaviorsAndNullMeansNone() {
+        List<PetBehaviorEntry> listed = new ArrayList<>(List.of(STAY));
+        PetSpecies.Variant variant = new PetSpecies.Variant("em_pet_gold", 1D, listed);
+        listed.add(DRIFT);
+        assertEquals(List.of(STAY), variant.behaviors());
+        assertEquals(List.of(), new PetSpecies.Variant("em_pet_gold", 1D, null).behaviors());
     }
 
     @Test
