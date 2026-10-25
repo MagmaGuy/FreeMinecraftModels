@@ -20,6 +20,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
+import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Entity;
@@ -30,9 +31,11 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -49,7 +52,8 @@ import java.util.stream.Stream;
  * Owns every pet: the species read from the {@code *.pet.yml} files in the models folder, the bodies alive in the
  * world, and the collections of online players. Bodies are vanilla mobs (an allay by default) carrying a
  * FreeMinecraftModels model and driven by a MagmaCore Mind program; they are never saved with their chunk, so an
- * owned pet is re-created next to its owner and a wild one simply goes. Everything runs on the server thread.
+ * owned pet is re-created next to its owner, and a wild one waits in the {@link WildPetStore} until its chunk loads
+ * again. Everything runs on the server thread.
  */
 public final class PetManager {
     private static final double BREED_DISTANCE = 8D;
@@ -68,7 +72,13 @@ public final class PetManager {
     private final Map<UUID, PetControl> byBody = new HashMap<>();
     private final Map<UUID, PetCollection> collections = new HashMap<>();
     private final Map<UUID, Map<String, PetControl>> ownedBodies = new HashMap<>();
+    private final WildPetStore wildStore = WildPetStore.load(new File(MetadataHandler.PLUGIN.getDataFolder(), "data/wild_pets.yml"));
+    // Newly generated chunks, stocked with wild pets the tick after they load.
+    private final ArrayDeque<PendingChunk> toStock = new ArrayDeque<>();
     private long nextWildSpawnTick;
+
+    private record PendingChunk(UUID world, int cx, int cz, long due) {
+    }
 
     private PetManager() {
     }
@@ -129,12 +139,19 @@ public final class PetManager {
         for (Player player : Bukkit.getOnlinePlayers()) manager.playerJoined(player);
     }
 
-    /** Despawns every pet body; collections are already saved on the players. */
+    /**
+     * Despawns every pet body; collections are already saved on the players, and wild pets go to the store to come
+     * back after the restart or reload.
+     */
     public static void shutdown() {
         PetManager manager = instance;
         instance = null;
         if (manager == null) return;
-        for (PetControl control : new ArrayList<>(manager.byBody.values())) manager.despawn(control);
+        for (PetControl control : new ArrayList<>(manager.byBody.values())) {
+            if (control.isWild() && control.route() == null) manager.stash(control);
+            else manager.despawn(control);
+        }
+        manager.wildStore.save();
         manager.collections.clear();
         manager.ownedBodies.clear();
     }
@@ -145,6 +162,7 @@ public final class PetManager {
         PetManager manager = instance;
         if (manager == null) return;
         if (ticks % WATCH_TICKS == 0) manager.watch();
+        manager.workChunks();
         if (ticks >= manager.nextWildSpawnTick) {
             manager.nextWildSpawnTick = ticks + Math.max(20, PetsConfig.wildSpawnIntervalTicks);
             WildSpawner.pass(manager, manager.species.values());
@@ -304,7 +322,8 @@ public final class PetManager {
         DynamicEntity modeled = control.modeled();
         if (modeled != null && !modeled.isRemoved()) modeled.remove();
         LivingEntity body = control.body();
-        if (body != null && body.isValid()) body.remove();
+        // A body whose chunk is on its way out may no longer be valid but still be there; it goes too.
+        if (body != null && !body.isDead()) body.remove();
     }
 
     private void forget(PetControl control) {
@@ -561,19 +580,82 @@ public final class PetManager {
                 }
             }
         }
-        ThreadLocalRandom random = ThreadLocalRandom.current();
         for (PetControl control : new ArrayList<>(byBody.values())) {
             if (!control.isWild()) continue;
             LivingEntity body = control.body();
-            // A migrant's flock decides when it leaves, whatever the mode or the distance.
-            if (control.route() != null && body != null && body.isValid()) continue;
-            if (body == null || !body.isValid() || PetsConfig.mode != PetsConfig.Mode.CREATURES) {
-                despawn(control);
+            // A migrant's flock decides when it leaves, whatever the mode; a lost migrant just goes.
+            if (control.route() != null) {
+                if (body == null || !body.isValid()) despawn(control);
                 continue;
             }
-            double nearest = WildSpawner.nearestPlayerDistance(body);
-            int alone = control.countAlone(nearest <= WildSpawner.NO_DESPAWN_DISTANCE, WATCH_TICKS);
-            if (WildSpawner.shouldDespawn(nearest, PetsConfig.wildDespawnDistance, alone, WATCH_TICKS, random)) despawn(control);
+            // Its chunk unloaded or stopped ticking (the model has let go of it by then), or the server turned
+            // cosmetic: it waits in the store and never despawns. A real death went through bodyDied instead.
+            if (body == null || !body.isValid() || PetsConfig.mode != PetsConfig.Mode.CREATURES) stash(control);
+        }
+        restoreNearPlayers();
+    }
+
+    // ---- wild pets that stay -----------------------------------------------------------------------------------
+
+    /** A newly generated chunk loaded; it is stocked next tick. */
+    public void chunkGenerated(World world, int cx, int cz) {
+        toStock.add(new PendingChunk(world.getUID(), cx, cz, ticks + 1));
+    }
+
+    /** Something other than FreeMinecraftModels removed a wild pet's body: it is gone, as if it had died. */
+    public void bodyRemovedByPlugin(Entity entity) {
+        PetControl control = pet(entity);
+        if (control != null && control.isWild()) bodyDied(control);
+    }
+
+    /** Writes the waiting wild pets to disk; called with every world save. */
+    public void saveWild() {
+        wildStore.save();
+    }
+
+    private void workChunks() {
+        while (!toStock.isEmpty() && toStock.peek().due() <= ticks) {
+            PendingChunk chunk = toStock.poll();
+            World world = Bukkit.getWorld(chunk.world());
+            if (world != null && world.isChunkLoaded(chunk.cx(), chunk.cz()))
+                WildSpawner.stockChunk(this, world, chunk.cx(), chunk.cz(), species.values());
+        }
+    }
+
+    /**
+     * Brings back the pets waiting in the loaded chunks within 8 chunks of a player. Checking every watchdog pass,
+     * rather than on chunk loads, also catches a chunk that stopped ticking and came back without unloading, a pet
+     * that left with an unload the chunk has already recovered from, and a switch back from cosmetic mode.
+     */
+    private void restoreNearPlayers() {
+        if (PetsConfig.mode != PetsConfig.Mode.CREATURES) return;
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            World world = player.getWorld();
+            UUID worldId = world.getUID();
+            int px = player.getLocation().getBlockX() >> 4, pz = player.getLocation().getBlockZ() >> 4;
+            for (int dx = -WildSpawner.SPAWN_DISTANCE_CHUNKS; dx <= WildSpawner.SPAWN_DISTANCE_CHUNKS; dx++)
+                for (int dz = -WildSpawner.SPAWN_DISTANCE_CHUNKS; dz <= WildSpawner.SPAWN_DISTANCE_CHUNKS; dz++)
+                    if (wildStore.has(worldId, px + dx, pz + dz) && world.isChunkLoaded(px + dx, pz + dz)) restore(world, px + dx, pz + dz);
+        }
+    }
+
+    /** Puts a wild pet in the store at the place its body was last seen, then clears it from the world. */
+    private void stash(PetControl control) {
+        LivingEntity body = control.body();
+        if (body != null) {
+            Location at = body.getLocation(), home = control.home() == null ? at : control.home();
+            wildStore.put(body.getWorld().getUID(), new WildPetStore.Entry(control.species().id(), control.model(), control.isBaby(),
+                    at.getX(), at.getY(), at.getZ(), home.getX(), home.getY(), home.getZ()));
+        }
+        despawn(control);
+    }
+
+    /** Brings back the pets waiting in a loaded chunk; pets of a species that is not installed keep waiting. */
+    private void restore(World world, int cx, int cz) {
+        for (WildPetStore.Entry entry : wildStore.take(world.getUID(), cx, cz)) {
+            PetSpecies pet = species(entry.species());
+            if (pet == null || spawn(pet, null, null, entry.model(), entry.baby(), entry.at(world), entry.home(world)) == null)
+                wildStore.put(world.getUID(), entry);
         }
     }
 

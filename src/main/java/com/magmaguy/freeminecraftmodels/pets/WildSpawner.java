@@ -8,7 +8,6 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
-import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
@@ -22,33 +21,93 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.ToIntFunction;
 
 /**
- * Wild pets spawn the way vanilla's ambient mobs (bats, fish) do, because like them they are never saved with the
- * world. Each pass tries the loaded chunks within 8 chunks of each player. A try picks a random column and height in
- * the chunk, then sends out three packs from it. Each pack walks a few blocks at a time and picks its species by
- * weight at the first spot 24 to 128 blocks from the nearest player, among the species that may stand there. Then it
- * places that species' group size along the walk. A player's local cap counts the wild pets within 8 chunks of them,
- * and a spot can be used while a player near it has room. Wild pets despawn like vanilla mobs too: at once past
- * 128 blocks from every player, and past 32 blocks at 1 in 800 a tick once no player has come within 32 blocks for
- * 600 ticks. Constants carry vanilla's names from NaturalSpawner, MobCategory and Mob.
+ * Wild pets spawn the way vanilla's farm animals do. Most come with the world: as a chunk generates, it is stocked
+ * with groups of pets, and they stay there, waiting in the {@link WildPetStore} while the chunk is unloaded. On top
+ * of that, a pass every {@code wildSpawnIntervalTicks} tops up the loaded chunks within 8 chunks of each player.
+ * A top-up try picks a random column and height in a chunk, then sends out three packs from it. Each pack walks a
+ * few blocks at a time and picks its species by weight at the first spot 24 to 128 blocks from the nearest player,
+ * among the species that may stand there, then places that species' group size along the walk. A player's local cap
+ * counts the wild pets within 8 chunks of them, and a spot can be used while a player near it has room. Constants
+ * carry vanilla's names from NaturalSpawner and MobCategory.
  */
 final class WildSpawner {
     /** SPAWN_DISTANCE_CHUNK: chunks around a player that spawn mobs. */
     static final int SPAWN_DISTANCE_CHUNKS = 8;
-    /** MIN_SPAWN_DISTANCE: nothing spawns closer than this to a player or to the world spawn. */
+    /** MIN_SPAWN_DISTANCE: nothing tops up closer than this to a player or to the world spawn. */
     static final double MIN_SPAWN_DISTANCE = 24D;
-    /** MobCategory.noDespawnDistance: a mob this close to a player never despawns. */
-    static final double NO_DESPAWN_DISTANCE = 32D;
-    /** Mob.checkDespawn: ticks alone before the random despawn starts, and its one-in odds per tick. */
-    static final int IDLE_TICKS_BEFORE_DESPAWN = 600, DESPAWN_ODDS_PER_TICK = 800;
+    /** MobCategory.CREATURE's despawn distance, which NaturalSpawner also uses as the farthest spawn from a player. */
+    static final double MAX_SPAWN_DISTANCE = 128D;
     /** Packs sent out from each chunk's starting spot, and the most tries a pack makes to find its first spot. */
     static final int PACKS = 3, PACK_SEARCH = 4;
     /** Each pack step moves nextInt(6) - nextInt(6) blocks on x and on z. */
     static final int PACK_STEP = 6;
+    /** A chunk's stocking: each member gets 4 spots, stepping nextInt(5) - nextInt(5) and staying in the chunk. */
+    static final int GENERATION_TRIES = 4, GENERATION_STEP = 5;
 
     private WildSpawner() {
     }
 
-    /** One spawn pass over every world with players in it. */
+    // ---- stocking new chunks ---------------------------------------------------------------------------------
+
+    /**
+     * Stocks a newly generated chunk, as vanilla's spawnMobsForChunkGeneration does for animals: while a roll comes
+     * under {@code wildGenerationChance}, one group of a species picked by weight, placed on the surface around a
+     * random column. Neither the caps, the players, the time nor the mob spawning rule hold it back.
+     */
+    static void stockChunk(PetManager manager, World world, int cx, int cz, Collection<PetSpecies> species) {
+        if (PetsConfig.mode != PetsConfig.Mode.CREATURES || species.isEmpty()) return;
+        Random random = ThreadLocalRandom.current();
+        List<PetSpecies> candidates = new ArrayList<>();
+        for (PetSpecies pet : species)
+            if (pet.wildSpawn().enabled() && pet.wildSpawn().weight() > 0 && pet.wildSpawn().allowsWorld(world)) candidates.add(pet);
+        if (candidates.isEmpty()) return;
+        int minX = cx << 4, minZ = cz << 4;
+        while (random.nextDouble() < PetsConfig.wildGenerationChance) {
+            int x = minX + random.nextInt(16), z = minZ + random.nextInt(16);
+            List<PetSpecies> fitting = new ArrayList<>();
+            for (PetSpecies pet : candidates) if (surfaceSpot(pet, world, x, z) != null) fitting.add(pet);
+            PetSpecies pet = pickWeighted(fitting, candidate -> candidate.wildSpawn().weight(), random);
+            if (pet == null) continue;
+            int group = pet.wildSpawn().minGroup() + random.nextInt(pet.wildSpawn().maxGroup() - pet.wildSpawn().minGroup() + 1);
+            int startX = x, startZ = z;
+            for (int member = 0; member < group; member++) {
+                boolean placed = false;
+                for (int attempt = 0; !placed && attempt < GENERATION_TRIES; attempt++) {
+                    Location at = surfaceSpot(pet, world, x, z);
+                    placed = at != null && manager.spawnWild(pet, at) != null;
+                    int[] next = generationStep(startX, startZ, x, z, minX, minZ, random);
+                    x = next[0];
+                    z = next[1];
+                }
+            }
+        }
+    }
+
+    /**
+     * Vanilla's step between a chunk's stocking spots: up to 4 blocks on each axis, and when that leaves the chunk, a
+     * fresh step from the group's first column until one stays in.
+     */
+    static int[] generationStep(int startX, int startZ, int x, int z, int minX, int minZ, Random random) {
+        x += random.nextInt(GENERATION_STEP) - random.nextInt(GENERATION_STEP);
+        z += random.nextInt(GENERATION_STEP) - random.nextInt(GENERATION_STEP);
+        while (x < minX || x >= minX + 16 || z < minZ || z >= minZ + 16) {
+            x = startX + random.nextInt(GENERATION_STEP) - random.nextInt(GENERATION_STEP);
+            z = startZ + random.nextInt(GENERATION_STEP) - random.nextInt(GENERATION_STEP);
+        }
+        return new int[]{x, z};
+    }
+
+    /** Where a member stands when its column is stocked: on the surface, or for swimmers in the top water block. */
+    private static Location surfaceSpot(PetSpecies pet, World world, int x, int z) {
+        int surface = world.getHighestBlockYAt(x, z);
+        int y = pet.wildSpawn().placement() == PetSpecies.Placement.WATER ? surface : surface + 1;
+        Location at = standingSpot(world, x, y, z, pet.wildSpawn().placement());
+        return at != null && pet.wildSpawn().allows(at) ? at : null;
+    }
+
+    // ---- topping up around players -----------------------------------------------------------------------------
+
+    /** One top-up pass over every world with players in it. */
     static void pass(PetManager manager, Collection<PetSpecies> species) {
         if (PetsConfig.mode != PetsConfig.Mode.CREATURES || species.isEmpty()) return;
         Random random = ThreadLocalRandom.current();
@@ -61,8 +120,8 @@ final class WildSpawner {
             if (!mobSpawning(world)) continue;
             List<PetSpecies> candidates = new ArrayList<>();
             for (PetSpecies pet : species)
-                if (pet.wildSpawn().enabled() && pet.wildSpawn().weight() > 0 && pet.wildSpawn().allowsWorld(world))
-                    candidates.add(pet);
+                if (pet.wildSpawn().enabled() && pet.wildSpawn().weight() > 0 && pet.wildSpawn().allowsWorld(world)
+                        && pet.wildSpawn().allowsTime(world)) candidates.add(pet);
             if (!candidates.isEmpty()) passWorld(manager, world, entry.getValue(), candidates, random);
         }
     }
@@ -120,7 +179,7 @@ final class WildSpawner {
         }
     }
 
-    /** Where a member of the species may spawn in this column at the pack's height, or null. */
+    /** Where a member of the species may top up in this column at the pack's height, or null. */
     private static Location spot(PetSpecies pet, World world, List<Player> players, int x, int y, int z) {
         Location at = standingSpot(world, x, y, z, pet.wildSpawn().placement());
         if (at == null || !pet.wildSpawn().allows(at) || !inRange(world, players, at)) return null;
@@ -132,15 +191,11 @@ final class WildSpawner {
         return random.nextInt(PACK_STEP) - random.nextInt(PACK_STEP);
     }
 
-    /**
-     * Vanilla's distance rule: farther than 24 blocks from the nearest player and from the world spawn, and within
-     * the hard despawn distance of that player, so nothing spawns only to vanish.
-     */
+    /** Vanilla's distance rule: farther than 24 blocks from the nearest player and the world spawn, within 128 of that player. */
     private static boolean inRange(World world, List<Player> players, Location at) {
         double nearest = Double.POSITIVE_INFINITY;
         for (Player player : players) nearest = Math.min(nearest, player.getLocation().distanceSquared(at));
-        if (nearest <= MIN_SPAWN_DISTANCE * MIN_SPAWN_DISTANCE) return false;
-        if (nearest > PetsConfig.wildDespawnDistance * PetsConfig.wildDespawnDistance) return false;
+        if (nearest <= MIN_SPAWN_DISTANCE * MIN_SPAWN_DISTANCE || nearest > MAX_SPAWN_DISTANCE * MAX_SPAWN_DISTANCE) return false;
         return world.getSpawnLocation().distanceSquared(at) > MIN_SPAWN_DISTANCE * MIN_SPAWN_DISTANCE;
     }
 
@@ -153,7 +208,7 @@ final class WildSpawner {
     }
 
     /**
-     * A species by weight among those that may spawn in this column, as vanilla picks a mob from the biome's spawn
+     * A species by weight among those that may top up in this column, as vanilla picks a mob from the biome's spawn
      * list at the pack's first spot.
      */
     private static PetSpecies pick(List<PetSpecies> candidates, World world, List<Player> players, int x, int y, int z,
@@ -162,6 +217,8 @@ final class WildSpawner {
         for (PetSpecies pet : candidates) if (spot(pet, world, players, x, y, z) != null) fitting.add(pet);
         return pickWeighted(fitting, pet -> pet.wildSpawn().weight(), random);
     }
+
+    // ---- shared ------------------------------------------------------------------------------------------------
 
     /** One entry, each as likely as its share of the total weight; null when nothing weighs anything. */
     static <T> T pickWeighted(List<T> entries, ToIntFunction<T> weight, Random random) {
@@ -177,9 +234,9 @@ final class WildSpawner {
     }
 
     /**
-     * Where a member may stand in this column, or null. Ground and water members stand at the pack's height, as
-     * vanilla's do, so caves and deep water count. Air and water-surface members float just over the column's
-     * surface, where the pet's hover takes over.
+     * Where a member may stand in this column, or null. Ground and water members stand at the given height, so a
+     * top-up's caves and deep water count. Air and water-surface members float just over the column's surface, where
+     * the pet's hover takes over.
      */
     static Location standingSpot(World world, int x, int y, int z, PetSpecies.Placement placement) {
         switch (placement) {
@@ -206,24 +263,6 @@ final class WildSpawner {
         return null;
     }
 
-    /**
-     * Vanilla's despawn rule for a mob nobody keeps: gone at once past the hard distance, safe within 32 blocks, and in
-     * between, once it has gone 600 ticks without a player within 32 blocks, a 1 in 800 chance per tick.
-     *
-     * @param idleTicks ticks without a player within 32 blocks, this check included
-     * @param ticks     ticks since the last check, folded into one roll
-     */
-    static boolean shouldDespawn(double nearestPlayer, double hardDistance, int idleTicks, int ticks, Random random) {
-        if (nearestPlayer > hardDistance) return true;
-        if (nearestPlayer <= NO_DESPAWN_DISTANCE || idleTicks <= IDLE_TICKS_BEFORE_DESPAWN) return false;
-        return random.nextDouble() < despawnChance(ticks);
-    }
-
-    /** The chance that at least one of {@code ticks} one-in-800 rolls hits. */
-    static double despawnChance(int ticks) {
-        return 1D - Math.pow(1D - 1D / DESPAWN_ODDS_PER_TICK, Math.max(1, ticks));
-    }
-
     /** Whether the spot is in the player's spawn area: the chunks within 8 of theirs, in the same world. */
     static boolean inSpawnArea(Player player, Location at) {
         return player.getWorld() == at.getWorld() && inSpawnArea(player.getLocation().getBlockX(), player.getLocation().getBlockZ(),
@@ -236,14 +275,6 @@ final class WildSpawner {
 
     static long chunkKey(int cx, int cz) {
         return ((long) cx << 32) | (cz & 0xFFFFFFFFL);
-    }
-
-    /** Distance from the body to the nearest player who is not spectating; infinity when there is none. */
-    static double nearestPlayerDistance(LivingEntity body) {
-        double nearest = Double.POSITIVE_INFINITY;
-        for (Player player : body.getWorld().getPlayers())
-            if (player.getGameMode() != GameMode.SPECTATOR) nearest = Math.min(nearest, player.getLocation().distance(body.getLocation()));
-        return nearest;
     }
 
     /**
