@@ -173,10 +173,48 @@ class PetProgramsTest {
             // Only what runs has settings: drift's bad radius is never reported, and its dependency stays out.
             assertEquals(List.of("fmm:pet/stay", "fmm:pet/hover"), List.copyOf(program.settings().keySet()));
             assertEquals(2, program.definition().instantiate().behaviors().size());
+            // Another variant of the species clashes the same way, which was said already.
+            assertEquals(List.of("fmm:pet/stay", "fmm:pet/hover"),
+                    ids(programs.program("jellyfish", "em_pet_jellyfish_blue", list, FILE)));
         }
-        assertEquals(List.of(FILE + ", variant " + GOLD + ": the pet behavior drift cannot run alongside the ones listed"
-                + " before it (Duplicate Mind memory alias 'home' in fmm:pet/stay and fmm:pet/drift); the creature runs"
-                + " without drift."), warnings);
+        assertEquals(List.of(FILE + ": the pet behavior drift cannot run alongside the ones listed before it (Duplicate"
+                + " Mind memory alias 'home' in fmm:pet/stay and fmm:pet/drift); the creature runs without drift."), warnings);
+    }
+
+    /** Writes a and d, which both declare the memory home, and x, which needs d. */
+    private void writeClashThroughADependency() throws IOException {
+        write("a", module("a", "memories = { home = 'position' }"));
+        write("d", module("d", "memories = { home = 'position' }"));
+        write("x", module("x", "dependencies = { 'fmm:pet/d' }"));
+    }
+
+    @Test
+    void aModuleWhoseDependencyClashesIsLeftOutWithIt() throws IOException {
+        writeClashThroughADependency();
+        try (PetBehaviorCatalog catalog = load()) {
+            PetPrograms.Program program = new PetPrograms(catalog, warnings::add).program("jellyfish", GOLD,
+                    List.of(entry("a"), entry("x")), FILE);
+            assertEquals(List.of("fmm:pet/a"), ids(program));
+            assertEquals(List.of("fmm:pet/a"), List.copyOf(program.settings().keySet()));
+        }
+        assertEquals(List.of(FILE + ": the pet behavior x needs pet behaviors that cannot run alongside the ones listed"
+                + " before it (Duplicate Mind memory alias 'home' in fmm:pet/a and fmm:pet/d); the creature runs without"
+                + " x."), warnings);
+    }
+
+    @Test
+    void aModuleNeedingOneLeftOutIsLeftOutToo() throws IOException {
+        writeClashThroughADependency();
+        try (PetBehaviorCatalog catalog = load()) {
+            PetPrograms.Program program = new PetPrograms(catalog, warnings::add).program("jellyfish", GOLD,
+                    List.of(entry("a"), entry("d"), entry("x")), FILE);
+            assertEquals(List.of("fmm:pet/a"), ids(program));
+            assertEquals(List.of("fmm:pet/a"), List.copyOf(program.settings().keySet()));
+        }
+        String reason = " (Duplicate Mind memory alias 'home' in fmm:pet/a and fmm:pet/d); the creature runs without ";
+        assertEquals(List.of(FILE + ": the pet behavior d cannot run alongside the ones listed before it" + reason + "d.",
+                FILE + ": the pet behavior x needs pet behaviors that cannot run alongside the ones listed before it"
+                        + reason + "x."), warnings);
     }
 
     @Test
@@ -209,8 +247,9 @@ class PetProgramsTest {
         assertEquals(List.of(), ids(program));
         assertEquals(Map.of(), program.settings());
         assertTrue(program.definition().instantiate().behaviors().isEmpty());
+        assertEquals(List.of(), ids(programs.program("jellyfish", "em_pet_jellyfish_blue", list, FILE)));
         assertEquals(1, warnings.size(), warnings.toString());
-        assertTrue(warnings.getFirst().startsWith(FILE + ", variant " + GOLD + ": could not build its pet behaviors (")
+        assertTrue(warnings.getFirst().startsWith(FILE + ": could not build its pet behaviors (")
                 && warnings.getFirst().endsWith("); the creature runs none of them."), warnings.getFirst());
         assertFalse(warnings.getFirst().contains("Exception"), warnings.getFirst());
     }
