@@ -176,8 +176,9 @@ public final class PetControl {
     public List<Player> drainContacts() {
         List<Player> touched = new ArrayList<>(contacts.size());
         for (UUID id : contacts) {
+            // Only online players are found by id.
             Player player = Bukkit.getPlayer(id);
-            if (player != null && player.isOnline()) touched.add(player);
+            if (player != null) touched.add(player);
         }
         contacts.clear();
         return touched;
