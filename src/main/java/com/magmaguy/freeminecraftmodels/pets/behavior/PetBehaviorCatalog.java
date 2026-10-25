@@ -46,7 +46,8 @@ public final class PetBehaviorCatalog implements AutoCloseable {
     public static final String NAMESPACE = "fmm";
     public static final String ID_PREFIX = NAMESPACE + ":pet/";
     /** The shipped modules by file name, each a resource under pet_behaviors/ in the jar. */
-    public static final List<String> DEFAULTS = List.of("migrate", "stay", "follow_owner", "drift", "hover");
+    public static final List<String> DEFAULTS = List.of("migrate", "stay", "follow_owner", "drift", "hover", "campfire",
+            "day_perch", "rain_bloom");
     private static final Pattern NAME = Pattern.compile("[a-z0-9._-]+");
     /** Ends a warning about a part of the folder that could not be read. */
     private static final String UNTIL_READ = ", and missing default pet behaviors are not written"
