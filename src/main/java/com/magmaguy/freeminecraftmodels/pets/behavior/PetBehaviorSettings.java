@@ -5,6 +5,7 @@ import com.magmaguy.shaded.luaj.vm2.LuaValue;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,15 +15,22 @@ import java.util.function.Consumer;
 
 /** A module's declared setting defaults with one creature's values on top, and the table Lua reads them from. */
 public final class PetBehaviorSettings {
+    /** What separates the items a pet file meant when it wrote a list as one line of text. */
+    private static final String SEPARATORS = "[,\\s]+";
+    /** Text that can only mean a one-item list. */
+    private static final String WORD = "[^,\\s]+";
+
     private PetBehaviorSettings() {
     }
 
     /**
      * The defaults with the creature's values on top, read-only and in the defaults' order. A value is taken when its
-     * meaning is clear even if quoted: "8" for a number, "TRUE" for true or false, 12 for text, one word for a list
-     * (and an empty list means none). A setting the module does not declare, a setting left without a value, a list
-     * with an empty entry, and any other value (including a number that is not finite) are reported through
-     * {@code warn}, naming {@code where}, and the default stays.
+     * meaning is clear even if quoted: "8" for a number, "TRUE" for true or false, and a single word (no spaces or
+     * commas) for a one-item list; an empty list means none. A number or true/false given to a text setting is taken
+     * as YAML read it, so on and yes become "true"; a pet file quotes such words to keep them. A setting the module
+     * does not declare, a setting left without a value, a list with an empty entry, and any other value (including a
+     * number that is not finite, or text holding several words for a list) are reported through {@code warn}, naming
+     * {@code where}, and the default stays.
      */
     public static Map<String, Object> merge(String module, Map<String, Object> defaults, Map<String, Object> values,
                                             String where, Consumer<String> warn) {
@@ -48,8 +56,8 @@ public final class PetBehaviorSettings {
             }
             Object coerced = coerce(example, value.getValue());
             if (coerced == null) {
-                warn.accept(setting + " must be " + kind(example) + ", not " + PetBehaviorYaml.typed(value.getValue())
-                        + keeping);
+                warn.accept(setting + " must be " + kind(example) + listHint(example, value.getValue()) + ", not "
+                        + PetBehaviorYaml.typed(value.getValue()) + keeping);
                 continue;
             }
             merged.put(name, coerced);
@@ -80,7 +88,7 @@ public final class PetBehaviorSettings {
             return value instanceof Number || value instanceof Boolean ? PetBehaviorYaml.plain(value) : null;
         }
         if (example instanceof List<?>) {
-            if (value instanceof String text) return List.of(text);
+            if (value instanceof String text) return text.strip().matches(WORD) ? List.of(text.strip()) : null;
             if (!(value instanceof List<?> list)) return null;
             List<String> texts = new ArrayList<>(list.size());
             for (Object entry : list) {
@@ -104,6 +112,17 @@ public final class PetBehaviorSettings {
             }
         } else return null;
         return Double.isFinite(number) ? number : null;
+    }
+
+    /**
+     * For text given to a list setting, how to write a list: with the text's own words when it has any (YAML reads
+     * "CAMPFIRE, SOUL_CAMPFIRE" on one line as one text), else with the default.
+     */
+    private static String listHint(Object example, Object value) {
+        if (!(example instanceof List<?> fallback) || !(value instanceof String text)) return "";
+        List<String> words = Arrays.stream(text.split(SEPARATORS)).filter(word -> !word.isEmpty()).toList();
+        return ", one per line starting with \"- \" or written "
+                + PetBehaviorYaml.plain(words.isEmpty() ? fallback : words);
     }
 
     private static String kind(Object example) {
