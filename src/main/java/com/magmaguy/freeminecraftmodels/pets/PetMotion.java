@@ -21,12 +21,17 @@ public final class PetMotion {
     private PetMotion() {
     }
 
-    /** A point near center, inside the species' hover band above the ground under it. */
+    /**
+     * A point near center, inside the species' hover band above the ground under it. A point in an unloaded chunk
+     * comes back at center's height, unchecked.
+     */
     public static Location hoverPoint(PetControl control, Location center, double radius) {
         ThreadLocalRandom random = ThreadLocalRandom.current();
         double angle = random.nextDouble() * Math.PI * 2D;
         double distance = radius <= 0D ? 0D : random.nextDouble() * radius;
         Location point = center.clone().add(Math.cos(angle) * distance, 0D, Math.sin(angle) * distance);
+        // Reading the ground there would load its chunk.
+        if (!loaded(point)) return point;
         double ground = groundBelow(point, 12, floatsOnLiquid(control));
         double height = control.species().hoverHeight() + (random.nextDouble() * 2D - 1D) * control.species().hoverVariance();
         point.setY(Math.max(ground + Math.max(0.5D, height), center.getY() - 3D));
@@ -66,10 +71,11 @@ public final class PetMotion {
     /**
      * One tick of flight toward target: accelerate to the cruise speed, ease off over the last few blocks, and hold
      * still on arrival. The body control turns the model toward the travel direction on its own. False when the body
-     * cannot fly.
+     * cannot fly, or when target is in another world.
      */
     public static boolean steerFlight(MindContext context, Location target, double cruise) {
         LivingEntity body = context.entity();
+        if (target.getWorld() != body.getWorld()) return false;
         Vector to = target.toVector().subtract(body.getLocation().toVector());
         double distance = to.length();
         Vector current = body.getVelocity();
@@ -81,8 +87,10 @@ public final class PetMotion {
     }
 
     /**
-     * A spot to stand on within radius of center: the floor of a random column nearest center's height, at most 3
-     * blocks above or 6 below it. Null over liquid or a long drop, inside solid ground, or in an unloaded chunk.
+     * A spot to stand on within radius of center: the floor of a random column nearest center's height. The floor
+     * block is at most 3 blocks above or 6 below center's block, so the spot is about 5 below to 4 above center's
+     * feet. Null over liquid or a long drop, inside solid ground, on a wall under a ceiling over center, or in an
+     * unloaded chunk.
      */
     public static Location groundPoint(Location center, double radius) {
         ThreadLocalRandom random = ThreadLocalRandom.current();
@@ -92,10 +100,12 @@ public final class PetMotion {
             if (!loaded(point)) continue;
             World world = point.getWorld();
             int x = point.getBlockX(), z = point.getBlockZ(), y = point.getBlockY();
-            // Outward from center's height, so a roof or a ceiling never passes for the floor: inside the ground,
-            // climb to the top of the slope; in the open, fall to the first block below.
+            // Outward from center's height. In the open, fall to the first block below, so a roof or a ceiling above
+            // never passes for the floor. Inside the ground, climb to the top of the slope; the climb counts only with
+            // headroom over center up to the spot's head, since under a ceiling it went up a wall onto the roof.
             if (world.getBlockAt(x, y, z).getType().isSolid()) {
                 while (y < point.getBlockY() + 3 && world.getBlockAt(x, y + 1, z).getType().isSolid()) y++;
+                if (y > point.getBlockY() && !headroom(center, y + 2)) continue;
             } else {
                 while (y > point.getBlockY() - 6 && y > world.getMinHeight() + 1 && open(world.getBlockAt(x, y, z))) y--;
             }
@@ -112,9 +122,20 @@ public final class PetMotion {
         return !block.getType().isSolid() && !block.isLiquid();
     }
 
+    /** Whether center's own column is passable from 2 blocks above its feet up to top; false when unloaded. */
+    private static boolean headroom(Location center, int top) {
+        if (!loaded(center)) return false;
+        World world = center.getWorld();
+        int x = center.getBlockX(), z = center.getBlockZ();
+        for (int y = center.getBlockY() + 2; y <= top; y++) if (!world.getBlockAt(x, y, z).isPassable()) return false;
+        return true;
+    }
+
     /**
-     * A spot in water within radius of center, between minDepth and maxDepth below the water's surface in its
-     * column. Null when no water is found near center's height, or in an unloaded chunk.
+     * A spot in water within radius of center, between minDepth and maxDepth below the topmost water the column's
+     * scan finds. The scan runs from 4 blocks above center's block to 12 below and skips solid blocks above center's
+     * height, so water over a ceiling still counts; ground at or below that height ends the column. Null when no
+     * water is found near center's height, or in an unloaded chunk.
      */
     public static Location waterPoint(Location center, double radius, double minDepth, double maxDepth) {
         ThreadLocalRandom random = ThreadLocalRandom.current();
@@ -143,27 +164,36 @@ public final class PetMotion {
         Location at = owner.getLocation();
         // The facing from the yaw alone, so an owner looking straight up or down still has a behind.
         double yaw = Math.toRadians(at.getYaw());
-        Location point = at.clone().subtract(-Math.sin(yaw) * back, 0D, Math.cos(yaw) * back);
+        Location point = at.clone().add(Math.sin(yaw) * back, 0D, -Math.cos(yaw) * back);
         point.setY(at.getY() + (control.species().locomotion() == MindBodyLocomotion.FLYING ? height : 0D));
         return point;
     }
 
     /**
      * Puts the body beside its owner: in its hover band when floating, on standing ground when walking, in water when
-     * swimming. False when the owner is away, in another world or in an unloaded chunk, or when nowhere near them
-     * fits; a world change despawns the pet and the watchdog brings it back instead.
+     * swimming, and on ground or else in water when amphibious, so it keeps up with an owner who swims or sails. A
+     * floating body faces the owner's way; the others keep their own facing. False when the owner is away or in
+     * another world, or when nowhere loaded near them fits; a world change despawns the pet and the watchdog brings
+     * it back instead.
      */
     public static boolean teleportNearOwner(PetControl control, LivingEntity body, double radius) {
         Player owner = control.owner().orElse(null);
         if (owner == null || owner.getWorld() != body.getWorld()) return false;
         Location at = owner.getLocation();
-        // A hover point reads the ground under it before any loaded check could stop it.
-        if (!loaded(at)) return false;
-        Location spot = switch (control.species().locomotion()) {
+        MindBodyLocomotion locomotion = control.species().locomotion();
+        Location spot = switch (locomotion) {
             case FLYING -> hoverPoint(control, at, radius);
             case AQUATIC -> waterPoint(at, Math.max(radius, 6D), 0.5D, 2D);
+            case AMPHIBIOUS -> {
+                Location ground = groundPoint(at, radius);
+                yield ground != null ? ground : waterPoint(at, Math.max(radius, 6D), 0.5D, 2D);
+            }
             default -> groundPoint(at, radius);
         };
-        return spot != null && loaded(spot) && body.teleport(spot);
+        if (spot == null || !loaded(spot)) return false;
+        // Ground and water spots are built facing south, so they take the body's yaw; a hover point keeps the
+        // owner's, as the Java follow did.
+        if (locomotion != MindBodyLocomotion.FLYING) spot.setYaw(body.getLocation().getYaw());
+        return body.teleport(spot);
     }
 }
