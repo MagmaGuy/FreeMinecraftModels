@@ -1,7 +1,10 @@
 package com.magmaguy.freeminecraftmodels.pets;
 
 import com.magmaguy.freeminecraftmodels.customentity.core.TravelOrientation;
+import com.magmaguy.freeminecraftmodels.pets.behavior.PetBehaviorEntry;
+import com.magmaguy.freeminecraftmodels.pets.behavior.PetPrograms;
 import com.magmaguy.freeminecraftmodels.pets.interactions.PetInteractions;
+import com.magmaguy.freeminecraftmodels.utils.StringToResourcePackFilename;
 import com.magmaguy.magmacore.ai.MindBodyLocomotion;
 import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.Location;
@@ -16,10 +19,15 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.inventory.ItemStack;
 
 import java.io.File;
+import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Random;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * One pet species, read from a {@code <species>.pet.yml} file that sits beside its model in the models folder, so a
@@ -29,8 +37,11 @@ import java.util.Random;
  */
 public final class PetSpecies {
     public static final String FILE_SUFFIX = ".pet.yml";
+    /** The keys a variant written as a map may hold. */
+    private static final List<String> VARIANT_KEYS = List.of("model", "weight", "behaviors");
 
-    public record Variant(String model, double weight) {
+    /** A model the species' pets may wear, its share of the picks, and the behavior modules it adds to the species'. */
+    public record Variant(String model, double weight, List<PetBehaviorEntry> behaviors) {
     }
 
     public enum TimeOfDay {ANY, DAY, NIGHT}
@@ -105,6 +116,7 @@ public final class PetSpecies {
     private final double hoverVariance;
     private final WildSpawn wildSpawn;
     private final MindBodyLocomotion locomotion;
+    private final List<PetBehaviorEntry> behaviors; // null: the locomotion's defaults
     private final TravelOrientation orientation;
     private final boolean centerOnBody;
     private final PetInteractions interactions;
@@ -141,7 +153,7 @@ public final class PetSpecies {
         this.babyGrowthMillis = (long) (config.getDouble("babyGrowthMinutes", 20D) * 60_000D);
         this.breedingCooldownMillis = (long) (config.getDouble("breedingCooldownMinutes", 5D) * 60_000D);
         this.loveTicks = (int) (config.getDouble("loveSeconds", 30D) * 20D);
-        this.variants = variants(config.getStringList("variants"), filename);
+        this.variants = variants(config.get("variants"), filename, Logger::warn);
         ConfigurationSection follow = section(config, "follow");
         this.followDistance = follow.getDouble("distance", 5D);
         this.leashDistance = follow.getDouble("leashDistance", 12D);
@@ -160,6 +172,7 @@ public final class PetSpecies {
             Logger.warn("Unknown locomotion " + locomotionName + " in " + filename + "; using FLYING");
         }
         this.locomotion = movement;
+        this.behaviors = listedBehaviors(config, filename, Logger::warn);
         this.wildSpawn = readWildSpawn(section(config, "wildSpawn"), movement, filename);
         this.orientation = orientation(section(config, "orientation"), filename);
         this.centerOnBody = centerOnBody(config, movement);
@@ -276,23 +289,158 @@ public final class PetSpecies {
         return List.copyOf(biomes);
     }
 
-    /** {@code model} or {@code model:weight}; the species' own model is the only variant when none are listed. */
-    private static List<Variant> variants(List<String> entries, String filename) {
+    /**
+     * The file's behaviors list, or null when it has none or has something that is not a list (after a warning), so
+     * the species runs its locomotion's defaults.
+     */
+    static List<PetBehaviorEntry> listedBehaviors(ConfigurationSection config, String filename, Consumer<String> warn) {
+        return config.contains("behaviors") ? PetBehaviorEntry.read(config.get("behaviors"), filename, warn) : null;
+    }
+
+    /**
+     * Variants as "model", "model:weight", or a map with a model, a weight and its own behaviors list; the species'
+     * own model is the only variant when none are listed. A malformed entry is reported through {@code warn}, naming
+     * the file, and skipped. A weight that is not a number counts as 1, and one below 0 as 0.
+     */
+    static List<Variant> variants(Object raw, String filename, Consumer<String> warn) {
+        if (raw == null) return List.of();
+        if (!(raw instanceof List<?> entries)) {
+            warn.accept(filename + ": variants must be a list, one model per line starting with \"- \"; the species wears "
+                    + "its own model.");
+            return List.of();
+        }
         List<Variant> variants = new ArrayList<>();
-        for (String entry : entries) {
-            int split = entry.lastIndexOf(':');
-            String model = split < 0 ? entry.trim() : entry.substring(0, split).trim();
-            double weight = 1D;
-            if (split >= 0) {
-                try {
-                    weight = Double.parseDouble(entry.substring(split + 1).trim());
-                } catch (NumberFormatException ignored) {
-                    Logger.warn("Bad variant weight in " + entry + " of " + filename + "; using 1");
-                }
-            }
-            variants.add(new Variant(model, Math.max(0D, weight)));
+        for (Object entry : entries) {
+            Variant variant = entry instanceof Map<?, ?> map && !map.isEmpty() ? variant(map, filename, warn)
+                    : variant(entry, filename, warn);
+            if (variant != null) variants.add(variant);
         }
         return List.copyOf(variants);
+    }
+
+    /** A variant written as text, "model" or "model:weight", or null after a warning. */
+    private static Variant variant(Object entry, String filename, Consumer<String> warn) {
+        // YAML reads a model named only with digits as a number; it still names the model.
+        String text = entry instanceof String || entry instanceof Number ? String.valueOf(entry).trim() : null;
+        if (text == null || text.isEmpty()) {
+            if (isEmpty(entry)) warn.accept(filename + ": variants has an empty entry; skipped.");
+            else skip(entry, "each entry is a model name, \"model:weight\", or a map with model, weight and behaviors",
+                    filename, warn);
+            return null;
+        }
+        int split = text.lastIndexOf(':');
+        String model = split < 0 ? text : text.substring(0, split).trim();
+        if (model.isEmpty()) {
+            skip(entry, "it names no model", filename, warn);
+            return null;
+        }
+        double weight = 1D;
+        if (split >= 0) {
+            String given = text.substring(split + 1).trim();
+            weight = weight(given.isEmpty() ? null : given, filename + ", variant " + model, warn);
+        }
+        return new Variant(model, weight, List.of());
+    }
+
+    /** A variant written as a map with a model, a weight and its own behaviors, or null after a warning. */
+    private static Variant variant(Map<?, ?> map, String filename, Consumer<String> warn) {
+        Object named = map.get("model");
+        String model = named instanceof String || named instanceof Number ? String.valueOf(named).trim() : "";
+        if (model.isEmpty()) {
+            if (map.containsKey("model")) skip(map, "its model must be a model's name", filename, warn);
+            else if (map.size() == 1 && map.keySet().iterator().next() instanceof String name && !VARIANT_KEYS.contains(name))
+                // Usually "- model: weight" with a space after the colon, or a model name with its settings below it.
+                skip(map, "write \"- " + name + ":<weight>\" with no space after the colon, or \"- model: " + name
+                        + "\" with weight and behaviors lined up below it", filename, warn);
+            else skip(map, "a variant written as a map needs \"model: <model name>\"", filename, warn);
+            return null;
+        }
+        String where = filename + ", variant " + model;
+        for (Object key : map.keySet())
+            if (!VARIANT_KEYS.contains(key))
+                warn.accept(where + ": a variant has no setting " + key + " (its settings are model, weight and behaviors); ignored.");
+        double weight = map.containsKey("weight") ? weight(map.get("weight"), where, warn) : 1D;
+        // read returns null after a warning for a value that is not a list: the variant then adds nothing.
+        List<PetBehaviorEntry> behaviors = map.containsKey("behaviors")
+                ? PetBehaviorEntry.read(map.get("behaviors"), where, warn) : null;
+        return new Variant(model, weight, behaviors == null ? List.of() : behaviors);
+    }
+
+    /** A variant's weight: a number, or text that reads as one ("0.5"); otherwise 1, and below 0 it is 0. */
+    private static double weight(Object value, String where, Consumer<String> warn) {
+        if (value == null) {
+            warn.accept(where + ": weight has no value; using 1.");
+            return 1D;
+        }
+        double weight;
+        try {
+            weight = value instanceof Number number ? number.doubleValue()
+                    : value instanceof String text ? new BigDecimal(text.strip()).doubleValue() : Double.NaN;
+        } catch (NumberFormatException notANumber) {
+            weight = Double.NaN;
+        }
+        if (!Double.isFinite(weight)) {
+            warn.accept(where + ": weight must be a number, not " + yaml(value, true) + "; using 1.");
+            return 1D;
+        }
+        if (weight < 0D) {
+            warn.accept(where + ": weight must be 0 or more, not " + yaml(value, false) + "; using 0.");
+            return 0D;
+        }
+        return weight;
+    }
+
+    private static void skip(Object entry, String reason, String filename, Consumer<String> warn) {
+        warn.accept(filename + ": skipping " + describe(entry) + " in variants; " + reason + ".");
+    }
+
+    private static boolean isEmpty(Object entry) {
+        return entry == null || entry instanceof String text && text.isBlank() || entry instanceof Map<?, ?> map && map.isEmpty()
+                || entry instanceof Collection<?> list && list.isEmpty();
+    }
+
+    /** A bad entry as its author would recognize it, quoted as YAML read it, as the behavior warnings show entries. */
+    private static String describe(Object entry) {
+        if (isEmpty(entry)) return "an empty entry";
+        return "\"" + (entry instanceof Map<?, ?> map ? pairs(map, false) : yaml(entry, false)) + "\"";
+    }
+
+    /** A value as a pet file writes it: whole numbers without ".0", maps as { key: value }, text quoted if asked. */
+    private static String yaml(Object value, boolean quoteText) {
+        if (value == null) return "";
+        if (value instanceof String text) return quoteText ? "\"" + text + "\"" : text;
+        if (value instanceof Double number) {
+            if (number.isNaN()) return ".nan";
+            if (number.isInfinite()) return number > 0 ? ".inf" : "-.inf";
+            return BigDecimal.valueOf(number).stripTrailingZeros().toPlainString();
+        }
+        if (value instanceof Map<?, ?> map) return map.isEmpty() ? "{}" : "{ " + pairs(map, quoteText) + " }";
+        if (value instanceof Collection<?> list)
+            return list.stream().map(item -> yaml(item, quoteText)).collect(Collectors.joining(", ", "[", "]"));
+        return String.valueOf(value);
+    }
+
+    private static String pairs(Map<?, ?> map, boolean quoteText) {
+        return map.entrySet().stream()
+                .map(pair -> pair.getKey() + ":" + (pair.getValue() == null ? "" : " " + yaml(pair.getValue(), quoteText)))
+                .collect(Collectors.joining(", "));
+    }
+
+    /**
+     * The modules a pet wearing this model runs: the file's list, or the locomotion's defaults when it has none, then
+     * the modules of the variant that names the model. Names match as FreeMinecraftModels names models (lower case,
+     * other characters as '_'): a pet wears the model whose name matches its record exactly, and a variant whose name
+     * the file later wrote in another case still gives that pet its modules.
+     */
+    static List<PetBehaviorEntry> behaviors(List<PetBehaviorEntry> listed, MindBodyLocomotion locomotion,
+                                            List<Variant> variants, String model) {
+        List<PetBehaviorEntry> base = listed != null ? listed : PetPrograms.defaults(locomotion);
+        if (model == null) return base;
+        String id = StringToResourcePackFilename.convert(model);
+        for (Variant variant : variants)
+            if (StringToResourcePackFilename.convert(variant.model()).equals(id))
+                return PetBehaviorEntry.overlay(base, variant.behaviors());
+        return base;
     }
 
     public String id() {
@@ -432,6 +580,19 @@ public final class PetSpecies {
 
     public MindBodyLocomotion locomotion() {
         return locomotion;
+    }
+
+    /**
+     * Whether the pet file lists its own behaviors; false when it has no list or one that is not a list, and the
+     * species runs its locomotion's defaults.
+     */
+    public boolean listsBehaviors() {
+        return behaviors != null;
+    }
+
+    /** The modules a pet wearing this model runs: the species' list or its locomotion's defaults, then the variant's. */
+    public List<PetBehaviorEntry> behaviors(String model) {
+        return behaviors(behaviors, locomotion, variants, model);
     }
 
     /** How the model leans with its travel. */

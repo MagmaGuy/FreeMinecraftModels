@@ -27,7 +27,7 @@ public final class PetSting {
 
     /**
      * FreeMinecraftModels found a player touching a model. For a pet body this replaces FMM's contact attack: the
-     * event is cancelled, and a wild pet with a sting stings.
+     * event is cancelled, a wild pet remembers the touch of a player it may sting, and a wild pet with a sting stings.
      */
     public static void onContact(ModeledEntityHitboxContactEvent event) {
         PetManager manager = PetManager.get();
@@ -36,11 +36,14 @@ public final class PetSting {
         PetControl control = underlying == null ? null : manager.pet(underlying);
         if (control == null) return;
         event.setCancelled(true);
-        PetInteractions.Sting sting = control.species().interactions().sting();
-        if (sting == null || !sting.wild() || !control.isWild()) return;
+        if (!control.isWild()) return;
         Player player = event.getPlayer();
         GameMode mode = player.getGameMode();
         if (mode == GameMode.CREATIVE || mode == GameMode.SPECTATOR || player.isDead()) return;
+        // For a sting behavior module, which reads the touches since its last look; the sting here reacts to the same.
+        control.recordContact(player);
+        PetInteractions.Sting sting = control.species().interactions().sting();
+        if (sting == null || !sting.wild()) return;
         sting(control, PetInteractionState.of(control), player, sting);
     }
 

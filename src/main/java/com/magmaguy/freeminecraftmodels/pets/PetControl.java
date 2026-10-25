@@ -7,7 +7,11 @@ import org.bukkit.Location;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -16,6 +20,9 @@ import java.util.UUID;
  * here needs synchronization.
  */
 public final class PetControl {
+    /** The most players a wild pet remembers touching it between looks; past that, more wait for the next touch. */
+    private static final int MAX_CONTACTS = 16;
+
     private final PetSpecies species;
     private final UUID owner;
     private final PetRecord record;
@@ -32,6 +39,8 @@ public final class PetControl {
     private long lastInteractionTick = Long.MIN_VALUE / 2;
     // Set on a wild pet flying a migration; null for every other pet.
     private MigrationRoute route;
+    // Players whose touch reached this wild pet's model since its sting last looked; a set, so a long touch counts once.
+    private final Set<UUID> contacts = new LinkedHashSet<>();
 
     PetControl(PetSpecies species, UUID owner, PetRecord record, String model, boolean baby, Location home) {
         this.species = species;
@@ -153,6 +162,25 @@ public final class PetControl {
 
     long lastInteractionTick() {
         return lastInteractionTick;
+    }
+
+    /**
+     * A player's touch reached this wild pet's model. Up to {@link #MAX_CONTACTS} players are kept until the next
+     * {@link #drainContacts}; a body that is spawned again (a stash, a tame, growing up) starts with none.
+     */
+    public void recordContact(Player player) {
+        if (contacts.size() < MAX_CONTACTS) contacts.add(player.getUniqueId());
+    }
+
+    /** The players that touched the model since the last call and are still online. */
+    public List<Player> drainContacts() {
+        List<Player> touched = new ArrayList<>(contacts.size());
+        for (UUID id : contacts) {
+            Player player = Bukkit.getPlayer(id);
+            if (player != null && player.isOnline()) touched.add(player);
+        }
+        contacts.clear();
+        return touched;
     }
 
     void setLastInteractionTick(long tick) {
