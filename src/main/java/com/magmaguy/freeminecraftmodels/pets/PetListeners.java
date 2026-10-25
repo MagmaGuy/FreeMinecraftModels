@@ -147,7 +147,7 @@ public final class PetListeners implements Listener {
             manager.chunkGenerated(event.getWorld(), event.getChunk().getX(), event.getChunk().getZ());
     }
 
-    /** A wild pet another plugin removed stays gone; one that left with its chunk waits to come back. */
+    /** A live wild pet another plugin removed stays gone; one whose chunk stopped ticking waits to come back. */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onRemove(EntityRemoveEvent event) {
         PetManager manager = PetManager.get();

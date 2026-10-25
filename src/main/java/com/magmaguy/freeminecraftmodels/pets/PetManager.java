@@ -602,10 +602,16 @@ public final class PetManager {
         toStock.add(new PendingChunk(world.getUID(), cx, cz, ticks + 1));
     }
 
-    /** Something other than FreeMinecraftModels removed a wild pet's body: it is gone, as if it had died. */
+    /**
+     * A plugin removed a wild pet's body. FreeMinecraftModels itself removes the body of a model whose chunk stopped
+     * ticking or is unloading; that body is no longer valid, and the pet waits in the store. A live body that another
+     * plugin removes is gone, as if it had died.
+     */
     public void bodyRemovedByPlugin(Entity entity) {
         PetControl control = pet(entity);
-        if (control != null && control.isWild()) bodyDied(control);
+        if (control == null || !control.isWild() || control.route() != null) return;
+        if (!entity.isValid()) store(control);
+        bodyDied(control);
     }
 
     /** Writes the waiting wild pets to disk; called with every world save. */
@@ -641,13 +647,16 @@ public final class PetManager {
 
     /** Puts a wild pet in the store at the place its body was last seen, then clears it from the world. */
     private void stash(PetControl control) {
-        LivingEntity body = control.body();
-        if (body != null) {
-            Location at = body.getLocation(), home = control.home() == null ? at : control.home();
-            wildStore.put(body.getWorld().getUID(), new WildPetStore.Entry(control.species().id(), control.model(), control.isBaby(),
-                    at.getX(), at.getY(), at.getZ(), home.getX(), home.getY(), home.getZ()));
-        }
+        store(control);
         despawn(control);
+    }
+
+    private void store(PetControl control) {
+        LivingEntity body = control.body();
+        if (body == null) return;
+        Location at = body.getLocation(), home = control.home() == null ? at : control.home();
+        wildStore.put(body.getWorld().getUID(), new WildPetStore.Entry(control.species().id(), control.model(), control.isBaby(),
+                at.getX(), at.getY(), at.getZ(), home.getX(), home.getY(), home.getZ()));
     }
 
     /** Brings back the pets waiting in a loaded chunk; pets of a species that is not installed keep waiting. */
