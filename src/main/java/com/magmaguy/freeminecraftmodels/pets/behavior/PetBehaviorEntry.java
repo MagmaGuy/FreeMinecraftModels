@@ -11,7 +11,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 /** One line of a pet file's behaviors list: a module by its file name, and the settings this creature gives it. */
 public record PetBehaviorEntry(String module, Map<String, Object> settings) {
@@ -57,7 +56,8 @@ public record PetBehaviorEntry(String module, Map<String, Object> settings) {
             rest.remove(map.keySet().iterator().next());
             warn.accept(where + ": " + String.join(", ", keys.subList(0, keys.size() - 1)) + " and " + keys.getLast()
                     + " ended up in one behaviors entry; indent " + keys.getFirst()
-                    + "'s settings two spaces past its name, or write \"- " + keys.getFirst() + ": " + yaml(rest) + "\".");
+                    + "'s settings two spaces past its name, or write \"- " + keys.getFirst() + ": "
+                    + PetBehaviorYaml.plain(rest) + "\".");
             return null;
         }
         if (item instanceof Map<?, ?> map && map.size() == 1
@@ -82,20 +82,7 @@ public record PetBehaviorEntry(String module, Map<String, Object> settings) {
         if (item == null || item instanceof String text && text.isBlank() || item instanceof Map<?, ?> map && map.isEmpty()
                 || item instanceof Collection<?> list && list.isEmpty())
             return "an empty entry";
-        return "\"" + (item instanceof Map<?, ?> map ? pairs(map) : yaml(item)) + "\"";
-    }
-
-    private static String yaml(Object value) {
-        if (value instanceof Map<?, ?> map) return map.isEmpty() ? "{}" : "{ " + pairs(map) + " }";
-        if (value instanceof Collection<?> list)
-            return list.stream().map(PetBehaviorEntry::yaml).collect(Collectors.joining(", ", "[", "]"));
-        return String.valueOf(value);
-    }
-
-    private static String pairs(Map<?, ?> map) {
-        return map.entrySet().stream()
-                .map(pair -> pair.getKey() + ":" + (pair.getValue() == null ? "" : " " + yaml(pair.getValue())))
-                .collect(Collectors.joining(", "));
+        return "\"" + (item instanceof Map<?, ?> map ? PetBehaviorYaml.plainPairs(map) : PetBehaviorYaml.plain(item)) + "\"";
     }
 
     /**

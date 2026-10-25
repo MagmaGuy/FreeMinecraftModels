@@ -101,6 +101,21 @@ class PetBehaviorEntryTest {
     }
 
     @Test
+    void badEntriesShowEmptyItemsAsNothingAndWholeNumbersWithoutDecimals() throws InvalidConfigurationException {
+        List<String> warnings = new ArrayList<>();
+        assertEquals(List.of(), PetBehaviorEntry.read(behaviors("""
+                behaviors:
+                - drift:
+                  - 8
+                  -
+                - hover: 12.0
+                """), "jellyfish.pet.yml", warnings::add));
+        assertEquals(2, warnings.size(), warnings.toString());
+        assertTrue(warnings.get(0).contains("skipping \"drift: [8, ]\""), warnings.get(0));
+        assertTrue(warnings.get(1).contains("skipping \"hover: 12\""), warnings.get(1));
+    }
+
+    @Test
     void aModuleListedTwiceKeepsTheFirst() throws InvalidConfigurationException {
         List<String> warnings = new ArrayList<>();
         assertEquals(List.of(new PetBehaviorEntry("drift", Map.of("radius", 8))), PetBehaviorEntry.read(behaviors("""

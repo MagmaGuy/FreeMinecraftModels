@@ -5,13 +5,12 @@ import com.magmaguy.shaded.luaj.vm2.LuaValue;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 /** A module's declared setting defaults with one creature's values on top, and the table Lua reads them from. */
 public final class PetBehaviorSettings {
@@ -19,41 +18,69 @@ public final class PetBehaviorSettings {
     }
 
     /**
-     * The defaults with the creature's values on top, read-only and in the defaults' order. A value for a setting the
-     * module does not declare, a setting left without a value, and a value of another type than the default (or a
-     * number that is not finite) are reported through {@code warn}, naming {@code where}, and the default stays.
+     * The defaults with the creature's values on top, read-only and in the defaults' order. A value is taken when its
+     * meaning is clear even if quoted: "8" for a number, "TRUE" for true or false, 12 for text, one word for a list
+     * (and an empty list means none). A setting the module does not declare, a setting left without a value, a list
+     * with an empty entry, and any other value (including a number that is not finite) are reported through
+     * {@code warn}, naming {@code where}, and the default stays.
      */
     public static Map<String, Object> merge(String module, Map<String, Object> defaults, Map<String, Object> values,
                                             String where, Consumer<String> warn) {
         Map<String, Object> merged = new LinkedHashMap<>(defaults);
         for (Map.Entry<String, Object> value : values.entrySet()) {
-            Object example = defaults.get(value.getKey());
-            if (example == null) {
-                warn.accept(where + ": the pet behavior " + module + " has no setting " + value.getKey() + "; ignored.");
+            String name = value.getKey();
+            if (!defaults.containsKey(name)) {
+                warn.accept(where + ": the pet behavior " + module + " has no setting " + name + " ("
+                        + settingsOf(defaults) + "); ignored.");
                 continue;
             }
+            Object example = defaults.get(name);
+            String setting = where + ": " + module + "." + name;
+            String keeping = "; using " + PetBehaviorYaml.typed(example) + ".";
             if (value.getValue() == null) {
-                warn.accept(where + ": " + module + "." + value.getKey() + " has no value; using " + plain(example) + ".");
+                warn.accept(setting + " has no value" + keeping);
+                continue;
+            }
+            if (example instanceof List<?> && value.getValue() instanceof List<?> list
+                    && list.stream().anyMatch(Objects::isNull)) {
+                warn.accept(setting + " has an empty entry" + keeping);
                 continue;
             }
             Object coerced = coerce(example, value.getValue());
             if (coerced == null) {
-                warn.accept(where + ": " + module + "." + value.getKey() + " must be " + kind(example) + ", not \""
-                        + yaml(value.getValue()) + "\"; using " + plain(example) + ".");
+                warn.accept(setting + " must be " + kind(example) + ", not " + PetBehaviorYaml.typed(value.getValue())
+                        + keeping);
                 continue;
             }
-            merged.put(value.getKey(), coerced);
+            merged.put(name, coerced);
         }
         return Collections.unmodifiableMap(merged);
     }
 
-    /** The value as the default's type, or null when it is not one. */
+    /** The module's setting names for a server owner who mistyped one. */
+    private static String settingsOf(Map<String, Object> defaults) {
+        List<String> names = List.copyOf(defaults.keySet());
+        if (names.isEmpty()) return "it has no settings";
+        if (names.size() == 1) return "its only setting is " + names.getFirst();
+        return "its settings are " + String.join(", ", names.subList(0, names.size() - 1)) + " and " + names.getLast();
+    }
+
+    /** The value as the default's type, or null when it does not clearly mean one. */
     private static Object coerce(Object example, Object value) {
-        if (example instanceof Double)
-            return value instanceof Number number && Double.isFinite(number.doubleValue()) ? number.doubleValue() : null;
-        if (example instanceof Boolean) return value instanceof Boolean flag ? flag : null;
-        if (example instanceof String) return value instanceof String text ? text : null;
+        if (example instanceof Double) return number(value);
+        if (example instanceof Boolean) {
+            if (value instanceof Boolean flag) return flag;
+            if (!(value instanceof String text)) return null;
+            if (text.strip().equalsIgnoreCase("true")) return true;
+            if (text.strip().equalsIgnoreCase("false")) return false;
+            return null;
+        }
+        if (example instanceof String) {
+            if (value instanceof String text) return text;
+            return value instanceof Number || value instanceof Boolean ? PetBehaviorYaml.plain(value) : null;
+        }
         if (example instanceof List<?>) {
+            if (value instanceof String text) return List.of(text);
             if (!(value instanceof List<?> list)) return null;
             List<String> texts = new ArrayList<>(list.size());
             for (Object entry : list) {
@@ -65,36 +92,26 @@ public final class PetBehaviorSettings {
         return null;
     }
 
+    /** A finite number, given as one or as text that reads as one ("8", "0.5", "1e3"), or null. */
+    private static Double number(Object value) {
+        double number;
+        if (value instanceof Number given) number = given.doubleValue();
+        else if (value instanceof String text) {
+            try {
+                number = new BigDecimal(text.strip()).doubleValue();
+            } catch (NumberFormatException notANumber) {
+                return null;
+            }
+        } else return null;
+        return Double.isFinite(number) ? number : null;
+    }
+
     private static String kind(Object example) {
         if (example instanceof Double) return "a number";
         if (example instanceof Boolean) return "true or false";
         if (example instanceof String) return "text";
         if (example instanceof List<?>) return "a list of text";
         throw unsupported(example);
-    }
-
-    /** A default as a server owner would write it, so an empty text still shows. */
-    private static String plain(Object example) {
-        return example instanceof String text && text.isEmpty() ? "\"\"" : yaml(example);
-    }
-
-    /** A value as YAML would write it: {@code .nan} rather than NaN, maps as {@code { key: value }}, nothing as empty. */
-    private static String yaml(Object value) {
-        if (value == null) return "";
-        if (value instanceof Double number) {
-            if (number.isNaN()) return ".nan";
-            if (number.isInfinite()) return number > 0 ? ".inf" : "-.inf";
-            return BigDecimal.valueOf(number).stripTrailingZeros().toPlainString();
-        }
-        if (value instanceof Map<?, ?> map) {
-            if (map.isEmpty()) return "{}";
-            return map.entrySet().stream()
-                    .map(pair -> pair.getKey() + ":" + (pair.getValue() == null ? "" : " " + yaml(pair.getValue())))
-                    .collect(Collectors.joining(", ", "{ ", " }"));
-        }
-        if (value instanceof Collection<?> list)
-            return list.stream().map(PetBehaviorSettings::yaml).collect(Collectors.joining(", ", "[", "]"));
-        return String.valueOf(value);
     }
 
     /**
