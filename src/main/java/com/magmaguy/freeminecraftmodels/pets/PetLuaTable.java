@@ -161,11 +161,11 @@ public final class PetLuaTable {
         property("speed", () -> LuaValue.valueOf(body().getVelocity().length()));
         property("route_cruise", () -> LuaValue.valueOf(control.route() == null ? 0D : control.route().cruise()));
 
-        // steer_to(point, cruise): one tick toward the point at cruise blocks per tick (0 to 4); false when the body
-        // cannot go there. Needs a behavior holding MOVE and LOOK.
+        // steer_to(point, cruise): one tick toward the point at cruise blocks per tick (0 to 4, and an infinite cruise
+        // means 4); false when the body cannot go there. Needs a behavior holding MOVE and LOOK.
         method("steer_to", args -> {
             Location target = at(args, 1);
-            double cruise = number(args, 2, 0D, MindActuator.MAX_FLIGHT_SPEED);
+            double cruise = cruise(args, 2);
             if (target == null) return LuaValue.FALSE;
             return LuaValue.valueOf(leased("c.pet:steer_to", "ai.controls.move and ai.controls.look",
                     () -> steerTo(target, cruise)));
@@ -364,6 +364,15 @@ public final class PetLuaTable {
 
     static double number(Varargs args, int index, double min, double max) {
         return Math.max(min, Math.min(max, number(args, index)));
+    }
+
+    /**
+     * A cruise argument, 0 to the flight cap. A module multiplying an owner's huge speed setting can overflow to
+     * positive infinity, which means the cap; NaN and negative infinity are refused.
+     */
+    static double cruise(Varargs args, int index) {
+        if (args.checkdouble(index) == Double.POSITIVE_INFINITY) return MindActuator.MAX_FLIGHT_SPEED;
+        return number(args, index, 0D, MindActuator.MAX_FLIGHT_SPEED);
     }
 
     /** A whole number argument, truncated as Lua's integer arguments are, then clamped. */

@@ -24,12 +24,9 @@ return ai.module {
             start = function(c)
                 local anchor = c.pet.anchor
                 if anchor == nil then return end
+                -- nil in an unloaded chunk: this drift ends at once, and its rest decides when the next one tries.
                 local to = c.pet:hover_point(anchor, c.pet.species.roam_radius)
-                if to == nil then
-                    -- The point is in an unloaded chunk: wait at least 40 ticks before trying again.
-                    c.memory:set('drift_next', c.tick + 40)
-                    return
-                end
+                if to == nil then return end
                 c.memory:set('drift_to', to)
                 c.memory:set('drift_until', c.tick + c.settings.drift_ticks)
                 c.memory:set('drift_last', c.pet.position)
@@ -50,9 +47,7 @@ return ai.module {
             end,
             stop = function(c)
                 c.memory:forget('drift_to')
-                local rest = c.settings.rest_ticks
-                -- math.random needs a range of at least one tick.
-                if c.settings.rest_random_ticks >= 1 then rest = rest + math.random(0, c.settings.rest_random_ticks - 1) end
+                local rest = c.settings.rest_ticks + math.floor(math.random() * math.max(0, c.settings.rest_random_ticks))
                 c.memory:set('drift_next', c.tick + rest)
             end
         }
