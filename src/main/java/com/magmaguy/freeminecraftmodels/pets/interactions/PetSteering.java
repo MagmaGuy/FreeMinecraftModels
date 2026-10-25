@@ -2,10 +2,12 @@ package com.magmaguy.freeminecraftmodels.pets.interactions;
 
 import com.magmaguy.freeminecraftmodels.pets.PetControl;
 import com.magmaguy.freeminecraftmodels.pets.PetSpecies;
+import com.magmaguy.magmacore.ai.MindBodyLocomotion;
 import com.magmaguy.magmacore.ai.MindContext;
 import com.magmaguy.magmacore.ai.MindControl;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.util.Vector;
 
@@ -54,16 +56,22 @@ final class PetSteering {
         Location point = center.clone().add(Math.cos(angle) * distance, 0D, Math.sin(angle) * distance);
         PetSpecies species = control.species();
         double height = species.hoverHeight() + (random.nextDouble() * 2D - 1D) * species.hoverVariance();
-        point.setY(Math.max(groundBelow(point, 12) + Math.max(0.5D, height), center.getY() - 3D));
+        boolean liquidIsGround = species.locomotion() != MindBodyLocomotion.AQUATIC;
+        point.setY(Math.max(groundBelow(point, 12, liquidIsGround) + Math.max(0.5D, height), center.getY() - 3D));
         return point;
     }
 
-    /** The top of the highest solid block under the point, searched a bounded number of blocks down. */
-    static double groundBelow(Location point, int depth) {
+    /**
+     * The top of the highest solid block under the point, searched a bounded number of blocks down; with
+     * {@code liquidIsGround} a water or lava surface counts too, so flyers hover over the sea.
+     */
+    static double groundBelow(Location point, int depth, boolean liquidIsGround) {
         World world = point.getWorld();
         int x = point.getBlockX(), z = point.getBlockZ();
-        for (int y = point.getBlockY(); y > point.getBlockY() - depth && y > world.getMinHeight(); y--)
-            if (world.getBlockAt(x, y, z).getType().isSolid()) return y + 1D;
+        for (int y = point.getBlockY(); y > point.getBlockY() - depth && y > world.getMinHeight(); y--) {
+            Block block = world.getBlockAt(x, y, z);
+            if (block.getType().isSolid() || (liquidIsGround && block.isLiquid())) return y + 1D;
+        }
         return point.getY() - depth;
     }
 }

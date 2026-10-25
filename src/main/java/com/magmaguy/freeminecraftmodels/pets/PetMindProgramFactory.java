@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.pets;
 
 import com.magmaguy.freeminecraftmodels.pets.interactions.PetInteractionRuntime;
 import com.magmaguy.magmacore.ai.MindBehavior;
+import com.magmaguy.magmacore.ai.MindBodyLocomotion;
 import com.magmaguy.magmacore.ai.MindContext;
 import com.magmaguy.magmacore.ai.MindControl;
 import com.magmaguy.magmacore.ai.MindProgram;
@@ -53,21 +54,30 @@ final class PetMindProgramFactory {
         double angle = random.nextDouble() * Math.PI * 2D;
         double distance = radius <= 0D ? 0D : random.nextDouble() * radius;
         Location point = center.clone().add(Math.cos(angle) * distance, 0D, Math.sin(angle) * distance);
-        double ground = groundBelow(point, 12);
+        double ground = groundBelow(point, 12, floatsOnLiquid(control));
         double height = control.species().hoverHeight() + (random.nextDouble() * 2D - 1D) * control.species().hoverVariance();
         point.setY(Math.max(ground + Math.max(0.5D, height), center.getY() - 3D));
         return point;
     }
 
-    /** The top of the highest solid block under the point, searched a bounded number of blocks down. */
-    static double groundBelow(Location point, int depth) {
+    /**
+     * The top of the highest solid block under the point, searched a bounded number of blocks down. With
+     * {@code liquidIsGround} a water or lava surface counts too, so a flyer hovers over the sea instead of sinking
+     * to the seabed; swimmers keep the seabed as their floor.
+     */
+    static double groundBelow(Location point, int depth, boolean liquidIsGround) {
         World world = point.getWorld();
         int x = point.getBlockX(), z = point.getBlockZ();
         for (int y = point.getBlockY(); y > point.getBlockY() - depth && y > world.getMinHeight(); y--) {
             Block block = world.getBlockAt(x, y, z);
-            if (block.getType().isSolid()) return y + 1D;
+            if (block.getType().isSolid() || (liquidIsGround && block.isLiquid())) return y + 1D;
         }
         return point.getY() - depth;
+    }
+
+    /** Whether the species hovers over liquid surfaces: everything that does not swim. */
+    static boolean floatsOnLiquid(PetControl control) {
+        return control.species().locomotion() != MindBodyLocomotion.AQUATIC;
     }
 
     private static boolean loaded(Location location) {
@@ -356,7 +366,7 @@ final class PetMindProgramFactory {
             Location here = context.entity().getLocation();
             if (target == null || context.gameTick() >= nextBobTick) {
                 nextBobTick = context.gameTick() + 30L;
-                double ground = groundBelow(here, 12);
+                double ground = groundBelow(here, 12, floatsOnLiquid(control));
                 double wanted = ground + control.species().hoverHeight();
                 double bob = (ThreadLocalRandom.current().nextDouble() - 0.5D) * control.species().hoverVariance();
                 target = here.clone();
