@@ -44,8 +44,9 @@ public final class PetSpecies {
     /**
      * How the species appears wild in CREATURES mode, shaped like a vanilla mob's entry in a biome's spawn list: a
      * weight against the other species that may spawn at the same spot, a group size, where the group may stand, and
-     * the light, world, environment, biome, time and height it needs. Empty lists allow everything. {@code cap} is
-     * how many of this species may be wild around one player.
+     * the light, world, environment, biome and height it needs. Empty lists allow everything. {@code time} and
+     * {@code cap} only hold back the top-up spawns around players: {@code cap} is how many of this species may be
+     * wild around one player, and new chunks are stocked whatever the time.
      */
     public record WildSpawn(boolean enabled, int weight, int minGroup, int maxGroup, Placement placement, int minLight,
                             int maxLight, int cap, List<String> worlds, List<World.Environment> environments,
@@ -54,13 +55,17 @@ public final class PetSpecies {
         public boolean allowsWorld(World world) {
             if (world == null) return false;
             if (!worlds.isEmpty() && !worlds.contains(world.getName())) return false;
-            if (!environments.isEmpty() && !environments.contains(world.getEnvironment())) return false;
+            return environments.isEmpty() || environments.contains(world.getEnvironment());
+        }
+
+        /** Whether it is the time of day the species tops up at in this world. */
+        public boolean allowsTime(World world) {
             long dayTime = world.getTime();
             boolean day = dayTime < 12300 || dayTime > 23850;
             return time == TimeOfDay.ANY || (time == TimeOfDay.DAY) == day;
         }
 
-        /** Whether a member of the species may spawn at this spot: world, height, biome and light. */
+        /** Whether a member of the species may spawn at this spot: world, height, biome and light level. */
         public boolean allows(Location location) {
             World world = location.getWorld();
             if (!allowsWorld(world)) return false;

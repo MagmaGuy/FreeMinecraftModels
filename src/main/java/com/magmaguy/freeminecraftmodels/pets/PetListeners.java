@@ -15,18 +15,21 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityRemoveEvent;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.EntitiesLoadEvent;
+import org.bukkit.event.world.WorldSaveEvent;
 import org.bukkit.inventory.EquipmentSlot;
 
 import java.util.ArrayList;
 
-/** Routes clicks, damage, deaths and player sessions to {@link PetManager}. */
+/** Routes clicks, damage, deaths, removals, new chunks, world saves and player sessions to {@link PetManager}. */
 public final class PetListeners implements Listener {
     private static Player attacker(Entity damager) {
         if (damager instanceof Player player) return player;
@@ -134,6 +137,27 @@ public final class PetListeners implements Listener {
         PetManager manager = PetManager.get();
         for (Entity entity : event.getEntities())
             if (PetManager.isPetBody(entity) && (manager == null || manager.pet(entity) == null)) entity.remove();
+    }
+
+    /** New chunks are stocked with wild pets as they generate, like vanilla's farm animals. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onChunkLoad(ChunkLoadEvent event) {
+        PetManager manager = PetManager.get();
+        if (manager != null && event.isNewChunk())
+            manager.chunkGenerated(event.getWorld(), event.getChunk().getX(), event.getChunk().getZ());
+    }
+
+    /** A wild pet another plugin removed stays gone; one that left with its chunk waits to come back. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onRemove(EntityRemoveEvent event) {
+        PetManager manager = PetManager.get();
+        if (manager != null && event.getCause() == EntityRemoveEvent.Cause.PLUGIN) manager.bodyRemovedByPlugin(event.getEntity());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onWorldSave(WorldSaveEvent event) {
+        PetManager manager = PetManager.get();
+        if (manager != null) manager.saveWild();
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

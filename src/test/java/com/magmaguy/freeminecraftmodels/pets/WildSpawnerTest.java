@@ -14,18 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** The parts of wild spawning that follow vanilla's numbers: pack steps, weighted picks, spawn areas and despawning. */
+/** The parts of wild spawning that follow vanilla's numbers: pack steps, stocking steps, weighted picks and spawn areas. */
 class WildSpawnerTest {
-    /** A random whose doubles are fixed, to land a despawn roll on either side of its chance. */
-    private static Random rolling(double value) {
-        return new Random() {
-            @Override
-            public double nextDouble() {
-                return value;
-            }
-        };
-    }
-
     @Test
     void packStepsStayWithinFiveBlocksAndCentreOnZero() {
         Random random = new Random(7);
@@ -77,28 +67,19 @@ class WildSpawnerTest {
     }
 
     @Test
-    void wildPetsPastTheHardDistanceDespawnAtOnce() {
-        assertTrue(WildSpawner.shouldDespawn(128.5D, 128D, 0, 20, rolling(0.99D)));
-    }
-
-    @Test
-    void wildPetsNearAPlayerNeverDespawn() {
-        assertFalse(WildSpawner.shouldDespawn(32D, 128D, 100_000, 20, rolling(0D)));
-    }
-
-    @Test
-    void theRandomDespawnWaitsSixHundredTicksAlone() {
-        assertFalse(WildSpawner.shouldDespawn(60D, 128D, 600, 20, rolling(0D)));
-        assertTrue(WildSpawner.shouldDespawn(60D, 128D, 620, 20, rolling(0D)));
-        assertFalse(WildSpawner.shouldDespawn(60D, 128D, 620, 20, rolling(0.99D)));
-    }
-
-    @Test
-    void aCheckEveryTwentyTicksRollsLikeTwentyOneInEightHundredRolls() {
-        assertEquals(1D / 800D, WildSpawner.despawnChance(1), 1e-12);
-        assertEquals(1D - Math.pow(799D / 800D, 20D), WildSpawner.despawnChance(20), 1e-12);
-        assertEquals(0.0247D, WildSpawner.despawnChance(20), 1e-4);
-        // A pet left alone lasts 800 ticks on average once the wait is over, as vanilla's do.
-        assertEquals(800D, 20D / WildSpawner.despawnChance(20), 15D);
+    void stockingStepsStayInTheChunkAndNearTheGroup() {
+        Random random = new Random(3);
+        int minX = -32, minZ = 48, startX = -31, startZ = 62;
+        int x = startX, z = startZ;
+        for (int i = 0; i < 5_000; i++) {
+            int[] next = WildSpawner.generationStep(startX, startZ, x, z, minX, minZ, random);
+            assertTrue(next[0] >= minX && next[0] < minX + 16 && next[1] >= minZ && next[1] < minZ + 16,
+                    "step " + i + " left the chunk: " + next[0] + "," + next[1]);
+            boolean fromLast = Math.abs(next[0] - x) <= 4 && Math.abs(next[1] - z) <= 4;
+            boolean fromStart = Math.abs(next[0] - startX) <= 4 && Math.abs(next[1] - startZ) <= 4;
+            assertTrue(fromLast || fromStart, "a step moves at most 4 blocks, from the last spot or the group's first");
+            x = next[0];
+            z = next[1];
+        }
     }
 }
