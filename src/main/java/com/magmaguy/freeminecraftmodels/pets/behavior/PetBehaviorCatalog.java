@@ -6,10 +6,19 @@ import com.magmaguy.magmacore.scripting.LuaMindModuleRegistry;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.CharacterCodingException;
+import java.nio.file.AccessDeniedException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -20,13 +29,13 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 /**
  * The pet behavior modules: every .lua file under the pet_behaviors folder, the shipped defaults among them. A
- * default is written when its file is missing, so a deleted default comes back and an edited one stays. A module's
- * id is fmm:pet/ and its file name, and a pet file lists modules by that file name. Each load opens a fresh module
- * owner, so an edited module needs no new revision across reloads.
+ * default is written when no file of its name exists anywhere in the folder, so a deleted default comes back and an
+ * edited one stays, even after it moves into a subfolder. A module's id is fmm:pet/ and its file name, and a pet file
+ * lists modules by that file name. Each load opens a fresh module owner, so an edited module needs no new revision
+ * across reloads.
  */
 public final class PetBehaviorCatalog implements AutoCloseable {
     public static final String NAMESPACE = "fmm";
@@ -51,41 +60,48 @@ public final class PetBehaviorCatalog implements AutoCloseable {
         PetBehaviorCatalog catalog = new PetBehaviorCatalog();
         try {
             Files.createDirectories(folder);
-        } catch (IOException | RuntimeException failure) {
-            warn.accept(display(folder, folder) + ": could not create the pet behaviors folder (" + failure.getMessage()
-                    + "); no pet behaviors load.");
+        } catch (IOException failure) {
+            warn.accept(display(folder, folder) + ": could not create the pet behaviors folder ("
+                    + describe(failure, "write") + "); no pet behaviors load.");
             return catalog;
         }
-        for (String name : defaults) {
-            try {
-                if (!Files.exists(folder.resolve(name + ".lua"))) writeDefault.accept(name);
-            } catch (RuntimeException failure) {
-                warn.accept(display(folder, folder.resolve(name + ".lua")) + ": could not write this default pet behavior ("
-                        + failure.getMessage() + "); it stays missing until the next load.");
-            }
-        }
+        List<File> files = luaFiles(folder, warn);
+        writeMissingDefaults(folder, defaults, writeDefault, warn, files);
+
+        // Every file name that failed to load, so a module needing one of them can say so.
+        Set<String> failed = new HashSet<>();
         Map<String, Pending> pending = new LinkedHashMap<>();
-        for (File file : ContentFileSelector.select(luaFiles(folder, warn), name -> name.toLowerCase(Locale.ROOT))) {
+        for (File file : ContentFileSelector.select(files, name -> name.toLowerCase(Locale.ROOT))) {
             String where = display(folder, file.toPath());
-            String name = file.getName().substring(0, file.getName().length() - ".lua".length()).toLowerCase(Locale.ROOT);
+            String name = stem(file);
             if (!NAME.matcher(name).matches()) {
-                warn.accept(where + ": a pet behavior's file name may use only lower-case letters, digits, '.', '_'"
-                        + " and '-'; this module is skipped.");
+                warn.accept(where + ": a pet behavior's file name may use only letters, digits, '.', '_' and '-';"
+                        + " this module is skipped.");
+                continue;
+            }
+            String source;
+            try {
+                source = Files.readString(file.toPath());
+            } catch (IOException failure) {
+                warn.accept(where + ": could not read this file (" + describe(failure, "read")
+                        + "); this module is skipped.");
+                failed.add(name);
                 continue;
             }
             try {
-                String source = Files.readString(file.toPath());
                 LuaMindModuleDescriptor declared = LuaMindModuleRegistry.inspectModule(where, source);
                 String expected = ID_PREFIX + name;
                 if (!declared.identifier().equals(expected)) {
                     warn.accept(where + ": declares id " + declared.identifier() + ", but a module's id is "
                             + ID_PREFIX + " followed by its file name, so it must be " + expected
                             + "; this module is skipped.");
+                    failed.add(name);
                     continue;
                 }
-                pending.put(name, new Pending(where, source, declared.revision()));
-            } catch (IOException | RuntimeException failure) {
+                pending.put(name, new Pending(where, source, declared.revision(), declared.dependencies()));
+            } catch (RuntimeException failure) {
                 warn.accept(where + ": " + reason(where, failure) + "; this module is skipped.");
+                failed.add(name);
             }
         }
         // A module may depend on another, which must register first; register in passes until no registration advances.
@@ -103,40 +119,169 @@ public final class PetBehaviorCatalog implements AutoCloseable {
                     it.remove();
                     advanced = true;
                 } catch (RuntimeException failure) {
-                    failures.put(entry.getKey(), module.where() + ": " + reason(module.where(), failure)
-                            + "; this module is skipped.");
+                    failures.put(entry.getKey(), reason(module.where(), failure));
                 }
             }
         }
-        failures.values().forEach(warn);
+        failed.addAll(failures.keySet());
+        Set<String> reported = new HashSet<>(failed);
+        reported.removeAll(failures.keySet());
+        failures.forEach((name, reason) -> {
+            Pending module = pending.get(name);
+            String missing = missingDependency(name, module, catalog.modules.keySet());
+            String note = missing == null || !failed.contains(missing) ? ""
+                    : " (it failed to load too, see " + (reported.contains(missing) ? "above" : "below") + ")";
+            warn.accept(module.where() + ": " + reason + note + "; this module is skipped.");
+            reported.add(name);
+        });
         return catalog;
     }
 
-    /** Every .lua file under the folder that really lies inside it. */
-    private static List<File> luaFiles(Path folder, Consumer<String> warn) {
-        List<Path> candidates;
-        Path root;
-        try (Stream<Path> walk = Files.walk(folder)) {
-            root = folder.toRealPath();
-            candidates = walk.filter(Files::isRegularFile)
-                    .filter(path -> path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".lua")).toList();
-        } catch (IOException | RuntimeException failure) {
-            warn.accept(display(folder, folder) + ": could not read the pet behaviors folder (" + failure.getMessage()
-                    + "); no pet behaviors load.");
-            return List.of();
-        }
-        List<File> files = new ArrayList<>();
-        for (Path path : candidates) {
+    /**
+     * Writes each default no file in the folder already carries the name of, wherever it sits, and adds what it wrote
+     * to {@code files}.
+     */
+    private static void writeMissingDefaults(Path folder, List<String> defaults, Consumer<String> writeDefault,
+                                             Consumer<String> warn, List<File> files) {
+        Set<String> present = new HashSet<>();
+        for (File file : files) present.add(stem(file));
+        for (String name : defaults) {
+            String key = name.toLowerCase(Locale.ROOT);
+            Path file = folder.resolve(name + ".lua");
+            // Something at the path that the walk skipped, such as a link out of the folder, is not replaced.
+            if (present.contains(key) || Files.exists(file, LinkOption.NOFOLLOW_LINKS)) continue;
+            String where = display(folder, file);
             try {
-                if (path.toRealPath().startsWith(root)) files.add(path.toFile());
-                else warn.accept(display(folder, path) + ": links to a file outside the pet behaviors folder;"
-                        + " this module is skipped.");
-            } catch (IOException failure) {
-                warn.accept(display(folder, path) + ": could not read this file (" + failure.getMessage()
-                        + "); this module is skipped.");
+                writeDefault.accept(name);
+                if (Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)) {
+                    files.add(file.toFile());
+                    present.add(key);
+                }
+            } catch (UncheckedIOException failure) {
+                warn.accept(where + ": could not write this default pet behavior (" + describe(failure.getCause(), "write")
+                        + "); it stays missing until the next load.");
+            } catch (RuntimeException failure) {
+                warn.accept(where + ": could not write this default pet behavior (" + failure.getClass().getSimpleName()
+                        + ": " + failure.getMessage() + "); it stays missing until the next load.");
             }
         }
+    }
+
+    /**
+     * Every .lua file under the folder that really lies inside it. A folder that cannot be read, or that links out of
+     * the folder or back into a folder already read, is reported and skipped, and the rest are still read.
+     */
+    private static List<File> luaFiles(Path folder, Consumer<String> warn) {
+        List<File> files = new ArrayList<>();
+        Path root;
+        try {
+            root = folder.toRealPath();
+        } catch (IOException failure) {
+            warn.accept(display(folder, folder) + ": could not read the pet behaviors folder ("
+                    + describe(failure, "read") + "); no pet behaviors load.");
+            return files;
+        }
+        Set<Path> visited = new HashSet<>();
+        try {
+            Files.walkFileTree(folder, new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
+                    String where = display(folder, directory);
+                    try {
+                        Path real = directory.toRealPath();
+                        if (!real.startsWith(root)) {
+                            warn.accept(where + ": links to a folder outside the pet behaviors folder;"
+                                    + " the pet behaviors in it are skipped.");
+                            return FileVisitResult.SKIP_SUBTREE;
+                        }
+                        if (!visited.add(real)) {
+                            warn.accept(where + ": links to a folder that is already being read;"
+                                    + " the pet behaviors in it are skipped.");
+                            return FileVisitResult.SKIP_SUBTREE;
+                        }
+                        return FileVisitResult.CONTINUE;
+                    } catch (IOException failure) {
+                        warn.accept(where + ": could not read this folder (" + describe(failure, "read")
+                                + "); the pet behaviors in it are skipped.");
+                        return FileVisitResult.SKIP_SUBTREE;
+                    }
+                }
+
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) {
+                    // Files.isRegularFile follows a link, so a linked file gets the real-path check below.
+                    if (!isLua(file) || !Files.isRegularFile(file)) return FileVisitResult.CONTINUE;
+                    String where = display(folder, file);
+                    try {
+                        if (file.toRealPath().startsWith(root)) files.add(file.toFile());
+                        else warn.accept(where + ": links to a file outside the pet behaviors folder;"
+                                + " this module is skipped.");
+                    } catch (IOException failure) {
+                        warn.accept(where + ": could not read this file (" + describe(failure, "read")
+                                + "); this module is skipped.");
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult visitFileFailed(Path file, IOException failure) {
+                    String where = display(folder, file);
+                    if (Files.isDirectory(file))
+                        warn.accept(where + ": could not read this folder (" + describe(failure, "read")
+                                + "); the pet behaviors in it are skipped.");
+                    else if (isLua(file))
+                        warn.accept(where + ": could not read this file (" + describe(failure, "read")
+                                + "); this module is skipped.");
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult postVisitDirectory(Path directory, IOException failure) {
+                    if (failure != null)
+                        warn.accept(display(folder, directory) + ": could not finish reading this folder ("
+                                + describe(failure, "read") + "); some pet behaviors in it may be skipped.");
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException failure) {
+            // The visitor handles every failure itself, so this is not expected; keep what was found.
+            warn.accept(display(folder, folder) + ": could not read the pet behaviors folder ("
+                    + describe(failure, "read") + "); some pet behaviors may be skipped.");
+        }
         return files;
+    }
+
+    private static boolean isLua(Path file) {
+        return file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".lua");
+    }
+
+    /** A file's name without .lua, lower-cased: the name a pet file uses for the module. */
+    private static String stem(File file) {
+        return file.getName().substring(0, file.getName().length() - ".lua".length()).toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * The file name of the dependency a failed registration stopped at: the first one, in declared order, that did not
+     * register. Null when a dependency lies outside the fmm:pet/ modules or is the module itself, since the failure is
+     * then about that.
+     */
+    private static String missingDependency(String name, Pending module, Set<String> registered) {
+        String missing = null;
+        for (String dependency : module.dependencies()) {
+            if (!dependency.startsWith(ID_PREFIX)) return null;
+            String dependencyName = dependency.substring(ID_PREFIX.length());
+            if (dependencyName.equals(name)) return null;
+            if (missing == null && !registered.contains(dependencyName)) missing = dependencyName;
+        }
+        return missing;
+    }
+
+    /** Why a file or folder could not be read or written, in words a server owner can act on. */
+    static String describe(IOException failure, String access) {
+        if (failure instanceof AccessDeniedException) return "the server may not " + access + " it";
+        if (failure instanceof CharacterCodingException) return "it is not saved as UTF-8";
+        if (failure instanceof NoSuchFileException) return "it disappeared while loading";
+        return failure.getClass().getSimpleName() + ": " + failure.getMessage();
     }
 
     /**
@@ -178,6 +323,6 @@ public final class PetBehaviorCatalog implements AutoCloseable {
         registry.close();
     }
 
-    private record Pending(String where, String source, long revision) {
+    private record Pending(String where, String source, long revision, List<String> dependencies) {
     }
 }
