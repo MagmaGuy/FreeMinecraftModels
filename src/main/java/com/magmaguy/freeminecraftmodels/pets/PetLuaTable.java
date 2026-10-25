@@ -8,6 +8,7 @@ import com.magmaguy.freeminecraftmodels.pets.interactions.PetSky;
 import com.magmaguy.magmacore.ai.MindActuator;
 import com.magmaguy.magmacore.ai.MindBodyLocomotion;
 import com.magmaguy.magmacore.ai.MindContext;
+import com.magmaguy.magmacore.ai.MindPosition;
 import com.magmaguy.magmacore.scripting.tables.LuaTableSupport;
 import com.magmaguy.magmacore.util.Logger;
 import com.magmaguy.shaded.luaj.vm2.LuaError;
@@ -64,9 +65,9 @@ import java.util.function.Supplier;
  * error, so no module can shadow a property or replace a method for the rest of its pet's life. c.pet never acts in
  * another world: a location it would return from another world than the body's reads as nil, and a location argument
  * naming another world counts as nothing there (nil, false or 0, and an infinite distance_to). Number arguments must
- * be finite; radii and depths are clamped to the caps below, so the Java work stays bounded, and no method loads a
- * chunk. A Java failure inside a property or method is logged once per pet and name, then reaches Lua as a short
- * error that fails the callback. Server thread only.
+ * be finite; radii, depths, heights, multipliers, amplifiers, durations and lists are capped below, so the Java work
+ * stays bounded, and no method loads a chunk. A Java failure inside a property or method is logged through the load's
+ * {@link Warnings}, then reaches Lua as a short error that fails the callback. Server thread only.
  */
 public final class PetLuaTable {
     /** Every name a module can read on c.pet. */
@@ -82,8 +83,9 @@ public final class PetLuaTable {
     public static final Set<String> SPECIES_FIELDS = Set.of("id", "speed", "hover_height", "hover_variance",
             "roam_radius", "follow_distance", "leash_distance", "teleport_distance", "scale", "baby_scale");
 
-    // The caps, each well above what the shipped pet files use (roam radius 5, hover depth 12, campfire radius 12 and
-    // 5 s, perch radius 2, sting reach 0.5, drizzle depth 4).
+    // Caps on what a module can ask for, each well above the shipped pet files' values: roam radius 5, hover depth
+    // 12, campfire radius 12 kept 5 s, perch radius 2 at height 0.3, sting reach 0.5, drizzle depth 4, rain bloom x1.25,
+    // effects of 60 and 300 ticks.
     private static final double MAX_SPOT_RADIUS = 64D;
     private static final int MAX_GROUND_DEPTH = 64;
     private static final double MAX_WATER_DEPTH = 16D;
@@ -91,22 +93,28 @@ public final class PetLuaTable {
     // The campfire index is shared by every pet, so a long keep would hold back fresh fires for all of them.
     private static final int MIN_CAMPFIRE_KEEP_TICKS = 20, MAX_CAMPFIRE_KEEP_TICKS = 1200;
     private static final int MAX_PERCH_RADIUS = 4;
+    private static final double MAX_PERCH_HEIGHT = 8D;
     private static final double MAX_STING_REACH = 4D;
     private static final int MAX_DRIZZLE_DEPTH = 8;
-    private static final int MAX_UNKNOWN_EFFECTS = 64;
+    // The scale attribute's own top, so the eased size stays finite.
+    private static final double MIN_SCALE_MULTIPLIER = 0.1D, MAX_SCALE_MULTIPLIER = 16D;
+    private static final int MAX_AMPLIFIER = 255;
+    // Five minutes.
+    private static final int MAX_EFFECT_TICKS = 6000;
+    /** The most entries a list argument (campfire blocks, soul variants) is read for. */
+    static final int MAX_LIST_ENTRIES = 64;
+    // How the Mind actuator words a call from a callback that does not hold the control it needs.
+    private static final String LEASE_FAILURE = "Mind behavior must declare and hold the ";
     private static final LuaString WORLD = LuaValue.valueOf("world"), X = LuaValue.valueOf("x"),
             Y = LuaValue.valueOf("y"), Z = LuaValue.valueOf("z");
-    // Potion effect names a module gave that name no effect, each warned about once.
-    private static final Set<String> UNKNOWN_EFFECTS = new HashSet<>();
 
     private final PetControl control;
+    private final Warnings warnings;
     private final Fields fields;
     private final Set<String> registered = new HashSet<>();
     private MindContext context;
-    // A walking or swimming body keeps its path until the target moves a block or a second passes.
-    private Location pathTarget;
-    private long pathUntil;
-    private boolean pathAccepted;
+    private String module = "";
+    private final WalkPath path = new WalkPath();
     private boolean raining;
     private long nextRainCheck = Long.MIN_VALUE;
     private double scale = Double.NaN;
@@ -114,13 +122,12 @@ public final class PetLuaTable {
     private boolean glowAnimating;
     private final Map<UUID, Long> stingReadyAt = new HashMap<>();
 
-    public PetLuaTable(PetControl control) {
+    /** {@code warnings} belongs to the load that builds this pet, and is shared by every pet that load builds. */
+    PetLuaTable(PetControl control, Warnings warnings) {
         this.control = control;
+        this.warnings = warnings;
         PetSpecies pet = control.species();
-        BiConsumer<String, RuntimeException> report = (name, failure) -> {
-            Logger.warn("A " + pet.id() + " pet's behavior module called " + name + ", which failed: " + failure);
-            failure.printStackTrace();
-        };
+        BiConsumer<String, Throwable> report = (call, failure) -> warnings.failure(pet.id(), module, call, failure);
         this.fields = new Fields("c.pet", report);
         Map<String, LuaValue> values = new LinkedHashMap<>();
         values.put("id", LuaValue.valueOf(pet.id()));
@@ -133,12 +140,9 @@ public final class PetLuaTable {
         values.put("teleport_distance", LuaValue.valueOf(pet.teleportDistance()));
         values.put("scale", LuaValue.valueOf(pet.scale()));
         values.put("baby_scale", LuaValue.valueOf(pet.babyScale()));
-        if (!values.keySet().equals(SPECIES_FIELDS)) throw new IllegalStateException("c.pet.species names drifted from its list");
-        Fields species = new Fields("c.pet.species", report);
-        values.forEach((name, value) -> species.value(name, () -> value));
-        LuaTable speciesTable = species.view();
+        LuaTable species = speciesTable(values);
 
-        property("species", () -> speciesTable);
+        property("species", () -> species);
         property("wild", () -> LuaValue.valueOf(control.isWild()));
         property("staying", () -> LuaValue.valueOf(control.isStaying()));
         property("settled", () -> LuaValue.valueOf(PetMotion.settled(control, body())));
@@ -158,15 +162,21 @@ public final class PetLuaTable {
         property("route_cruise", () -> LuaValue.valueOf(control.route() == null ? 0D : control.route().cruise()));
 
         // steer_to(point, cruise): one tick toward the point at cruise blocks per tick (0 to 4); false when the body
-        // cannot go there.
+        // cannot go there. Needs a behavior holding MOVE and LOOK.
         method("steer_to", args -> {
             Location target = at(args, 1);
             double cruise = number(args, 2, 0D, MindActuator.MAX_FLIGHT_SPEED);
-            return LuaValue.valueOf(target != null && steerTo(target, cruise));
+            if (target == null) return LuaValue.FALSE;
+            return LuaValue.valueOf(leased("c.pet:steer_to", "ai.controls.move and ai.controls.look",
+                    () -> steerTo(target, cruise)));
         });
+        // stop(): needs a behavior holding MOVE.
         method("stop", args -> {
-            pathTarget = null;
-            context.actuator().stopMoving();
+            path.forget();
+            leased("c.pet:stop", "ai.controls.move", () -> {
+                context.actuator().stopMoving();
+                return null;
+            });
             return LuaValue.NIL;
         });
         // hover_point(center, radius): a point in the hover band within radius (up to 64), nil when unloaded.
@@ -203,10 +213,10 @@ public final class PetLuaTable {
             double back = number(args, 1), height = number(args, 2);
             return location(control.owner().map(owner -> PetMotion.trailPoint(control, owner, back, height)).orElse(null));
         });
-        // teleport_near_owner(radius): radius up to 64.
+        // teleport_near_owner(radius): radius up to 64. It moves the body directly, so it needs no control.
         method("teleport_near_owner", args -> {
             double radius = number(args, 1, 0D, MAX_SPOT_RADIUS);
-            pathTarget = null;
+            path.forget();
             return LuaValue.valueOf(PetMotion.teleportNearOwner(control, body(), radius));
         });
         method("distance_to", args -> {
@@ -214,9 +224,9 @@ public final class PetLuaTable {
             return LuaValue.valueOf(point == null ? Double.POSITIVE_INFINITY : body().getLocation().distance(point));
         });
         method("route_target", args -> location(control.route() == null ? null : control.route().target(control)));
-        // find_perch(height, radius): height at least 0, radius 0 to 4.
+        // find_perch(height, radius): height 0 to 8, radius 0 to 4.
         method("find_perch", args -> {
-            double height = number(args, 1, 0D, Double.MAX_VALUE);
+            double height = number(args, 1, 0D, MAX_PERCH_HEIGHT);
             return location(findPerch(height, whole(args, 2, 0, MAX_PERCH_RADIUS)));
         });
         // nearest_campfire(radius, keep_ticks, blocks, soul_variants, height): radius 1 to 32, keep_ticks 20 to 1200.
@@ -242,17 +252,18 @@ public final class PetLuaTable {
             clearGlow();
             return LuaValue.NIL;
         });
-        // scale_toward(target, span, ticks, elapsed): multipliers at least 0.1, ticks at least 2, elapsed at least 0.
+        // scale_toward(target, span, ticks, elapsed): multipliers 0.1 to 16, ticks at least 2, elapsed at least 0.
         method("scale_toward", args -> {
-            scaleToward(number(args, 1, 0.1D, Double.MAX_VALUE), number(args, 2, 0.1D, Double.MAX_VALUE),
+            scaleToward(number(args, 1, MIN_SCALE_MULTIPLIER, MAX_SCALE_MULTIPLIER),
+                    number(args, 2, MIN_SCALE_MULTIPLIER, MAX_SCALE_MULTIPLIER),
                     whole(args, 3, 2, Integer.MAX_VALUE), whole(args, 4, 0, Integer.MAX_VALUE));
             return LuaValue.NIL;
         });
-        // sting_contacts(on, effect, duration, amplifier, damage, cooldown): always takes the touches.
+        // sting_contacts(on, effect, duration, amplifier, damage, cooldown): takes the touches first, whatever follows.
         method("sting_contacts", args -> {
+            List<Player> touched = control.drainContacts();
             boolean on = args.arg1().toboolean();
             Sting sting = sting(args, 2);
-            List<Player> touched = control.drainContacts();
             if (!on) return LuaValue.valueOf(0);
             World world = body().getWorld();
             int stung = 0;
@@ -260,7 +271,7 @@ public final class PetLuaTable {
                 GameMode mode = player.getGameMode();
                 if (mode == GameMode.CREATIVE || mode == GameMode.SPECTATOR || player.isDead()
                         || player.getWorld() != world) continue;
-                if (sting(player, sting)) stung++;
+                if (sting(player, sting, "c.pet:sting_contacts")) stung++;
             }
             return LuaValue.valueOf(stung);
         });
@@ -276,22 +287,23 @@ public final class PetLuaTable {
                     candidate -> candidate instanceof Enemy && candidate instanceof LivingEntity && !(candidate instanceof Player))) {
                 LivingEntity victim = (LivingEntity) entity;
                 if (victim.isDead() || manager.pet(victim) != null) continue;
-                if (touches(victim, reach) && sting(victim, sting)) stung++;
+                if (touches(victim, reach) && sting(victim, sting, "c.pet:sting_enemies")) stung++;
             }
             return LuaValue.valueOf(stung);
         });
         // drizzle(depth, chance): depth 1 to 8, chance 0 to 1.
         method("drizzle", args -> LuaValue.valueOf(drizzle(whole(args, 1, 1, MAX_DRIZZLE_DEPTH), number(args, 2, 0D, 1D))));
-        // owner_effect(effect, duration, amplifier, range): false when the owner is away, elsewhere or out of range.
+        // owner_effect(effect, duration, amplifier, range): duration 1 to 6000 ticks, amplifier 0 to 255; false when
+        // the owner is away, elsewhere or out of range.
         method("owner_effect", args -> {
             String name = args.checkjstring(1);
-            int duration = whole(args, 2, 1, Integer.MAX_VALUE), amplifier = whole(args, 3, 0, Integer.MAX_VALUE);
+            int duration = whole(args, 2, 1, MAX_EFFECT_TICKS), amplifier = whole(args, 3, 0, MAX_AMPLIFIER);
             double range = number(args, 4);
             Player owner = control.owner().orElse(null);
             LivingEntity body = body();
             if (owner == null || owner.getWorld() != body.getWorld()
                     || owner.getLocation().distance(body.getLocation()) > range) return LuaValue.FALSE;
-            PotionEffectType effect = knownEffect(name);
+            PotionEffectType effect = knownEffect(name, "c.pet:owner_effect");
             if (effect == null) return LuaValue.FALSE;
             owner.addPotionEffect(new PotionEffect(effect, duration, amplifier, true, false, true));
             return LuaValue.TRUE;
@@ -313,8 +325,10 @@ public final class PetLuaTable {
         return fields.view();
     }
 
-    void bind(MindContext context) {
+    /** Points the table at a callback's context, and names the module it runs for in warnings. */
+    void bind(MindContext context, String module) {
         this.context = context;
+        this.module = module;
     }
 
     private LivingEntity body() {
@@ -331,30 +345,57 @@ public final class PetLuaTable {
         fields.method(name, body);
     }
 
+    /** The read-only c.pet.species table, from exactly {@link #SPECIES_FIELDS}. */
+    static LuaTable speciesTable(Map<String, LuaValue> values) {
+        if (!values.keySet().equals(SPECIES_FIELDS)) throw new IllegalStateException("c.pet.species names drifted from its list");
+        // Constants cannot fail, so nothing reaches the report.
+        Fields species = new Fields("c.pet.species", (call, failure) -> {
+        });
+        values.forEach((name, value) -> species.value(name, () -> value));
+        return species.view();
+    }
+
     /** A number argument; NaN and the infinities are refused. */
-    private static double number(Varargs args, int index) {
+    static double number(Varargs args, int index) {
         double value = args.checkdouble(index);
         if (!Double.isFinite(value)) LuaValue.argerror(index, "finite number expected, got " + value);
         return value;
     }
 
-    private static double number(Varargs args, int index, double min, double max) {
+    static double number(Varargs args, int index, double min, double max) {
         return Math.max(min, Math.min(max, number(args, index)));
     }
 
     /** A whole number argument, truncated as Lua's integer arguments are, then clamped. */
-    private static int whole(Varargs args, int index, int min, int max) {
+    static int whole(Varargs args, int index, int min, int max) {
         return (int) Math.max(min, Math.min(max, number(args, index)));
     }
 
     /**
-     * The location a table argument names, in the body's world, or null when its world key names another world; a
-     * table without one means the body's world. Its coordinates must be finite numbers; yaw and pitch are ignored.
+     * Runs an actuator call, turning the actuator's refusal of a callback that holds no lease (a sensor, can_start)
+     * into a plain Lua error that says where the call belongs. Any other failure passes on.
      */
+    static <T> T leased(String call, String controls, Supplier<T> action) {
+        try {
+            return action.get();
+        } catch (IllegalStateException refused) {
+            if (refused.getMessage() == null || !refused.getMessage().startsWith(LEASE_FAILURE)) throw refused;
+            throw new LuaError(call + " needs a behavior that declares " + controls
+                    + "; call it from a behavior's start, tick or stop, not from can_start or a sensor");
+        }
+    }
+
     private Location at(Varargs args, int index) {
+        return at(args, index, body().getWorld());
+    }
+
+    /**
+     * The location a table argument names, in {@code world}, or null when its world key names another world; a table
+     * without one means {@code world}. Its coordinates must be finite numbers; yaw and pitch are ignored.
+     */
+    static Location at(Varargs args, int index, World world) {
         LuaTable table = args.checktable(index);
         double x = coordinate(table, X, index), y = coordinate(table, Y, index), z = coordinate(table, Z, index);
-        World world = body().getWorld();
         LuaValue name = table.get(WORLD);
         if (!name.isnil() && !(name.isstring() && name.tojstring().equals(world.getName()))) return null;
         return new Location(world, x, y, z);
@@ -392,14 +433,42 @@ public final class PetLuaTable {
 
     private boolean steerTo(Location target, double cruise) {
         if (control.species().locomotion() == MindBodyLocomotion.FLYING) return PetMotion.steerFlight(context, target, cruise);
-        long now = context.gameTick();
-        if (pathTarget != null && pathTarget.getWorld() == target.getWorld() && pathTarget.distanceSquared(target) < 1D
-                && now < pathUntil) return pathAccepted;
-        pathTarget = target.clone();
-        pathUntil = now + 20L;
-        pathAccepted = body().getLocation().distanceSquared(target) < 0.25D
-                || context.actuator().moveTo(target, Math.max(0.6D, cruise * 4D));
-        return pathAccepted;
+        return path.steer(context, target, cruise);
+    }
+
+    /**
+     * A walking or swimming body's path. A request is kept for a second while the target stays within a block, the
+     * cruise is the same and the body's navigation still heads for that request: a released MOVE lease, an arrival or
+     * another module's request ends that, and the next call asks again.
+     */
+    static final class WalkPath {
+        private Location target;
+        private double cruise;
+        private long until;
+        private boolean accepted;
+
+        boolean steer(MindContext context, Location to, double cruise) {
+            long now = context.gameTick();
+            if (target != null && cruise == this.cruise && now < until && target.getWorld() == to.getWorld()
+                    && target.distanceSquared(to) < 1D && heading(context)) return accepted;
+            target = to.clone();
+            this.cruise = cruise;
+            until = now + 20L;
+            accepted = context.entity().getLocation().distanceSquared(to) < 0.25D
+                    || context.actuator().moveTo(to, Math.max(0.6D, cruise * 4D));
+            return accepted;
+        }
+
+        void forget() {
+            target = null;
+        }
+
+        private boolean heading(MindContext context) {
+            MindPosition destination = context.perception().navigation().destination().orElse(null);
+            return destination != null && destination.world().equals(target.getWorld().getName())
+                    && destination.x() == target.getX() && destination.y() == target.getY()
+                    && destination.z() == target.getZ();
+        }
     }
 
     /** Leaves within the search radius under the hover band, nearest first, else the ground right below. */
@@ -483,7 +552,7 @@ public final class PetLuaTable {
     }
 
     /** The campfire kinds a list names; none it recognises means both, as in a pet file. */
-    private static Set<Material> materials(LuaValue list) {
+    static Set<Material> materials(LuaValue list) {
         Set<Material> materials = new HashSet<>();
         for (String name : texts(list)) {
             Material material = Material.matchMaterial(name);
@@ -496,11 +565,15 @@ public final class PetLuaTable {
         return materials;
     }
 
-    /** The texts of a list's array part, read raw so a length metamethod cannot stretch the loop. */
-    private static Set<String> texts(LuaValue list) {
+    /**
+     * The texts of a list's first {@link #MAX_LIST_ENTRIES} entries, read raw so a length metamethod cannot stretch
+     * the loop. Anything but a table is an empty list.
+     */
+    static Set<String> texts(LuaValue list) {
         Set<String> texts = new HashSet<>();
         if (!(list instanceof LuaTable table)) return texts;
-        for (int index = 1; index <= table.rawlen(); index++) texts.add(table.rawget(index).tojstring());
+        int length = Math.min(MAX_LIST_ENTRIES, table.rawlen());
+        for (int index = 1; index <= length; index++) texts.add(table.rawget(index).tojstring());
         return texts;
     }
 
@@ -563,20 +636,23 @@ public final class PetLuaTable {
     private record Sting(String effect, int duration, int amplifier, double damage, int cooldown) {
     }
 
-    /** The sting arguments from {@code first}: effect, duration at least 1, amplifier and damage at least 0, cooldown at least 1. */
+    /**
+     * The sting arguments from {@code first}: effect, duration 1 to 6000 ticks, amplifier 0 to 255, damage at least 0
+     * and cooldown at least 1 tick.
+     */
     private static Sting sting(Varargs args, int first) {
-        return new Sting(args.optjstring(first, ""), whole(args, first + 1, 1, Integer.MAX_VALUE),
-                whole(args, first + 2, 0, Integer.MAX_VALUE), number(args, first + 3, 0D, Double.MAX_VALUE),
+        return new Sting(args.optjstring(first, ""), whole(args, first + 1, 1, MAX_EFFECT_TICKS),
+                whole(args, first + 2, 0, MAX_AMPLIFIER), number(args, first + 3, 0D, Double.MAX_VALUE),
                 whole(args, first + 4, 1, Integer.MAX_VALUE));
     }
 
-    private boolean sting(LivingEntity victim, Sting sting) {
+    private boolean sting(LivingEntity victim, Sting sting, String call) {
         long now = PetManager.ticks();
         Long readyAt = stingReadyAt.get(victim.getUniqueId());
         if (readyAt != null && now < readyAt) return false;
         if (stingReadyAt.size() > 32) stingReadyAt.values().removeIf(at -> at <= now);
         stingReadyAt.put(victim.getUniqueId(), now + sting.cooldown());
-        PotionEffectType effect = knownEffect(sting.effect());
+        PotionEffectType effect = knownEffect(sting.effect(), call);
         if (effect != null)
             victim.addPotionEffect(new PotionEffect(effect, sting.duration(), sting.amplifier(), false, true, true));
         if (sting.damage() > 0D) victim.damage(sting.damage(), body());
@@ -590,12 +666,11 @@ public final class PetLuaTable {
         return true;
     }
 
-    /** The effect a module names, warning once per name that names none; blank and NONE mean no effect. */
-    private static PotionEffectType knownEffect(String name) {
+    /** The effect a module names; one that names none is warned about once per species and name per load. */
+    private PotionEffectType knownEffect(String name, String call) {
         PotionEffectType effect = effect(name);
-        if (effect == null && name != null && !name.isBlank() && !name.equalsIgnoreCase("NONE")
-                && UNKNOWN_EFFECTS.size() < MAX_UNKNOWN_EFFECTS && UNKNOWN_EFFECTS.add(name))
-            Logger.warn("A pet behavior module named the potion effect " + name + ", which does not exist; it applies none.");
+        if (effect == null && name != null && !name.isBlank() && !name.equalsIgnoreCase("NONE"))
+            warnings.unknownEffect(control.species().id(), module, call, name);
         return effect;
     }
 
@@ -645,24 +720,67 @@ public final class PetLuaTable {
     }
 
     /**
+     * What pet behavior modules get warned about, each said once per load however many pets hit it: a failing c.pet
+     * property or method once per species and name, with its stack trace, and an unknown potion effect once per
+     * species and effect. Whatever builds the pets makes one per load and hands it to every pet table of that load,
+     * so a reload says everything again. Server thread only.
+     */
+    static final class Warnings {
+        /** The most distinct warnings one load says; a module inventing names past that stays quiet. */
+        private static final int MAX_SAID = 256;
+        private final BiConsumer<String, Throwable> sink;
+        private final Set<String> said = new HashSet<>();
+
+        /** Warnings to the server log, a failure's with its stack trace. */
+        Warnings() {
+            this((message, failure) -> {
+                Logger.warn(message);
+                if (failure != null) failure.printStackTrace();
+            });
+        }
+
+        /** {@code sink} gets each warning's text and, for a failure, its cause; otherwise null. */
+        Warnings(BiConsumer<String, Throwable> sink) {
+            this.sink = sink;
+        }
+
+        /** A c.pet call failed in Java, inside the module with this id. */
+        void failure(String species, String module, String call, Throwable failure) {
+            say("failure\n" + species + "\n" + call, "The " + species + " pet behavior " + module + " called " + call
+                    + ", which failed: " + failure, failure);
+        }
+
+        /** A c.pet call was given a potion effect name that names none. */
+        void unknownEffect(String species, String module, String call, String effect) {
+            say("effect\n" + species + "\n" + effect.toLowerCase(Locale.ROOT), "The " + species + " pet behavior "
+                    + module + " gave " + call + " the potion effect " + effect + ", which does not exist; it applies none.",
+                    null);
+        }
+
+        private void say(String key, String message, Throwable failure) {
+            if (said.size() >= MAX_SAID || !said.add(key)) return;
+            sink.accept(message, failure);
+        }
+    }
+
+    /**
      * A read-only Lua table of named fields. Every read runs the field's supplier, so a value is fresh on each access;
      * a method is a field holding a function, called with a dot or with a colon on this table. Assigning to the
      * table, rawset on it and setmetatable on it raise a Lua error naming the field. A Java failure inside a field or
-     * method is reported once per name and reaches Lua as a short error; Lua errors, such as bad arguments, pass
-     * through unreported.
+     * method, linkage errors included, goes to the report with the field's name and reaches Lua as a short error; Lua
+     * errors, such as bad arguments, pass through unreported.
      */
     static final class Fields {
         private record Field(String label, Supplier<LuaValue> supplier) {
         }
 
         private final String name;
-        private final BiConsumer<String, RuntimeException> report;
+        private final BiConsumer<String, Throwable> report;
         private final Map<LuaValue, Field> fields = new HashMap<>();
-        private final Set<String> reported = new HashSet<>();
         private final LuaTable view = new Sealed(this);
 
-        /** {@code name} is how Lua reaches the table, such as c.pet; {@code report} gets a failing name and its failure. */
-        Fields(String name, BiConsumer<String, RuntimeException> report) {
+        /** {@code name} is how Lua reaches the table, such as c.pet; {@code report} gets each failing name and failure. */
+        Fields(String name, BiConsumer<String, Throwable> report) {
             this.name = name;
             this.report = report;
             LuaTable metatable = new LuaTable();
@@ -712,14 +830,15 @@ public final class PetLuaTable {
                 throw new IllegalStateException(name + " has two fields named " + field);
         }
 
+        // LuaJ and the Mind scheduler catch only exceptions; these bodies used to run where every Throwable was caught.
         private LuaValue guarded(String label, Supplier<LuaValue> body) {
             try {
                 LuaValue value = body.get();
                 return value == null ? LuaValue.NIL : value;
             } catch (LuaError error) {
                 throw error;
-            } catch (RuntimeException failure) {
-                if (reported.add(label)) report.accept(label, failure);
+            } catch (RuntimeException | LinkageError failure) {
+                report.accept(label, failure);
                 throw new LuaError(label + " failed; the server log has the cause");
             }
         }

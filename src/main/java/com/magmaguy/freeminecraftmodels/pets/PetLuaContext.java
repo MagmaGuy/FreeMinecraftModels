@@ -18,21 +18,24 @@ import java.util.Map;
  */
 final class PetLuaContext implements LuaMindContextExtension {
     private static final LuaString PET = LuaValue.valueOf("pet"), SETTINGS = LuaValue.valueOf("settings");
+    // For a callback from something with no settings of its own, such as the program itself. Sealed, so sharing it
+    // carries nothing from one callback to another.
+    private static final LuaTable NONE = new PetLuaTable.Fields("c.settings", (call, failure) -> {
+    }).view();
 
     private final PetLuaTable pet;
     private final Map<String, LuaTable> settings = new HashMap<>();
-    // For a callback from something with no settings of its own, such as the program itself.
-    private final LuaTable none = new LuaTable();
 
-    PetLuaContext(PetControl control, PetPrograms.Program program) {
-        this.pet = new PetLuaTable(control);
+    /** {@code warnings} belongs to the load that builds this pet, and is shared by every pet that load builds. */
+    PetLuaContext(PetControl control, PetPrograms.Program program, PetLuaTable.Warnings warnings) {
+        this.pet = new PetLuaTable(control, warnings);
         program.settings().forEach((module, values) -> settings.put(module, PetBehaviorSettings.toLua(values)));
     }
 
     @Override
     public void extend(LuaTable table, MindContext context, String contribution) {
-        pet.bind(context);
+        pet.bind(context, contribution);
         table.rawset(PET, pet.table());
-        table.rawset(SETTINGS, settings.getOrDefault(contribution, none));
+        table.rawset(SETTINGS, settings.getOrDefault(contribution, NONE));
     }
 }
