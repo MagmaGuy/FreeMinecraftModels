@@ -20,7 +20,6 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
-import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Entity;
@@ -59,6 +58,8 @@ public final class PetManager {
     // The Mind host belongs to this plugin enable and survives content reloads; NMSManager shuts it down on disable.
     private static MindHost host;
     private static BukkitTask clock;
+    // The watchdog's period: owned pets brought back, babies grown, wild pets despawned.
+    private static final int WATCH_TICKS = 20;
     private static long ticks;
     private static NamespacedKey bodyKey;
     private static PetManager instance;
@@ -143,10 +144,10 @@ public final class PetManager {
         if (host != null) host.tick();
         PetManager manager = instance;
         if (manager == null) return;
-        if (ticks % 20 == 0) manager.watch();
+        if (ticks % WATCH_TICKS == 0) manager.watch();
         if (ticks >= manager.nextWildSpawnTick) {
             manager.nextWildSpawnTick = ticks + Math.max(20, PetsConfig.wildSpawnIntervalTicks);
-            manager.spawnWildAroundPlayers();
+            WildSpawner.pass(manager, manager.species.values());
         }
     }
 
@@ -560,66 +561,35 @@ public final class PetManager {
                 }
             }
         }
-        double despawnDistance = PetsConfig.wildDespawnDistance;
+        ThreadLocalRandom random = ThreadLocalRandom.current();
         for (PetControl control : new ArrayList<>(byBody.values())) {
             if (!control.isWild()) continue;
             LivingEntity body = control.body();
             // A migrant's flock decides when it leaves, whatever the mode or the distance.
             if (control.route() != null && body != null && body.isValid()) continue;
-            if (body == null || !body.isValid() || PetsConfig.mode != PetsConfig.Mode.CREATURES
-                    || nearestPlayerDistance(body.getLocation()) > despawnDistance)
+            if (body == null || !body.isValid() || PetsConfig.mode != PetsConfig.Mode.CREATURES) {
                 despawn(control);
+                continue;
+            }
+            double nearest = WildSpawner.nearestPlayerDistance(body);
+            int alone = control.countAlone(nearest <= WildSpawner.NO_DESPAWN_DISTANCE, WATCH_TICKS);
+            if (WildSpawner.shouldDespawn(nearest, PetsConfig.wildDespawnDistance, alone, WATCH_TICKS, random)) despawn(control);
         }
-    }
-
-    private static double nearestPlayerDistance(Location location) {
-        double nearest = Double.POSITIVE_INFINITY;
-        for (Player player : location.getWorld().getPlayers())
-            nearest = Math.min(nearest, player.getLocation().distance(location));
-        return nearest;
     }
 
     // ---- wild spawning ----------------------------------------------------------------------------------------
 
-    private void spawnWildAroundPlayers() {
-        if (PetsConfig.mode != PetsConfig.Mode.CREATURES) return;
-        List<PetSpecies> candidates = new ArrayList<>();
-        for (PetSpecies pet : species.values()) if (pet.wildSpawn().enabled()) candidates.add(pet);
-        if (candidates.isEmpty()) return;
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            if (random.nextDouble() >= PetsConfig.wildSpawnChancePerPlayer) continue;
-            if (wildNear(player.getLocation(), 128D, null) >= PetsConfig.wildPetCapPerPlayer) continue;
-            PetSpecies pet = candidates.get(random.nextInt(candidates.size()));
-            if (random.nextDouble() >= pet.wildSpawn().chance()) continue;
-            if (wildNear(player.getLocation(), 128D, pet) >= pet.wildSpawn().cap()) continue;
-            Location at = wildSpawnLocation(player);
-            if (at != null && pet.wildSpawn().allows(at)) spawnWild(pet, at);
-        }
-    }
-
-    private int wildNear(Location location, double radius, PetSpecies only) {
+    /**
+     * Wild pets of all species, or of one, in the player's spawn area: the chunks within 8 of theirs. Migrants pass
+     * through and do not fill the caps.
+     */
+    int wildInSpawnArea(Player player, PetSpecies only) {
         int count = 0;
         for (PetControl control : byBody.values()) {
-            // Migrants pass through; they do not fill the wild caps.
             if (!control.isWild() || control.route() != null || (only != null && control.species() != only)) continue;
             LivingEntity body = control.body();
-            if (body != null && body.getWorld() == location.getWorld() && body.getLocation().distance(location) <= radius) count++;
+            if (body != null && body.isValid() && WildSpawner.inSpawnArea(player, body.getLocation())) count++;
         }
         return count;
-    }
-
-    /** A surface point 24 to 48 blocks from the player, in a loaded chunk, open to the sky. */
-    private static Location wildSpawnLocation(Player player) {
-        World world = player.getWorld();
-        ThreadLocalRandom random = ThreadLocalRandom.current();
-        double angle = random.nextDouble() * Math.PI * 2D;
-        double distance = 24D + random.nextDouble() * 24D;
-        Location at = player.getLocation().clone().add(Math.cos(angle) * distance, 0D, Math.sin(angle) * distance);
-        if (!world.isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4)) return null;
-        var top = world.getHighestBlockAt(at);
-        if (top.isLiquid()) return null;
-        at.setY(top.getY() + 1D);
-        return at;
     }
 }

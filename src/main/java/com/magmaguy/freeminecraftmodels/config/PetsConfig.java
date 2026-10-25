@@ -25,7 +25,7 @@ public class PetsConfig extends ConfigurationFile {
     public static boolean petsInvulnerableToPlayers;
     public static boolean petsDiePermanently;
     public static int wildSpawnIntervalTicks;
-    public static double wildSpawnChancePerPlayer;
+    public static double wildSpawnChunkChance;
     public static int wildPetCapPerPlayer;
     public static double wildDespawnDistance;
     public static String tamedMessage;
@@ -74,17 +74,23 @@ public class PetsConfig extends ConfigurationFile {
                 List.of("Whether a pet that dies leaves its owner's collection. When false it goes home until re-equipped."),
                 fileConfiguration, "petsDiePermanently", false);
         wildSpawnIntervalTicks = ConfigurationEngine.setInt(
-                List.of("CREATURES mode: ticks between wild spawn attempts around each player."),
-                fileConfiguration, "wildSpawnIntervalTicks", 200);
-        wildSpawnChancePerPlayer = ConfigurationEngine.setDouble(
-                List.of("CREATURES mode: chance of a wild spawn attempt per player per interval, 0 to 1."),
-                fileConfiguration, "wildSpawnChancePerPlayer", 0.05D);
+                List.of("CREATURES mode: ticks between wild spawn passes. Wild pets spawn like vanilla mobs: each pass",
+                        "tries the loaded chunks within 8 chunks of each player, never closer than 24 blocks to one.",
+                        "400 is vanilla's pace for animals."),
+                fileConfiguration, "wildSpawnIntervalTicks", 400);
+        wildSpawnChunkChance = ConfigurationEngine.setDouble(
+                List.of("CREATURES mode: chance that a pass tries a given chunk, 0 to 1. Vanilla tries every chunk (1);",
+                        "lower values fill the area around a player more slowly."),
+                fileConfiguration, "wildSpawnChunkChance", 0.02D);
         wildPetCapPerPlayer = ConfigurationEngine.setInt(
-                List.of("CREATURES mode: wild pets of all species allowed within 128 blocks of a player."),
-                fileConfiguration, "wildPetCapPerPlayer", 4);
+                List.of("CREATURES mode: wild pets of all species allowed in the area 8 chunks around a player, like a",
+                        "vanilla mob cap. Each species' wildSpawn.cap limits that species further."),
+                fileConfiguration, "wildPetCapPerPlayer", 6);
         wildDespawnDistance = ConfigurationEngine.setDouble(
-                List.of("CREATURES mode: wild pets farther than this from every player despawn."),
-                fileConfiguration, "wildDespawnDistance", 96D);
+                List.of("CREATURES mode: wild pets farther than this from every player despawn at once, and none spawn",
+                        "farther out. Past 32 blocks they also despawn at random once no player has come near for",
+                        "30 seconds, as vanilla mobs do."),
+                fileConfiguration, "wildDespawnDistance", 128D);
         tamedMessage = ConfigurationEngine.setString(fileConfiguration, "tamedMessage",
                 "&aYou tamed a $pet&a! It follows you now. &f/fmm pets &amanages your pets.");
         tameFailedMessage = ConfigurationEngine.setString(fileConfiguration, "tameFailedMessage",

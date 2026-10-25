@@ -32,6 +32,8 @@ public final class PetControl {
     private long lastInteractionTick = Long.MIN_VALUE / 2;
     // Set on a wild pet flying a migration; null for every other pet.
     private MigrationRoute route;
+    // Ticks a wild pet has gone without a player within 32 blocks: vanilla's noActionTime, which starts its despawn.
+    private int aloneTicks;
 
     PetControl(PetSpecies species, UUID owner, PetRecord record, String model, boolean baby, Location home) {
         this.species = species;
@@ -149,6 +151,12 @@ public final class PetControl {
     /** Adults breed again once the cooldown on their record has run out. */
     public boolean canBreed() {
         return !baby && (record == null || System.currentTimeMillis() >= record.breedCooldownUntil);
+    }
+
+    /** Adds the ticks since the last check while no player is near, or starts over when one is; returns the total. */
+    int countAlone(boolean playerNear, int ticks) {
+        aloneTicks = playerNear ? 0 : aloneTicks + ticks;
+        return aloneTicks;
     }
 
     long lastInteractionTick() {

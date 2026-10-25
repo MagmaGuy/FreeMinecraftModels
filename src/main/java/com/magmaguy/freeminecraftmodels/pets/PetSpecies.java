@@ -35,21 +35,40 @@ public final class PetSpecies {
 
     public enum TimeOfDay {ANY, DAY, NIGHT}
 
-    /** Where and how often the species appears wild in CREATURES mode. Empty lists allow everything. */
-    public record WildSpawn(boolean enabled, double chance, int cap, List<String> worlds,
-                            List<World.Environment> environments, List<Biome> biomes, TimeOfDay time,
-                            int minY, int maxY) {
-        public boolean allows(Location location) {
-            World world = location.getWorld();
+    /**
+     * Where a wild group may stand when it spawns, like a vanilla mob's spawn placement: on the ground, in water, in
+     * the air just over a water surface, or in the open air over solid ground.
+     */
+    public enum Placement {GROUND, WATER, WATER_SURFACE, AIR}
+
+    /**
+     * How the species appears wild in CREATURES mode, shaped like a vanilla mob's entry in a biome's spawn list: a
+     * weight against the other species that may spawn at the same spot, a group size, where the group may stand, and
+     * the light, world, environment, biome, time and height it needs. Empty lists allow everything. {@code cap} is
+     * how many of this species may be wild around one player.
+     */
+    public record WildSpawn(boolean enabled, int weight, int minGroup, int maxGroup, Placement placement, int minLight,
+                            int maxLight, int cap, List<String> worlds, List<World.Environment> environments,
+                            List<Biome> biomes, TimeOfDay time, int minY, int maxY) {
+        /** Whether this world could ever hold the species, before looking at any spot in it. */
+        public boolean allowsWorld(World world) {
             if (world == null) return false;
             if (!worlds.isEmpty() && !worlds.contains(world.getName())) return false;
             if (!environments.isEmpty() && !environments.contains(world.getEnvironment())) return false;
-            if (location.getBlockY() < minY || location.getBlockY() > maxY) return false;
-            if (!biomes.isEmpty() && !biomes.contains(world.getBiome(location.getBlockX(), location.getBlockY(), location.getBlockZ())))
-                return false;
             long dayTime = world.getTime();
             boolean day = dayTime < 12300 || dayTime > 23850;
             return time == TimeOfDay.ANY || (time == TimeOfDay.DAY) == day;
+        }
+
+        /** Whether a member of the species may spawn at this spot: world, height, biome and light. */
+        public boolean allows(Location location) {
+            World world = location.getWorld();
+            if (!allowsWorld(world)) return false;
+            if (location.getBlockY() < minY || location.getBlockY() > maxY) return false;
+            if (!biomes.isEmpty() && !biomes.contains(world.getBiome(location.getBlockX(), location.getBlockY(), location.getBlockZ())))
+                return false;
+            int light = location.getBlock().getLightLevel();
+            return light >= minLight && light <= maxLight;
         }
     }
 
@@ -128,16 +147,6 @@ public final class PetSpecies {
         ConfigurationSection floating = section(config, "float");
         this.hoverHeight = floating.getDouble("hoverHeight", 1.5D);
         this.hoverVariance = floating.getDouble("hoverVariance", 0.75D);
-        ConfigurationSection wild = section(config, "wildSpawn");
-        TimeOfDay time = TimeOfDay.ANY;
-        try {
-            time = TimeOfDay.valueOf(wild.getString("time", "ANY").toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException ignored) {
-            Logger.warn("Unknown wildSpawn.time in " + filename + "; using ANY");
-        }
-        this.wildSpawn = new WildSpawn(wild.getBoolean("enabled", true), wild.getDouble("chance", 1D), wild.getInt("cap", 4),
-                List.copyOf(wild.getStringList("worlds")), environments(wild.getStringList("environments"), filename),
-                biomes(wild.getStringList("biomes"), filename), time, wild.getInt("minY", -64), wild.getInt("maxY", 320));
         MindBodyLocomotion movement = MindBodyLocomotion.FLYING;
         String locomotionName = config.getString("locomotion", "FLYING");
         try {
@@ -146,6 +155,7 @@ public final class PetSpecies {
             Logger.warn("Unknown locomotion " + locomotionName + " in " + filename + "; using FLYING");
         }
         this.locomotion = movement;
+        this.wildSpawn = readWildSpawn(section(config, "wildSpawn"), movement, filename);
         this.orientation = orientation(section(config, "orientation"), filename);
         this.centerOnBody = centerOnBody(config, movement);
         this.interactions = PetInteractions.read(config, filename, model);
@@ -200,6 +210,42 @@ public final class PetSpecies {
             else materials.add(material);
         }
         return List.copyOf(materials);
+    }
+
+    /**
+     * Reads the wildSpawn section. Placement defaults from how the species moves: flyers spawn in the air, swimmers
+     * in water, the rest on the ground. A file from before weights keeps its old {@code chance} (a share of spawn
+     * attempts, 0 to 1) as a weight out of 10.
+     */
+    static WildSpawn readWildSpawn(ConfigurationSection wild, MindBodyLocomotion locomotion, String filename) {
+        TimeOfDay time = TimeOfDay.ANY;
+        try {
+            time = TimeOfDay.valueOf(wild.getString("time", "ANY").toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ignored) {
+            Logger.warn("Unknown wildSpawn.time in " + filename + "; using ANY");
+        }
+        Placement fallback = switch (locomotion) {
+            case FLYING -> Placement.AIR;
+            case AQUATIC -> Placement.WATER;
+            default -> Placement.GROUND;
+        };
+        Placement placement = fallback;
+        String placementName = wild.getString("placement", fallback.name());
+        try {
+            placement = Placement.valueOf(placementName.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ignored) {
+            Logger.warn("Unknown wildSpawn.placement " + placementName + " in " + filename + "; using " + fallback);
+        }
+        int weight = wild.contains("weight") ? wild.getInt("weight")
+                : (int) Math.round(Math.max(0D, Math.min(1D, wild.getDouble("chance", 1D))) * 10D);
+        int minGroup = Math.max(1, wild.getInt("minGroup", 1));
+        int maxGroup = Math.max(minGroup, wild.getInt("maxGroup", minGroup));
+        int minLight = Math.max(0, Math.min(15, wild.getInt("minLight", 0)));
+        int maxLight = Math.max(minLight, Math.min(15, wild.getInt("maxLight", 15)));
+        return new WildSpawn(wild.getBoolean("enabled", true), Math.max(0, weight), minGroup, maxGroup, placement,
+                minLight, maxLight, Math.max(0, wild.getInt("cap", 4)), List.copyOf(wild.getStringList("worlds")),
+                environments(wild.getStringList("environments"), filename), biomes(wild.getStringList("biomes"), filename),
+                time, wild.getInt("minY", -64), wild.getInt("maxY", 320));
     }
 
     private static List<World.Environment> environments(List<String> names, String filename) {
