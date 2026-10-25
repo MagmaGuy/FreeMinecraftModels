@@ -170,6 +170,16 @@ class PetBehaviorEntryTest {
     }
 
     @Test
+    void aVariantSettingLeftEmptyThatTheSpeciesLacksStaysForTheMergeToReport() {
+        List<PetBehaviorEntry> species = List.of(new PetBehaviorEntry("night_glow", Map.of("light", 15)));
+        List<PetBehaviorEntry> variant = List.of(new PetBehaviorEntry("night_glow", Collections.singletonMap("radius", null)));
+        Map<String, Object> settings = PetBehaviorEntry.overlay(species, variant).getFirst().settings();
+        assertEquals(List.of("light", "radius"), List.copyOf(settings.keySet()));
+        assertEquals(15, settings.get("light"));
+        assertNull(settings.get("radius"));
+    }
+
+    @Test
     void aVariantWithoutModulesKeepsTheSpeciesList() {
         List<PetBehaviorEntry> species = new ArrayList<>(List.of(new PetBehaviorEntry("stay", Map.of())));
         List<PetBehaviorEntry> overlaid = PetBehaviorEntry.overlay(species, List.of());
