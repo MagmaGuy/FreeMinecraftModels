@@ -174,7 +174,8 @@ public final class PetMotion {
      * swimming, and on ground or else in water when amphibious, so it keeps up with an owner who swims or sails. A
      * floating body faces the owner's way; the others keep their own facing. False when the owner is away or in
      * another world, or when nowhere loaded near them fits; a world change despawns the pet and the watchdog brings
-     * it back instead.
+     * it back instead. False too when the spot found is not at least a block nearer the owner than the body already
+     * is, so a catch-up never moves a pet away from its owner, nor hops it from one spot beside them to another.
      */
     public static boolean teleportNearOwner(PetControl control, LivingEntity body, double radius) {
         Player owner = control.owner().orElse(null);
@@ -190,10 +191,15 @@ public final class PetMotion {
             }
             default -> groundPoint(at, radius);
         };
-        if (spot == null || !loaded(spot)) return false;
+        if (spot == null || !loaded(spot) || !closesIn(at.distance(spot), at.distance(body.getLocation()))) return false;
         // Ground and water spots are built facing south, so they take the body's yaw; a hover point keeps the
         // owner's, as the Java follow did.
         if (locomotion != MindBodyLocomotion.FLYING) spot.setYaw(body.getLocation().getYaw());
         return body.teleport(spot);
+    }
+
+    /** Whether a catch-up spot this far from the owner is worth it for a body this far: at least a block nearer. */
+    static boolean closesIn(double spotDistance, double bodyDistance) {
+        return spotDistance <= bodyDistance - 1D;
     }
 }

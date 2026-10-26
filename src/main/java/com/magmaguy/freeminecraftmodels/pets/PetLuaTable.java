@@ -215,7 +215,8 @@ public final class PetLuaTable {
             double back = number(args, 1), height = number(args, 2);
             return location(control.owner().map(owner -> PetMotion.trailPoint(control, owner, back, height)).orElse(null));
         });
-        // teleport_near_owner(radius): radius up to 64. It moves the body directly, so it needs no control.
+        // teleport_near_owner(radius): radius up to 64; false when nothing fits beside the owner or the spot is not at
+        // least a block nearer them than the body is. It moves the body directly, so it needs no control.
         method("teleport_near_owner", args -> {
             double radius = number(args, 1, 0D, MAX_SPOT_RADIUS);
             path.forget();

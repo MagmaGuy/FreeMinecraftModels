@@ -58,7 +58,9 @@ import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Runs the shipped pet behavior modules against a strict stand-in for c.pet, and for the parts of c.perception and
@@ -118,7 +120,7 @@ class ShippedPetModulesTest {
     /**
      * follow_owner's calls by where the owner is: the follow speed past the follow distance, times leash_urgency past
      * the leash, only the catch-up teleport past the teleport distance, and nothing while the owner is near, away or
-     * wild. Failed steering also teleports, after stuck_ticks.
+     * wild. Steering that is refused, or accepted but gets the pet nowhere, also teleports, after stuck_ticks.
      */
     private static final Map<Owner, Set<String>> FOLLOW_CALLS = Map.of(
             Owner.WILD, Set.of(), Owner.WITHIN_FOLLOW, Set.of(), Owner.AWAY, Set.of(),
@@ -217,6 +219,15 @@ class ShippedPetModulesTest {
             assertEquals(new TreeSet<>(DEFAULT_CALLS), coverage.calls, "the shipped defaults pass the Java behaviors' arguments");
             assertCallsByOwner(FOLLOW_CALLS, coverage, "fmm:pet/follow_owner",
                     "follow_owner's speed and teleport by where the owner is");
+            // Short of the teleport distance, a pet that gets somewhere never jumps; one whose steering is refused, or
+            // accepted but leaves it where it was, catches up after stuck_ticks.
+            for (Owner owner : List.of(Owner.PAST_FOLLOW, Owner.PAST_LEASH)) {
+                assertFalse(coverage.calls(owner, Answers.SOMETHING, "fmm:pet/follow_owner")
+                        .contains("teleport_near_owner(2)"), owner + ": a moving pet does not catch up");
+                for (Answers stuck : List.of(Answers.STEER_FAILS, Answers.STUCK))
+                    assertTrue(coverage.calls(owner, stuck, "fmm:pet/follow_owner").contains("teleport_near_owner(2)"),
+                            owner + ", " + stuck + ": a pet that gets nowhere catches up");
+            }
             assertCallsByOwner(STING_CALLS, coverage, "fmm:pet/sting", "sting's victims by whether the pet is wild");
         }
         assertEquals(List.of(), warnings);
@@ -318,6 +329,11 @@ class ShippedPetModulesTest {
         /** Only steering fails, as for a walking body with no path, and the pet stays put. */
         STEER_FAILS,
         /**
+         * Every method finds something and steering is accepted, but the pet stays put, as a walker whose path ends at
+         * a fence or a flyer held back by a wall.
+         */
+        STUCK,
+        /**
          * Each method answers nothing in some 10-tick windows and something in others, distances swing between near
          * and far, and the pet stays put.
          */
@@ -326,23 +342,32 @@ class ShippedPetModulesTest {
 
     /**
      * What the runs reached: the c.pet names read, each distinct call with its module and arguments, overall and by
-     * where the owner was, and the behaviors and sensors whose callbacks ran.
+     * where the owner was and how the methods answered, and the behaviors and sensors whose callbacks ran.
      */
     private static final class Coverage {
         final Set<String> names = new TreeSet<>(), calls = new TreeSet<>();
-        final Map<Owner, Set<String>> callsByOwner = new EnumMap<>(Owner.class);
+        final Map<Owner, Map<Answers, Set<String>>> callsByState = new EnumMap<>(Owner.class);
         final Set<String> started = new TreeSet<>(), ticked = new TreeSet<>(), stopped = new TreeSet<>(),
                 sensed = new TreeSet<>();
 
-        void call(Owner owner, String call) {
+        void call(Owner owner, Answers answers, String call) {
             calls.add(call);
-            callsByOwner.computeIfAbsent(owner, key -> new TreeSet<>()).add(call);
+            callsByState.computeIfAbsent(owner, key -> new EnumMap<>(Answers.class))
+                    .computeIfAbsent(answers, key -> new TreeSet<>()).add(call);
         }
 
-        /** The calls a module made while the owner was there, without the module's name. */
+        /** The calls a module made while the owner was there, however the methods answered, without its name. */
         Set<String> calls(Owner owner, String module) {
-            return callsByOwner.getOrDefault(owner, Set.of()).stream().filter(call -> call.startsWith(module + " "))
-                    .map(call -> call.substring(module.length() + 1)).collect(Collectors.toCollection(TreeSet::new));
+            Set<String> calls = new TreeSet<>();
+            for (Answers answers : Answers.values()) calls.addAll(calls(owner, answers, module));
+            return calls;
+        }
+
+        /** The calls a module made while the owner was there and the methods answered so, without its name. */
+        Set<String> calls(Owner owner, Answers answers, String module) {
+            return callsByState.getOrDefault(owner, Map.of()).getOrDefault(answers, Set.of()).stream()
+                    .filter(call -> call.startsWith(module + " ")).map(call -> call.substring(module.length() + 1))
+                    .collect(Collectors.toCollection(TreeSet::new));
         }
     }
 
@@ -545,7 +570,8 @@ class ShippedPetModulesTest {
                 double range = (double) args[0];
                 if (!Double.isFinite(range) || range <= 0)
                     throw new IllegalArgumentException("maxDistance must be finite and positive, got " + range);
-                coverage.call(owner, module + " c.perception:nearest_player(" + shown(LuaValue.valueOf(range)) + ")");
+                coverage.call(owner, answers,
+                        module + " c.perception:nearest_player(" + shown(LuaValue.valueOf(range)) + ")");
                 return answersNothing("nearest_player") ? Optional.empty() : Optional.of(PLAYER);
             });
             // Only look_at, which needs the LOOK lease and a finite point in the body's world, as the native one does.
@@ -556,7 +582,7 @@ class ShippedPetModulesTest {
                 if (at.getWorld() != WORLD || !Double.isFinite(at.getX()) || !Double.isFinite(at.getY())
                         || !Double.isFinite(at.getZ()))
                     throw new LuaError(module + " looked at " + at + ", not a finite point in the body's world");
-                coverage.call(owner, module + " c.actuator:look_at(L)");
+                coverage.call(owner, answers, module + " c.actuator:look_at(L)");
                 return null;
             });
             Map<String, LuaValue> species = Map.of("id", LuaValue.valueOf("test"), "speed", LuaValue.valueOf(SPEED),
@@ -659,7 +685,7 @@ class ShippedPetModulesTest {
 
         private boolean answersNothing(String method) {
             return switch (answers) {
-                case SOMETHING -> false;
+                case SOMETHING, STUCK -> false;
                 case NOTHING -> true;
                 case STEER_FAILS -> method.equals("steer_to");
                 case FLICKER -> Math.floorMod(tick / 10 + method.hashCode(), 3) == 0;
@@ -675,7 +701,7 @@ class ShippedPetModulesTest {
                     Varargs own = args.narg() > 0 && args.arg1() == table ? args.subargs(2) : args;
                     check(called, method.shape(), own);
                     requireLeases("c.pet:" + called, LEASED.get(called));
-                    coverage.call(owner, module + " " + called + "(" + arguments(method.shape(), own) + ")");
+                    coverage.call(owner, answers, module + " " + called + "(" + arguments(method.shape(), own) + ")");
                     return answersNothing(called) ? method.nothing() : method.something().apply(own);
                 }
             };

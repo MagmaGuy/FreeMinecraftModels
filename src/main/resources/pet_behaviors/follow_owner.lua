@@ -1,12 +1,13 @@
 -- Keeps up with the owner once they get past the follow distance, faster past the leash. Teleports beside them when
--- they get too far away, or when a walking or swimming body finds no path toward them for stuck_ticks.
+-- they get too far away, or after stuck_ticks without getting anywhere: no path toward them, a path that ends short of
+-- them at a fence or a shore, or a wall in a flying body's way. A catch-up only ever lands nearer the owner.
 return ai.module {
     id = 'fmm:pet/follow_owner', revision = 1,
     -- speed is in blocks per tick at species speed 1 for a flying body; for a walking or swimming one, 4 x speed x the
     -- species speed multiplies its body type's own movement speed, never under a quarter of it. leash_urgency
     -- multiplies it past the leash distance; trail_back is how many blocks behind the owner the pet aims.
     settings = { speed = 0.25, leash_urgency = 1.6, trail_back = 1.5, stuck_ticks = 60 },
-    memories = { follow_owner_stuck = 'integer' },
+    memories = { follow_owner_stuck = 'integer', follow_owner_last = 'position' },
     behaviors = {
         ai.behavior {
             id = 'fmm:pet/follow_owner', priority = 10,
@@ -19,7 +20,10 @@ return ai.module {
                 if c.pet.staying or c.pet.owner_location == nil then return false end
                 return c.pet.owner_distance > c.pet.species.follow_distance * 0.6
             end,
-            start = function(c) c.memory:set('follow_owner_stuck', 0) end,
+            start = function(c)
+                c.memory:set('follow_owner_stuck', 0)
+                c.memory:forget('follow_owner_last')
+            end,
             tick = function(c)
                 local species = c.pet.species
                 local distance = c.pet.owner_distance
@@ -31,15 +35,22 @@ return ai.module {
                 if target == nil then return end
                 local urgency = 1
                 if distance > species.leash_distance then urgency = c.settings.leash_urgency end
-                -- A flying body steers by velocity, which only fails while something else holds its movement, so
-                -- in practice only walking and swimming bodies count stuck ticks.
-                local stuck = c.memory:get('follow_owner_stuck') or 0
-                if c.pet:steer_to(target, c.settings.speed * urgency * species.speed) then
-                    if stuck ~= 0 then c.memory:set('follow_owner_stuck', 0) end
-                    return
+                -- A tick counts as stuck when the steering is refused or the pet has not moved since the last one:
+                -- native navigation accepts a path that ends short of the owner, and keeps accepting it.
+                local here, last = c.pet.position, c.memory:get('follow_owner_last')
+                c.memory:set('follow_owner_last', here)
+                local moved = true
+                if last ~= nil then
+                    local dx, dy, dz = here.x - last.x, here.y - last.y, here.z - last.z
+                    moved = dx * dx + dy * dy + dz * dz >= 1e-4
                 end
-                stuck = stuck + 1
+                local stuck = 0
+                if not c.pet:steer_to(target, c.settings.speed * urgency * species.speed) or not moved then
+                    stuck = (c.memory:get('follow_owner_stuck') or 0) + 1
+                end
                 if stuck >= c.settings.stuck_ticks then
+                    -- Refused when no spot beside the owner is nearer them than the pet already is; it tries again
+                    -- after another stuck_ticks.
                     c.pet:teleport_near_owner(2)
                     stuck = 0
                 end
