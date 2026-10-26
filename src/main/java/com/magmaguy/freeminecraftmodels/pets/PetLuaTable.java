@@ -58,8 +58,10 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
- * The c.pet table a behavior module reads: the pet's state, read fresh on each access, and the Java helpers that
- * keep per-tick work fast. One table per pet; {@link #bind} points it at the current callback's Mind context first.
+ * The c.pet table a behavior module reads: the pet's state, and the Java helpers that keep per-tick work fast. One
+ * table per pet; {@link #bind} points it at the current callback's Mind context first. A property is read once per pet
+ * tick and kept for the rest of that tick, through every callback, unless a c.pet method moves or stops the body; a
+ * location property gives a fresh table on every read, so a module may change the one it gets.
  * <p>
  * Modules get it read-only: assigning to c.pet or c.pet.species, rawset on them and setmetatable all raise a Lua
  * error, so no module can shadow a property or replace a method for the rest of its pet's life. c.pet never acts in
@@ -112,9 +114,15 @@ public final class PetLuaTable {
     private final Warnings warnings;
     private final Fields fields;
     private final Set<String> registered = new HashSet<>();
+    private final Ticks ticks = new Ticks();
     private MindContext context;
     private String module = "";
+    // The world a location table names, as a Lua string, kept while it stays the same world.
+    private World namedWorld;
+    private LuaString worldName;
     private final WalkPath path = new WalkPath();
+    // The body's location this tick, shared by c.pet.position and distance_to.
+    private final Supplier<Location> position;
     private boolean raining;
     private long nextRainCheck = Long.MIN_VALUE;
     private double scale = Double.NaN;
@@ -143,23 +151,30 @@ public final class PetLuaTable {
         LuaTable species = speciesTable(values);
 
         property("species", () -> species);
-        property("wild", () -> LuaValue.valueOf(control.isWild()));
-        property("staying", () -> LuaValue.valueOf(control.isStaying()));
-        property("settled", () -> LuaValue.valueOf(PetMotion.settled(control, body())));
-        property("baby", () -> LuaValue.valueOf(control.isBaby()));
-        property("migrating", () -> LuaValue.valueOf(control.route() != null));
-        property("model", () -> control.model() == null ? LuaValue.NIL : LuaValue.valueOf(control.model()));
-        property("position", () -> LuaTableSupport.locationToTable(body().getLocation()));
-        property("home", () -> location(control.home()));
-        property("anchor", () -> location(anchor()));
-        property("stay_anchor", () -> location(control.stayAnchor()));
-        property("owner_location", () -> location(control.owner().map(Player::getLocation).orElse(null)));
-        property("owner_distance", () -> LuaValue.valueOf(control.ownerDistance(body())));
-        property("night", () -> LuaValue.valueOf(PetSky.isNight(body().getWorld())));
-        property("day", () -> LuaValue.valueOf(PetSky.isDay(body().getWorld())));
-        property("raining", () -> LuaValue.valueOf(raining()));
-        property("speed", () -> LuaValue.valueOf(body().getVelocity().length()));
-        property("route_cruise", () -> LuaValue.valueOf(control.route() == null ? 0D : control.route().cruise()));
+        property("wild", ticks.perTick(() -> LuaValue.valueOf(control.isWild())));
+        property("staying", ticks.perTick(() -> LuaValue.valueOf(control.isStaying())));
+        property("settled", ticks.perTick(() -> LuaValue.valueOf(PetMotion.settled(control, body()))));
+        property("baby", ticks.perTick(() -> LuaValue.valueOf(control.isBaby())));
+        property("migrating", ticks.perTick(() -> LuaValue.valueOf(control.route() != null)));
+        property("model", ticks.perTick(() ->
+                control.model() == null ? LuaValue.NIL : LuaValue.valueOf(control.model())));
+        // Locations are kept as Java locations, and each read makes its own table from one.
+        position = ticks.perTick(() -> body().getLocation());
+        Supplier<Location> home = ticks.perTick(control::home), anchor = ticks.perTick(this::anchor),
+                stayAnchor = ticks.perTick(control::stayAnchor),
+                ownerLocation = ticks.perTick(() -> control.owner().map(Player::getLocation).orElse(null));
+        property("position", () -> locationTable(position.get()));
+        property("home", () -> location(home.get()));
+        property("anchor", () -> location(anchor.get()));
+        property("stay_anchor", () -> location(stayAnchor.get()));
+        property("owner_location", () -> location(ownerLocation.get()));
+        property("owner_distance", ticks.perTick(() -> LuaValue.valueOf(control.ownerDistance(body()))));
+        property("night", ticks.perTick(() -> LuaValue.valueOf(PetSky.isNight(body().getWorld()))));
+        property("day", ticks.perTick(() -> LuaValue.valueOf(PetSky.isDay(body().getWorld()))));
+        property("raining", ticks.perTick(() -> LuaValue.valueOf(raining())));
+        property("speed", ticks.perTick(() -> LuaValue.valueOf(body().getVelocity().length())));
+        property("route_cruise", ticks.perTick(() ->
+                LuaValue.valueOf(control.route() == null ? 0D : control.route().cruise())));
 
         // steer_to(point, cruise): one tick toward the point; false when the body cannot go there. cruise is 0 to 4
         // (positive infinity means 4 and negative infinity 0). A flying body flies at cruise blocks per tick. A walking
@@ -179,6 +194,7 @@ public final class PetLuaTable {
                 context.actuator().stopMoving();
                 return null;
             });
+            ticks.moved();
             return LuaValue.NIL;
         });
         // hover_point(center, radius): a point in the hover band within radius (up to 64), nil when unloaded.
@@ -230,11 +246,15 @@ public final class PetLuaTable {
         method("teleport_near_owner", args -> {
             double radius = number(args, 1, 0D, MAX_SPOT_RADIUS);
             path.forget();
-            return LuaValue.valueOf(PetMotion.teleportNearOwner(control, body(), radius));
+            try {
+                return LuaValue.valueOf(PetMotion.teleportNearOwner(control, body(), radius));
+            } finally {
+                ticks.moved();
+            }
         });
         method("distance_to", args -> {
             Location point = at(args, 1);
-            return LuaValue.valueOf(point == null ? Double.POSITIVE_INFINITY : body().getLocation().distance(point));
+            return LuaValue.valueOf(point == null ? Double.POSITIVE_INFINITY : position.get().distance(point));
         });
         method("route_target", args -> location(control.route() == null ? null : control.route().target(control)));
         // find_perch(height, radius): height 0 to 8, radius 0 to 4.
@@ -342,10 +362,14 @@ public final class PetLuaTable {
         return fields.view();
     }
 
-    /** Points the table at a callback's context, and names the module it runs for in warnings. */
+    /**
+     * Points the table at a callback's context, and names the module it runs for in warnings. A callback on a new pet
+     * tick, a new game tick or another body reads every property afresh.
+     */
     void bind(MindContext context, String module) {
         this.context = context;
         this.module = module;
+        ticks.bind(PetManager.ticks(), context.gameTick(), context.entity());
     }
 
     private LivingEntity body() {
@@ -439,8 +463,17 @@ public final class PetLuaTable {
 
     /** A location as a table, or nil when there is none or it is in another world than the body. */
     private LuaValue location(Location location) {
-        return location == null || location.getWorld() != body().getWorld() ? LuaValue.NIL
-                : LuaTableSupport.locationToTable(location);
+        return location == null || location.getWorld() != body().getWorld() ? LuaValue.NIL : locationTable(location);
+    }
+
+    /** A fresh table of the location, its world's name made a Lua string once per world. */
+    private LuaTable locationTable(Location location) {
+        World world = location.getWorld();
+        if (world != namedWorld) {
+            namedWorld = world;
+            worldName = world == null ? null : LuaValue.valueOf(world.getName());
+        }
+        return LuaTableSupport.locationToTable(location, worldName);
     }
 
     /** Owned: the owner. Wild: its home, or where it is when it has none. */
@@ -814,6 +847,51 @@ public final class PetLuaTable {
         private void say(String key, String message, Throwable failure) {
             if (said.size() >= MAX_SAID || !said.add(key)) return;
             sink.accept(message, failure);
+        }
+    }
+
+    /**
+     * The tick c.pet's properties belong to. A property read through {@link #perTick} asks its source once per tick
+     * and keeps the answer, failures aside, until a callback binds another pet tick, game tick or body, or c.pet moves
+     * or stops the body itself. Before any callback has bound one, every read asks. Server thread only.
+     */
+    static final class Ticks {
+        private long petTick, gameTick;
+        private Object body;
+        private boolean bound;
+        private long epoch;
+
+        /** The callback about to run is on this pet tick and game tick, for this body. */
+        void bind(long petTick, long gameTick, Object body) {
+            if (bound && petTick == this.petTick && gameTick == this.gameTick && body == this.body) return;
+            bound = true;
+            this.petTick = petTick;
+            this.gameTick = gameTick;
+            this.body = body;
+            epoch++;
+        }
+
+        /** c.pet moved or stopped the body, so what its properties read may have changed. */
+        void moved() {
+            epoch++;
+        }
+
+        /** {@code source}, asked at most once per tick. */
+        <T> Supplier<T> perTick(Supplier<T> source) {
+            return new Supplier<>() {
+                private long readIn = -1L;
+                private T value;
+
+                @Override
+                public T get() {
+                    if (!bound) return source.get();
+                    if (readIn != epoch) {
+                        value = source.get();
+                        readIn = epoch;
+                    }
+                    return value;
+                }
+            };
         }
     }
 
