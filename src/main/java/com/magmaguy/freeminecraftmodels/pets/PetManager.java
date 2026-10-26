@@ -376,10 +376,7 @@ public final class PetManager {
         if (host == null || at.getWorld() == null) return null;
         String variant = wornVariant(pet, model);
         String modelId = baby && pet.babyModel() != null ? pet.babyModel() : variant;
-        if (FileModelConverter.getModel(modelId) == null) {
-            Logger.warn("Could not spawn pet " + pet.id() + ": model " + modelId + " is not loaded.");
-            return null;
-        }
+        if (FileModelConverter.getModel(modelId) == null) return refuse(pet, "model " + modelId + " is not loaded");
         PetControl control = new PetControl(pet, owner, record, variant, baby, home);
         MindHandle mind;
         try {
@@ -388,12 +385,7 @@ public final class PetManager {
             mind = host.open(UUID.randomUUID(),
                     program.definition().instantiate(new PetLuaContext(control, program, warnings)));
         } catch (RuntimeException failure) {
-            String reason = failure.getMessage() != null ? failure.getMessage() : failure.getClass().getSimpleName();
-            // The watchdog tries again every second and chunk stocking a few times over, so it is said once.
-            if (refusals.size() < MAX_REFUSALS_SAID && refusals.add(pet.id() + "\n" + reason))
-                Logger.warn("Could not spawn pet " + pet.id() + ": its behaviors could not start (" + reason
-                        + "). This is logged once per species and cause until the next reload.");
-            return null;
+            return refuse(pet, "its behaviors could not start (" + reason(failure) + ")");
         }
         double scale = pet.scale() * (baby ? pet.babyScale() : 1D) * sizeMultiplier;
         MindBodyProfile profile = new MindBodyProfile(pet.locomotion(), scale, false, pet.body().getKey().toString());
@@ -405,16 +397,14 @@ public final class PetManager {
             });
         } catch (RuntimeException failure) {
             mind.close();
-            Logger.warn("Could not spawn pet " + pet.id() + ": " + failure.getMessage());
-            return null;
+            return refuse(pet, "its body could not spawn (" + reason(failure) + ")");
         }
         LivingEntity entity = body.entity();
         DynamicEntity modeled = DynamicEntity.create(modelId, entity);
         if (modeled == null) {
             mind.close();
             entity.remove();
-            Logger.warn("Could not put model " + modelId + " on pet " + pet.id() + ".");
-            return null;
+            return refuse(pet, "model " + modelId + " could not be put on its body");
         }
         control.attach(entity, modeled, mind);
         // Clicks land on the model players see, not on the small body hidden inside it.
@@ -425,6 +415,23 @@ public final class PetManager {
         byBody.put(entity.getUniqueId(), control);
         if (owner != null && record != null) ownedBodies.computeIfAbsent(owner, ignored -> new HashMap<>()).put(record.id, control);
         return control;
+    }
+
+    /**
+     * Says why a pet of the species was not spawned, once per species and cause for this load: the watchdog tries
+     * again every second and chunk stocking a few times over, so each retry would say it again. Returns null, as
+     * spawning does then.
+     */
+    private PetControl refuse(PetSpecies pet, String cause) {
+        if (refusals.size() < MAX_REFUSALS_SAID && refusals.add(pet.id() + "\n" + cause))
+            Logger.warn("Could not spawn pet " + pet.id() + ": " + cause + ". This is logged once per species and cause"
+                    + " until the next reload.");
+        return null;
+    }
+
+    /** A failure's message, or its type when it has none. */
+    private static String reason(RuntimeException failure) {
+        return failure.getMessage() != null ? failure.getMessage() : failure.getClass().getSimpleName();
     }
 
     private static void prepare(LivingEntity entity, PetSpecies pet) {
