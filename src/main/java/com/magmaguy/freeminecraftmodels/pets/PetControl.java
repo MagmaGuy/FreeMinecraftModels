@@ -8,10 +8,10 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -22,6 +22,11 @@ import java.util.UUID;
 public final class PetControl {
     /** The most players a wild pet remembers touching it between looks; past that, more wait for the next touch. */
     private static final int MAX_CONTACTS = 16;
+    /**
+     * How long a touch waits for a behavior module to take it, in pet clock ticks. A pet whose modules never take
+     * touches, one without a sting, forgets them unseen, so none waits to sting long after it happened.
+     */
+    private static final long CONTACT_TICKS = 20L;
 
     private final PetSpecies species;
     private final UUID owner;
@@ -39,8 +44,9 @@ public final class PetControl {
     private long lastInteractionTick = Long.MIN_VALUE / 2;
     // Set on a wild pet flying a migration; null for every other pet.
     private MigrationRoute route;
-    // Players whose touch reached this wild pet's model since its sting last looked; a set, so a long touch counts once.
-    private final Set<UUID> contacts = new LinkedHashSet<>();
+    // Players whose touch reached this wild pet's model since its sting last looked, each with the pet clock tick of
+    // their latest touch; a map, so a long touch counts once.
+    private final Map<UUID, Long> contacts = new LinkedHashMap<>();
 
     PetControl(PetSpecies species, UUID owner, PetRecord record, String model, boolean baby, Location home) {
         this.species = species;
@@ -166,21 +172,27 @@ public final class PetControl {
 
     /**
      * A player's touch reached this wild pet's model. Up to {@link #MAX_CONTACTS} players are kept until the next
-     * {@link #drainContacts}; a body that is spawned again (a stash, a tame, growing up) starts with none.
+     * {@link #drainContacts}, for {@link #CONTACT_TICKS} after their latest touch; a body that is spawned again (a
+     * stash, a tame, growing up) starts with none.
      */
     public void recordContact(Player player) {
-        if (contacts.size() < MAX_CONTACTS) contacts.add(player.getUniqueId());
+        long now = PetManager.ticks();
+        if (contacts.size() >= MAX_CONTACTS) contacts.values().removeIf(tick -> now - tick > CONTACT_TICKS);
+        if (contacts.size() < MAX_CONTACTS || contacts.containsKey(player.getUniqueId()))
+            contacts.put(player.getUniqueId(), now);
     }
 
-    /** The players that touched the model since the last call and are still online. */
+    /** The players that touched the model since the last call, within {@link #CONTACT_TICKS}, and are still online. */
     public List<Player> drainContacts() {
         if (contacts.isEmpty()) return List.of();
+        long now = PetManager.ticks();
         List<Player> touched = new ArrayList<>(contacts.size());
-        for (UUID id : contacts) {
+        contacts.forEach((id, tick) -> {
+            if (now - tick > CONTACT_TICKS) return;
             // Only online players are found by id.
             Player player = Bukkit.getPlayer(id);
             if (player != null) touched.add(player);
-        }
+        });
         contacts.clear();
         return touched;
     }
