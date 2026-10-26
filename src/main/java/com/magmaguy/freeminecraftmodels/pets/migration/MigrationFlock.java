@@ -173,6 +173,7 @@ public final class MigrationFlock implements MigrationRoute {
                     said = true;
                     Logger.warn("A " + member.species().id() + " migration could not remove a member of its flock: "
                             + failure);
+                    failure.printStackTrace();
                 }
             }
         }

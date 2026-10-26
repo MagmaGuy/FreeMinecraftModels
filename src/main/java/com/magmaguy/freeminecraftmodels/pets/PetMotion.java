@@ -109,6 +109,7 @@ public final class PetMotion {
             if (!loaded(point)) continue;
             World world = point.getWorld();
             int x = point.getBlockX(), z = point.getBlockZ(), y = point.getBlockY();
+            if (!clear(center, x, z, minDistance)) continue;
             // Outward from center's height. In the open, fall to the first block below, so a roof or a ceiling above
             // never passes for the floor. Inside the ground, climb to the top of the slope; the climb counts only with
             // headroom over center up to the spot's head, since under a ceiling it went up a wall onto the roof.
@@ -122,8 +123,7 @@ public final class PetMotion {
             // Liquid, a long drop, or the bottom of the world.
             if (!block.getType().isSolid()) continue;
             Block feet = block.getRelative(0, 1, 0), head = block.getRelative(0, 2, 0);
-            if (feet.isPassable() && !feet.isLiquid() && head.isPassable() && clear(center, x, z, minDistance))
-                return new Location(world, x + 0.5D, y + 1D, z + 0.5D);
+            if (feet.isPassable() && !feet.isLiquid() && head.isPassable()) return new Location(world, x + 0.5D, y + 1D, z + 0.5D);
         }
         return null;
     }
@@ -271,7 +271,7 @@ public final class PetMotion {
     }
 
     /** Whether the middle of the block column at x, z is at least minDistance across from center. */
-    private static boolean clear(Location center, int x, int z, double minDistance) {
+    static boolean clear(Location center, int x, int z, double minDistance) {
         double dx = x + 0.5D - center.getX(), dz = z + 0.5D - center.getZ();
         return dx * dx + dz * dz >= minDistance * minDistance;
     }

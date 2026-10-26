@@ -246,7 +246,9 @@ public final class PetLuaTable {
             return location(control.owner().map(owner -> PetMotion.trailPoint(control, owner, back, height)).orElse(null));
         });
         // teleport_near_owner(radius): radius up to 64; false when nothing fits beside the owner or the spot is not at
-        // least a block nearer them than the body is. It moves the body directly, so it needs no control.
+        // least a block nearer them than the body is. A walker's or swimmer's spot is at least a block across from the
+        // owner, never on their own block; a flyer's is a hover point. It moves the body directly, so it needs no
+        // control.
         method("teleport_near_owner", args -> {
             double radius = number(args, 1, 0D, MAX_SPOT_RADIUS);
             path.forget();
