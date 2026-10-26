@@ -161,8 +161,10 @@ public final class PetLuaTable {
         property("speed", () -> LuaValue.valueOf(body().getVelocity().length()));
         property("route_cruise", () -> LuaValue.valueOf(control.route() == null ? 0D : control.route().cruise()));
 
-        // steer_to(point, cruise): one tick toward the point at cruise blocks per tick (0 to 4; positive infinity means
-        // 4 and negative infinity 0); false when the body cannot go there. Needs a behavior holding MOVE and LOOK.
+        // steer_to(point, cruise): one tick toward the point; false when the body cannot go there. cruise is 0 to 4
+        // (positive infinity means 4 and negative infinity 0). A flying body flies at cruise blocks per tick. A walking
+        // or swimming body paths there natively, at 4 x cruise times its body type's movement speed, never under a
+        // quarter of it; a cruise of 0 stops it and reads false. Needs a behavior holding MOVE and LOOK.
         method("steer_to", args -> {
             Location target = at(args, 1);
             double cruise = cruise(args, 2);
@@ -456,14 +458,24 @@ public final class PetLuaTable {
      * A walking or swimming body's path. A request is kept for a second while the target stays within a block, the
      * cruise is the same and the body's navigation still heads for that request: a released MOVE lease, an arrival or
      * another module's request ends that, and the next call asks again.
+     * <p>
+     * The request's speed is {@link #speed}: 4 × cruise, at least {@link #MIN_SPEED}, which multiplies the body type's
+     * own movement speed. A cruise of 0 or less stops the body instead and reads as false, since it does not go there.
      */
     static final class WalkPath {
+        /** The slowest walk or swim, a quarter of the body type's movement speed. */
+        static final double MIN_SPEED = 0.25D;
         private Location target;
         private double cruise;
         private long until;
         private boolean accepted;
 
         boolean steer(MindContext context, Location to, double cruise) {
+            if (cruise <= 0D) {
+                forget();
+                context.actuator().stopMoving();
+                return false;
+            }
             long now = context.gameTick();
             if (target != null && cruise == this.cruise && now < until && target.getWorld() == to.getWorld()
                     && target.distanceSquared(to) < 1D && heading(context)) return accepted;
@@ -471,8 +483,13 @@ public final class PetLuaTable {
             this.cruise = cruise;
             until = now + 20L;
             accepted = context.entity().getLocation().distanceSquared(to) < 0.25D
-                    || context.actuator().moveTo(to, Math.max(0.6D, cruise * 4D));
+                    || context.actuator().moveTo(to, speed(cruise));
             return accepted;
+        }
+
+        /** The native speed modifier a positive cruise asks for. */
+        static double speed(double cruise) {
+            return Math.max(MIN_SPEED, cruise * 4D);
         }
 
         void forget() {
