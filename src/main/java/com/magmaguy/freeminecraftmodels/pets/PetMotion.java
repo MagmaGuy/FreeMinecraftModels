@@ -193,12 +193,33 @@ public final class PetMotion {
 
     /**
      * A spot to rest within radius of center in the body's own medium: in its hover band when it flies, on standing
-     * ground when it walks or cannot move, 0.5 to 2 blocks under the water's surface when it swims, and on ground or
-     * else in water when it is amphibious. Null when nothing near center fits. A hover point in an unloaded chunk comes
-     * back at center's height, unchecked, as {@link #hoverPoint} gives it; the others are null there.
+     * ground when it walks or cannot move, in water when it swims, and on ground or else in water when it is
+     * amphibious. A swimmer resting in water stays at center's height, so one told to stay deep keeps its depth;
+     * otherwise its spot is 0.5 to 2 blocks under the surface. Null when nothing near center fits. A hover point in an
+     * unloaded chunk comes back at center's height, unchecked, as {@link #hoverPoint} gives it; the others are null
+     * there.
      */
     public static Location restPoint(PetControl control, Location center, double radius) {
+        if (control.species().locomotion() == MindBodyLocomotion.AQUATIC) {
+            Location level = levelWaterPoint(center, radius);
+            if (level != null) return level;
+        }
         return restPoint(control, center, radius, radius);
+    }
+
+    /**
+     * A spot in water within radius of center at center's own height, or null when center's block is not water, its
+     * chunk is unloaded, or a few tries find no water at that height.
+     */
+    static Location levelWaterPoint(Location center, double radius) {
+        if (!loaded(center) || center.getBlock().getType() != Material.WATER) return null;
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        for (int attempt = 0; attempt < 4; attempt++) {
+            double angle = random.nextDouble() * Math.PI * 2D, distance = random.nextDouble() * radius;
+            Location point = center.clone().add(Math.cos(angle) * distance, 0D, Math.sin(angle) * distance);
+            if (loaded(point) && point.getBlock().getType() == Material.WATER) return point;
+        }
+        return null;
     }
 
     /** As {@link #restPoint(PetControl, Location, double)}, but looking for water within waterRadius. */
