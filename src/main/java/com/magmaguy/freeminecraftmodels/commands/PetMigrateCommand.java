@@ -51,7 +51,8 @@ public class PetMigrateCommand extends AdvancedCommand {
         }
         if (migrations.start(player, species, true) == null)
             Logger.sendMessage(player, species == null
-                    ? "&cNo species migrates: give one a migration: section in its pet file."
+                    ? "&cNo species can migrate: none has a migration: section in its pet file, or their behaviors"
+                    + " don't run migrate; see the console."
                     : "&cThe flock could not start; see the console.");
         else Logger.sendMessage(player, "&aA flock is on its way. Look up.");
     }
