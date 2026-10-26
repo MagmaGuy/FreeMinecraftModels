@@ -1,5 +1,5 @@
 -- Lights the model at a fixed level at night, whatever the light where it floats, and hands it back to world light by
--- day. A model with a bone named lantern_bone also loops its glow animation while it glows. Java players only.
+-- day. A model with the bone that lantern_bone names also loops its glow animation while it glows. Java players only.
 return ai.module {
     id = 'fmm:pet/night_glow', revision = 1,
     -- light is 0 to 15; 15 is fully bright. With night_only false it glows day and night.

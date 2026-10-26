@@ -28,6 +28,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -238,6 +239,21 @@ class PetLuaTableTest {
         assertEquals(both, PetLuaTable.materials(list("STONE", "torch")));
         assertEquals(Set.of(Material.SOUL_CAMPFIRE), PetLuaTable.materials(list("soul_campfire", "STONE")));
         assertEquals(both, PetLuaTable.materials(list("CAMPFIRE", "minecraft:soul_campfire")));
+    }
+
+    @Test
+    void anOwnerEffectLeavesOnlyAStrongerAndLongerOneAlone() {
+        // A drunk potion: as strong or stronger, with more time left, or infinite.
+        assertTrue(PetLuaTable.covers(0, false, 9600, 0, 300));
+        assertTrue(PetLuaTable.covers(1, false, 300, 0, 300));
+        assertTrue(PetLuaTable.covers(0, true, -1, 0, 300));
+        // The pet's own effect a second on, with 280 ticks left, is renewed.
+        assertFalse(PetLuaTable.covers(0, false, 280, 0, 300));
+        // Weaker, however long: renewed.
+        assertFalse(PetLuaTable.covers(0, true, -1, 1, 300));
+        assertFalse(PetLuaTable.covers(0, false, 9600, 1, 300));
+        // Stronger but shorter: renewed, and vanilla keeps it hidden beneath the stronger one.
+        assertFalse(PetLuaTable.covers(2, false, 100, 0, 300));
     }
 
     @Test

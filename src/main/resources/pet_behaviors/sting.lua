@@ -18,11 +18,11 @@ return ai.module {
         ai.sensor {
             id = 'fmm:pet/sting_players', interval = 2,
             sense = function(c)
+                -- Only a wild pet's model records touches, so an owned pet never stings a player. A wild one always
+                -- takes them, so they never pile up while stinging is off.
+                if not c.pet.wild then return end
                 local s = c.settings
-                -- Always take the touches, so they never pile up while stinging is off. An owned pet passes false, so
-                -- it never stings a player.
-                c.pet:sting_contacts(c.pet.wild and s.wild, s.effect, s.duration_ticks, s.amplifier, s.damage,
-                        cooldown_ticks(c))
+                c.pet:sting_contacts(s.wild, s.effect, s.duration_ticks, s.amplifier, s.damage, cooldown_ticks(c))
             end
         },
         ai.sensor {

@@ -58,6 +58,7 @@ import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 /**
  * Runs the shipped pet behavior modules against a strict stand-in for c.pet, and for the parts of c.perception and
@@ -106,7 +107,6 @@ class ShippedPetModulesTest {
             "fmm:pet/rain_bloom steer_to(L, 0.126)",
             "fmm:pet/night_glow set_glow(15, lantern, glow)", "fmm:pet/night_glow clear_glow()",
             "fmm:pet/sting sting_contacts(true, SLOWNESS, 60, 0, 0, 60)",
-            "fmm:pet/sting sting_contacts(false, SLOWNESS, 60, 0, 0, 60)",
             "fmm:pet/sting sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)",
             "fmm:pet/crop_drizzle drizzle(4, 0.1)",
             "fmm:pet/owner_effect owner_effect(NIGHT_VISION, 300, 0, 16)",
@@ -125,6 +125,17 @@ class ShippedPetModulesTest {
             Owner.PAST_FOLLOW, Set.of("trail_point(1.5, 2)", "steer_to(L, 0.375)", "teleport_near_owner(2)"),
             Owner.PAST_LEASH, Set.of("trail_point(1.5, 2)", "steer_to(L, 0.6)", "teleport_near_owner(2)"),
             Owner.PAST_TELEPORT, Set.of("teleport_near_owner(2)"));
+    /**
+     * sting's calls by where the owner is: a wild pet takes the touches on its model and stings those players; an
+     * owned one never takes touches, and stings hostile mobs only.
+     */
+    private static final Map<Owner, Set<String>> STING_CALLS = Map.of(
+            Owner.WILD, Set.of("sting_contacts(true, SLOWNESS, 60, 0, 0, 60)"),
+            Owner.WITHIN_FOLLOW, Set.of("sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)"),
+            Owner.PAST_FOLLOW, Set.of("sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)"),
+            Owner.PAST_LEASH, Set.of("sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)"),
+            Owner.PAST_TELEPORT, Set.of("sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)"),
+            Owner.AWAY, Set.of("sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)"));
     /**
      * The controls each leased c.pet method needs, as PetLuaTable documents them. A behavior holds its declared
      * controls from just before its start until its stop returns, so start, can_continue, tick and stop hold them, and
@@ -204,12 +215,9 @@ class ShippedPetModulesTest {
             unread.removeAll(coverage.names);
             assertEquals(Set.of(), unread, "every c.pet name a module's source uses is read on some path");
             assertEquals(new TreeSet<>(DEFAULT_CALLS), coverage.calls, "the shipped defaults pass the Java behaviors' arguments");
-            Map<Owner, Set<String>> expected = new EnumMap<>(Owner.class), follow = new EnumMap<>(Owner.class);
-            for (Owner owner : Owner.values()) {
-                expected.put(owner, new TreeSet<>(FOLLOW_CALLS.get(owner)));
-                follow.put(owner, coverage.calls(owner, "fmm:pet/follow_owner"));
-            }
-            assertEquals(expected, follow, "follow_owner's speed and teleport by where the owner is");
+            assertCallsByOwner(FOLLOW_CALLS, coverage, "fmm:pet/follow_owner",
+                    "follow_owner's speed and teleport by where the owner is");
+            assertCallsByOwner(STING_CALLS, coverage, "fmm:pet/sting", "sting's victims by whether the pet is wild");
         }
         assertEquals(List.of(), warnings);
     }
@@ -218,25 +226,52 @@ class ShippedPetModulesTest {
     void extremeSettingsNeverFailACallback() {
         try (PetBehaviorCatalog catalog = catalog()) {
             PetPrograms programs = new PetPrograms(catalog, warnings::add);
-            for (double value : new double[]{0, -5, 0.5, 1e12}) {
-                List<PetBehaviorEntry> entries = new ArrayList<>();
-                Map<String, Set<String>> numeric = new LinkedHashMap<>();
-                for (String name : PetBehaviorCatalog.DEFAULTS) {
-                    Map<String, Object> settings = new LinkedHashMap<>();
-                    catalog.module(name).orElseThrow().settings().forEach((setting, fallback) -> {
-                        if (fallback instanceof Double) settings.put(setting, value);
-                    });
-                    numeric.put(PetBehaviorCatalog.ID_PREFIX + name, settings.keySet());
-                    entries.add(new PetBehaviorEntry(name, settings));
-                }
-                PetPrograms.Program program = programs.program("test", "settings " + value, entries, "settings " + value);
-                numeric.forEach((module, settings) -> settings.forEach(setting ->
-                        assertEquals(value, program.settings().get(module).get(setting), module + "." + setting)));
-                // Flickering answers reach the nothing paths and failed steering too, at half the cost of every mode.
-                exercise(program, EnumSet.of(Answers.SOMETHING, Answers.FLICKER));
-            }
+            for (double value : new double[]{0, -5, 0.5, 1e12})
+                sweep(catalog, programs, "numbers " + value, fallback -> fallback instanceof Double ? value : null);
+            // Every switch the other way round from its default.
+            sweep(catalog, programs, "switches flipped", fallback -> fallback instanceof Boolean flag ? !flag : null);
+            // Text that names nothing, as an effect of NONE or an empty one.
+            for (String text : new String[]{"NONE", ""})
+                sweep(catalog, programs, "text '" + text + "'", fallback -> fallback instanceof String ? text : null);
         }
         assertEquals(List.of(), warnings);
+    }
+
+    /**
+     * Runs every shipped module with each setting given the value {@code change} makes of its default (null keeps the
+     * default), once it has checked that each value reached its module's settings and that some setting changed.
+     */
+    private static void sweep(PetBehaviorCatalog catalog, PetPrograms programs, String label,
+                              Function<Object, Object> change) {
+        List<PetBehaviorEntry> entries = new ArrayList<>();
+        Map<String, Map<String, Object>> changed = new LinkedHashMap<>();
+        for (String name : PetBehaviorCatalog.DEFAULTS) {
+            Map<String, Object> settings = new LinkedHashMap<>();
+            catalog.module(name).orElseThrow().settings().forEach((setting, fallback) -> {
+                Object value = change.apply(fallback);
+                if (value != null) settings.put(setting, value);
+            });
+            changed.put(PetBehaviorCatalog.ID_PREFIX + name, settings);
+            entries.add(new PetBehaviorEntry(name, settings));
+        }
+        assertNotEquals(Set.of(), changed.values().stream().flatMap(settings -> settings.keySet().stream())
+                .collect(Collectors.toSet()), label + " changes some setting");
+        PetPrograms.Program program = programs.program("test", label, entries, label);
+        changed.forEach((module, settings) -> settings.forEach((setting, value) ->
+                assertEquals(value, program.settings().get(module).get(setting), label + ": " + module + "." + setting)));
+        // Flickering answers reach the nothing paths and failed steering too, at half the cost of every mode.
+        exercise(program, EnumSet.of(Answers.SOMETHING, Answers.FLICKER));
+    }
+
+    /** A module's calls by where the owner is, against the expected ones. */
+    private static void assertCallsByOwner(Map<Owner, Set<String>> calls, Coverage coverage, String module,
+                                           String message) {
+        Map<Owner, Set<String>> expected = new EnumMap<>(Owner.class), actual = new EnumMap<>(Owner.class);
+        for (Owner owner : Owner.values()) {
+            expected.put(owner, new TreeSet<>(calls.get(owner)));
+            actual.put(owner, coverage.calls(owner, module));
+        }
+        assertEquals(expected, actual, message);
     }
 
     /** Every c.pet name, and every c.pet.species field, the shipped modules' code (not their comments) uses. */

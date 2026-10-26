@@ -1,8 +1,8 @@
 -- Drifts to a random point around its anchor (the owner, or home when wild), then rests a while.
 return ai.module {
     id = 'fmm:pet/drift', revision = 1,
-    -- speed is in blocks per tick at species speed 1. A rest lasts rest_ticks plus up to rest_random_ticks more; a
-    -- drift gives up after drift_ticks, or after stuck_ticks without moving.
+    -- speed is in blocks per tick at species speed 1. A rest lasts rest_ticks plus a random 0 to rest_random_ticks - 1
+    -- more; a drift gives up after drift_ticks, or after stuck_ticks without moving.
     settings = { speed = 0.06, drift_ticks = 160, rest_ticks = 60, rest_random_ticks = 80, stuck_ticks = 20 },
     memories = { drift_to = 'position', drift_next = 'integer', drift_until = 'integer', drift_last = 'position',
                  drift_stuck = 'integer' },

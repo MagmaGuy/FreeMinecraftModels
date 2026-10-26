@@ -3,7 +3,7 @@
 return ai.module {
     id = 'fmm:pet/wander', revision = 1,
     -- speed is in blocks per tick at species speed 1. A walk gives up after walk_ticks, or after stuck_ticks without
-    -- moving; a rest lasts rest_ticks plus up to rest_random_ticks more.
+    -- moving; a rest lasts rest_ticks plus a random 0 to rest_random_ticks - 1 more.
     settings = { speed = 0.15, walk_ticks = 120, stuck_ticks = 20, rest_ticks = 80, rest_random_ticks = 120 },
     memories = { wander_to = 'position', wander_next = 'integer', wander_until = 'integer', wander_last = 'position',
                  wander_stuck = 'integer' },

@@ -5,7 +5,8 @@
 return ai.module {
     id = 'fmm:pet/swim', revision = 1,
     -- speed is in blocks per tick at species speed 1; the depths are in blocks (0 to 16). A swim gives up after
-    -- swim_ticks, or after stuck_ticks without moving; a rest lasts rest_ticks plus up to rest_random_ticks more.
+    -- swim_ticks, or after stuck_ticks without moving; a rest lasts rest_ticks plus a random 0 to
+    -- rest_random_ticks - 1 more.
     settings = { speed = 0.1, min_depth = 0.5, max_depth = 3, swim_ticks = 120, stuck_ticks = 20, rest_ticks = 40,
                  rest_random_ticks = 60 },
     memories = { swim_to = 'position', swim_next = 'integer', swim_until = 'integer', swim_last = 'position',

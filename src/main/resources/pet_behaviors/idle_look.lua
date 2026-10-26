@@ -16,7 +16,7 @@ end
 return ai.module {
     id = 'fmm:pet/idle_look', revision = 1,
     -- range is in blocks. A look lasts look_ticks, or until the player leaves the range; the rest after it lasts
-    -- rest_ticks plus up to rest_random_ticks more.
+    -- rest_ticks plus a random 0 to rest_random_ticks - 1 more.
     settings = { range = 8, look_ticks = 40, rest_ticks = 100, rest_random_ticks = 100 },
     memories = { idle_look_next = 'integer', idle_look_until = 'integer' },
     behaviors = {
