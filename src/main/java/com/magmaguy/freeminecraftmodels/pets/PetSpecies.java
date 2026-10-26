@@ -193,7 +193,7 @@ public final class PetSpecies {
         }
         this.locomotion = movement;
         this.behaviors = listedBehaviors(config, filename, Logger::warn);
-        warnLegacySections(config, filename, Logger::warn);
+        warnLegacySections(config, filename, listedModules(behaviors, variants), Logger::warn);
         this.wildSpawn = readWildSpawn(section(config, "wildSpawn"), movement, filename);
         this.orientation = orientation(section(config, "orientation"), filename);
         this.centerOnBody = centerOnBody(config, movement);
@@ -318,19 +318,37 @@ public final class PetSpecies {
         return config.contains("behaviors") ? PetBehaviorEntry.read(config.get("behaviors"), filename, warn) : null;
     }
 
+    /** Every module the file's lists name, the species' own (null for none) and its variants'. */
+    static Set<String> listedModules(List<PetBehaviorEntry> listed, List<Variant> variants) {
+        Set<String> modules = new HashSet<>();
+        if (listed != null) for (PetBehaviorEntry entry : listed) modules.add(entry.module());
+        for (Variant variant : variants) for (PetBehaviorEntry entry : variant.behaviors()) modules.add(entry.module());
+        return modules;
+    }
+
     /**
      * Warns, once per load of the file, about each section it still has from before world interactions became
-     * behavior modules, naming the module that does the same now; the section itself does nothing.
+     * behavior modules, which does nothing now. A section the file already covers with its module, or one switched
+     * off ({@code enabled: false}, or a plain setting that is not {@code true}), only needs removing; for the rest the
+     * warning names the module to list. {@code listed} holds every module the file's lists name.
      */
-    static void warnLegacySections(ConfigurationSection config, String filename, Consumer<String> warn) {
+    static void warnLegacySections(ConfigurationSection config, String filename, Set<String> listed,
+                                   Consumer<String> warn) {
         LEGACY_SECTIONS.forEach((key, module) -> {
             if (!config.contains(key)) return;
             // glow could also be just "glow: true".
-            String kind = config.isConfigurationSection(key) ? "section" : "setting";
-            warn.accept(filename + ": the " + key + " " + kind + " no longer does anything; world interactions are"
-                    + " behavior modules now. List the " + module + " module under behaviors: instead (see"
-                    + " plugins/FreeMinecraftModels/pet_behaviors/" + module + ".lua for its settings); this " + kind
-                    + " is ignored.");
+            boolean section = config.isConfigurationSection(key);
+            String kind = section ? "section" : "setting";
+            boolean on = section ? config.getConfigurationSection(key).getBoolean("enabled", true)
+                    : config.isBoolean(key) && config.getBoolean(key);
+            String ignored = filename + ": the " + key + " " + kind + " is ignored now that world interactions are"
+                    + " behavior modules";
+            if (listed.contains(module))
+                warn.accept(ignored + ", and a behaviors: list in this file already has " + module + "; remove the "
+                        + kind + ".");
+            else if (!on) warn.accept(ignored + ", and it is switched off anyway; remove the " + kind + ".");
+            else warn.accept(ignored + "; list the " + module + " module under behaviors: instead (see"
+                        + " plugins/FreeMinecraftModels/pet_behaviors/" + module + ".lua for its settings).");
         });
     }
 
