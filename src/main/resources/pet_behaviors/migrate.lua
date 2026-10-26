@@ -7,6 +7,9 @@ return ai.module {
             id = 'fmm:pet/migrate', priority = 1, probe_interval = 10,
             controls = { ai.controls.move, ai.controls.look },
             can_start = function(c) return c.pet.migrating and c.pet:route_target() ~= nil end,
+            -- route_target looks at every flock member, so in flight only tick asks for it. A member loses its target
+            -- only as it goes: the flock ends and despawns its members, or a player tames it.
+            can_continue = function(c) return c.pet.migrating end,
             tick = function(c)
                 local target = c.pet:route_target()
                 -- The flock's cruise, not the species' speed, so the whole flock flies together.
