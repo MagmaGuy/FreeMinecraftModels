@@ -16,7 +16,8 @@ return ai.module {
                  cooldown_seconds = 3, reach = 0.5 },
     sensors = {
         ai.sensor {
-            id = 'fmm:pet/sting_players', interval = 2,
+            -- Every 4 ticks: the model keeps a touch for 20 ticks, so each one is stung within 4 ticks of it.
+            id = 'fmm:pet/sting_players', interval = 4,
             sense = function(c)
                 -- Only a wild pet's model records touches, so an owned pet never stings a player. A wild one always
                 -- takes them, so they never pile up while stinging is off.

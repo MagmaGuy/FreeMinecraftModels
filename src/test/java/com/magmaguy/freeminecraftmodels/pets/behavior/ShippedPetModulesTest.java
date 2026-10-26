@@ -115,7 +115,7 @@ class ShippedPetModulesTest {
             "fmm:pet/campfire distance_to(L)", "fmm:pet/campfire steer_to(L, 0.09)",
             "fmm:pet/day_perch find_perch(0.3, 2)", "fmm:pet/day_perch distance_to(L)",
             "fmm:pet/day_perch steer_to(L, 0.045)", "fmm:pet/day_perch steer_to(L, 0.09)",
-            "fmm:pet/rain_bloom scale_toward(1, 1.25, 60, 2)", "fmm:pet/rain_bloom scale_toward(1.25, 1.25, 60, 2)",
+            "fmm:pet/rain_bloom scale_toward(1, 1.25, 60, 4)", "fmm:pet/rain_bloom scale_toward(1.25, 1.25, 60, 4)",
             "fmm:pet/rain_bloom hover_point(L, 5)", "fmm:pet/rain_bloom distance_to(L)",
             "fmm:pet/rain_bloom steer_to(L, 0.126)",
             "fmm:pet/night_glow set_glow(15, lantern, glow)", "fmm:pet/night_glow clear_glow()",

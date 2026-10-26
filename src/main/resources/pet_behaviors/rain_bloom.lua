@@ -2,8 +2,8 @@
 -- anchor (the owner, or home when wild) drift_frequency times as often as the plain drift, rise blocks higher and
 -- speed_multiplier times as fast. It shrinks back when the rain stops or it finds cover.
 
--- How often the swelling takes a step, in ticks.
-local SWELL_TICKS = 2
+-- How often the swelling takes a step, in ticks: 15 steps over the default 3 seconds.
+local SWELL_TICKS = 4
 
 return ai.module {
     id = 'fmm:pet/rain_bloom', revision = 1,
