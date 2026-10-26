@@ -253,11 +253,11 @@ class ShippedPetModulesTest {
 
     /**
      * How often the runtime asks each shipped behavior, while stopped, whether it can start: every 4 ticks for an
-     * owner's commands and walk-offs, 5 for hover's bob between drifts, 10 for the rest. Pinned, so a typo cannot
-     * make stay or follow_owner wait seconds, or put a behavior back to asking every tick.
+     * owner's commands and walk-offs and for hover's bob between drifts, every 10 for the rest. Pinned, so a typo
+     * cannot make stay or follow_owner wait seconds, or put a behavior back to asking every tick.
      */
     private static final Map<String, Integer> PROBE_INTERVALS = Map.ofEntries(
-            Map.entry("fmm:pet/stay", 4), Map.entry("fmm:pet/follow_owner", 4), Map.entry("fmm:pet/hover", 5),
+            Map.entry("fmm:pet/stay", 4), Map.entry("fmm:pet/follow_owner", 4), Map.entry("fmm:pet/hover", 4),
             Map.entry("fmm:pet/migrate", 10), Map.entry("fmm:pet/campfire", 10), Map.entry("fmm:pet/day_perch", 10),
             Map.entry("fmm:pet/rain_bloom", 10), Map.entry("fmm:pet/drift", 10), Map.entry("fmm:pet/wander", 10),
             Map.entry("fmm:pet/swim", 10), Map.entry("fmm:pet/idle_look", 10));
