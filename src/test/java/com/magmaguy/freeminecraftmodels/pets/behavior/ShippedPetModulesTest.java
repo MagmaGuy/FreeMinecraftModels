@@ -6,6 +6,7 @@ import com.magmaguy.magmacore.ai.MindActuator;
 import com.magmaguy.magmacore.ai.MindBehavior;
 import com.magmaguy.magmacore.ai.MindBodyLocomotion;
 import com.magmaguy.magmacore.ai.MindContext;
+import com.magmaguy.magmacore.ai.MindControl;
 import com.magmaguy.magmacore.ai.MindMemoryView;
 import com.magmaguy.magmacore.ai.MindPerception;
 import com.magmaguy.magmacore.ai.MindProgram;
@@ -32,6 +33,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -102,6 +104,23 @@ class ShippedPetModulesTest {
             "fmm:pet/sting sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)",
             "fmm:pet/crop_drizzle drizzle(4, 0.1)",
             "fmm:pet/owner_effect owner_effect(NIGHT_VISION, 300, 0, 16)");
+    /**
+     * follow_owner's calls by where the owner is: the follow speed past the follow distance, times leash_urgency past
+     * the leash, only the catch-up teleport past the teleport distance, and nothing while the owner is near, away or
+     * wild. Failed steering also teleports, after stuck_ticks.
+     */
+    private static final Map<Owner, Set<String>> FOLLOW_CALLS = Map.of(
+            Owner.WILD, Set.of(), Owner.WITHIN_FOLLOW, Set.of(), Owner.AWAY, Set.of(),
+            Owner.PAST_FOLLOW, Set.of("trail_point(1.5, 2)", "steer_to(L, 0.375)", "teleport_near_owner(2)"),
+            Owner.PAST_LEASH, Set.of("trail_point(1.5, 2)", "steer_to(L, 0.6)", "teleport_near_owner(2)"),
+            Owner.PAST_TELEPORT, Set.of("teleport_near_owner(2)"));
+    /**
+     * The controls each leased c.pet method needs, as PetLuaTable documents them. A behavior holds its declared
+     * controls from just before its start until its stop returns, so start, can_continue, tick and stop hold them, and
+     * can_start and sensors hold none.
+     */
+    private static final Map<String, Set<MindControl>> LEASED = Map.of(
+            "steer_to", EnumSet.of(MindControl.MOVE, MindControl.LOOK), "stop", EnumSet.of(MindControl.MOVE));
     private static final Pattern PET_NAME = Pattern.compile("c\\.pet[.:]([a-z_]+)");
     private static final Pattern SPECIES_NAME = Pattern.compile("species\\.([a-z_]+)");
 
@@ -161,6 +180,12 @@ class ShippedPetModulesTest {
             unread.removeAll(coverage.names);
             assertEquals(Set.of(), unread, "every c.pet name a module's source uses is read on some path");
             assertEquals(new TreeSet<>(DEFAULT_CALLS), coverage.calls, "the shipped defaults pass the Java behaviors' arguments");
+            Map<Owner, Set<String>> expected = new EnumMap<>(Owner.class), follow = new EnumMap<>(Owner.class);
+            for (Owner owner : Owner.values()) {
+                expected.put(owner, new TreeSet<>(FOLLOW_CALLS.get(owner)));
+                follow.put(owner, coverage.calls(owner, "fmm:pet/follow_owner"));
+            }
+            assertEquals(expected, follow, "follow_owner's speed and teleport by where the owner is");
         }
         assertEquals(List.of(), warnings);
     }
@@ -241,13 +266,25 @@ class ShippedPetModulesTest {
     }
 
     /**
-     * What the runs reached: the c.pet names read, each distinct call with its module and arguments, and the behaviors
-     * and sensors whose callbacks ran.
+     * What the runs reached: the c.pet names read, each distinct call with its module and arguments, overall and by
+     * where the owner was, and the behaviors and sensors whose callbacks ran.
      */
     private static final class Coverage {
         final Set<String> names = new TreeSet<>(), calls = new TreeSet<>();
+        final Map<Owner, Set<String>> callsByOwner = new EnumMap<>(Owner.class);
         final Set<String> started = new TreeSet<>(), ticked = new TreeSet<>(), stopped = new TreeSet<>(),
                 sensed = new TreeSet<>();
+
+        void call(Owner owner, String call) {
+            calls.add(call);
+            callsByOwner.computeIfAbsent(owner, key -> new TreeSet<>()).add(call);
+        }
+
+        /** The calls a module made while the owner was there, without the module's name. */
+        Set<String> calls(Owner owner, String module) {
+            return callsByOwner.getOrDefault(owner, Set.of()).stream().filter(call -> call.startsWith(module + " "))
+                    .map(call -> call.substring(module.length() + 1)).collect(Collectors.toCollection(TreeSet::new));
+        }
     }
 
     /** Runs the program through every pet state crossed with each of the given ways the methods answer. */
@@ -270,6 +307,8 @@ class ShippedPetModulesTest {
     /**
      * One pet's life as the Mind runtime leads it: a behavior that can start starts and, the same tick, ticks while it
      * can continue; a sensor senses on its interval. Something else takes the body once, and the pet goes at the end.
+     * Each callback holds the controls the runtime would lease it: its behavior's from start to stop, none in can_start
+     * or a sensor.
      */
     private static void run(PetPrograms.Program program, StubPet pet, Coverage coverage) {
         Map<String, LuaTable> settings = new HashMap<>();
@@ -286,6 +325,7 @@ class ShippedPetModulesTest {
         for (long tick : TICKS) {
             pet.tick = tick;
             MindContext context = context(memory, tick);
+            pet.leases = null;
             for (MindSensor sensor : instance.sensors()) {
                 if (tick % sensor.intervalTicks() != 0) continue;
                 sensor.sense(context);
@@ -293,36 +333,42 @@ class ShippedPetModulesTest {
             }
             for (int index = 0; index < behaviors.size(); index++) {
                 MindBehavior behavior = behaviors.get(index);
+                pet.leases = null;
                 if (!running[index] && behavior.canStart(context)) {
+                    pet.leases = behavior.controls();
                     behavior.start(context);
                     running[index] = true;
                     coverage.started.add(behavior.identifier());
                 }
                 if (!running[index]) continue;
+                pet.leases = behavior.controls();
                 if (behavior.canContinue(context)) {
                     behavior.tick(context);
                     coverage.ticked.add(behavior.identifier());
                 } else {
-                    stop(behavior, context, MindStopReason.COMPLETED, coverage);
+                    stop(behavior, pet, context, MindStopReason.COMPLETED, coverage);
                     running[index] = false;
                 }
             }
-            if (tick == PREEMPT_AT) stopAll(behaviors, running, context, MindStopReason.PREEMPTED, coverage);
+            if (tick == PREEMPT_AT) stopAll(behaviors, running, pet, context, MindStopReason.PREEMPTED, coverage);
         }
         pet.tick = TICKS[TICKS.length - 1] + 1;
-        stopAll(behaviors, running, context(memory, pet.tick), MindStopReason.ENTITY_REMOVED, coverage);
+        stopAll(behaviors, running, pet, context(memory, pet.tick), MindStopReason.ENTITY_REMOVED, coverage);
     }
 
-    private static void stopAll(List<MindBehavior> behaviors, boolean[] running, MindContext context,
+    private static void stopAll(List<MindBehavior> behaviors, boolean[] running, StubPet pet, MindContext context,
                                 MindStopReason reason, Coverage coverage) {
         for (int index = 0; index < behaviors.size(); index++) {
             if (!running[index]) continue;
-            stop(behaviors.get(index), context, reason, coverage);
+            stop(behaviors.get(index), pet, context, reason, coverage);
             running[index] = false;
         }
     }
 
-    private static void stop(MindBehavior behavior, MindContext context, MindStopReason reason, Coverage coverage) {
+    /** The runtime stops a behavior before it releases the behavior's controls, so stop still holds them. */
+    private static void stop(MindBehavior behavior, StubPet pet, MindContext context, MindStopReason reason,
+                             Coverage coverage) {
+        pet.leases = behavior.controls();
         behavior.stop(context, reason);
         coverage.stopped.add(behavior.identifier());
     }
@@ -377,8 +423,9 @@ class ShippedPetModulesTest {
 
     /**
      * A strict c.pet with exactly PetLuaTable's names and the pet file's default species values. It raises on any other
-     * name, checks each method's arguments against the order and kinds PetLuaTable documents, and records every name
-     * read. Properties are read fresh and locations are fresh tables, as from the real one.
+     * name, checks each method's arguments against the order and kinds PetLuaTable documents and each leased method's
+     * controls against the running callback's, and records every name read. Properties are read fresh and locations
+     * are fresh tables, as from the real one.
      */
     private static final class StubPet {
         private record Method(String shape, Function<Varargs, LuaValue> something, LuaValue nothing) {
@@ -387,10 +434,13 @@ class ShippedPetModulesTest {
         final Owner owner;
         final boolean staying, night;
         final Answers answers;
-        final Set<String> read, calls;
+        final Coverage coverage;
+        final Set<String> read;
         long tick;
         /** The module whose callback runs, as the context extension names it. */
         String module = "";
+        /** The controls the running callback holds; null in can_start and sensors, which hold none. */
+        Set<MindControl> leases;
         LuaTable table;
 
         StubPet(Owner owner, boolean staying, boolean night, Answers answers, Coverage coverage) {
@@ -398,8 +448,8 @@ class ShippedPetModulesTest {
             this.staying = staying;
             this.night = night;
             this.answers = answers;
+            this.coverage = coverage;
             this.read = coverage.names;
-            this.calls = coverage.calls;
             Map<String, LuaValue> species = Map.of("id", LuaValue.valueOf("test"), "speed", LuaValue.valueOf(SPEED),
                     "hover_height", LuaValue.valueOf(HOVER_HEIGHT), "hover_variance", LuaValue.valueOf(0.75),
                     "roam_radius", LuaValue.valueOf(5), "follow_distance", LuaValue.valueOf(FOLLOW),
@@ -434,7 +484,7 @@ class ShippedPetModulesTest {
             properties.put("route_cruise", () -> LuaValue.valueOf(owner == Owner.WILD ? 0.3 : 0));
             assertEquals(PetLuaTable.PROPERTIES, properties.keySet(), "the stand-in's properties match PetLuaTable's");
 
-            // Shapes: L a location, N a finite number, C a cruise (a number that may be +infinity), T a list of text,
+            // Shapes: L a location, N a finite number, C a cruise (a number that may be infinite), T a list of text,
             // S text, s optional text, B true or false.
             Map<String, Method> methods = new HashMap<>();
             methods.put("steer_to", new Method("LC", args -> LuaValue.TRUE, LuaValue.FALSE));
@@ -515,10 +565,18 @@ class ShippedPetModulesTest {
                     // Called with a colon, the table itself comes first.
                     Varargs own = args.narg() > 0 && args.arg1() == table ? args.subargs(2) : args;
                     check(called, method.shape(), own);
-                    calls.add(module + " " + called + "(" + arguments(method.shape(), own) + ")");
+                    requireLeases("c.pet:" + called, LEASED.get(called));
+                    coverage.call(owner, module + " " + called + "(" + arguments(method.shape(), own) + ")");
                     return answersNothing(called) ? method.nothing() : method.something().apply(own);
                 }
             };
+        }
+
+        /** Raises, as the real call does, unless the running callback holds every control the call needs. */
+        void requireLeases(String call, Set<MindControl> needed) {
+            if (needed == null || (leases != null && leases.containsAll(needed))) return;
+            throw new LuaError(module + " called " + call + ", which needs " + needed + ", " + (leases == null
+                    ? "from can_start or a sensor, which hold no controls" : "from a behavior declaring only " + leases));
         }
 
         /** The arguments as the recorded call shows them: L for a location, numbers to 9 digits, lists in braces. */
@@ -551,8 +609,7 @@ class ShippedPetModulesTest {
                 boolean fits = switch (kind) {
                     case 'L' -> isLocation(value);
                     case 'N' -> value.type() == LuaValue.TNUMBER && Double.isFinite(value.todouble());
-                    case 'C' -> value.type() == LuaValue.TNUMBER && !Double.isNaN(value.todouble())
-                            && value.todouble() != Double.NEGATIVE_INFINITY;
+                    case 'C' -> value.type() == LuaValue.TNUMBER && !Double.isNaN(value.todouble());
                     case 'T' -> isTextList(value);
                     case 'S' -> value.type() == LuaValue.TSTRING;
                     case 's' -> value.isnil() || value.type() == LuaValue.TSTRING;
@@ -586,7 +643,7 @@ class ShippedPetModulesTest {
             return switch (kind) {
                 case 'L' -> "a location table";
                 case 'N' -> "a finite number";
-                case 'C' -> "a number that is not NaN or -infinity";
+                case 'C' -> "a number that is not NaN";
                 case 'T' -> "a list of text";
                 case 'S' -> "text";
                 case 's' -> "text or nil";
@@ -601,7 +658,10 @@ class ShippedPetModulesTest {
         }
     }
 
-    /** A Mind context at this tick whose memory really remembers, and whose other parts answer with plain defaults. */
+    /**
+     * A Mind context at this tick whose memory really remembers. c.perception and c.actuator fail on every call, since
+     * the shipped modules move through c.pet; the other parts answer with plain defaults.
+     */
     private static MindContext context(Map<Object, Object> memory, long tick) {
         MindMemoryView view = stub(MindMemoryView.class, (proxy, method, args) -> switch (method.getName()) {
             case "get" -> Optional.ofNullable(memory.get(args[0]));
@@ -611,8 +671,23 @@ class ShippedPetModulesTest {
             default -> null;
         });
         return new MindContext(stub(LivingEntity.class, ShippedPetModulesTest::plain), tick, 1L, view,
-                stub(MindPerception.class, ShippedPetModulesTest::plain), stub(MindActuator.class, ShippedPetModulesTest::plain),
+                stub(MindPerception.class, (proxy, method, args) -> unknown("c.perception", proxy, method, args)),
+                stub(MindActuator.class, (proxy, method, args) -> unknown("c.actuator", proxy, method, args)),
                 stub(MindActionRequester.class, ShippedPetModulesTest::plain));
+    }
+
+    /**
+     * A call the stand-in does not answer: it fails, so a shipped module that starts using it fails here until the
+     * stand-in checks it.
+     */
+    private static Object unknown(String part, Object proxy, java.lang.reflect.Method method, Object[] args) {
+        return switch (method.getName()) {
+            case "toString" -> part;
+            case "hashCode" -> System.identityHashCode(proxy);
+            case "equals" -> proxy == args[0];
+            default -> throw new AssertionError("The stand-in's " + part + " has no " + method.getName()
+                    + "; add it, checked, before a shipped module uses it");
+        };
     }
 
     private static Object plain(Object proxy, java.lang.reflect.Method method, Object[] args) {

@@ -167,14 +167,15 @@ class PetLuaTableTest {
     }
 
     @Test
-    void anInfiniteCruiseIsTheFlightCap() {
+    void anInfiniteCruiseIsClampedLikeAnyOther() {
         double cap = MindActuator.MAX_FLIGHT_SPEED;
         assertEquals(cap, PetLuaTable.cruise(args(LuaValue.valueOf(Double.POSITIVE_INFINITY)), 1));
         assertEquals(cap, PetLuaTable.cruise(args(LuaValue.valueOf(1e300)), 1));
         assertEquals(0.25D, PetLuaTable.cruise(args(LuaValue.valueOf(0.25)), 1));
         assertEquals(0D, PetLuaTable.cruise(args(LuaValue.valueOf(-5)), 1));
-        for (double refused : new double[]{Double.NaN, Double.NEGATIVE_INFINITY})
-            assertThrows(LuaError.class, () -> PetLuaTable.cruise(args(LuaValue.valueOf(refused)), 1));
+        assertEquals(0D, PetLuaTable.cruise(args(LuaValue.valueOf(-1e300)), 1));
+        assertEquals(0D, PetLuaTable.cruise(args(LuaValue.valueOf(Double.NEGATIVE_INFINITY)), 1));
+        assertThrows(LuaError.class, () -> PetLuaTable.cruise(args(LuaValue.valueOf(Double.NaN)), 1));
         assertThrows(LuaError.class, () -> PetLuaTable.cruise(args(LuaValue.NIL), 1));
     }
 
