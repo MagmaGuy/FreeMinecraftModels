@@ -1,7 +1,20 @@
--- Settled in water: swims to a spot near its anchor (the owner, or home when wild), between min_depth and max_depth
--- under the surface, rests a while, and goes again. It only picks spots in water. A swimmer stranded on land cannot
--- path anywhere, so it waits there; an owned one is back in water once its owner moves off and follow_owner's
--- catch-up teleport finds water beside them.
+-- In water: swims to a spot near its anchor (the owner, or home when wild), between min_depth and max_depth under the
+-- surface, rests a while, and goes again; follow_owner takes over whenever the owner gets past the follow distance. It
+-- only picks spots in water. A swimmer stranded on land cannot path anywhere, so it waits there; an owned one is back
+-- in water once its owner moves off and follow_owner's catch-up teleport finds water beside them.
+
+-- Within this many blocks of its spot a swim is over: native navigation stops about a block short of its goal, give
+-- or take a waypoint.
+local ARRIVED = 1.5
+
+-- How far from its anchor a swim may end: the roam radius around home, and for an owned pet no farther than 0.8 of
+-- the follow distance from its owner, so follow_owner does not take over the moment it arrives.
+local function trip_radius(c)
+    local species = c.pet.species
+    if c.pet.wild then return species.roam_radius end
+    return math.min(species.roam_radius, species.follow_distance * 0.8)
+end
+
 return ai.module {
     id = 'fmm:pet/swim', revision = 1,
     -- speed sets the swim: 4 x speed x the species speed multiplies the body type's own movement speed, never under a
@@ -22,7 +35,7 @@ return ai.module {
             can_continue = function(c)
                 local to = c.memory:get('swim_to')
                 if to == nil or c.tick >= (c.memory:get('swim_until') or 0) or c.pet.staying then return false end
-                if c.pet:distance_to(to) <= 1 then return false end
+                if c.pet:distance_to(to) <= ARRIVED then return false end
                 -- Not moving: no path reaches the spot, or the path ended short of it. Rest, then try another.
                 return (c.memory:get('swim_stuck') or 0) < c.settings.stuck_ticks
             end,
@@ -32,7 +45,7 @@ return ai.module {
                 if anchor == nil then return end
                 -- nil with no water near the anchor's height, or in an unloaded chunk: this swim ends at once, and its
                 -- rest decides when the next one looks.
-                local to = c.pet:water_point(anchor, c.pet.species.roam_radius, s.min_depth, s.max_depth)
+                local to = c.pet:water_point(anchor, trip_radius(c), s.min_depth, s.max_depth)
                 if to == nil then return end
                 c.memory:set('swim_to', to)
                 c.memory:set('swim_until', c.tick + s.swim_ticks)

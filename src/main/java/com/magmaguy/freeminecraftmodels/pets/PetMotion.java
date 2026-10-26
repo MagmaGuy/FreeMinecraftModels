@@ -182,20 +182,36 @@ public final class PetMotion {
         if (owner == null || owner.getWorld() != body.getWorld()) return false;
         Location at = owner.getLocation();
         MindBodyLocomotion locomotion = control.species().locomotion();
-        Location spot = switch (locomotion) {
-            case FLYING -> hoverPoint(control, at, radius);
-            case AQUATIC -> waterPoint(at, Math.max(radius, 6D), 0.5D, 2D);
-            case AMPHIBIOUS -> {
-                Location ground = groundPoint(at, radius);
-                yield ground != null ? ground : waterPoint(at, Math.max(radius, 6D), 0.5D, 2D);
-            }
-            default -> groundPoint(at, radius);
-        };
+        // Water is looked for at least 6 blocks out, since an owner on a shore or a boat may have none closer.
+        Location spot = restPoint(control, at, radius, Math.max(radius, 6D));
         if (spot == null || !loaded(spot) || !closesIn(at.distance(spot), at.distance(body.getLocation()))) return false;
         // Ground and water spots are built facing south, so they take the body's yaw; a hover point keeps the
         // owner's, as the Java follow did.
         if (locomotion != MindBodyLocomotion.FLYING) spot.setYaw(body.getLocation().getYaw());
         return body.teleport(spot);
+    }
+
+    /**
+     * A spot to rest within radius of center in the body's own medium: in its hover band when it flies, on standing
+     * ground when it walks or cannot move, 0.5 to 2 blocks under the water's surface when it swims, and on ground or
+     * else in water when it is amphibious. Null when nothing near center fits. A hover point in an unloaded chunk comes
+     * back at center's height, unchecked, as {@link #hoverPoint} gives it; the others are null there.
+     */
+    public static Location restPoint(PetControl control, Location center, double radius) {
+        return restPoint(control, center, radius, radius);
+    }
+
+    /** As {@link #restPoint(PetControl, Location, double)}, but looking for water within waterRadius. */
+    static Location restPoint(PetControl control, Location center, double radius, double waterRadius) {
+        return switch (control.species().locomotion()) {
+            case FLYING -> hoverPoint(control, center, radius);
+            case AQUATIC -> waterPoint(center, waterRadius, 0.5D, 2D);
+            case AMPHIBIOUS -> {
+                Location ground = groundPoint(center, radius);
+                yield ground != null ? ground : waterPoint(center, waterRadius, 0.5D, 2D);
+            }
+            default -> groundPoint(center, radius);
+        };
     }
 
     /** Whether a catch-up spot this far from the owner is worth it for a body this far: at least a block nearer. */

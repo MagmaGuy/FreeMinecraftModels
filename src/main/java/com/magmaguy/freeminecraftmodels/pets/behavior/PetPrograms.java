@@ -55,14 +55,15 @@ public final class PetPrograms {
     /**
      * The list a species without one runs, by how its body moves. A stationary body cannot path, so it does not
      * wander; follow_owner's catch-up teleport still keeps an owned one with its owner, and stay lets the owner
-     * manage it.
+     * manage it. It does not idle_look either: MagmaCore never ticks a stationary body's look control, so the look
+     * would search for players and turn nothing.
      */
     public static List<PetBehaviorEntry> defaults(MindBodyLocomotion locomotion) {
         List<String> names = switch (locomotion) {
             case FLYING -> List.of("migrate", "stay", "follow_owner", "drift", "hover");
             case AQUATIC -> List.of("stay", "follow_owner", "swim");
             case GROUNDED, AMPHIBIOUS -> List.of("stay", "follow_owner", "wander", "idle_look");
-            case STATIONARY -> List.of("stay", "follow_owner", "idle_look");
+            case STATIONARY -> List.of("stay", "follow_owner");
         };
         return names.stream().map(name -> new PetBehaviorEntry(name, Map.of())).toList();
     }

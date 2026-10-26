@@ -13,6 +13,7 @@ import com.magmaguy.magmacore.ai.MindProgram;
 import com.magmaguy.magmacore.ai.MindRunawayException;
 import com.magmaguy.magmacore.ai.MindSensor;
 import com.magmaguy.magmacore.ai.MindStopReason;
+import com.magmaguy.magmacore.scripting.tables.LuaLivingEntityTable;
 import com.magmaguy.shaded.luaj.vm2.LuaError;
 import com.magmaguy.shaded.luaj.vm2.LuaTable;
 import com.magmaguy.shaded.luaj.vm2.LuaValue;
@@ -20,18 +21,23 @@ import com.magmaguy.shaded.luaj.vm2.Varargs;
 import com.magmaguy.shaded.luaj.vm2.lib.ThreeArgFunction;
 import com.magmaguy.shaded.luaj.vm2.lib.TwoArgFunction;
 import com.magmaguy.shaded.luaj.vm2.lib.VarArgFunction;
+import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.Server;
 import org.bukkit.World;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -47,11 +53,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -90,11 +99,12 @@ class ShippedPetModulesTest {
      * slowness for 60 ticks at amplifier 0, no damage, a 60-tick cooldown and mobs within 0.5 blocks, players only for
      * a wild pet; a drizzle looks 4 blocks down at chance 0.1. owner_effect is new: night vision for 300 ticks within 16
      * blocks. So are the walking and swimming modules: a walk and a swim at 0.15 to a spot within the roam
-     * radius, the swim 0.5 to 3 blocks under the surface, and a look at the nearest player within 8 blocks.
+     * radius (an owned pet's within 0.8 of the follow distance), the swim 0.5 to 3 blocks under the surface, and a look
+     * at the nearest player within 8 blocks. stay bobs as before, now in the body's own medium.
      */
     private static final Set<String> DEFAULT_CALLS = Set.of(
             "fmm:pet/migrate route_target()", "fmm:pet/migrate steer_to(L, 0.3)", "fmm:pet/migrate stop()",
-            "fmm:pet/stay hover_point(L, 0.5)", "fmm:pet/stay steer_to(L, 0.045)", "fmm:pet/stay stop()",
+            "fmm:pet/stay rest_point(L, 0.5)", "fmm:pet/stay steer_to(L, 0.045)", "fmm:pet/stay stop()",
             "fmm:pet/follow_owner trail_point(1.5, 2)", "fmm:pet/follow_owner teleport_near_owner(2)",
             "fmm:pet/follow_owner steer_to(L, 0.375)", "fmm:pet/follow_owner steer_to(L, 0.6)",
             "fmm:pet/drift hover_point(L, 5)", "fmm:pet/drift distance_to(L)", "fmm:pet/drift steer_to(L, 0.09)",
@@ -112,11 +122,18 @@ class ShippedPetModulesTest {
             "fmm:pet/sting sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)",
             "fmm:pet/crop_drizzle drizzle(4, 0.1)",
             "fmm:pet/owner_effect owner_effect(NIGHT_VISION, 300, 0, 16)",
-            "fmm:pet/wander ground_point(L, 5)", "fmm:pet/wander distance_to(L)", "fmm:pet/wander steer_to(L, 0.225)",
-            "fmm:pet/wander stop()",
+            "fmm:pet/wander ground_point(L, 5)", "fmm:pet/wander ground_point(L, 4)", "fmm:pet/wander distance_to(L)",
+            "fmm:pet/wander steer_to(L, 0.225)", "fmm:pet/wander stop()",
             "fmm:pet/idle_look c.perception:nearest_player(8)", "fmm:pet/idle_look c.actuator:look_at(L)",
-            "fmm:pet/swim water_point(L, 5, 0.5, 3)", "fmm:pet/swim distance_to(L)", "fmm:pet/swim steer_to(L, 0.225)",
-            "fmm:pet/swim stop()");
+            "fmm:pet/swim water_point(L, 5, 0.5, 3)", "fmm:pet/swim water_point(L, 4, 0.5, 3)",
+            "fmm:pet/swim distance_to(L)", "fmm:pet/swim steer_to(L, 0.225)", "fmm:pet/swim stop()");
+    /**
+     * wander's and swim's calls by where the owner is: a wild pet's trips end within the roam radius of home, an owned
+     * one's within 0.8 of the follow distance of its owner (4 of 5 here), so follow_owner does not take over as soon as
+     * it arrives. With the owner away there is no anchor, and no trip.
+     */
+    private static final Map<Owner, Set<String>> WANDER_CALLS = trips("ground_point(L, 5)", "ground_point(L, 4)"),
+            SWIM_CALLS = trips("water_point(L, 5, 0.5, 3)", "water_point(L, 4, 0.5, 3)");
     /**
      * follow_owner's calls by where the owner is: the follow speed past the follow distance, times leash_urgency past
      * the leash, only the catch-up teleport past the teleport distance, and nothing while the owner is near, away or
@@ -146,8 +163,8 @@ class ShippedPetModulesTest {
     private static final Map<String, Set<MindControl>> LEASED = Map.of(
             "steer_to", EnumSet.of(MindControl.MOVE, MindControl.LOOK), "stop", EnumSet.of(MindControl.MOVE));
     /**
-     * The world of the pet's body. The stand-in player's locations name no world, since MagmaCore would ask Bukkit,
-     * which has no server here, for a named one; a location without one is taken to be in the body's world, this one.
+     * The world of the pet's body and the stand-in player, named world. MagmaCore looks up the world a location table
+     * names through Bukkit, so the class installs a stand-in server that answers it.
      */
     private static final World WORLD = stub(World.class, (proxy, method, args) ->
             method.getName().equals("getName") ? "world" : unknown("the world", proxy, method, args));
@@ -159,10 +176,12 @@ class ShippedPetModulesTest {
         case "getUniqueId" -> new UUID(0L, 1L);
         case "getType" -> EntityType.PLAYER;
         case "getGameMode" -> GameMode.SURVIVAL;
-        case "getLocation" -> new Location(null, 3.5, 70, 0.5);
-        case "getEyeLocation" -> new Location(null, 3.5, 71.62, 0.5);
+        case "getLocation" -> new Location(WORLD, 3.5, 70, 0.5);
+        case "getEyeLocation" -> new Location(WORLD, 3.5, 71.62, 0.5);
         default -> unknown("the player", proxy, method, args);
     });
+    /** Whether this class installed the stand-in Bukkit server, so it removes it when done. */
+    private static boolean installedServer;
     private static final Pattern PET_NAME = Pattern.compile("c\\.pet[.:]([a-z_]+)");
     private static final Pattern SPECIES_NAME = Pattern.compile("species\\.([a-z_]+)");
 
@@ -170,15 +189,49 @@ class ShippedPetModulesTest {
     Path folder;
     private final List<String> warnings = new ArrayList<>();
 
+    /**
+     * Installs a stand-in Bukkit server when there is none, for the world a location table names, then warms up. A
+     * cold JVM links MagmaCore's Lua tables on their first use, which can take longer than the 20 ms CPU limit of the
+     * callback that first uses them. So this builds the player table nearest_player returns, outside any limit, and
+     * lives one pet's life through every shipped module before any checked run.
+     */
+    @BeforeAll
+    static void setUp(@TempDir Path folder) {
+        if (Bukkit.getServer() == null) {
+            Bukkit.setServer(stub(Server.class, (proxy, method, args) -> switch (method.getName()) {
+                case "getWorld" -> "world".equals(args[0]) ? WORLD : null;
+                case "getLogger" -> Logger.getLogger("FMM-shipped-pet-modules-test");
+                case "getBukkitVersion" -> "26.3-R0.1-SNAPSHOT";
+                default -> plain(proxy, method, args);
+            }));
+            installedServer = true;
+        }
+        LuaLivingEntityTable.build(PLAYER);
+        warmUp(folder);
+    }
+
+    @AfterAll
+    static void tearDown() throws ReflectiveOperationException {
+        if (!installedServer) return;
+        Field server = Bukkit.class.getDeclaredField("server");
+        server.setAccessible(true);
+        server.set(null, null);
+        installedServer = false;
+    }
+
     private PetBehaviorCatalog catalog() {
+        return load(folder, warnings::add);
+    }
+
+    private static PetBehaviorCatalog load(Path folder, Consumer<String> warn) {
         return PetBehaviorCatalog.load(folder, PetBehaviorCatalog.DEFAULTS, name -> {
-            try (InputStream in = getClass().getResourceAsStream("/pet_behaviors/" + name + ".lua")) {
+            try (InputStream in = ShippedPetModulesTest.class.getResourceAsStream("/pet_behaviors/" + name + ".lua")) {
                 if (in == null) throw new IllegalStateException("No resource for the default " + name);
                 Files.copy(in, folder.resolve(name + ".lua"));
             } catch (IOException failure) {
                 throw new UncheckedIOException(failure);
             }
-        }, warnings::add);
+        }, warn);
     }
 
     @Test
@@ -229,6 +282,20 @@ class ShippedPetModulesTest {
                             owner + ", " + stuck + ": a pet that gets nowhere catches up");
             }
             assertCallsByOwner(STING_CALLS, coverage, "fmm:pet/sting", "sting's victims by whether the pet is wild");
+            assertCallsByOwner(WANDER_CALLS, coverage, "fmm:pet/wander", "wander's spots by whether the pet is wild");
+            assertCallsByOwner(SWIM_CALLS, coverage, "fmm:pet/swim", "swim's spots by whether the pet is wild");
+            // idle_look finds the player again every 5 ticks while it looks, and with nobody near searches every 20.
+            assertEquals(20L, coverage.closestSearches.get(Answers.NOTHING), "idle_look's searches with nobody near");
+            assertEquals(5L, coverage.closestSearches.values().stream().min(Long::compare).orElseThrow(),
+                    "idle_look's closest searches");
+            // A trip that gets nowhere gives up after stuck_ticks (20), long before its 120-tick timeout; a moving one
+            // runs on.
+            for (String module : List.of("fmm:pet/wander", "fmm:pet/swim")) {
+                Map<Answers, Integer> trips = coverage.longestTrips.getOrDefault(module, Map.of());
+                for (Answers stuck : List.of(Answers.STEER_FAILS, Answers.STUCK))
+                    assertEquals(20, trips.get(stuck), module + ", " + stuck + ": steer_to calls in the longest trip");
+                assertTrue(trips.getOrDefault(Answers.SOMETHING, 0) > 20, module + ": a moving trip runs past 20");
+            }
         }
         assertEquals(List.of(), warnings);
     }
@@ -272,6 +339,15 @@ class ShippedPetModulesTest {
                 assertEquals(value, program.settings().get(module).get(setting), label + ": " + module + "." + setting)));
         // Flickering answers reach the nothing paths and failed steering too, at half the cost of every mode.
         exercise(program, EnumSet.of(Answers.SOMETHING, Answers.FLICKER));
+    }
+
+    /** A trip module's calls by where the owner is, from how it searches for a wild pet's spot and an owned one's. */
+    private static Map<Owner, Set<String>> trips(String wild, String owned) {
+        Map<Owner, Set<String>> calls = new EnumMap<>(Owner.class);
+        for (Owner owner : Owner.values())
+            calls.put(owner, owner == Owner.AWAY ? Set.of() : Set.of(owner == Owner.WILD ? wild : owned,
+                    "distance_to(L)", "steer_to(L, 0.225)", "stop()"));
+        return calls;
     }
 
     /** A module's calls by where the owner is, against the expected ones. */
@@ -342,13 +418,25 @@ class ShippedPetModulesTest {
 
     /**
      * What the runs reached: the c.pet names read, each distinct call with its module and arguments, overall and by
-     * where the owner was and how the methods answered, and the behaviors and sensors whose callbacks ran.
+     * where the owner was and how the methods answered, and the behaviors and sensors whose callbacks ran. Also, by
+     * how the methods answered, the fewest ticks between two nearest_player calls in one pet's life, and by module the
+     * most steer_to calls in one trip (from its first steer_to to its stop()).
      */
     private static final class Coverage {
         final Set<String> names = new TreeSet<>(), calls = new TreeSet<>();
         final Map<Owner, Map<Answers, Set<String>>> callsByState = new EnumMap<>(Owner.class);
         final Set<String> started = new TreeSet<>(), ticked = new TreeSet<>(), stopped = new TreeSet<>(),
                 sensed = new TreeSet<>();
+        final Map<Answers, Long> closestSearches = new EnumMap<>(Answers.class);
+        final Map<String, Map<Answers, Integer>> longestTrips = new TreeMap<>();
+
+        void search(Answers answers, long gap) {
+            closestSearches.merge(answers, gap, Math::min);
+        }
+
+        void trip(String module, Answers answers, int steers) {
+            longestTrips.computeIfAbsent(module, key -> new EnumMap<>(Answers.class)).merge(answers, steers, Math::max);
+        }
 
         void call(Owner owner, Answers answers, String call) {
             calls.add(call);
@@ -373,7 +461,6 @@ class ShippedPetModulesTest {
 
     /** Runs the program through every pet state crossed with each of the given ways the methods answer. */
     private static Coverage exercise(PetPrograms.Program program, Set<Answers> modes) {
-        warmUp(program);
         Coverage coverage = new Coverage();
         for (Owner owner : Owner.values())
             for (boolean staying : new boolean[]{false, true})
@@ -390,24 +477,31 @@ class ShippedPetModulesTest {
     }
 
     /**
-     * Lives one pet's life with every method finding something, again whenever the Lua runaway limit stops it, so the
-     * checked runs start warm. A cold JVM links MagmaCore's context and entity tables on their first use, inside the
-     * first callbacks' 20 ms CPU limit, and can overrun it once per table; a module that overruns it warm still fails.
+     * Lives one pet's life through every shipped module, with every method finding something. MagmaCore's context
+     * tables still link inside the first callbacks' limits, so a time limit stopping it is tried again; the instruction
+     * limit counts the same however warm the JVM is, and fails at once, as does anything else.
      */
-    private static void warmUp(PetPrograms.Program program) {
-        for (int attempt = 1; ; attempt++) {
-            Coverage ignored = new Coverage();
-            StubPet pet = new StubPet(Owner.PAST_FOLLOW, false, true, Answers.SOMETHING, ignored);
-            try {
-                run(program, pet, ignored);
-                return;
-            } catch (MindRunawayException coldStart) {
-                if (attempt < 8) continue;
-                throw new AssertionError("Warming up, " + pet + ", tick " + pet.tick + ": " + coldStart.getMessage(),
-                        coldStart);
-            } catch (RuntimeException | AssertionError failure) {
-                throw new AssertionError("Warming up, " + pet + ", tick " + pet.tick + ": " + failure.getMessage(),
-                        failure);
+    private static void warmUp(Path folder) {
+        try (PetBehaviorCatalog catalog = load(folder, warning -> {
+        })) {
+            PetPrograms.Program everything = new PetPrograms(catalog, warning -> {
+            }).program("warm-up", "everything", PetBehaviorCatalog.DEFAULTS.stream()
+                    .map(name -> new PetBehaviorEntry(name, Map.of())).toList(), "warm-up");
+            for (int attempt = 1; ; attempt++) {
+                Coverage ignored = new Coverage();
+                StubPet pet = new StubPet(Owner.PAST_FOLLOW, false, true, Answers.SOMETHING, ignored);
+                try {
+                    run(everything, pet, ignored);
+                    return;
+                } catch (MindRunawayException runaway) {
+                    String why = String.valueOf(runaway.getMessage());
+                    boolean timed = why.startsWith("Lua CPU-time budget exceeded") || why.startsWith("Lua elapsed-time");
+                    if (timed && attempt < 8) continue;
+                    throw new AssertionError("Warming up, " + pet + ", tick " + pet.tick + ": " + why, runaway);
+                } catch (RuntimeException | AssertionError failure) {
+                    throw new AssertionError("Warming up, " + pet + ", tick " + pet.tick + ": " + failure.getMessage(),
+                            failure);
+                }
             }
         }
     }
@@ -416,7 +510,8 @@ class ShippedPetModulesTest {
      * One pet's life as the Mind runtime leads it: a behavior that can start starts and, the same tick, ticks while it
      * can continue; a sensor senses on its interval. Something else takes the body once, and the pet goes at the end.
      * Each callback holds the controls the runtime would lease it: its behavior's from start to stop, none in can_start
-     * or a sensor.
+     * or a sensor. It does not arbitrate between behaviors: every behavior that can start runs, beside any other
+     * holding the same controls, so priorities and the pre-emption they cause are not exercised here.
      */
     private static void run(PetPrograms.Program program, StubPet pet, Coverage coverage) {
         Map<String, LuaTable> settings = new HashMap<>();
@@ -554,6 +649,10 @@ class ShippedPetModulesTest {
         final LivingEntity body;
         final MindPerception perception;
         final MindActuator actuator;
+        /** The tick of the last nearest_player call, or -1 before the first. */
+        private long lastSearch = -1;
+        /** The steer_to calls of each module's trip in progress. */
+        private final Map<String, Integer> tripSteers = new HashMap<>();
 
         StubPet(Owner owner, boolean staying, boolean night, Answers answers, Coverage coverage) {
             this.owner = owner;
@@ -572,6 +671,8 @@ class ShippedPetModulesTest {
                     throw new IllegalArgumentException("maxDistance must be finite and positive, got " + range);
                 coverage.call(owner, answers,
                         module + " c.perception:nearest_player(" + shown(LuaValue.valueOf(range)) + ")");
+                if (lastSearch >= 0) coverage.search(answers, tick - lastSearch);
+                lastSearch = tick;
                 return answersNothing("nearest_player") ? Optional.empty() : Optional.of(PLAYER);
             });
             // Only look_at, which needs the LOOK lease and a finite point in the body's world, as the native one does.
@@ -625,6 +726,7 @@ class ShippedPetModulesTest {
             methods.put("steer_to", new Method("LC", args -> LuaValue.TRUE, LuaValue.FALSE));
             methods.put("stop", new Method("", args -> LuaValue.NIL, LuaValue.NIL));
             methods.put("hover_point", new Method("LN", args -> shifted(args.arg1(), 1, 0), LuaValue.NIL));
+            methods.put("rest_point", new Method("LN", args -> shifted(args.arg1(), 1, 0), LuaValue.NIL));
             methods.put("ground_below", new Method("LN",
                     args -> LuaValue.valueOf(args.arg1().get("y").todouble() - (tick / 30 % 2 == 0 ? 2 : 10)), LuaValue.NIL));
             methods.put("ground_point", new Method("LN", args -> shifted(args.arg1(), 1, 0), LuaValue.NIL));
@@ -702,6 +804,12 @@ class ShippedPetModulesTest {
                     check(called, method.shape(), own);
                     requireLeases("c.pet:" + called, LEASED.get(called));
                     coverage.call(owner, answers, module + " " + called + "(" + arguments(method.shape(), own) + ")");
+                    if (called.equals("steer_to")) {
+                        tripSteers.merge(module, 1, Integer::sum);
+                    } else if (called.equals("stop")) {
+                        Integer steers = tripSteers.remove(module);
+                        if (steers != null) coverage.trip(module, answers, steers);
+                    }
                     return answersNothing(called) ? method.nothing() : method.something().apply(own);
                 }
             };
