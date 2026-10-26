@@ -31,6 +31,7 @@ permissions:
       freeminecraftmodels.disguise.self: true
       freeminecraftmodels.disguise.others: true
       freeminecraftmodels.bypassregionprotection: true
+      freeminecraftmodels.pets.admin: true
   freeminecraftmodels.admin:
     description: Allows access to the admin content browser
     default: op
@@ -52,3 +53,9 @@ permissions:
   freeminecraftmodels.shop:
     description: Allows access to the furniture shop
     default: true
+  freeminecraftmodels.pets:
+    description: Allows opening your pets menu with /fmm pets
+    default: true
+  freeminecraftmodels.pets.admin:
+    description: Allows /fmm petadmin and /fmm petmigrate
+    default: op
