@@ -10,6 +10,7 @@ import com.magmaguy.magmacore.ai.MindControl;
 import com.magmaguy.magmacore.ai.MindMemoryView;
 import com.magmaguy.magmacore.ai.MindPerception;
 import com.magmaguy.magmacore.ai.MindProgram;
+import com.magmaguy.magmacore.ai.MindRunawayException;
 import com.magmaguy.magmacore.ai.MindSensor;
 import com.magmaguy.magmacore.ai.MindStopReason;
 import com.magmaguy.shaded.luaj.vm2.LuaError;
@@ -19,7 +20,12 @@ import com.magmaguy.shaded.luaj.vm2.Varargs;
 import com.magmaguy.shaded.luaj.vm2.lib.ThreeArgFunction;
 import com.magmaguy.shaded.luaj.vm2.lib.TwoArgFunction;
 import com.magmaguy.shaded.luaj.vm2.lib.VarArgFunction;
+import org.bukkit.GameMode;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -42,6 +48,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -51,21 +58,19 @@ import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Runs the shipped pet behavior modules against a strict stand-in for c.pet. Every default list that ships must build,
- * and every module runs through each pet state the stand-in plays and each way its methods answer, including the
- * "nothing" each one documents. Reading a name c.pet or c.settings lacks, passing a method arguments of the wrong
- * shape, or failing on a nothing answer or an extreme setting fails here.
+ * Runs the shipped pet behavior modules against a strict stand-in for c.pet, and for the parts of c.perception and
+ * c.actuator they use. Every locomotion's default list must build, and every module runs through each pet state the
+ * stand-in plays and each way its methods answer, including the "nothing" each one documents. Reading a name c.pet or
+ * c.settings lacks, passing a method arguments of the wrong shape, calling a leased method without its controls, or
+ * failing on a nothing answer or an extreme setting fails here.
  */
 class ShippedPetModulesTest {
-    /** Modules a locomotion's default list names that ship in a later task. */
-    private static final Set<String> NOT_YET_SHIPPED = Set.of("wander", "idle_look", "swim");
     /**
      * The game ticks a pet lives through: every tick to 119, past every stuck threshold (follow_owner's 60 is the
-     * longest), every bob, re-check and ring step, and the 100-tick retries; then jumps of 40 to 480, past rain_bloom's
-     * 120-tick and drift's 160-tick timeouts and every rest.
+     * longest), every bob, re-check and ring step, and the 100-tick retries; then jumps of 40 to 480, past the 120-tick
+     * timeouts of rain_bloom, wander and swim, drift's 160, and every rest.
      */
     private static final long[] TICKS = LongStream.concat(LongStream.range(0, 120),
             LongStream.rangeClosed(4, 12).map(step -> step * 40)).toArray();
@@ -81,7 +86,8 @@ class ShippedPetModulesTest {
      * own route cruise. The glow is light 15 on the lantern bone's glow animation at night and none by day; a sting is
      * slowness for 60 ticks at amplifier 0, no damage, a 60-tick cooldown and mobs within 0.5 blocks, players only for
      * a wild pet; a drizzle looks 4 blocks down at chance 0.1. owner_effect is new: night vision for 300 ticks within 16
-     * blocks.
+     * blocks. So are the walking and swimming modules: a walk at 0.15 and a swim at 0.1 to a spot within the roam
+     * radius, the swim 0.5 to 3 blocks under the surface, and a look at the nearest player within 8 blocks.
      */
     private static final Set<String> DEFAULT_CALLS = Set.of(
             "fmm:pet/migrate route_target()", "fmm:pet/migrate steer_to(L, 0.3)", "fmm:pet/migrate stop()",
@@ -103,7 +109,12 @@ class ShippedPetModulesTest {
             "fmm:pet/sting sting_contacts(false, SLOWNESS, 60, 0, 0, 60)",
             "fmm:pet/sting sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)",
             "fmm:pet/crop_drizzle drizzle(4, 0.1)",
-            "fmm:pet/owner_effect owner_effect(NIGHT_VISION, 300, 0, 16)");
+            "fmm:pet/owner_effect owner_effect(NIGHT_VISION, 300, 0, 16)",
+            "fmm:pet/wander ground_point(L, 5)", "fmm:pet/wander distance_to(L)", "fmm:pet/wander steer_to(L, 0.225)",
+            "fmm:pet/wander stop()",
+            "fmm:pet/idle_look c.perception:nearest_player(8)", "fmm:pet/idle_look c.actuator:look_at(L)",
+            "fmm:pet/swim water_point(L, 5, 0.5, 3)", "fmm:pet/swim distance_to(L)", "fmm:pet/swim steer_to(L, 0.15)",
+            "fmm:pet/swim stop()");
     /**
      * follow_owner's calls by where the owner is: the follow speed past the follow distance, times leash_urgency past
      * the leash, only the catch-up teleport past the teleport distance, and nothing while the owner is near, away or
@@ -121,6 +132,24 @@ class ShippedPetModulesTest {
      */
     private static final Map<String, Set<MindControl>> LEASED = Map.of(
             "steer_to", EnumSet.of(MindControl.MOVE, MindControl.LOOK), "stop", EnumSet.of(MindControl.MOVE));
+    /**
+     * The world of the pet's body. The stand-in player's locations name no world, since MagmaCore would ask Bukkit,
+     * which has no server here, for a named one; a location without one is taken to be in the body's world, this one.
+     */
+    private static final World WORLD = stub(World.class, (proxy, method, args) ->
+            method.getName().equals("getName") ? "world" : unknown("the world", proxy, method, args));
+    /**
+     * The player c.perception:nearest_player finds, 3 blocks from the pet. It answers what MagmaCore reads to build its
+     * entity table, and where it stands and looks from; anything else a module asks of it fails.
+     */
+    private static final Player PLAYER = stub(Player.class, (proxy, method, args) -> switch (method.getName()) {
+        case "getUniqueId" -> new UUID(0L, 1L);
+        case "getType" -> EntityType.PLAYER;
+        case "getGameMode" -> GameMode.SURVIVAL;
+        case "getLocation" -> new Location(null, 3.5, 70, 0.5);
+        case "getEyeLocation" -> new Location(null, 3.5, 71.62, 0.5);
+        default -> unknown("the player", proxy, method, args);
+    });
     private static final Pattern PET_NAME = Pattern.compile("c\\.pet[.:]([a-z_]+)");
     private static final Pattern SPECIES_NAME = Pattern.compile("species\\.([a-z_]+)");
 
@@ -151,20 +180,15 @@ class ShippedPetModulesTest {
     void everyDefaultListRunsEveryPath() throws IOException {
         try (PetBehaviorCatalog catalog = catalog()) {
             PetPrograms programs = new PetPrograms(catalog, warnings::add);
-            // Task 16 (when wander, idle_look and swim ship) drops NOT_YET_SHIPPED, so every locomotion is exercised.
-            List<MindBodyLocomotion> exercised = new ArrayList<>();
             for (MindBodyLocomotion locomotion : MindBodyLocomotion.values()) {
                 Set<String> missing = PetPrograms.defaults(locomotion).stream().map(PetBehaviorEntry::module)
                         .filter(name -> !PetBehaviorCatalog.DEFAULTS.contains(name)).collect(Collectors.toSet());
-                assertTrue(NOT_YET_SHIPPED.containsAll(missing),
-                        locomotion + "'s default list names " + missing + ", which no shipped module or later task provides");
-                if (!missing.isEmpty()) continue;
-                // Each module's every path runs in the full list below; this shows the list builds and runs.
+                assertEquals(Set.of(), missing, locomotion + "'s default list names modules that do not ship");
+                // Each module's every path runs in the full list below; this shows each list builds and runs, a
+                // stationary body's always failing steering included.
                 exercise(programs.program("test", locomotion.name(), PetPrograms.defaults(locomotion), locomotion.name()),
-                        EnumSet.of(Answers.SOMETHING));
-                exercised.add(locomotion);
+                        EnumSet.allOf(Answers.class));
             }
-            assertTrue(exercised.contains(MindBodyLocomotion.FLYING), "the flying list ships, so it is exercised");
 
             PetPrograms.Program everything = programs.program("test", "everything", PetBehaviorCatalog.DEFAULTS.stream()
                     .map(name -> new PetBehaviorEntry(name, Map.of())).toList(), "everything");
@@ -289,6 +313,7 @@ class ShippedPetModulesTest {
 
     /** Runs the program through every pet state crossed with each of the given ways the methods answer. */
     private static Coverage exercise(PetPrograms.Program program, Set<Answers> modes) {
+        warmUp(program);
         Coverage coverage = new Coverage();
         for (Owner owner : Owner.values())
             for (boolean staying : new boolean[]{false, true})
@@ -302,6 +327,29 @@ class ShippedPetModulesTest {
                         }
                     }
         return coverage;
+    }
+
+    /**
+     * Lives one pet's life with every method finding something, again whenever the Lua runaway limit stops it, so the
+     * checked runs start warm. A cold JVM links MagmaCore's context and entity tables on their first use, inside the
+     * first callbacks' 20 ms CPU limit, and can overrun it once per table; a module that overruns it warm still fails.
+     */
+    private static void warmUp(PetPrograms.Program program) {
+        for (int attempt = 1; ; attempt++) {
+            Coverage ignored = new Coverage();
+            StubPet pet = new StubPet(Owner.PAST_FOLLOW, false, true, Answers.SOMETHING, ignored);
+            try {
+                run(program, pet, ignored);
+                return;
+            } catch (MindRunawayException coldStart) {
+                if (attempt < 8) continue;
+                throw new AssertionError("Warming up, " + pet + ", tick " + pet.tick + ": " + coldStart.getMessage(),
+                        coldStart);
+            } catch (RuntimeException | AssertionError failure) {
+                throw new AssertionError("Warming up, " + pet + ", tick " + pet.tick + ": " + failure.getMessage(),
+                        failure);
+            }
+        }
     }
 
     /**
@@ -324,7 +372,7 @@ class ShippedPetModulesTest {
         boolean[] running = new boolean[behaviors.size()];
         for (long tick : TICKS) {
             pet.tick = tick;
-            MindContext context = context(memory, tick);
+            MindContext context = context(memory, tick, pet);
             pet.leases = null;
             for (MindSensor sensor : instance.sensors()) {
                 if (tick % sensor.intervalTicks() != 0) continue;
@@ -353,7 +401,7 @@ class ShippedPetModulesTest {
             if (tick == PREEMPT_AT) stopAll(behaviors, running, pet, context, MindStopReason.PREEMPTED, coverage);
         }
         pet.tick = TICKS[TICKS.length - 1] + 1;
-        stopAll(behaviors, running, pet, context(memory, pet.tick), MindStopReason.ENTITY_REMOVED, coverage);
+        stopAll(behaviors, running, pet, context(memory, pet.tick, pet), MindStopReason.ENTITY_REMOVED, coverage);
     }
 
     private static void stopAll(List<MindBehavior> behaviors, boolean[] running, StubPet pet, MindContext context,
@@ -425,7 +473,8 @@ class ShippedPetModulesTest {
      * A strict c.pet with exactly PetLuaTable's names and the pet file's default species values. It raises on any other
      * name, checks each method's arguments against the order and kinds PetLuaTable documents and each leased method's
      * controls against the running callback's, and records every name read. Properties are read fresh and locations
-     * are fresh tables, as from the real one.
+     * are fresh tables, as from the real one. It also stands in for the pet's body, and for the c.perception and
+     * c.actuator calls the shipped modules make, checked as strictly.
      */
     private static final class StubPet {
         private record Method(String shape, Function<Varargs, LuaValue> something, LuaValue nothing) {
@@ -442,6 +491,9 @@ class ShippedPetModulesTest {
         /** The controls the running callback holds; null in can_start and sensors, which hold none. */
         Set<MindControl> leases;
         LuaTable table;
+        final LivingEntity body;
+        final MindPerception perception;
+        final MindActuator actuator;
 
         StubPet(Owner owner, boolean staying, boolean night, Answers answers, Coverage coverage) {
             this.owner = owner;
@@ -450,6 +502,28 @@ class ShippedPetModulesTest {
             this.answers = answers;
             this.coverage = coverage;
             this.read = coverage.names;
+            body = stub(LivingEntity.class, (proxy, method, args) ->
+                    method.getName().equals("getWorld") ? WORLD : plain(proxy, method, args));
+            // Only nearest_player, which refuses a range that is not finite and positive, as the native one does.
+            perception = stub(MindPerception.class, (proxy, method, args) -> {
+                if (!method.getName().equals("nearestPlayer")) return unknown("c.perception", proxy, method, args);
+                double range = (double) args[0];
+                if (!Double.isFinite(range) || range <= 0)
+                    throw new IllegalArgumentException("maxDistance must be finite and positive, got " + range);
+                coverage.call(owner, module + " c.perception:nearest_player(" + shown(LuaValue.valueOf(range)) + ")");
+                return answersNothing("nearest_player") ? Optional.empty() : Optional.of(PLAYER);
+            });
+            // Only look_at, which needs the LOOK lease and a finite point in the body's world, as the native one does.
+            actuator = stub(MindActuator.class, (proxy, method, args) -> {
+                if (!method.getName().equals("lookAt")) return unknown("c.actuator", proxy, method, args);
+                requireLeases("c.actuator:look_at", EnumSet.of(MindControl.LOOK));
+                Location at = (Location) args[0];
+                if (at.getWorld() != WORLD || !Double.isFinite(at.getX()) || !Double.isFinite(at.getY())
+                        || !Double.isFinite(at.getZ()))
+                    throw new LuaError(module + " looked at " + at + ", not a finite point in the body's world");
+                coverage.call(owner, module + " c.actuator:look_at(L)");
+                return null;
+            });
             Map<String, LuaValue> species = Map.of("id", LuaValue.valueOf("test"), "speed", LuaValue.valueOf(SPEED),
                     "hover_height", LuaValue.valueOf(HOVER_HEIGHT), "hover_variance", LuaValue.valueOf(0.75),
                     "roam_radius", LuaValue.valueOf(5), "follow_distance", LuaValue.valueOf(FOLLOW),
@@ -586,8 +660,7 @@ class ShippedPetModulesTest {
                 LuaValue value = args.arg(index + 1);
                 shown.add(switch (shape.charAt(index)) {
                     case 'L' -> "L";
-                    case 'N', 'C' -> Double.isFinite(value.todouble()) ? new BigDecimal(value.todouble())
-                            .round(new MathContext(9)).stripTrailingZeros().toPlainString() : value.tojstring();
+                    case 'N', 'C' -> shown(value);
                     case 'T' -> {
                         List<String> entries = new ArrayList<>();
                         for (int entry = 1; entry <= value.checktable().rawlen(); entry++)
@@ -598,6 +671,13 @@ class ShippedPetModulesTest {
                 });
             }
             return String.join(", ", shown);
+        }
+
+        /** A number as a recorded call shows it, to 9 digits. */
+        private static String shown(LuaValue number) {
+            double value = number.todouble();
+            return Double.isFinite(value) ? new BigDecimal(value).round(new MathContext(9)).stripTrailingZeros()
+                    .toPlainString() : number.tojstring();
         }
 
         private static void check(String name, String shape, Varargs args) {
@@ -659,10 +739,10 @@ class ShippedPetModulesTest {
     }
 
     /**
-     * A Mind context at this tick whose memory really remembers. c.perception and c.actuator fail on every call, since
-     * the shipped modules move through c.pet; the other parts answer with plain defaults.
+     * A Mind context at this tick whose memory really remembers, with the pet's body, c.perception and c.actuator; its
+     * other parts answer with plain defaults.
      */
-    private static MindContext context(Map<Object, Object> memory, long tick) {
+    private static MindContext context(Map<Object, Object> memory, long tick, StubPet pet) {
         MindMemoryView view = stub(MindMemoryView.class, (proxy, method, args) -> switch (method.getName()) {
             case "get" -> Optional.ofNullable(memory.get(args[0]));
             case "set" -> memory.put(args[0], args[1]);
@@ -670,9 +750,7 @@ class ShippedPetModulesTest {
             case "contains" -> memory.containsKey(args[0]);
             default -> null;
         });
-        return new MindContext(stub(LivingEntity.class, ShippedPetModulesTest::plain), tick, 1L, view,
-                stub(MindPerception.class, (proxy, method, args) -> unknown("c.perception", proxy, method, args)),
-                stub(MindActuator.class, (proxy, method, args) -> unknown("c.actuator", proxy, method, args)),
+        return new MindContext(pet.body, tick, 1L, view, pet.perception, pet.actuator,
                 stub(MindActionRequester.class, ShippedPetModulesTest::plain));
     }
 
