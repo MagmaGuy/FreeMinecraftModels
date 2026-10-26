@@ -87,7 +87,7 @@ class ShippedPetModulesTest {
      * own route cruise. The glow is light 15 on the lantern bone's glow animation at night and none by day; a sting is
      * slowness for 60 ticks at amplifier 0, no damage, a 60-tick cooldown and mobs within 0.5 blocks, players only for
      * a wild pet; a drizzle looks 4 blocks down at chance 0.1. owner_effect is new: night vision for 300 ticks within 16
-     * blocks. So are the walking and swimming modules: a walk at 0.15 and a swim at 0.1 to a spot within the roam
+     * blocks. So are the walking and swimming modules: a walk and a swim at 0.15 to a spot within the roam
      * radius, the swim 0.5 to 3 blocks under the surface, and a look at the nearest player within 8 blocks.
      */
     private static final Set<String> DEFAULT_CALLS = Set.of(
@@ -113,7 +113,7 @@ class ShippedPetModulesTest {
             "fmm:pet/wander ground_point(L, 5)", "fmm:pet/wander distance_to(L)", "fmm:pet/wander steer_to(L, 0.225)",
             "fmm:pet/wander stop()",
             "fmm:pet/idle_look c.perception:nearest_player(8)", "fmm:pet/idle_look c.actuator:look_at(L)",
-            "fmm:pet/swim water_point(L, 5, 0.5, 3)", "fmm:pet/swim distance_to(L)", "fmm:pet/swim steer_to(L, 0.15)",
+            "fmm:pet/swim water_point(L, 5, 0.5, 3)", "fmm:pet/swim distance_to(L)", "fmm:pet/swim steer_to(L, 0.225)",
             "fmm:pet/swim stop()");
     /**
      * follow_owner's calls by where the owner is: the follow speed past the follow distance, times leash_urgency past

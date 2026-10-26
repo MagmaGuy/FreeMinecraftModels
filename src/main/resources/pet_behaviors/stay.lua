@@ -1,7 +1,9 @@
 -- Told to stay: holds the spot, with a gentle bob so it never looks parked.
 return ai.module {
     id = 'fmm:pet/stay', revision = 1,
-    -- speed is in blocks per tick at species speed 1; bob_radius is how far from the spot each bob may wander.
+    -- speed is in blocks per tick at species speed 1 for a flying body; for a walking or swimming one, 4 x speed x the
+    -- species speed multiplies its body type's own movement speed, never under a quarter of it. bob_radius is how far
+    -- from the spot each bob may wander.
     settings = { speed = 0.03, bob_ticks = 40, bob_radius = 0.5 },
     memories = { stay_target = 'position', stay_next_bob = 'integer' },
     behaviors = {

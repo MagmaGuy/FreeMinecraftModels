@@ -317,14 +317,22 @@ class PetLuaTableTest {
     /** A walking body at the origin whose navigation remembers the last move request until it is reset. */
     private final class Walker {
         final List<Location> requests = new ArrayList<>();
+        final List<Double> speeds = new ArrayList<>();
+        int stops;
         MindPosition destination;
         long tick;
         final MindActuator actuator = stub(MindActuator.class, (proxy, method, args) -> {
             if (method.getName().equals("moveTo")) {
                 Location to = (Location) args[0];
                 requests.add(to);
+                speeds.add((Double) args[1]);
                 destination = MindPosition.from(to);
                 return true;
+            }
+            if (method.getName().equals("stopMoving")) {
+                stops++;
+                destination = null;
+                return null;
             }
             return plain(proxy, method, args);
         });
@@ -368,5 +376,26 @@ class PetLuaTableTest {
         walker.tick = 42;
         path.steer(walker.context(), target, 0.15D);
         assertEquals(6, walker.requests.size(), "a forgotten path asks again");
+    }
+
+    @Test
+    void aWalkingBodyTakesSlowSpeedsAsGivenAndStandsStillAtZero() {
+        Walker walker = new Walker();
+        PetLuaTable.WalkPath path = new PetLuaTable.WalkPath();
+        Location target = new Location(world, 10, 64, 0);
+        double[] cruises = {0.25, 0.15, 0.1, 0.03, 0.001};
+        for (double cruise : cruises) {
+            path.forget();
+            assertTrue(path.steer(walker.context(), target, cruise));
+        }
+        assertEquals(List.of(1D, 0.6D, 0.4D, 0.25D, 0.25D), walker.speeds,
+                "4 x cruise multiplies the body's movement speed, never under a quarter of it");
+
+        assertFalse(path.steer(walker.context(), target, 0D), "a cruise of 0 does not go there");
+        assertFalse(path.steer(walker.context(), target, -1D));
+        assertEquals(5, walker.requests.size(), "a cruise of 0 asks for no path");
+        assertEquals(2, walker.stops, "a cruise of 0 stops the body");
+        assertTrue(path.steer(walker.context(), target, 0.15D));
+        assertEquals(6, walker.requests.size(), "moving again asks for a fresh path");
     }
 }
