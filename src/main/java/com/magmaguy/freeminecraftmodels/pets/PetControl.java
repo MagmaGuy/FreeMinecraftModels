@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * The live state of one pet body: who owns it, whether it is told to stay, where it idles, and the timers taming and
@@ -176,21 +177,28 @@ public final class PetControl {
      * stash, a tame, growing up) starts with none.
      */
     public void recordContact(Player player) {
-        long now = PetManager.ticks();
+        recordContact(player.getUniqueId(), PetManager.ticks());
+    }
+
+    /** {@link #recordContact(Player)} on the pet clock's tick {@code now}. */
+    void recordContact(UUID player, long now) {
         if (contacts.size() >= MAX_CONTACTS) contacts.values().removeIf(tick -> now - tick > CONTACT_TICKS);
-        if (contacts.size() < MAX_CONTACTS || contacts.containsKey(player.getUniqueId()))
-            contacts.put(player.getUniqueId(), now);
+        if (contacts.size() < MAX_CONTACTS || contacts.containsKey(player)) contacts.put(player, now);
     }
 
     /** The players that touched the model since the last call, within {@link #CONTACT_TICKS}, and are still online. */
     public List<Player> drainContacts() {
+        // Only online players are found by id.
+        return drainContacts(PetManager.ticks(), Bukkit::getPlayer);
+    }
+
+    /** {@link #drainContacts()} on the pet clock's tick {@code now}, finding each player through {@code online}. */
+    <T> List<T> drainContacts(long now, Function<UUID, T> online) {
         if (contacts.isEmpty()) return List.of();
-        long now = PetManager.ticks();
-        List<Player> touched = new ArrayList<>(contacts.size());
+        List<T> touched = new ArrayList<>(contacts.size());
         contacts.forEach((id, tick) -> {
             if (now - tick > CONTACT_TICKS) return;
-            // Only online players are found by id.
-            Player player = Bukkit.getPlayer(id);
+            T player = online.apply(id);
             if (player != null) touched.add(player);
         });
         contacts.clear();
