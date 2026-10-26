@@ -7,8 +7,8 @@ return ai.module {
     memories = { hover_target = 'position', hover_next_bob = 'integer' },
     behaviors = {
         ai.behavior {
-            -- Asked to start every 5 ticks: after a drift the pet takes up its bob again within 0.2 s.
-            id = 'fmm:pet/hover', priority = 30, probe_interval = 5,
+            -- Asked to start every 4 ticks: it takes up its bob again within 4 ticks (0.2 s) of a drift ending.
+            id = 'fmm:pet/hover', priority = 30, probe_interval = 4,
             controls = { ai.controls.move, ai.controls.look },
             can_start = function(c) return not c.pet.staying end,
             tick = function(c)
