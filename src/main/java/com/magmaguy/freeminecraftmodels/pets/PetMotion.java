@@ -18,6 +18,9 @@ import java.util.concurrent.ThreadLocalRandom;
  * swimming body paths there natively. Speeds are blocks per tick.
  */
 public final class PetMotion {
+    /** How far from the owner a catch-up spot must be, so a walker or swimmer never lands on the owner's own block. */
+    static final double CATCH_UP_CLEARANCE = 1D;
+
     private PetMotion() {
     }
 
@@ -89,13 +92,19 @@ public final class PetMotion {
     /**
      * A spot to stand on within radius of center: the floor of a random column nearest center's height. The floor
      * block is at most 3 blocks above or 6 below center's block, so the spot is about 5 below to 4 above center's
-     * feet. Null over liquid or a long drop, inside solid ground, on a wall under a ceiling over center, or in an
-     * unloaded chunk.
+     * feet. Columns are spread evenly over the area within radius. Null over liquid or a long drop, inside solid
+     * ground, on a wall under a ceiling over center, or in an unloaded chunk.
      */
     public static Location groundPoint(Location center, double radius) {
+        return groundPoint(center, radius, 0D);
+    }
+
+    /** As {@link #groundPoint(Location, double)}, with the spot at least minDistance across from center. */
+    static Location groundPoint(Location center, double radius, double minDistance) {
         ThreadLocalRandom random = ThreadLocalRandom.current();
         for (int attempt = 0; attempt < 4; attempt++) {
-            double angle = random.nextDouble() * Math.PI * 2D, distance = random.nextDouble() * radius;
+            double angle = random.nextDouble() * Math.PI * 2D;
+            double distance = spotDistance(radius, minDistance, random.nextDouble());
             Location point = center.clone().add(Math.cos(angle) * distance, 0D, Math.sin(angle) * distance);
             if (!loaded(point)) continue;
             World world = point.getWorld();
@@ -113,7 +122,8 @@ public final class PetMotion {
             // Liquid, a long drop, or the bottom of the world.
             if (!block.getType().isSolid()) continue;
             Block feet = block.getRelative(0, 1, 0), head = block.getRelative(0, 2, 0);
-            if (feet.isPassable() && !feet.isLiquid() && head.isPassable()) return new Location(world, x + 0.5D, y + 1D, z + 0.5D);
+            if (feet.isPassable() && !feet.isLiquid() && head.isPassable() && clear(center, x, z, minDistance))
+                return new Location(world, x + 0.5D, y + 1D, z + 0.5D);
         }
         return null;
     }
@@ -134,17 +144,25 @@ public final class PetMotion {
     /**
      * A spot in water within radius of center, between minDepth and maxDepth below the topmost water the column's
      * scan finds. The scan runs from 4 blocks above center's block to 12 below and skips solid blocks above center's
-     * height, so water over a ceiling still counts; ground at or below that height ends the column. Null when no
-     * water is found near center's height, or in an unloaded chunk.
+     * height, so water over a ceiling still counts; ground at or below that height ends the column. Columns are
+     * spread evenly over the area within radius. Null when no water is found near center's height, or in an unloaded
+     * chunk.
      */
     public static Location waterPoint(Location center, double radius, double minDepth, double maxDepth) {
+        return waterPoint(center, radius, minDepth, maxDepth, 0D);
+    }
+
+    /** As {@link #waterPoint(Location, double, double, double)}, with the spot at least minDistance across from center. */
+    static Location waterPoint(Location center, double radius, double minDepth, double maxDepth, double minDistance) {
         ThreadLocalRandom random = ThreadLocalRandom.current();
         for (int attempt = 0; attempt < 6; attempt++) {
-            double angle = random.nextDouble() * Math.PI * 2D, distance = random.nextDouble() * radius;
+            double angle = random.nextDouble() * Math.PI * 2D;
+            double distance = spotDistance(radius, minDistance, random.nextDouble());
             Location point = center.clone().add(Math.cos(angle) * distance, 0D, Math.sin(angle) * distance);
             if (!loaded(point)) continue;
             World world = point.getWorld();
             int x = point.getBlockX(), z = point.getBlockZ();
+            if (!clear(center, x, z, minDistance)) continue;
             for (int y = point.getBlockY() + 4; y >= point.getBlockY() - 12 && y > world.getMinHeight(); y--) {
                 Material type = world.getBlockAt(x, y, z).getType();
                 // Ground at or below center's height makes the column land; water under it is a sealed pocket.
@@ -175,7 +193,9 @@ public final class PetMotion {
      * floating body faces the owner's way; the others keep their own facing. False when the owner is away or in
      * another world, or when nowhere loaded near them fits; a world change despawns the pet and the watchdog brings
      * it back instead. False too when the spot found is not at least a block nearer the owner than the body already
-     * is, so a catch-up never moves a pet away from its owner, nor hops it from one spot beside them to another.
+     * is, so a catch-up never moves a pet away from its owner, nor hops it from one spot beside them to another. A
+     * ground or water spot is at least {@link #CATCH_UP_CLEARANCE} across from the owner, never on their own block; a
+     * hover point is drawn as {@link #hoverPoint} draws it.
      */
     public static boolean teleportNearOwner(PetControl control, LivingEntity body, double radius) {
         Player owner = control.owner().orElse(null);
@@ -183,7 +203,7 @@ public final class PetMotion {
         Location at = owner.getLocation();
         MindBodyLocomotion locomotion = control.species().locomotion();
         // Water is looked for at least 6 blocks out, since an owner on a shore or a boat may have none closer.
-        Location spot = restPoint(control, at, radius, Math.max(radius, 6D));
+        Location spot = restPoint(control, at, radius, Math.max(radius, 6D), CATCH_UP_CLEARANCE);
         if (spot == null || !loaded(spot) || !closesIn(at.distance(spot), at.distance(body.getLocation()))) return false;
         // Ground and water spots are built facing south, so they take the body's yaw; a hover point keeps the
         // owner's, as the Java follow did.
@@ -215,7 +235,7 @@ public final class PetMotion {
         if (!loaded(center) || center.getBlock().getType() != Material.WATER) return null;
         ThreadLocalRandom random = ThreadLocalRandom.current();
         for (int attempt = 0; attempt < 4; attempt++) {
-            double angle = random.nextDouble() * Math.PI * 2D, distance = random.nextDouble() * radius;
+            double angle = random.nextDouble() * Math.PI * 2D, distance = spotDistance(radius, 0D, random.nextDouble());
             Location point = center.clone().add(Math.cos(angle) * distance, 0D, Math.sin(angle) * distance);
             if (loaded(point) && point.getBlock().getType() == Material.WATER) return point;
         }
@@ -224,15 +244,36 @@ public final class PetMotion {
 
     /** As {@link #restPoint(PetControl, Location, double)}, but looking for water within waterRadius. */
     static Location restPoint(PetControl control, Location center, double radius, double waterRadius) {
+        return restPoint(control, center, radius, waterRadius, 0D);
+    }
+
+    /** As above, with a ground or water spot at least minDistance across from center; a hover point ignores it. */
+    static Location restPoint(PetControl control, Location center, double radius, double waterRadius, double minDistance) {
         return switch (control.species().locomotion()) {
             case FLYING -> hoverPoint(control, center, radius);
-            case AQUATIC -> waterPoint(center, waterRadius, 0.5D, 2D);
+            case AQUATIC -> waterPoint(center, waterRadius, 0.5D, 2D, minDistance);
             case AMPHIBIOUS -> {
-                Location ground = groundPoint(center, radius);
-                yield ground != null ? ground : waterPoint(center, waterRadius, 0.5D, 2D);
+                Location ground = groundPoint(center, radius, minDistance);
+                yield ground != null ? ground : waterPoint(center, waterRadius, 0.5D, 2D, minDistance);
             }
-            default -> groundPoint(center, radius);
+            default -> groundPoint(center, radius, minDistance);
         };
+    }
+
+    /**
+     * How far from center a ground or water spot is drawn, for a uniform draw from 0 to 1: the square root of it,
+     * scaled to lie between minDistance and radius, so the spots spread evenly over that area. A draw scaled directly
+     * would put half of them within half the radius, a quarter of the area, crowding them toward center.
+     */
+    static double spotDistance(double radius, double minDistance, double draw) {
+        double low = Math.max(0D, Math.min(minDistance, radius));
+        return Math.sqrt(low * low + draw * (radius * radius - low * low));
+    }
+
+    /** Whether the middle of the block column at x, z is at least minDistance across from center. */
+    private static boolean clear(Location center, int x, int z, double minDistance) {
+        double dx = x + 0.5D - center.getX(), dz = z + 0.5D - center.getZ();
+        return dx * dx + dz * dz >= minDistance * minDistance;
     }
 
     /** Whether a catch-up spot this far from the owner is worth it for a body this far: at least a block nearer. */
