@@ -23,7 +23,8 @@ return ai.module {
                  wander_stuck = 'integer' },
     behaviors = {
         ai.behavior {
-            id = 'fmm:pet/wander', priority = 20,
+            -- Asked to start every 10 ticks: it rests 4 to 10 seconds between walks anyway.
+            id = 'fmm:pet/wander', priority = 20, probe_interval = 10,
             controls = { ai.controls.move, ai.controls.look },
             can_start = function(c)
                 if c.pet.staying or c.tick < (c.memory:get('wander_next') or 0) then return false end

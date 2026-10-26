@@ -9,7 +9,8 @@ return ai.module {
     memories = { stay_target = 'position', stay_next_bob = 'integer' },
     behaviors = {
         ai.behavior {
-            id = 'fmm:pet/stay', priority = 5,
+            -- Asked to start every 4 ticks: it holds the spot within 0.2 s of being told to stay.
+            id = 'fmm:pet/stay', priority = 5, probe_interval = 4,
             controls = { ai.controls.move, ai.controls.look },
             can_start = function(c) return c.pet.staying and c.pet.stay_anchor ~= nil end,
             tick = function(c)

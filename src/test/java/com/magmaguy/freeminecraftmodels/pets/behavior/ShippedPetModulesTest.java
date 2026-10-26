@@ -251,6 +251,22 @@ class ShippedPetModulesTest {
         assertEquals(List.of(), warnings);
     }
 
+    /** The runtime asks a stopped behavior to start only every probe_interval ticks; none of ours asks every tick. */
+    @Test
+    void everyShippedBehaviorIsAskedToStartLessOftenThanEveryTick() {
+        try (PetBehaviorCatalog catalog = catalog()) {
+            PetPrograms programs = new PetPrograms(catalog, warnings::add);
+            List<PetBehaviorEntry> all = PetBehaviorCatalog.DEFAULTS.stream()
+                    .map(name -> new PetBehaviorEntry(name, Map.of())).toList();
+            MindProgram everything = programs.program("test", "everything", all, "everything").definition().instantiate();
+            Map<String, Integer> everyTick = everything.behaviors().stream()
+                    .filter(behavior -> behavior.probeInterval() < 2)
+                    .collect(Collectors.toMap(MindBehavior::identifier, MindBehavior::probeInterval));
+            assertEquals(Map.of(), everyTick, "behaviors without a probe_interval");
+        }
+        assertEquals(List.of(), warnings);
+    }
+
     @Test
     void everyDefaultListRunsEveryPath() throws IOException {
         try (PetBehaviorCatalog catalog = catalog()) {

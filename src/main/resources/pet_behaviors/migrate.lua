@@ -3,7 +3,8 @@ return ai.module {
     id = 'fmm:pet/migrate', revision = 1,
     behaviors = {
         ai.behavior {
-            id = 'fmm:pet/migrate', priority = 1,
+            -- Asked to start every 10 ticks: a late starter catches up, as members outfly the flock's anchor.
+            id = 'fmm:pet/migrate', priority = 1, probe_interval = 10,
             controls = { ai.controls.move, ai.controls.look },
             can_start = function(c) return c.pet.migrating and c.pet:route_target() ~= nil end,
             tick = function(c)

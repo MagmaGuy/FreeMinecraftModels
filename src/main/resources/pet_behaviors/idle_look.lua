@@ -37,7 +37,8 @@ return ai.module {
                  idle_look_refresh = 'integer' },
     behaviors = {
         ai.behavior {
-            id = 'fmm:pet/idle_look', priority = 30,
+            -- Asked to start every 10 ticks: it looks for a player only every SEARCH_TICKS anyway.
+            id = 'fmm:pet/idle_look', priority = 30, probe_interval = 10,
             controls = { ai.controls.look },
             can_start = function(c)
                 if c.tick < (c.memory:get('idle_look_next') or 0) then return false end

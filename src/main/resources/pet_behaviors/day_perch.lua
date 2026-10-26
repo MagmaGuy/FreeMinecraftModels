@@ -11,7 +11,8 @@ return ai.module {
                  day_perch_next_bob = 'integer' },
     behaviors = {
         ai.behavior {
-            id = 'fmm:pet/day_perch', priority = 18,
+            -- Asked to start every 10 ticks: settling takes seconds, and a failed search waits 5 seconds.
+            id = 'fmm:pet/day_perch', priority = 18, probe_interval = 10,
             controls = { ai.controls.move, ai.controls.look },
             can_start = function(c)
                 local s = c.settings
