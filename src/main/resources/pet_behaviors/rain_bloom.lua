@@ -29,7 +29,8 @@ return ai.module {
     },
     behaviors = {
         ai.behavior {
-            id = 'fmm:pet/rain_bloom', priority = 19,
+            -- Asked to start every 10 ticks: it pauses at least 10 ticks between bloom drifts anyway.
+            id = 'fmm:pet/rain_bloom', priority = 19, probe_interval = 10,
             controls = { ai.controls.move, ai.controls.look },
             can_start = function(c)
                 if not c.pet.raining or c.pet.staying then return false end

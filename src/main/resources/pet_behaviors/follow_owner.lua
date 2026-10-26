@@ -11,7 +11,8 @@ return ai.module {
     memories = { follow_owner_stuck = 'integer', follow_owner_last = 'position' },
     behaviors = {
         ai.behavior {
-            id = 'fmm:pet/follow_owner', priority = 10,
+            -- Asked to start every 4 ticks: it sets off within 0.2 s of the owner passing the follow distance.
+            id = 'fmm:pet/follow_owner', priority = 10, probe_interval = 4,
             controls = { ai.controls.move, ai.controls.look },
             can_start = function(c)
                 if c.pet.staying or c.pet.owner_location == nil then return false end

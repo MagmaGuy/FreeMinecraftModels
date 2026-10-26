@@ -8,7 +8,8 @@ return ai.module {
                  drift_stuck = 'integer' },
     behaviors = {
         ai.behavior {
-            id = 'fmm:pet/drift', priority = 20,
+            -- Asked to start every 10 ticks: it rests 3 to 7 seconds between drifts anyway.
+            id = 'fmm:pet/drift', priority = 20, probe_interval = 10,
             controls = { ai.controls.move, ai.controls.look },
             can_start = function(c)
                 if c.pet.staying or c.tick < (c.memory:get('drift_next') or 0) then return false end

@@ -26,7 +26,8 @@ return ai.module {
                  swim_stuck = 'integer' },
     behaviors = {
         ai.behavior {
-            id = 'fmm:pet/swim', priority = 20,
+            -- Asked to start every 10 ticks: it rests 2 to 5 seconds between swims anyway.
+            id = 'fmm:pet/swim', priority = 20, probe_interval = 10,
             controls = { ai.controls.move, ai.controls.look },
             can_start = function(c)
                 if c.pet.staying or c.tick < (c.memory:get('swim_next') or 0) then return false end

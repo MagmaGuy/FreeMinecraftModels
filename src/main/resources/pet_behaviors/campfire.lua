@@ -26,7 +26,8 @@ return ai.module {
                  campfire_next_search = 'integer', campfire_next_check = 'integer', campfire_next_point = 'integer' },
     behaviors = {
         ai.behavior {
-            id = 'fmm:pet/campfire', priority = 15,
+            -- Asked to start every 10 ticks: it looks for a fire only every search_seconds anyway.
+            id = 'fmm:pet/campfire', priority = 15, probe_interval = 10,
             controls = { ai.controls.move, ai.controls.look },
             can_start = function(c)
                 local s = c.settings
