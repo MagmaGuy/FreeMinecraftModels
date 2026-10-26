@@ -154,13 +154,16 @@ public final class PetMigrations {
     }
 
 
-    /** A migrating species by weight, among those pets.yml allows. */
+    /**
+     * A migrating species by weight, among those pets.yml allows. A species whose migrants would not run the migrate
+     * behavior is left out, since its flock would hover where it spawned; its pet file was warned about at load.
+     */
     private static PetSpecies pick(PetManager manager, Settings current) {
         List<PetSpecies> candidates = new ArrayList<>();
         double total = 0D;
         for (PetSpecies species : manager.species()) {
             PetInteractions.Migration look = species.interactions().migration();
-            if (look == null || look.weight() <= 0D) continue;
+            if (look == null || look.weight() <= 0D || !manager.canMigrate(species)) continue;
             if (!current.species().isEmpty() && !current.species().contains(species.id())) continue;
             candidates.add(species);
             total += look.weight();
