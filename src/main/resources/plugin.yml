@@ -1,5 +1,5 @@
 name: FreeMinecraftModels
-version: '2.12.9'
+version: '2.13.0'
 main: com.magmaguy.freeminecraftmodels.FreeMinecraftModels
 api-version: '1.21.4'
 prefix: FreeMinecraftModels
