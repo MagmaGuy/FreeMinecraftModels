@@ -162,8 +162,19 @@ public final class MigrationFlock implements MigrationRoute {
         PetManager manager = PetManager.get();
         if (manager != null) {
             List<PetControl> flying = new ArrayList<>(members.keySet());
-            for (PetControl member : flying)
-                if (member.body() != null && manager.pet(member.body()) == member) manager.despawn(member);
+            boolean said = false;
+            for (PetControl member : flying) {
+                if (member.body() == null || manager.pet(member.body()) != member) continue;
+                // One member that cannot go must not keep the rest of the flock in the sky.
+                try {
+                    manager.despawn(member);
+                } catch (RuntimeException failure) {
+                    if (said) continue;
+                    said = true;
+                    Logger.warn("A " + member.species().id() + " migration could not remove a member of its flock: "
+                            + failure);
+                }
+            }
         }
         members.clear();
     }
