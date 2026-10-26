@@ -7,13 +7,19 @@ import com.magmaguy.freeminecraftmodels.config.ModelsFolder;
 import com.magmaguy.freeminecraftmodels.config.PetsConfig;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.freeminecraftmodels.pets.behavior.PetBehaviorCatalog;
+import com.magmaguy.freeminecraftmodels.pets.behavior.PetPrograms;
 import com.magmaguy.freeminecraftmodels.pets.interactions.PetInteractionRuntime;
+import com.magmaguy.magmacore.ai.MindBodyLocomotion;
 import com.magmaguy.magmacore.ai.MindBodyProfile;
+import com.magmaguy.magmacore.ai.MindFailure;
 import com.magmaguy.magmacore.ai.MindHandle;
 import com.magmaguy.magmacore.ai.MindHost;
 import com.magmaguy.magmacore.ai.MobBody;
+import com.magmaguy.magmacore.scripting.tables.LuaLivingEntityTable;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.Logger;
+import com.magmaguy.shaded.luaj.vm2.LuaError;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -32,28 +38,40 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.UncheckedIOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 /**
  * Owns every pet: the species read from the {@code *.pet.yml} files in the models folder, the bodies alive in the
  * world, and the collections of online players. Bodies are vanilla mobs (an allay by default) carrying a
- * FreeMinecraftModels model and driven by a MagmaCore Mind program; they are never saved with their chunk, so an
- * owned pet is re-created next to its owner, and a wild one waits in the {@link WildPetStore} until its chunk loads
- * again. Everything runs on the server thread.
+ * FreeMinecraftModels model and driven by a MagmaCore Mind program, assembled from the pet behavior modules in
+ * plugins/FreeMinecraftModels/pet_behaviors/ that the pet file lists (see {@link PetPrograms}); they are never saved
+ * with their chunk, so an owned pet is re-created next to its owner, and a wild one waits in the {@link WildPetStore}
+ * until its chunk loads again. Everything runs on the server thread.
  */
 public final class PetManager {
     private static final double BREED_DISTANCE = 8D;
@@ -67,8 +85,16 @@ public final class PetManager {
     private static long ticks;
     private static NamespacedKey bodyKey;
     private static PetManager instance;
+    private static final FailureLog FAILURES = new FailureLog(Logger::warn);
+    // Whether a Lua player table was built since these classes loaded; see warmEntityTables.
+    private static boolean entityTablesWarm;
 
     private final Map<String, PetSpecies> species = new LinkedHashMap<>();
+    // This load's behavior modules, the programs built from them and the warnings their c.pet tables share; the
+    // modules close once this load's pets are put away.
+    private PetBehaviorCatalog behaviors;
+    private PetPrograms programs;
+    private PetLuaTable.Warnings warnings;
     private final Map<UUID, PetControl> byBody = new HashMap<>();
     private final Map<UUID, PetCollection> collections = new HashMap<>();
     private final Map<UUID, Map<String, PetControl>> ownedBodies = new HashMap<>();
@@ -107,8 +133,7 @@ public final class PetManager {
             return;
         }
         try {
-            host = adapter.createMindHost(new NamespacedKey(plugin, "pet_mind"),
-                    failure -> Logger.warn("A pet's AI stopped: " + failure));
+            host = adapter.createMindHost(new NamespacedKey(plugin, "pet_mind"), FAILURES::report);
         } catch (UnsupportedOperationException | IllegalStateException unavailable) {
             Logger.info("Pets are off: they need Minecraft 1.21.4 or newer (" + unavailable.getMessage() + ").");
             host = null;
@@ -129,19 +154,25 @@ public final class PetManager {
         host = null;
     }
 
-    /** (Re)loads the species and brings back the equipped pets of everyone online. */
+    /**
+     * (Re)loads the species and the behavior modules, builds every species' programs, and brings back the equipped
+     * pets of everyone online. The previous load's pets are put away first, so every pet comes back running the
+     * modules as they are now.
+     */
     public static void initialize() {
         shutdown();
         if (host == null) return;
+        FAILURES.clear();
         PetManager manager = new PetManager();
         manager.loadSpecies();
+        manager.loadBehaviors();
         instance = manager;
         for (Player player : Bukkit.getOnlinePlayers()) manager.playerJoined(player);
     }
 
     /**
      * Despawns every pet body; collections are already saved on the players, and wild pets go to the store to come
-     * back after the restart or reload.
+     * back after the restart or reload. Then the behavior modules close, since no pet runs them any more.
      */
     public static void shutdown() {
         PetManager manager = instance;
@@ -154,6 +185,7 @@ public final class PetManager {
         manager.wildStore.save();
         manager.collections.clear();
         manager.ownedBodies.clear();
+        if (manager.behaviors != null) manager.behaviors.close();
     }
 
     private static void tickAll() {
@@ -192,6 +224,82 @@ public final class PetManager {
                         + path.getFileName() + "; keeping the first.");
         }
         if (!species.isEmpty()) Logger.info("Loaded " + species.size() + " pet species; pet mode is " + PetsConfig.mode + ".");
+    }
+
+    /**
+     * Loads the behavior modules from plugins/FreeMinecraftModels/pet_behaviors/, writing each missing shipped default
+     * there first, then builds the program of every species for its own model and each variant. Building them all now
+     * puts every warning about a pet file's list in the load's log, and keeps the building out of Lua callbacks, as
+     * PetPrograms requires.
+     */
+    private void loadBehaviors() {
+        Path folder = new File(MetadataHandler.PLUGIN.getDataFolder(), "pet_behaviors").toPath();
+        behaviors = PetBehaviorCatalog.load(folder, PetBehaviorCatalog.DEFAULTS,
+                name -> writeDefault(folder, name, MetadataHandler.PLUGIN::getResource), Logger::warn);
+        programs = new PetPrograms(behaviors, Logger::warn);
+        warnings = new PetLuaTable.Warnings();
+        for (PetSpecies pet : species.values()) {
+            program(pet, pet.model());
+            for (PetSpecies.Variant variant : pet.variants()) program(pet, variant.model());
+        }
+        if (!species.isEmpty()) Logger.info("Loaded " + behaviors.names().size() + " pet behaviors.");
+    }
+
+    /** The program a pet of the species wearing this variant runs; the first call for a variant builds it. */
+    private PetPrograms.Program program(PetSpecies pet, String variant) {
+        return programs.program(pet.id(), variant, pet.behaviors(variant),
+                where(pet.file().getName(), pet.listsBehaviors(), pet.locomotion()));
+    }
+
+    /**
+     * How warnings about a species' program name it: its pet file, and when that file lists no behaviors, that the
+     * list is its locomotion's defaults, for example {@code jellyfish.pet.yml (default behaviors for FLYING)}.
+     */
+    static String where(String fileName, boolean listsBehaviors, MindBodyLocomotion locomotion) {
+        return listsBehaviors ? fileName : fileName + " (default behaviors for " + locomotion.name() + ")";
+    }
+
+    /**
+     * Writes the shipped behavior module {@code name} to {@code folder/name.lua} from the resource
+     * pet_behaviors/name.lua that {@code resources} opens (null when there is none). It goes to a temporary file
+     * beside it first, which no load reads since its name does not end in .lua, and is then moved into place in one
+     * step, or with a plain move that never replaces a file where the file system cannot move atomically. So a crash
+     * never leaves a partly written default, which the next load would keep as an owner's edit. Throws
+     * {@link UncheckedIOException} when it cannot write; the catalog asks only where no file is.
+     */
+    static void writeDefault(Path folder, String name, Function<String, InputStream> resources) {
+        String resource = "pet_behaviors/" + name + ".lua";
+        Path temporary = folder.resolve(name + ".lua."
+                + Long.toUnsignedString(ThreadLocalRandom.current().nextLong(), 36) + ".tmp");
+        // Whether the temporary file is ours and still there, so a failure removes it.
+        boolean leftOver = false;
+        try (InputStream source = resources.apply(resource)) {
+            if (source == null) throw new FileNotFoundException("the plugin jar has no " + resource);
+            // A file of our own rather than Files.createTempFile, which on Linux would leave the module readable by
+            // the server's user only.
+            try (OutputStream target = Files.newOutputStream(temporary, StandardOpenOption.CREATE_NEW,
+                    StandardOpenOption.WRITE)) {
+                leftOver = true;
+                source.transferTo(target);
+            }
+            Path file = folder.resolve(name + ".lua");
+            try {
+                Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException unsupported) {
+                Files.move(temporary, file);
+            }
+            leftOver = false;
+        } catch (IOException failure) {
+            throw new UncheckedIOException(failure);
+        } finally {
+            if (leftOver) {
+                try {
+                    Files.deleteIfExists(temporary);
+                } catch (IOException ignored) {
+                    // Its name keeps every load from reading it.
+                }
+            }
+        }
     }
 
     public Collection<PetSpecies> species() {
@@ -262,7 +370,17 @@ public final class PetManager {
             return null;
         }
         PetControl control = new PetControl(pet, owner, record, variant, baby, home);
-        MindHandle mind = host.open(UUID.randomUUID(), PetMindProgramFactory.create(MetadataHandler.PLUGIN, control));
+        MindHandle mind;
+        try {
+            PetPrograms.Program program = program(pet, variant);
+            // One context per body: its c.pet table holds this pet's glow and sting cooldowns.
+            mind = host.open(UUID.randomUUID(),
+                    program.definition().instantiate(new PetLuaContext(control, program, warnings)));
+        } catch (RuntimeException failure) {
+            Logger.warn("Could not spawn pet " + pet.id() + ": its behaviors could not start ("
+                    + failure.getMessage() + ").");
+            return null;
+        }
         double scale = pet.scale() * (baby ? pet.babyScale() : 1D) * sizeMultiplier;
         MindBodyProfile profile = new MindBodyProfile(pet.locomotion(), scale, false, pet.body().getKey().toString());
         MobBody body;
@@ -349,9 +467,27 @@ public final class PetManager {
     // ---- players ---------------------------------------------------------------------------------------------
 
     public void playerJoined(Player player) {
+        warmEntityTables(player);
         PetCollection collection = PetCollection.load(player);
         collections.put(player.getUniqueId(), collection);
         for (PetRecord record : collection.equipped()) spawnOwned(player, record);
+    }
+
+    /**
+     * Builds the Lua table c.perception:nearest_player gives a module for this player, and drops it, once per class
+     * load (a reload keeps the classes linked; a new jar starts cold). The first build links MagmaCore's entity table
+     * classes, which on a cold server can take longer than the 20 ms runaway limit of the callback that first finds a
+     * player, idle_look's can_start, and fail it. Here it runs on the server thread outside any Lua limit, when a
+     * player first joins or is online at load, before any pet can look for them.
+     */
+    private static void warmEntityTables(Player player) {
+        if (entityTablesWarm) return;
+        entityTablesWarm = true;
+        try {
+            LuaLivingEntityTable.build(player);
+        } catch (RuntimeException | LinkageError failure) {
+            Logger.warn("Could not prepare the Lua player table pet behaviors use: " + failure);
+        }
     }
 
     public void playerLeft(Player player) {
@@ -682,5 +818,44 @@ public final class PetManager {
             if (body != null && body.isValid() && WildSpawner.inSpawnArea(player, body.getLocation())) count++;
         }
         return count;
+    }
+
+    // ---- failed callbacks -------------------------------------------------------------------------------------
+
+    /**
+     * Logs a failed Mind callback once per program, callback and kind of failure until {@link #clear}, which each load
+     * calls: a module failing on every tick of a hundred pets says so once. A failure costs only that callback's turn:
+     * MagmaCore stops a behavior whose start or tick failed and may start it again later, runs a failed sensor at its
+     * next interval, and keeps running the pet's other behaviors. Server thread only.
+     */
+    static final class FailureLog {
+        private final Consumer<String> sink;
+        private final Set<String> said = new HashSet<>();
+
+        FailureLog(Consumer<String> sink) {
+            this.sink = sink;
+        }
+
+        void report(MindFailure failure) {
+            if (said.add(failure.programIdentifier() + "\n" + failure.callbackIdentifier() + "\n" + failure.kind()))
+                sink.accept(message(failure));
+        }
+
+        void clear() {
+            said.clear();
+        }
+
+        static String message(MindFailure failure) {
+            boolean runaway = failure.kind() == MindFailure.Kind.RUNAWAY_LIMIT_EXCEEDED;
+            Throwable cause = failure.cause();
+            // A Lua error's message names the file and line, and a runaway's the limit; anything else needs its type.
+            String reason = cause == null ? "no reason was given"
+                    : (cause instanceof LuaError || runaway) && cause.getMessage() != null ? cause.getMessage()
+                    : cause.toString();
+            String what = runaway ? "ran past its CPU time or instruction limit" : "failed";
+            return "The pet behavior callback " + failure.callbackIdentifier() + " in " + failure.programIdentifier()
+                    + " " + what + ": " + reason + ". Its behavior or sensor runs again later, and the pet keeps its other"
+                    + " behaviors. This is logged once per program, callback and kind of failure until the next reload.";
+        }
     }
 }

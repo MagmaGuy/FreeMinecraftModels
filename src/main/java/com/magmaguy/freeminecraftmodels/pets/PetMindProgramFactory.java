@@ -1,6 +1,5 @@
 package com.magmaguy.freeminecraftmodels.pets;
 
-import com.magmaguy.freeminecraftmodels.pets.interactions.PetInteractionRuntime;
 import com.magmaguy.magmacore.ai.MindBehavior;
 import com.magmaguy.magmacore.ai.MindBodyLocomotion;
 import com.magmaguy.magmacore.ai.MindContext;
@@ -26,6 +25,8 @@ import java.util.concurrent.ThreadLocalRandom;
  * the lowest priority number that can start owns the body. The body is steered directly: a flying mob's navigation
  * accelerates by the square of a tiny attribute and crawls, while a velocity per tick gives the glide a jellyfish
  * should have. Speeds are blocks per tick scaled by the species' value.
+ * <p>
+ * No longer used: pets run the Lua behavior modules instead. It goes with the other Java behaviors.
  */
 final class PetMindProgramFactory {
     private PetMindProgramFactory() {
@@ -33,15 +34,13 @@ final class PetMindProgramFactory {
 
     static MindProgram create(Plugin plugin, PetControl control) {
         String owner = control.isWild() ? "wild" : "owned";
-        MindProgram.Builder builder = MindProgram.builder(new NamespacedKey(plugin, "pet/" + control.species().id() + "/" + owner).toString(), 1L)
+        return MindProgram.builder(new NamespacedKey(plugin, "pet/" + control.species().id() + "/" + owner).toString(), 1L)
                 .behavior(new MigrationBehavior(control))
                 .behavior(new StayBehavior(control))
                 .behavior(new FollowOwnerBehavior(control))
                 .behavior(new DriftBehavior(control))
-                .behavior(new HoverBehavior(control));
-        // Campfire gathering, day perch and rain bloom drifts, when the species' pet file asks for them.
-        PetInteractionRuntime.addBehaviors(builder, control);
-        return builder.build();
+                .behavior(new HoverBehavior(control))
+                .build();
     }
 
     private static final Set<MindControl> MOVE_AND_LOOK = EnumSet.of(MindControl.MOVE, MindControl.LOOK);

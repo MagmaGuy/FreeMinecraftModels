@@ -125,7 +125,7 @@ public final class PetListeners implements Listener {
         manager.bodyDied(pet);
     }
 
-    /** A pet's model touched a player: wild pets sting, and no pet deals FMM's contact attack. */
+    /** A pet's model touched a player: a wild pet remembers it for its sting module; no pet deals FMM's contact attack. */
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
     public void onModelContact(ModeledEntityHitboxContactEvent event) {
         PetSting.onContact(event);
