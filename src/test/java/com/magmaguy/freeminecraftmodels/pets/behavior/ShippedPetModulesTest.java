@@ -76,7 +76,10 @@ class ShippedPetModulesTest {
      * Every distinct call the shipped modules make at their default settings (L is a location), with the arguments
      * today's Java behaviors used: each cruise is the Java constant times SPEED (drift, campfire and a far perch 0.06;
      * a near perch, stay and hover 0.03; follow 0.25, x1.6 past the leash; rain bloom 0.06 x1.4), except the flock's
-     * own route cruise.
+     * own route cruise. The glow is light 15 on the lantern bone's glow animation at night and none by day; a sting is
+     * slowness for 60 ticks at amplifier 0, no damage, a 60-tick cooldown and mobs within 0.5 blocks, players only for
+     * a wild pet; a drizzle looks 4 blocks down at chance 0.1. owner_effect is new: night vision for 300 ticks within 16
+     * blocks.
      */
     private static final Set<String> DEFAULT_CALLS = Set.of(
             "fmm:pet/migrate route_target()", "fmm:pet/migrate steer_to(L, 0.3)", "fmm:pet/migrate stop()",
@@ -92,7 +95,13 @@ class ShippedPetModulesTest {
             "fmm:pet/day_perch steer_to(L, 0.045)", "fmm:pet/day_perch steer_to(L, 0.09)",
             "fmm:pet/rain_bloom scale_toward(1, 1.25, 60, 2)", "fmm:pet/rain_bloom scale_toward(1.25, 1.25, 60, 2)",
             "fmm:pet/rain_bloom hover_point(L, 5)", "fmm:pet/rain_bloom distance_to(L)",
-            "fmm:pet/rain_bloom steer_to(L, 0.126)");
+            "fmm:pet/rain_bloom steer_to(L, 0.126)",
+            "fmm:pet/night_glow set_glow(15, lantern, glow)", "fmm:pet/night_glow clear_glow()",
+            "fmm:pet/sting sting_contacts(true, SLOWNESS, 60, 0, 0, 60)",
+            "fmm:pet/sting sting_contacts(false, SLOWNESS, 60, 0, 0, 60)",
+            "fmm:pet/sting sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)",
+            "fmm:pet/crop_drizzle drizzle(4, 0.1)",
+            "fmm:pet/owner_effect owner_effect(NIGHT_VISION, 300, 0, 16)");
     private static final Pattern PET_NAME = Pattern.compile("c\\.pet[.:]([a-z_]+)");
     private static final Pattern SPECIES_NAME = Pattern.compile("species\\.([a-z_]+)");
 
