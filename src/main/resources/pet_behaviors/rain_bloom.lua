@@ -8,8 +8,8 @@ local SWELL_TICKS = 2
 return ai.module {
     id = 'fmm:pet/rain_bloom', revision = 1,
     -- speed is in blocks per tick at species speed 1, before speed_multiplier. A bloom drift gives up after
-    -- drift_ticks, or after stuck_ticks without moving. The pause after it is a plain drift's rest (rest_ticks plus up
-    -- to rest_random_ticks more) made drift_frequency times shorter, but never under 10 ticks.
+    -- drift_ticks, or after stuck_ticks without moving. The pause after it is a plain drift's rest (rest_ticks plus a
+    -- random 0 to rest_random_ticks - 1 more) made drift_frequency times shorter, but never under 10 ticks.
     settings = { speed_multiplier = 1.4, scale_multiplier = 1.25, drift_frequency = 2.5, rise = 1, scale_seconds = 3,
                  speed = 0.06, drift_ticks = 120, stuck_ticks = 20, rest_ticks = 60, rest_random_ticks = 80 },
     memories = { rain_bloom_to = 'position', rain_bloom_next = 'integer', rain_bloom_until = 'integer',

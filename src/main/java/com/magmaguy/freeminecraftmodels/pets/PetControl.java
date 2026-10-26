@@ -174,6 +174,7 @@ public final class PetControl {
 
     /** The players that touched the model since the last call and are still online. */
     public List<Player> drainContacts() {
+        if (contacts.isEmpty()) return List.of();
         List<Player> touched = new ArrayList<>(contacts.size());
         for (UUID id : contacts) {
             // Only online players are found by id.

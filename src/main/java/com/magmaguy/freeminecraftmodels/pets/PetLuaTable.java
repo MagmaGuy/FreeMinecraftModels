@@ -294,7 +294,8 @@ public final class PetLuaTable {
         // drizzle(depth, chance): depth 1 to 8, chance 0 to 1.
         method("drizzle", args -> LuaValue.valueOf(drizzle(whole(args, 1, 1, MAX_DRIZZLE_DEPTH), number(args, 2, 0D, 1D))));
         // owner_effect(effect, duration, amplifier, range): duration 1 to 6000 ticks, amplifier 0 to 255; false when
-        // the owner is away, elsewhere or out of range.
+        // the owner is away, elsewhere or out of range. An effect the owner already has that is at least as strong and
+        // lasts at least as long is left alone, so a drunk potion keeps its swirls and no effect event fires.
         method("owner_effect", args -> {
             String name = args.checkjstring(1);
             int duration = whole(args, 2, 1, MAX_EFFECT_TICKS), amplifier = whole(args, 3, 0, MAX_AMPLIFIER);
@@ -305,6 +306,9 @@ public final class PetLuaTable {
                     || owner.getLocation().distance(body.getLocation()) > range) return LuaValue.FALSE;
             PotionEffectType effect = knownEffect(name, "c.pet:owner_effect");
             if (effect == null) return LuaValue.FALSE;
+            PotionEffect current = owner.getPotionEffect(effect);
+            if (current != null && covers(current.getAmplifier(), current.isInfinite(), current.getDuration(),
+                    amplifier, duration)) return LuaValue.TRUE;
             owner.addPotionEffect(new PotionEffect(effect, duration, amplifier, true, false, true));
             return LuaValue.TRUE;
         });
@@ -693,6 +697,16 @@ public final class PetLuaTable {
         PotionEffectType effect = key == null ? null : Registry.EFFECT.get(key);
         // Older names such as SLOW still resolve through the legacy lookup.
         return effect != null ? effect : PotionEffectType.getByName(name.toUpperCase(Locale.ROOT));
+    }
+
+    /**
+     * Whether an effect the owner has, at {@code amplifier} with {@code remaining} ticks left (or infinite), makes a
+     * renewal at {@code wantedAmplifier} for {@code wantedDuration} ticks pointless: it is at least as strong and lasts
+     * at least as long. A stronger but shorter one does not; vanilla then keeps the renewal hidden beneath it, to take
+     * over when it ends.
+     */
+    static boolean covers(int amplifier, boolean infinite, int remaining, int wantedAmplifier, int wantedDuration) {
+        return amplifier >= wantedAmplifier && (infinite || remaining >= wantedDuration);
     }
 
     /** Hovering still over a crop: water particles, and a chance it grows a stage. */
