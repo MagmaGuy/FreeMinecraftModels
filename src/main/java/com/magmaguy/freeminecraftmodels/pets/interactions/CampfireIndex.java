@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.pets.interactions;
 
+import com.magmaguy.freeminecraftmodels.pets.PetManager;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -16,8 +17,8 @@ import java.util.function.Predicate;
 
 /**
  * Campfires near a point, from the block entities of the loaded chunks around it. Each chunk's list is kept for the
- * caller's search interval and shared by every pet, so a crowd of pets scans a chunk once per interval. Server
- * thread only.
+ * caller's search interval, on the pet clock ({@link PetManager#ticks()}), and shared by every pet, so a crowd of pets
+ * scans a chunk once per interval. Server thread only.
  */
 public final class CampfireIndex {
     private record Entry(long expiresAt, int[] positions) {
@@ -32,7 +33,7 @@ public final class CampfireIndex {
     public static Block nearest(Location centre, double radius, int keepTicks, Predicate<Block> accepts) {
         World world = centre.getWorld();
         if (world == null) return null;
-        long now = PetInteractionRuntime.ticks();
+        long now = PetManager.ticks();
         Map<Long, Entry> chunks = WORLDS.computeIfAbsent(world, ignored -> new HashMap<>());
         double best = radius * radius;
         Block found = null;

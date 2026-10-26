@@ -1,20 +1,22 @@
 package com.magmaguy.freeminecraftmodels.pets.interactions;
 
+import com.magmaguy.freeminecraftmodels.pets.PetManager;
 import com.magmaguy.freeminecraftmodels.pets.migration.PetMigrations;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
 /**
- * Drives the night migration schedule and the clock the campfire index keeps its fires by, in a pass every two ticks.
- * What a pet does in the world, campfire gathering, day perch, rain bloom, glow, sting and drizzle among it, comes from
- * the behavior modules its Mind program runs; wild pets' touches reach the sting module through
- * {@link PetSting#onContact}. Server thread only.
+ * Drives the night migration schedule and prunes the campfire index, in a pass every two ticks. What a pet does in the
+ * world, campfire gathering, day perch, rain bloom, glow, sting and drizzle among it, comes from the behavior modules
+ * its Mind program runs; wild pets' touches reach the sting module through {@link PetSting#onContact}. Server thread
+ * only.
  */
 public final class PetInteractionRuntime {
     private static final int PASS_TICKS = 2;
     private static BukkitTask task;
     private static PetMigrations migrations;
+    // The pass clock in server ticks, the migration schedule's time base.
     private static long ticks;
 
     private PetInteractionRuntime() {
@@ -40,14 +42,9 @@ public final class PetInteractionRuntime {
         return migrations;
     }
 
-    /** The pass clock in server ticks, the time base for the campfire index. */
-    public static long ticks() {
-        return ticks;
-    }
-
     private static void runPass() {
         ticks += PASS_TICKS;
         if (migrations != null) migrations.tick(ticks);
-        if (ticks % 1200L == 0L) CampfireIndex.prune(ticks);
+        if (ticks % 1200L == 0L) CampfireIndex.prune(PetManager.ticks());
     }
 }
