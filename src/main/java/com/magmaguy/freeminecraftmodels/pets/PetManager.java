@@ -57,6 +57,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
@@ -249,45 +250,74 @@ public final class PetManager {
 
     /**
      * Builds the program of every model a migrant of the species may wear, and notes the species as one whose flocks
-     * fly when each of them runs migrate. A migrant without it hovers where it spawns, so a species with a migration
-     * section whose programs leave migrate out is warned about and never picked for a flock.
+     * fly when it flies and each of those programs runs migrate. Any other flock would hover, or fall, where it
+     * spawned, so it is never picked; a species whose migration section has a weight is warned about.
      */
     private void checkMigrants(PetSpecies pet) {
         PetInteractions.Migration look = pet.interactions().migration();
-        Set<String> models = migrantModels(pet, look);
+        Set<String> models = migrantModels(pet.model(), pet.variants(), look == null ? null : look.model(),
+                PetManager::loaded);
         List<String> grounded = new ArrayList<>();
         for (String model : models) if (!program(pet, model).runs("migrate")) grounded.add(model);
-        if (grounded.isEmpty()) migrating.add(pet.id());
-        else if (look != null) {
-            String whose = grounded.size() == models.size() ? "its behaviors don't"
-                    : "the behaviors of variant" + (grounded.size() == 1 ? " " : "s ") + String.join(", ", grounded)
-                    + " don't";
-            Logger.warn(pet.file().getName() + ": has a migration section but " + whose + " include migrate; its"
-                    + " night flocks are not launched.");
-        }
+        String problem = migrationProblem(pet.file().getName(), pet.locomotion(), pet.variants(), models, grounded);
+        if (problem == null) migrating.add(pet.id());
+        else if (look != null && look.weight() > 0D) Logger.warn(problem);
     }
 
     /**
      * The models a migrant of the species may wear, as spawning settles them: the migration look's own model, or else
-     * each variant with a share of the picks, or the species' model when none has one.
+     * each variant with a share of the picks, or the species' model when none has one. A model {@code loaded} says is
+     * not loaded settles to the species' model.
      */
-    private static Set<String> migrantModels(PetSpecies pet, PetInteractions.Migration look) {
+    static Set<String> migrantModels(String speciesModel, List<PetSpecies.Variant> variants, String lookModel,
+                                     Predicate<String> loaded) {
         Set<String> models = new LinkedHashSet<>();
-        if (look != null && look.model() != null) models.add(wornVariant(pet, look.model()));
-        else for (PetSpecies.Variant variant : pet.variants())
-            if (variant.weight() > 0D) models.add(wornVariant(pet, variant.model()));
-        if (models.isEmpty()) models.add(pet.model());
+        if (lookModel != null) models.add(wornVariant(speciesModel, lookModel, loaded));
+        else for (PetSpecies.Variant variant : variants)
+            if (variant.weight() > 0D) models.add(wornVariant(speciesModel, variant.model(), loaded));
+        if (models.isEmpty()) models.add(speciesModel);
         return models;
     }
 
     /** The variant a pet asked to wear this model runs as: the model when it is loaded, else the species' model. */
-    private static String wornVariant(PetSpecies pet, String model) {
-        return model == null || FileModelConverter.getModel(model) == null ? pet.model() : model;
+    static String wornVariant(String speciesModel, String model, Predicate<String> loaded) {
+        return model == null || !loaded.test(model) ? speciesModel : model;
+    }
+
+    private static boolean loaded(String model) {
+        return FileModelConverter.getModel(model) != null;
     }
 
     /**
-     * Whether a night flock of the species flies its route: every model its migrants may wear runs the migrate
-     * module. Known for this load's species only.
+     * Why a night flock of the species would not fly its route, worded as the warning about its pet file, or null
+     * when it flies. Only a flying species can, and only when the program of every model its migrants may wear runs
+     * migrate; {@code grounded} holds those whose program does not. A model that is one of the variants is named as
+     * one; the species' model a missing variant settled to is named as a model.
+     */
+    static String migrationProblem(String fileName, MindBodyLocomotion locomotion, List<PetSpecies.Variant> variants,
+                                   Set<String> models, List<String> grounded) {
+        String start = fileName + ": has a migration section, but ";
+        String end = ", so its night flocks are not launched; ";
+        if (locomotion != MindBodyLocomotion.FLYING)
+            return start + "a " + locomotion.name() + " species cannot fly a migration route" + end
+                    + "remove the migration section.";
+        if (grounded.isEmpty()) return null;
+        String whose;
+        if (grounded.size() == models.size()) whose = "its behaviors don't";
+        else {
+            List<String> named = new ArrayList<>();
+            for (String model : grounded) {
+                boolean variant = variants.stream().anyMatch(listed -> listed.model().equals(model));
+                named.add((variant ? "variant " : "model ") + model);
+            }
+            whose = "the behaviors of " + String.join(", ", named) + " don't";
+        }
+        return start + whose + " run migrate" + end + "list migrate under behaviors: to launch them.";
+    }
+
+    /**
+     * Whether a night flock of the species flies its route: the species flies, and every model its migrants may wear
+     * runs the migrate module. Known for this load's species only.
      */
     public boolean canMigrate(PetSpecies pet) {
         return migrating.contains(pet.id());
@@ -374,7 +404,7 @@ public final class PetManager {
     private PetControl spawn(PetSpecies pet, UUID owner, PetRecord record, String model, boolean baby, Location at, Location home,
                              double sizeMultiplier) {
         if (host == null || at.getWorld() == null) return null;
-        String variant = wornVariant(pet, model);
+        String variant = wornVariant(pet.model(), model, PetManager::loaded);
         String modelId = baby && pet.babyModel() != null ? pet.babyModel() : variant;
         if (FileModelConverter.getModel(modelId) == null) return refuse(pet, "model " + modelId + " is not loaded");
         PetControl control = new PetControl(pet, owner, record, variant, baby, home);

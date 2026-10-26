@@ -25,8 +25,9 @@ import java.util.concurrent.ThreadLocalRandom;
  * crossing. The members are wild pets of the species on a migration route, so they look and animate like the pets,
  * and a player who reaches one can tame it. Each player gets one roll per night, the first time the schedule sees them in
  * that night; a won roll picks a moment in the rest of the night, and the flock starts then if the player is under
- * open sky (otherwise it tries again until the night runs out). Species take part through a {@code migration:}
- * section in their pet file; the schedule's own settings live in pets.yml.
+ * open sky (otherwise it tries again until the night runs out). A flying species takes part through a
+ * {@code migration:} section in its pet file, as long as migrate is among its behaviors (the flying defaults include
+ * it); the schedule's own settings live in pets.yml.
  */
 public final class PetMigrations {
     /** The pets.yml settings of the schedule and of every flock. */
@@ -54,7 +55,8 @@ public final class PetMigrations {
                 List.of("Night migrations: rare flocks of a migrating pet species crossing the night sky over players.",
                         "The members are wild pets of the species flying a migration route: same model and animations,",
                         "and in CREATURES mode a player who reaches one can tame it. They leave after durationSeconds.",
-                        "A species migrates when its pet file has a migration: section."),
+                        "A species migrates when it flies, its pet file has a migration: section, and migrate is among",
+                        "its behaviors (the flying defaults include it); the console says when one cannot."),
                 config, "migrations.enabled", true);
         double chance = ConfigurationEngine.setDouble(
                 List.of("Chance, 0 to 1, that a player gets a flock over them on a given night."),
@@ -79,7 +81,7 @@ public final class PetMigrations {
                 List.of("Most flocks in the air at once across the server."),
                 config, "migrations.maxActiveFlocks", 3);
         List<?> species = ConfigurationEngine.setList(
-                List.of("Species ids that may migrate. Empty means every species with a migration: section."),
+                List.of("Species ids that may migrate. Empty means every species that can (see enabled above)."),
                 config, "migrations.species", List.of());
         List<String> ids = new ArrayList<>();
         for (Object id : species) if (id != null) ids.add(id.toString().toLowerCase(Locale.ROOT));
@@ -155,8 +157,9 @@ public final class PetMigrations {
 
 
     /**
-     * A migrating species by weight, among those pets.yml allows. A species whose migrants would not run the migrate
-     * behavior is left out, since its flock would hover where it spawned; its pet file was warned about at load.
+     * A migrating species by weight, among those pets.yml allows. A species that does not fly, or whose migrants would
+     * not run the migrate behavior, is left out, since its flock would hover or fall where it spawned; its pet file
+     * was warned about at load.
      */
     private static PetSpecies pick(PetManager manager, Settings current) {
         List<PetSpecies> candidates = new ArrayList<>();
