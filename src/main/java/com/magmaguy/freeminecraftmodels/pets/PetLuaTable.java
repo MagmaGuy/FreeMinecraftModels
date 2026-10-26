@@ -75,10 +75,10 @@ public final class PetLuaTable {
             "species", "position", "home", "anchor", "stay_anchor", "owner_location", "owner_distance", "night", "day",
             "raining", "speed", "route_cruise");
     /** Every method a module can call on c.pet. */
-    public static final Set<String> METHODS = Set.of("steer_to", "stop", "hover_point", "ground_below", "ground_point",
-            "water_point", "trail_point", "teleport_near_owner", "distance_to", "route_target", "find_perch",
-            "nearest_campfire", "campfire_usable", "set_glow", "clear_glow", "scale_toward", "sting_contacts",
-            "sting_enemies", "drizzle", "owner_effect", "play_animation");
+    public static final Set<String> METHODS = Set.of("steer_to", "stop", "hover_point", "rest_point", "ground_below",
+            "ground_point", "water_point", "trail_point", "teleport_near_owner", "distance_to", "route_target",
+            "find_perch", "nearest_campfire", "campfire_usable", "set_glow", "clear_glow", "scale_toward",
+            "sting_contacts", "sting_enemies", "drizzle", "owner_effect", "play_animation");
     /** The fields of c.pet.species. */
     public static final Set<String> SPECIES_FIELDS = Set.of("id", "speed", "hover_height", "hover_variance",
             "roam_radius", "follow_distance", "leash_distance", "teleport_distance", "scale", "baby_scale");
@@ -195,6 +195,16 @@ public final class PetLuaTable {
             int depth = whole(args, 2, 1, MAX_GROUND_DEPTH);
             if (point == null || !PetMotion.loaded(point)) return LuaValue.NIL;
             return LuaValue.valueOf(PetMotion.groundBelow(point, depth, PetMotion.floatsOnLiquid(control)));
+        });
+        // rest_point(center, radius): a spot to rest within radius (up to 64) in the body's own medium: in its hover
+        // band when it flies, on standing ground when it walks, in water when it swims, on ground or else in water when
+        // it is amphibious. nil when nothing fits there, or it is unloaded.
+        method("rest_point", args -> {
+            Location center = at(args, 1);
+            double radius = number(args, 2, 0D, MAX_SPOT_RADIUS);
+            if (center == null) return LuaValue.NIL;
+            Location point = PetMotion.restPoint(control, center, radius);
+            return point != null && PetMotion.loaded(point) ? location(point) : LuaValue.NIL;
         });
         // ground_point(center, radius): a standing spot within radius (up to 64), or nil.
         method("ground_point", args -> {

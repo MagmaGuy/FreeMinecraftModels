@@ -279,7 +279,7 @@ class PetProgramsTest {
         assertEquals(List.of("stay", "follow_owner", "wander", "idle_look"), names(MindBodyLocomotion.GROUNDED));
         assertEquals(List.of("stay", "follow_owner", "wander", "idle_look"), names(MindBodyLocomotion.AMPHIBIOUS));
         assertEquals(List.of("stay", "follow_owner", "swim"), names(MindBodyLocomotion.AQUATIC));
-        assertEquals(List.of("stay", "follow_owner", "idle_look"), names(MindBodyLocomotion.STATIONARY));
+        assertEquals(List.of("stay", "follow_owner"), names(MindBodyLocomotion.STATIONARY));
     }
 
     private static List<String> names(MindBodyLocomotion locomotion) {
