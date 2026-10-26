@@ -379,6 +379,15 @@ class PetLuaTableTest {
     }
 
     @Test
+    void aCatchUpLandsAtLeastABlockNearerTheOwner() {
+        assertTrue(PetMotion.closesIn(2.5, 30), "a far pet lands beside its owner");
+        assertTrue(PetMotion.closesIn(4, 5));
+        assertFalse(PetMotion.closesIn(4.5, 5), "half a block nearer is not worth a jump");
+        assertFalse(PetMotion.closesIn(6, 5), "a catch-up never lands farther away");
+        assertFalse(PetMotion.closesIn(0.5, 1.2), "a pet already beside its owner stays");
+    }
+
+    @Test
     void aWalkingBodyTakesSlowSpeedsAsGivenAndStandsStillAtZero() {
         Walker walker = new Walker();
         PetLuaTable.WalkPath path = new PetLuaTable.WalkPath();
