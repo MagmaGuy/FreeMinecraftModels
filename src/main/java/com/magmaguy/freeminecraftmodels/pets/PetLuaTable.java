@@ -61,8 +61,8 @@ import java.util.function.Supplier;
  * The c.pet table a behavior module reads: the pet's state, and the Java helpers that keep per-tick work fast. One
  * table per pet; {@link #bind} points it at the current callback's Mind context first.
  * <p>
- * Its properties are a snapshot per pet tick: each is read on its first use in a tick and kept through every callback
- * of that tick. A new pet tick, game tick or body reads them afresh, and so does every read after
+ * Its properties, and route_target, are a snapshot per pet tick: each is read on its first use in a tick and kept
+ * through every callback of that tick. A new pet tick, game tick or body reads them afresh, and so does every read after
  * {@code c.pet:teleport_near_owner} or {@code c.pet:stop}. Nothing else does: after {@code c.entity:teleport},
  * {@code set_velocity} or {@code push}, or the stop MagmaCore makes when a behavior gives up its controls, the
  * properties show the change on the next tick. {@code speed} is the exception, read fresh every time, since that stop
@@ -260,7 +260,11 @@ public final class PetLuaTable {
             Location point = at(args, 1);
             return LuaValue.valueOf(point == null ? Double.POSITIVE_INFINITY : position.get().distance(point));
         });
-        method("route_target", args -> location(control.route() == null ? null : control.route().target(control)));
+        // route_target(): kept for the pet tick like a property, since it weighs every flock member's place to keep
+        // them apart, and can_start and tick both ask for it.
+        Supplier<Location> routeTarget = ticks.perTick(() ->
+                control.route() == null ? null : control.route().target(control));
+        method("route_target", args -> location(routeTarget.get()));
         // find_perch(height, radius): height 0 to 8, radius 0 to 4.
         method("find_perch", args -> {
             double height = number(args, 1, 0D, MAX_PERCH_HEIGHT);
