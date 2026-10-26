@@ -493,27 +493,48 @@ class ShippedPetModulesTest {
         }
     }
 
-    /** Runs the program through every pet state crossed with each of the given ways the methods answer. */
+    /**
+     * Runs the program through every pet state crossed with each of the given ways the methods answer. A pet's life
+     * that a time limit stops is lived once more: on a busy machine one callback can read past it, the more so on
+     * Windows, whose thread CPU clock moves in steps of about 15.6 ms. What the stopped life reached stays recorded,
+     * since the program did it. The instruction limit and every other failure fail at once.
+     */
     private static Coverage exercise(PetPrograms.Program program, Set<Answers> modes) {
         Coverage coverage = new Coverage();
         for (Owner owner : Owner.values())
             for (boolean staying : new boolean[]{false, true})
                 for (boolean night : new boolean[]{false, true})
-                    for (Answers answers : modes) {
-                        StubPet pet = new StubPet(owner, staying, night, answers, coverage);
-                        try {
-                            run(program, pet, coverage);
-                        } catch (RuntimeException | AssertionError failure) {
-                            throw new AssertionError(pet + ", tick " + pet.tick + ": " + failure.getMessage(), failure);
+                    for (Answers answers : modes)
+                        for (int attempt = 1; ; attempt++) {
+                            StubPet pet = new StubPet(owner, staying, night, answers, coverage);
+                            try {
+                                run(program, pet, coverage);
+                                break;
+                            } catch (MindRunawayException runaway) {
+                                if (timed(runaway) && attempt == 1) continue;
+                                throw new AssertionError(pet + ", tick " + pet.tick + ": " + runaway.getMessage(),
+                                        runaway);
+                            } catch (RuntimeException | AssertionError failure) {
+                                throw new AssertionError(pet + ", tick " + pet.tick + ": " + failure.getMessage(),
+                                        failure);
+                            }
                         }
-                    }
         return coverage;
     }
 
+    /** Whether a time limit stopped the callback, rather than the instruction limit, which counts the same anywhere. */
+    private static boolean timed(MindRunawayException runaway) {
+        String why = String.valueOf(runaway.getMessage());
+        // Raised inside LuaJ's instruction hook, the message gains a source:line prefix and a traceback.
+        return why.contains("Lua CPU-time budget exceeded") || why.contains("Lua elapsed-time");
+    }
+
     /**
-     * Lives one pet's life through every shipped module, with every method finding something. MagmaCore's context
-     * tables still link inside the first callbacks' limits, so a time limit stopping it is tried again; the instruction
-     * limit counts the same however warm the JVM is, and fails at once, as does anything else.
+     * Lives a few pets' lives through every shipped module: owned and following, wild, with the owner away, and with
+     * the methods finding something, nothing, or something only now and then, so the paths the checked runs take are
+     * warm. MagmaCore's context tables still link inside the first callbacks' limits, so a time limit stopping a life
+     * is tried again; the instruction limit counts the same however warm the JVM is, and fails at once, as does
+     * anything else.
      */
     private static void warmUp(Path folder) {
         try (PetBehaviorCatalog catalog = load(folder, warning -> {
@@ -521,23 +542,28 @@ class ShippedPetModulesTest {
             PetPrograms.Program everything = new PetPrograms(catalog, warning -> {
             }).program("warm-up", "everything", PetBehaviorCatalog.DEFAULTS.stream()
                     .map(name -> new PetBehaviorEntry(name, Map.of())).toList(), "warm-up");
-            for (int attempt = 1; ; attempt++) {
-                Coverage ignored = new Coverage();
-                StubPet pet = new StubPet(Owner.PAST_FOLLOW, false, true, Answers.SOMETHING, ignored);
-                try {
-                    run(everything, pet, ignored);
-                    return;
-                } catch (MindRunawayException runaway) {
-                    String why = String.valueOf(runaway.getMessage());
-                    // Raised inside LuaJ's instruction hook, the message gains a source:line prefix and a traceback.
-                    boolean timed = why.contains("Lua CPU-time budget exceeded") || why.contains("Lua elapsed-time");
-                    if (timed && attempt < 8) continue;
-                    throw new AssertionError("Warming up, " + pet + ", tick " + pet.tick + ": " + why, runaway);
-                } catch (RuntimeException | AssertionError failure) {
-                    throw new AssertionError("Warming up, " + pet + ", tick " + pet.tick + ": " + failure.getMessage(),
-                            failure);
+            Map<Owner, Answers> lives = new EnumMap<>(Owner.class);
+            lives.put(Owner.PAST_FOLLOW, Answers.SOMETHING);
+            lives.put(Owner.WILD, Answers.SOMETHING);
+            lives.put(Owner.AWAY, Answers.NOTHING);
+            lives.put(Owner.PAST_TELEPORT, Answers.FLICKER);
+            lives.forEach((owner, answers) -> {
+                for (int attempt = 1; ; attempt++) {
+                    Coverage ignored = new Coverage();
+                    StubPet pet = new StubPet(owner, false, true, answers, ignored);
+                    try {
+                        run(everything, pet, ignored);
+                        return;
+                    } catch (MindRunawayException runaway) {
+                        if (timed(runaway) && attempt < 8) continue;
+                        throw new AssertionError("Warming up, " + pet + ", tick " + pet.tick + ": "
+                                + runaway.getMessage(), runaway);
+                    } catch (RuntimeException | AssertionError failure) {
+                        throw new AssertionError("Warming up, " + pet + ", tick " + pet.tick + ": "
+                                + failure.getMessage(), failure);
+                    }
                 }
-            }
+            });
         }
     }
 
