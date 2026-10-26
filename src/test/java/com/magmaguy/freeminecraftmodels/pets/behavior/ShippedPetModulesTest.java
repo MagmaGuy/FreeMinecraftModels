@@ -251,18 +251,27 @@ class ShippedPetModulesTest {
         assertEquals(List.of(), warnings);
     }
 
-    /** The runtime asks a stopped behavior to start only every probe_interval ticks; none of ours asks every tick. */
+    /**
+     * How often the runtime asks each shipped behavior, while stopped, whether it can start: every 4 ticks for an
+     * owner's commands and walk-offs, 5 for hover's bob between drifts, 10 for the rest. Pinned, so a typo cannot
+     * make stay or follow_owner wait seconds, or put a behavior back to asking every tick.
+     */
+    private static final Map<String, Integer> PROBE_INTERVALS = Map.ofEntries(
+            Map.entry("fmm:pet/stay", 4), Map.entry("fmm:pet/follow_owner", 4), Map.entry("fmm:pet/hover", 5),
+            Map.entry("fmm:pet/migrate", 10), Map.entry("fmm:pet/campfire", 10), Map.entry("fmm:pet/day_perch", 10),
+            Map.entry("fmm:pet/rain_bloom", 10), Map.entry("fmm:pet/drift", 10), Map.entry("fmm:pet/wander", 10),
+            Map.entry("fmm:pet/swim", 10), Map.entry("fmm:pet/idle_look", 10));
+
     @Test
-    void everyShippedBehaviorIsAskedToStartLessOftenThanEveryTick() {
+    void everyShippedBehaviorIsAskedToStartAtItsPinnedInterval() {
         try (PetBehaviorCatalog catalog = catalog()) {
             PetPrograms programs = new PetPrograms(catalog, warnings::add);
             List<PetBehaviorEntry> all = PetBehaviorCatalog.DEFAULTS.stream()
                     .map(name -> new PetBehaviorEntry(name, Map.of())).toList();
             MindProgram everything = programs.program("test", "everything", all, "everything").definition().instantiate();
-            Map<String, Integer> everyTick = everything.behaviors().stream()
-                    .filter(behavior -> behavior.probeInterval() < 2)
+            Map<String, Integer> intervals = everything.behaviors().stream()
                     .collect(Collectors.toMap(MindBehavior::identifier, MindBehavior::probeInterval));
-            assertEquals(Map.of(), everyTick, "behaviors without a probe_interval");
+            assertEquals(new TreeMap<>(PROBE_INTERVALS), new TreeMap<>(intervals));
         }
         assertEquals(List.of(), warnings);
     }
