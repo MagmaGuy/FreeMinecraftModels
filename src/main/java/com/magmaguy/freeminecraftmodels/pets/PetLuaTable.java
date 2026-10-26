@@ -59,9 +59,14 @@ import java.util.function.Supplier;
 
 /**
  * The c.pet table a behavior module reads: the pet's state, and the Java helpers that keep per-tick work fast. One
- * table per pet; {@link #bind} points it at the current callback's Mind context first. A property is read once per pet
- * tick and kept for the rest of that tick, through every callback, unless a c.pet method moves or stops the body; a
- * location property gives a fresh table on every read, so a module may change the one it gets.
+ * table per pet; {@link #bind} points it at the current callback's Mind context first.
+ * <p>
+ * Its properties are a snapshot per pet tick: each is read on its first use in a tick and kept through every callback
+ * of that tick. A new pet tick, game tick or body reads them afresh, and so does every read after
+ * {@code c.pet:teleport_near_owner} or {@code c.pet:stop}. Nothing else does: after {@code c.entity:teleport},
+ * {@code set_velocity} or {@code push}, or the stop MagmaCore makes when a behavior gives up its controls, the
+ * properties show the change on the next tick. {@code speed} is the exception, read fresh every time, since that stop
+ * changes it. A location property gives a fresh table on every read, so a module may change the one it gets.
  * <p>
  * Modules get it read-only: assigning to c.pet or c.pet.species, rawset on them and setmetatable all raise a Lua
  * error, so no module can shadow a property or replace a method for the rest of its pet's life. c.pet never acts in
@@ -117,9 +122,7 @@ public final class PetLuaTable {
     private final Ticks ticks = new Ticks();
     private MindContext context;
     private String module = "";
-    // The world a location table names, as a Lua string, kept while it stays the same world.
-    private World namedWorld;
-    private LuaString worldName;
+    private final LocationTables locations = new LocationTables();
     private final WalkPath path = new WalkPath();
     // The body's location this tick, shared by c.pet.position and distance_to.
     private final Supplier<Location> position;
@@ -163,7 +166,7 @@ public final class PetLuaTable {
         Supplier<Location> home = ticks.perTick(control::home), anchor = ticks.perTick(this::anchor),
                 stayAnchor = ticks.perTick(control::stayAnchor),
                 ownerLocation = ticks.perTick(() -> control.owner().map(Player::getLocation).orElse(null));
-        property("position", () -> locationTable(position.get()));
+        property("position", () -> locations.table(position.get()));
         property("home", () -> location(home.get()));
         property("anchor", () -> location(anchor.get()));
         property("stay_anchor", () -> location(stayAnchor.get()));
@@ -172,7 +175,8 @@ public final class PetLuaTable {
         property("night", ticks.perTick(() -> LuaValue.valueOf(PetSky.isNight(body().getWorld()))));
         property("day", ticks.perTick(() -> LuaValue.valueOf(PetSky.isDay(body().getWorld()))));
         property("raining", ticks.perTick(() -> LuaValue.valueOf(raining())));
-        property("speed", ticks.perTick(() -> LuaValue.valueOf(body().getVelocity().length())));
+        // Not kept: the stop MagmaCore makes when a behavior gives up its controls changes it within the tick.
+        property("speed", () -> LuaValue.valueOf(body().getVelocity().length()));
         property("route_cruise", ticks.perTick(() ->
                 LuaValue.valueOf(control.route() == null ? 0D : control.route().cruise())));
 
@@ -463,17 +467,23 @@ public final class PetLuaTable {
 
     /** A location as a table, or nil when there is none or it is in another world than the body. */
     private LuaValue location(Location location) {
-        return location == null || location.getWorld() != body().getWorld() ? LuaValue.NIL : locationTable(location);
+        return location == null || location.getWorld() != body().getWorld() ? LuaValue.NIL : locations.table(location);
     }
 
-    /** A fresh table of the location, its world's name made a Lua string once per world. */
-    private LuaTable locationTable(Location location) {
-        World world = location.getWorld();
-        if (world != namedWorld) {
-            namedWorld = world;
-            worldName = world == null ? null : LuaValue.valueOf(world.getName());
+    /** Builds the location tables c.pet returns, keeping the last world's name as a Lua string. */
+    static final class LocationTables {
+        private World world;
+        private LuaString name;
+
+        /** A fresh table of the location, so a module may change it without changing the next one. */
+        LuaTable table(Location location) {
+            World at = location.getWorld();
+            if (at != world) {
+                world = at;
+                name = at == null ? null : LuaValue.valueOf(at.getName());
+            }
+            return LuaTableSupport.locationToTable(location, name);
         }
-        return LuaTableSupport.locationToTable(location, worldName);
     }
 
     /** Owned: the owner. Wild: its home, or where it is when it has none. */
@@ -852,8 +862,9 @@ public final class PetLuaTable {
 
     /**
      * The tick c.pet's properties belong to. A property read through {@link #perTick} asks its source once per tick
-     * and keeps the answer, failures aside, until a callback binds another pet tick, game tick or body, or c.pet moves
-     * or stops the body itself. Before any callback has bound one, every read asks. Server thread only.
+     * and keeps the answer, failures aside, until a callback binds another pet tick, game tick or body, or
+     * {@link #moved} says c.pet moved or stopped the body itself. Before any callback has bound one, every read asks.
+     * Server thread only.
      */
     static final class Ticks {
         private long petTick, gameTick;
@@ -896,11 +907,12 @@ public final class PetLuaTable {
     }
 
     /**
-     * A read-only Lua table of named fields. Every read runs the field's supplier, so a value is fresh on each access;
-     * a method is a field holding a function, called with a dot or with a colon on this table. Assigning to the
-     * table, rawset on it and setmetatable on it raise a Lua error naming the field. A Java failure inside a field or
-     * method, linkage errors included, goes to the report with the field's name and reaches Lua as a short error; Lua
-     * errors, such as bad arguments, pass through unreported.
+     * A read-only Lua table of named fields. Every read asks the field's supplier, and the supplier decides how fresh
+     * the value is: most of c.pet's keep theirs for the pet tick through {@link Ticks#perTick}. A method is a field
+     * holding a function, called with a dot or with a colon on this table. Assigning to the table, rawset on it and
+     * setmetatable on it raise a Lua error naming the field. A Java failure inside a field or method, linkage errors
+     * included, goes to the report with the field's name and reaches Lua as a short error; Lua errors, such as bad
+     * arguments, pass through unreported.
      */
     static final class Fields {
         private record Field(String label, Supplier<LuaValue> supplier) {

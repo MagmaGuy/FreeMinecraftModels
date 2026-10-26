@@ -7,10 +7,8 @@ import com.magmaguy.magmacore.ai.MindNavigationStatus;
 import com.magmaguy.magmacore.ai.MindPerception;
 import com.magmaguy.magmacore.ai.MindPosition;
 import com.magmaguy.magmacore.scripting.LuaEnvironmentFactory;
-import com.magmaguy.magmacore.scripting.tables.LuaTableSupport;
 import com.magmaguy.shaded.luaj.vm2.Globals;
 import com.magmaguy.shaded.luaj.vm2.LuaError;
-import com.magmaguy.shaded.luaj.vm2.LuaString;
 import com.magmaguy.shaded.luaj.vm2.LuaTable;
 import com.magmaguy.shaded.luaj.vm2.LuaValue;
 import com.magmaguy.shaded.luaj.vm2.Varargs;
@@ -81,7 +79,7 @@ class PetLuaTableTest {
     }
 
     @Test
-    void propertiesAreReadFreshOnEveryAccess() {
+    void aFieldAsksItsSupplierOnEveryRead() {
         assertEquals(1D, run("return c.pet.speed").todouble());
         speed = 2D;
         assertEquals(2D, run("return c.pet.speed").todouble());
@@ -167,17 +165,45 @@ class PetLuaTableTest {
 
     @Test
     void aKeptLocationGivesAFreshTableOnEveryRead() {
+        // c.pet's location path: a location kept for the tick, a table built from it on every read.
         PetLuaTable.Ticks ticks = new PetLuaTable.Ticks();
-        Supplier<Location> kept = ticks.perTick(() -> new Location(world, 1.5D, 64D, -2D));
+        PetLuaTable.LocationTables tables = new PetLuaTable.LocationTables();
+        int[] reads = {0};
+        Supplier<Location> kept = ticks.perTick(() -> {
+            reads[0]++;
+            return new Location(world, 1.5D, 64D, -2D);
+        });
+        PetLuaTable.Fields located = new PetLuaTable.Fields("c.pet",
+                (call, failure) -> warnings.failure(species, "fmm:pet/test", call, failure));
+        located.value("position", () -> tables.table(kept.get()));
+        Globals globals = LuaEnvironmentFactory.createGlobals();
+        LuaTable c = new LuaTable();
+        c.set("pet", located.view());
+        globals.set("c", c);
         ticks.bind(7L, 100L, new Object());
-        LuaString name = LuaValue.valueOf("world");
-        LuaTable first = LuaTableSupport.locationToTable(kept.get(), name);
-        first.set("x", 99);
-        LuaTable second = LuaTableSupport.locationToTable(kept.get(), name);
-        assertSame(kept.get(), kept.get(), "one location for the tick");
-        assertEquals(1.5D, second.get("x").todouble());
-        assertEquals("world", second.get("world").tojstring());
-        assertEquals(64D, second.get("y").todouble());
+
+        Varargs both = globals.load("""
+                local first = c.pet.position
+                first.x = 99
+                local second = c.pet.position
+                return first == second, second.world, second.x, second.y, second.z
+                """, "module").invoke();
+        assertFalse(both.arg(1).toboolean(), "each read is its own table");
+        assertEquals("world", both.arg(2).tojstring());
+        assertEquals(1.5D, both.arg(3).todouble(), "changing one read leaves the next alone");
+        assertEquals(64D, both.arg(4).todouble());
+        assertEquals(-2D, both.arg(5).todouble());
+        assertEquals(1, reads[0], "one location for the tick");
+    }
+
+    @Test
+    void locationTablesNameTheirWorldOnceUntilItChanges() {
+        PetLuaTable.LocationTables tables = new PetLuaTable.LocationTables();
+        LuaValue first = tables.table(new Location(world, 0D, 64D, 0D)).get("world");
+        assertSame(first, tables.table(new Location(world, 5D, 70D, 5D)).get("world"));
+        World nether = world("world_nether");
+        assertEquals("world_nether", tables.table(new Location(nether, 0D, 64D, 0D)).get("world").tojstring());
+        assertTrue(tables.table(new Location(null, 0D, 64D, 0D)).get("world").isnil());
     }
 
     @Test
