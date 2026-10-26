@@ -24,6 +24,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -41,6 +42,17 @@ public final class PetSpecies {
     public static final String FILE_SUFFIX = ".pet.yml";
     /** The keys a variant written as a map may hold. */
     private static final List<String> VARIANT_KEYS = List.of("model", "weight", "behaviors");
+    /** The world interaction sections pet files had before behavior modules, each with the module that replaces it. */
+    private static final Map<String, String> LEGACY_SECTIONS = new LinkedHashMap<>();
+
+    static {
+        LEGACY_SECTIONS.put("campfire", "campfire");
+        LEGACY_SECTIONS.put("rainBloom", "rain_bloom");
+        LEGACY_SECTIONS.put("glow", "night_glow");
+        LEGACY_SECTIONS.put("sting", "sting");
+        LEGACY_SECTIONS.put("dayPerch", "day_perch");
+        LEGACY_SECTIONS.put("drizzle", "crop_drizzle");
+    }
 
     /**
      * A model the species' pets may wear, its share of the picks, and the behavior modules it adds to the species'.
@@ -181,6 +193,7 @@ public final class PetSpecies {
         }
         this.locomotion = movement;
         this.behaviors = listedBehaviors(config, filename, Logger::warn);
+        warnLegacySections(config, filename, Logger::warn);
         this.wildSpawn = readWildSpawn(section(config, "wildSpawn"), movement, filename);
         this.orientation = orientation(section(config, "orientation"), filename);
         this.centerOnBody = centerOnBody(config, movement);
@@ -303,6 +316,22 @@ public final class PetSpecies {
      */
     static List<PetBehaviorEntry> listedBehaviors(ConfigurationSection config, String filename, Consumer<String> warn) {
         return config.contains("behaviors") ? PetBehaviorEntry.read(config.get("behaviors"), filename, warn) : null;
+    }
+
+    /**
+     * Warns, once per load of the file, about each section it still has from before world interactions became
+     * behavior modules, naming the module that does the same now; the section itself does nothing.
+     */
+    static void warnLegacySections(ConfigurationSection config, String filename, Consumer<String> warn) {
+        LEGACY_SECTIONS.forEach((key, module) -> {
+            if (!config.contains(key)) return;
+            // glow could also be just "glow: true".
+            String kind = config.isConfigurationSection(key) ? "section" : "setting";
+            warn.accept(filename + ": the " + key + " " + kind + " no longer does anything; world interactions are"
+                    + " behavior modules now. List the " + module + " module under behaviors: instead (see"
+                    + " plugins/FreeMinecraftModels/pet_behaviors/" + module + ".lua for its settings); this " + kind
+                    + " is ignored.");
+        });
     }
 
     /**
@@ -581,7 +610,7 @@ public final class PetSpecies {
         return wildSpawn;
     }
 
-    /** Campfire, rain bloom, glow, sting, day perch, drizzle and migration settings; each null when off. */
+    /** The species' look in night migrations; its migration() is null when off. */
     public PetInteractions interactions() {
         return interactions;
     }

@@ -8,21 +8,20 @@ import com.magmaguy.freeminecraftmodels.config.PetsConfig;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.pets.behavior.PetBehaviorCatalog;
+import com.magmaguy.freeminecraftmodels.pets.behavior.PetBehaviorDefaults;
 import com.magmaguy.freeminecraftmodels.pets.behavior.PetBehaviorEntry;
+import com.magmaguy.freeminecraftmodels.pets.behavior.PetFailureLog;
 import com.magmaguy.freeminecraftmodels.pets.behavior.PetPrograms;
 import com.magmaguy.freeminecraftmodels.pets.interactions.PetInteractionRuntime;
 import com.magmaguy.freeminecraftmodels.pets.interactions.PetInteractions;
-import com.magmaguy.magmacore.MagmaCore;
 import com.magmaguy.magmacore.ai.MindBodyLocomotion;
 import com.magmaguy.magmacore.ai.MindBodyProfile;
-import com.magmaguy.magmacore.ai.MindFailure;
 import com.magmaguy.magmacore.ai.MindHandle;
 import com.magmaguy.magmacore.ai.MindHost;
 import com.magmaguy.magmacore.ai.MobBody;
 import com.magmaguy.magmacore.scripting.tables.LuaLivingEntityTable;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.Logger;
-import com.magmaguy.shaded.luaj.vm2.LuaError;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -41,19 +40,9 @@ import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
-import java.nio.channels.Channels;
-import java.nio.channels.FileChannel;
-import java.nio.file.DirectoryIteratorException;
-import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -67,9 +56,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
@@ -83,9 +69,6 @@ import java.util.stream.Stream;
 public final class PetManager {
     private static final double BREED_DISTANCE = 8D;
     private static final int INTERACTION_DEBOUNCE_TICKS = 5;
-    /** A temporary file {@link #writeDefault} leaves only when the server stops in the middle of writing a default. */
-    private static final Pattern LEFTOVER_DEFAULT = Pattern.compile("[a-z0-9_]+\\.lua\\.[0-9a-z]{1,13}\\.tmp");
-    private static final long LEFTOVER_DEFAULT_MILLIS = 60_000L;
     // Spawn refusals said in one load, past which more stay quiet.
     private static final int MAX_REFUSALS_SAID = 64;
 
@@ -97,7 +80,7 @@ public final class PetManager {
     private static long ticks;
     private static NamespacedKey bodyKey;
     private static PetManager instance;
-    private static final FailureLog FAILURES = new FailureLog(Logger::warn);
+    private static final PetFailureLog FAILURES = new PetFailureLog(Logger::warn);
     // Whether a Lua player table was built since these classes loaded; see warmEntityTables.
     private static boolean entityTablesWarm;
 
@@ -248,9 +231,9 @@ public final class PetManager {
      */
     private void loadBehaviors() {
         Path folder = new File(MetadataHandler.PLUGIN.getDataFolder(), "pet_behaviors").toPath();
-        removeLeftoverDefaults(folder, System.currentTimeMillis());
+        PetBehaviorDefaults.removeLeftovers(folder, System.currentTimeMillis());
         behaviors = PetBehaviorCatalog.load(folder, PetBehaviorCatalog.DEFAULTS,
-                name -> writeDefault(folder, name, MetadataHandler.PLUGIN::getResource), Logger::warn);
+                name -> PetBehaviorDefaults.write(folder, name, MetadataHandler.PLUGIN::getResource), Logger::warn);
         programs = new PetPrograms(behaviors, Logger::warn);
         warnings = new PetLuaTable.Warnings();
         for (PetSpecies pet : species.values()) {
@@ -281,74 +264,6 @@ public final class PetManager {
         if (listsBehaviors) return fileName;
         return fileName + " (default behaviors for " + locomotion.name()
                 + (variantAdds ? ", plus variant " + variant + "'s list" : "") + ")";
-    }
-
-    /**
-     * Deletes the temporary files {@link #writeDefault} left directly in the folder when a server stopped in the
-     * middle of writing a default, once they are a minute old, so one being written now is never touched. Only regular
-     * files named exactly as it names them go; anything else stays, and so does what cannot be deleted, which no load
-     * reads anyway.
-     */
-    static void removeLeftoverDefaults(Path folder, long nowMillis) {
-        if (!Files.isDirectory(folder)) return;
-        try (DirectoryStream<Path> files = Files.newDirectoryStream(folder)) {
-            for (Path file : files) {
-                if (!LEFTOVER_DEFAULT.matcher(file.getFileName().toString()).matches()) continue;
-                try {
-                    BasicFileAttributes attributes = Files.readAttributes(file, BasicFileAttributes.class,
-                            LinkOption.NOFOLLOW_LINKS);
-                    if (attributes.isRegularFile()
-                            && nowMillis - attributes.lastModifiedTime().toMillis() > LEFTOVER_DEFAULT_MILLIS)
-                        Files.deleteIfExists(file);
-                } catch (IOException ignored) {
-                    // It stays.
-                }
-            }
-        } catch (IOException | DirectoryIteratorException ignored) {
-            // The catalog reports a folder it cannot read.
-        }
-    }
-
-    /**
-     * Writes the shipped behavior module {@code name} to {@code folder/name.lua} from the resource
-     * pet_behaviors/name.lua that {@code resources} opens (null when there is none). It goes to a temporary file
-     * beside it first, which no load reads since its name does not end in .lua, forced to disk, and is then moved into
-     * place in one step, or with a plain move that never replaces a file where the atomic move fails. So a crash never
-     * leaves a partly written default, which the next load would keep as an owner's edit. Throws
-     * {@link UncheckedIOException} when it cannot write; the catalog asks only where no file is.
-     */
-    static void writeDefault(Path folder, String name, Function<String, InputStream> resources) {
-        String resource = "pet_behaviors/" + name + ".lua";
-        Path temporary = folder.resolve(name + ".lua."
-                + Long.toUnsignedString(ThreadLocalRandom.current().nextLong(), 36) + ".tmp");
-        // Whether the temporary file is ours and still there, so a failure removes it.
-        boolean leftOver = false;
-        try (InputStream source = resources.apply(resource)) {
-            if (source == null) throw new FileNotFoundException("the plugin jar has no " + resource);
-            // A file of our own rather than Files.createTempFile, which on Linux would leave the module readable by
-            // the server's user only.
-            try (FileChannel target = FileChannel.open(temporary, StandardOpenOption.CREATE_NEW,
-                    StandardOpenOption.WRITE)) {
-                leftOver = true;
-                source.transferTo(Channels.newOutputStream(target));
-                // On disk before the move, so a crash just after it cannot leave an empty module behind.
-                target.force(true);
-            }
-            // Windows can hold a file just written for a moment (Defender, the indexer); MagmaCore retries the move
-            // through that, then moves atomically, or else plainly without replacing.
-            MagmaCore.movePath(temporary, folder.resolve(name + ".lua"));
-            leftOver = false;
-        } catch (IOException failure) {
-            throw new UncheckedIOException(failure);
-        } finally {
-            if (leftOver) {
-                try {
-                    Files.deleteIfExists(temporary);
-                } catch (IOException ignored) {
-                    // Its name keeps every load from reading it.
-                }
-            }
-        }
     }
 
     public Collection<PetSpecies> species() {
@@ -870,55 +785,5 @@ public final class PetManager {
             if (body != null && body.isValid() && WildSpawner.inSpawnArea(player, body.getLocation())) count++;
         }
         return count;
-    }
-
-    // ---- failed callbacks -------------------------------------------------------------------------------------
-
-    /**
-     * Logs a failed Mind callback once per program, callback and kind of failure until {@link #clear}, which each load
-     * calls: a module failing on every tick of a hundred pets says so once. MagmaCore stops a behavior whose callback
-     * failed, or does not start it, and tries it again from the next tick. A behavior that keeps passing can_start and
-     * failing after it holds its controls each tick it runs, so lower-priority behaviors that move or turn the pet may
-     * never run meanwhile: a failing drift tick keeps hover from running. A failed sensor runs again at its next
-     * interval. Server thread only.
-     */
-    static final class FailureLog {
-        private final Consumer<String> sink;
-        private final Set<String> said = new HashSet<>();
-
-        FailureLog(Consumer<String> sink) {
-            this.sink = sink;
-        }
-
-        void report(MindFailure failure) {
-            if (said.add(failure.programIdentifier() + "\n" + failure.callbackIdentifier() + "\n" + failure.kind()))
-                sink.accept(message(failure));
-        }
-
-        void clear() {
-            said.clear();
-        }
-
-        static String message(MindFailure failure) {
-            boolean runaway = failure.kind() == MindFailure.Kind.RUNAWAY_LIMIT_EXCEEDED;
-            Throwable cause = failure.cause();
-            // A Lua error's message names the file and line, and a runaway's the limit; anything else needs its type.
-            String reason = cause == null ? "no reason was given"
-                    : (cause instanceof LuaError || runaway) && cause.getMessage() != null ? cause.getMessage()
-                    : cause.toString();
-            String what = runaway ? "ran past its CPU time or instruction limit" : "failed";
-            String callback = failure.callbackIdentifier();
-            // MagmaCore runs can_start in place of a missing can_continue, under can_continue's name.
-            String also = callback.endsWith(".can_continue") ? " (or can_start, which runs there when a behavior has"
-                    + " no can_continue)" : "";
-            String outcome = callback.endsWith(".sense")
-                    ? "MagmaCore runs that sensor again at its next interval; the pet's behaviors keep running."
-                    : "MagmaCore stops that behavior, or does not start it, and tries it again from the next tick;"
-                    + " while it keeps failing, lower-priority behaviors that move or turn the pet may not run. The"
-                    + " pet's sensors keep running.";
-            return "The pet behavior callback " + callback + also + " in " + failure.programIdentifier() + " " + what
-                    + ": " + reason + ". " + outcome + " This is logged once per program, callback and kind of failure"
-                    + " until the next reload.";
-        }
     }
 }
