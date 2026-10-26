@@ -30,6 +30,13 @@ import java.util.stream.Collectors;
 public final class PetPrograms {
     /** A creature's program, and the settings of each module it runs by module id. */
     public record Program(LuaMindDefinition definition, Map<String, Map<String, Object>> settings) {
+        /** Whether the program runs the module of this file name, listed or pulled in by another module. */
+        public boolean runs(String module) {
+            String id = PetBehaviorCatalog.ID_PREFIX + module.toLowerCase(Locale.ROOT);
+            for (LuaMindModuleDescriptor resolved : definition.resolvedModules())
+                if (resolved.identifier().equals(id)) return true;
+            return false;
+        }
     }
 
     // About one probe per movement behavior plus the sensors due, per pet tick; the load check tunes these values.

@@ -274,6 +274,30 @@ class PetProgramsTest {
     }
 
     @Test
+    void onlyAProgramRunningMigrateCanFlyAMigration() throws IOException {
+        write("route", module("route", "settings = { cruise = 1 }, dependencies = { 'fmm:pet/migrate' }"));
+        try (PetBehaviorCatalog catalog = catalog("migrate", "stay", "follow_owner", "drift", "hover", "wander",
+                "idle_look", "swim")) {
+            PetPrograms programs = new PetPrograms(catalog, warnings::add);
+            // Only a flyer's default list includes migrate.
+            assertTrue(programs.program("jellyfish", "flying", PetPrograms.defaults(MindBodyLocomotion.FLYING), FILE)
+                    .runs("migrate"));
+            for (MindBodyLocomotion locomotion : List.of(MindBodyLocomotion.GROUNDED, MindBodyLocomotion.AMPHIBIOUS,
+                    MindBodyLocomotion.AQUATIC, MindBodyLocomotion.STATIONARY))
+                assertFalse(programs.program("jellyfish", locomotion.name(), PetPrograms.defaults(locomotion), FILE)
+                        .runs("migrate"), locomotion.name());
+            // A list that leaves it out does not run it; one module needing it pulls it in.
+            assertFalse(programs.program("jellyfish", "listed", List.of(entry("stay"), entry("drift")), FILE)
+                    .runs("migrate"));
+            PetPrograms.Program pulled = programs.program("jellyfish", "pulled", List.of(entry("route")), FILE);
+            assertTrue(pulled.runs("migrate"));
+            assertTrue(pulled.runs("MIGRATE"));
+            assertFalse(pulled.runs("stay"));
+        }
+        assertEquals(List.of(), warnings);
+    }
+
+    @Test
     void eachLocomotionHasADefaultList() {
         assertEquals(List.of("migrate", "stay", "follow_owner", "drift", "hover"), names(MindBodyLocomotion.FLYING));
         assertEquals(List.of("stay", "follow_owner", "wander", "idle_look"), names(MindBodyLocomotion.GROUNDED));
