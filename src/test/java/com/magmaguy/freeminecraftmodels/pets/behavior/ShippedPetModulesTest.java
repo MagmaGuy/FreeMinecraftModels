@@ -105,7 +105,8 @@ class ShippedPetModulesTest {
     private static final Set<String> DEFAULT_CALLS = Set.of(
             "fmm:pet/migrate route_target()", "fmm:pet/migrate steer_to(L, 0.3)", "fmm:pet/migrate stop()",
             "fmm:pet/stay rest_point(L, 0.5)", "fmm:pet/stay steer_to(L, 0.045)", "fmm:pet/stay stop()",
-            "fmm:pet/follow_owner trail_point(1.5, 2)", "fmm:pet/follow_owner teleport_near_owner(2)",
+            "fmm:pet/follow_owner trail_point(1.5, 2)", "fmm:pet/follow_owner distance_to(L)",
+            "fmm:pet/follow_owner teleport_near_owner(2)",
             "fmm:pet/follow_owner steer_to(L, 0.375)", "fmm:pet/follow_owner steer_to(L, 0.6)",
             "fmm:pet/drift hover_point(L, 5)", "fmm:pet/drift distance_to(L)", "fmm:pet/drift steer_to(L, 0.09)",
             "fmm:pet/hover ground_below(L, 12)", "fmm:pet/hover steer_to(L, 0.045)",
@@ -137,13 +138,16 @@ class ShippedPetModulesTest {
     /**
      * follow_owner's calls by where the owner is: the follow speed past the follow distance, times leash_urgency past
      * the leash, only the catch-up teleport past the teleport distance, and nothing while the owner is near, away or
-     * wild. Steering that is refused, or accepted but gets the pet nowhere, also teleports, after stuck_ticks.
+     * wild. Steering that is refused, or accepted but gets the pet nowhere, also teleports, after stuck_ticks. Each
+     * follow also checks how far the pet is from its trail point, to end on arrival.
      */
     private static final Map<Owner, Set<String>> FOLLOW_CALLS = Map.of(
             Owner.WILD, Set.of(), Owner.WITHIN_FOLLOW, Set.of(), Owner.AWAY, Set.of(),
-            Owner.PAST_FOLLOW, Set.of("trail_point(1.5, 2)", "steer_to(L, 0.375)", "teleport_near_owner(2)"),
-            Owner.PAST_LEASH, Set.of("trail_point(1.5, 2)", "steer_to(L, 0.6)", "teleport_near_owner(2)"),
-            Owner.PAST_TELEPORT, Set.of("teleport_near_owner(2)"));
+            Owner.PAST_FOLLOW, Set.of("trail_point(1.5, 2)", "distance_to(L)", "steer_to(L, 0.375)",
+                    "teleport_near_owner(2)"),
+            Owner.PAST_LEASH, Set.of("trail_point(1.5, 2)", "distance_to(L)", "steer_to(L, 0.6)",
+                    "teleport_near_owner(2)"),
+            Owner.PAST_TELEPORT, Set.of("trail_point(1.5, 2)", "distance_to(L)", "teleport_near_owner(2)"));
     /**
      * sting's calls by where the owner is: a wild pet takes the touches on its model and stings those players; an
      * owned one never takes touches, and stings hostile mobs only.
@@ -180,8 +184,8 @@ class ShippedPetModulesTest {
         case "getEyeLocation" -> new Location(WORLD, 3.5, 71.62, 0.5);
         default -> unknown("the player", proxy, method, args);
     });
-    /** Whether this class installed the stand-in Bukkit server, so it removes it when done. */
-    private static boolean installedServer;
+    /** The Bukkit server another class left installed, if any, put back when this class is done. */
+    private static Server previousServer;
     private static final Pattern PET_NAME = Pattern.compile("c\\.pet[.:]([a-z_]+)");
     private static final Pattern SPECIES_NAME = Pattern.compile("species\\.([a-z_]+)");
 
@@ -190,33 +194,38 @@ class ShippedPetModulesTest {
     private final List<String> warnings = new ArrayList<>();
 
     /**
-     * Installs a stand-in Bukkit server when there is none, for the world a location table names, then warms up. A
-     * cold JVM links MagmaCore's Lua tables on their first use, which can take longer than the 20 ms CPU limit of the
-     * callback that first uses them. So this builds the player table nearest_player returns, outside any limit, and
-     * lives one pet's life through every shipped module before any checked run.
+     * Installs this class's own stand-in Bukkit server, for the world a location table names, whatever an earlier
+     * class left installed, then warms up. A cold JVM links MagmaCore's Lua tables on their first use, which can take
+     * longer than the 20 ms CPU limit of the callback that first uses them. So this builds the player table
+     * nearest_player returns, outside any limit, and lives one pet's life through every shipped module before any
+     * checked run.
      */
     @BeforeAll
-    static void setUp(@TempDir Path folder) {
-        if (Bukkit.getServer() == null) {
-            Bukkit.setServer(stub(Server.class, (proxy, method, args) -> switch (method.getName()) {
-                case "getWorld" -> "world".equals(args[0]) ? WORLD : null;
-                case "getLogger" -> Logger.getLogger("FMM-shipped-pet-modules-test");
-                case "getBukkitVersion" -> "26.3-R0.1-SNAPSHOT";
-                default -> plain(proxy, method, args);
-            }));
-            installedServer = true;
-        }
+    static void setUp(@TempDir Path folder) throws ReflectiveOperationException {
+        Field server = serverField();
+        previousServer = (Server) server.get(null);
+        server.set(null, stub(Server.class, (proxy, method, args) -> switch (method.getName()) {
+            case "getWorld" -> "world".equals(args[0]) ? WORLD : null;
+            case "getLogger" -> Logger.getLogger("FMM-shipped-pet-modules-test");
+            case "getBukkitVersion" -> "26.3-R0.1-SNAPSHOT";
+            default -> plain(proxy, method, args);
+        }));
         LuaLivingEntityTable.build(PLAYER);
         warmUp(folder);
     }
 
+    /** Puts back the server that was installed before this class, or none. */
     @AfterAll
     static void tearDown() throws ReflectiveOperationException {
-        if (!installedServer) return;
+        serverField().set(null, previousServer);
+        previousServer = null;
+    }
+
+    /** Bukkit's server singleton, which Bukkit.setServer will not replace once set. */
+    private static Field serverField() throws NoSuchFieldException {
         Field server = Bukkit.class.getDeclaredField("server");
         server.setAccessible(true);
-        server.set(null, null);
-        installedServer = false;
+        return server;
     }
 
     private PetBehaviorCatalog catalog() {
@@ -495,7 +504,8 @@ class ShippedPetModulesTest {
                     return;
                 } catch (MindRunawayException runaway) {
                     String why = String.valueOf(runaway.getMessage());
-                    boolean timed = why.startsWith("Lua CPU-time budget exceeded") || why.startsWith("Lua elapsed-time");
+                    // Raised inside LuaJ's instruction hook, the message gains a source:line prefix and a traceback.
+                    boolean timed = why.contains("Lua CPU-time budget exceeded") || why.contains("Lua elapsed-time");
                     if (timed && attempt < 8) continue;
                     throw new AssertionError("Warming up, " + pet + ", tick " + pet.tick + ": " + why, runaway);
                 } catch (RuntimeException | AssertionError failure) {

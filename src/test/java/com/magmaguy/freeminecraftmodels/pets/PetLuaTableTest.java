@@ -378,6 +378,34 @@ class PetLuaTableTest {
         assertEquals(6, walker.requests.size(), "a forgotten path asks again");
     }
 
+    /** A loaded or unloaded world holding water up to y 63 and air above it. */
+    private static World sea(boolean loaded) {
+        return stub(World.class, (proxy, method, args) -> switch (method.getName()) {
+            case "isChunkLoaded" -> loaded;
+            case "getBlockAt" -> {
+                int y = args.length == 1 ? ((Location) args[0]).getBlockY() : (Integer) args[1];
+                Material type = y <= 63 ? Material.WATER : Material.AIR;
+                yield stub(org.bukkit.block.Block.class, (block, call, ignored) ->
+                        call.getName().equals("getType") ? type : plain(block, call, ignored));
+            }
+            default -> plain(proxy, method, args);
+        });
+    }
+
+    @Test
+    void aSwimmerRestingInWaterKeepsItsDepth() {
+        World sea = sea(true);
+        Location deep = new Location(sea, 0.5, 55.5, 0.5);
+        for (int draw = 0; draw < 20; draw++) {
+            Location spot = PetMotion.levelWaterPoint(deep, 2);
+            assertEquals(55.5, spot.getY(), "a swimmer told to stay 8 blocks down bobs at that depth");
+            assertTrue(spot.distance(deep) <= 2);
+        }
+        assertEquals(deep, PetMotion.levelWaterPoint(deep, 0));
+        assertNull(PetMotion.levelWaterPoint(new Location(sea, 0.5, 70, 0.5), 2), "out of the water: the usual spot");
+        assertNull(PetMotion.levelWaterPoint(new Location(sea(false), 0.5, 55.5, 0.5), 2), "an unloaded chunk");
+    }
+
     @Test
     void aCatchUpLandsAtLeastABlockNearerTheOwner() {
         assertTrue(PetMotion.closesIn(2.5, 30), "a far pet lands beside its owner");

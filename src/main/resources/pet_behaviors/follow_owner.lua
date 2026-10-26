@@ -4,8 +4,9 @@
 return ai.module {
     id = 'fmm:pet/follow_owner', revision = 1,
     -- speed is in blocks per tick at species speed 1 for a flying body; for a walking or swimming one, 4 x speed x the
-    -- species speed multiplies its body type's own movement speed, never under a quarter of it. leash_urgency
-    -- multiplies it past the leash distance; trail_back is how many blocks behind the owner the pet aims.
+    -- species speed multiplies its body type's own movement speed, never under a quarter of it. At speed 0 the pet
+    -- follows only by its catch-up teleports. leash_urgency multiplies it past the leash distance; trail_back is how
+    -- many blocks behind the owner the pet aims.
     settings = { speed = 0.25, leash_urgency = 1.6, trail_back = 1.5, stuck_ticks = 60 },
     memories = { follow_owner_stuck = 'integer', follow_owner_last = 'position' },
     behaviors = {
@@ -18,7 +19,12 @@ return ai.module {
             end,
             can_continue = function(c)
                 if c.pet.staying or c.pet.owner_location == nil then return false end
-                return c.pet.owner_distance > c.pet.species.follow_distance * 0.6
+                local species = c.pet.species
+                if c.pet.owner_distance <= species.follow_distance * 0.6 then return false end
+                -- At its trail point it is done, even when that point lies farther from the owner than the line
+                -- above, as for a pet hovering high over them: otherwise it would hold still there, catching up.
+                local target = c.pet:trail_point(c.settings.trail_back, species.hover_height)
+                return target == nil or c.pet:distance_to(target) > 0.5
             end,
             start = function(c)
                 c.memory:set('follow_owner_stuck', 0)
