@@ -7,8 +7,10 @@ import com.magmaguy.magmacore.ai.MindNavigationStatus;
 import com.magmaguy.magmacore.ai.MindPerception;
 import com.magmaguy.magmacore.ai.MindPosition;
 import com.magmaguy.magmacore.scripting.LuaEnvironmentFactory;
+import com.magmaguy.magmacore.scripting.tables.LuaTableSupport;
 import com.magmaguy.shaded.luaj.vm2.Globals;
 import com.magmaguy.shaded.luaj.vm2.LuaError;
+import com.magmaguy.shaded.luaj.vm2.LuaString;
 import com.magmaguy.shaded.luaj.vm2.LuaTable;
 import com.magmaguy.shaded.luaj.vm2.LuaValue;
 import com.magmaguy.shaded.luaj.vm2.Varargs;
@@ -26,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -83,6 +86,98 @@ class PetLuaTableTest {
         speed = 2D;
         assertEquals(2D, run("return c.pet.speed").todouble());
         assertTrue(run("return c.pet.unknown == nil").toboolean());
+    }
+
+    /** c.pet with one property read through {@code ticks}, from {@code source}. */
+    private LuaValue readThrough(PetLuaTable.Ticks ticks, Supplier<LuaValue> source) {
+        PetLuaTable.Fields kept = new PetLuaTable.Fields("c.pet",
+                (call, failure) -> warnings.failure(species, "fmm:pet/test", call, failure));
+        kept.value("speed", ticks.perTick(source));
+        Globals globals = LuaEnvironmentFactory.createGlobals();
+        LuaTable c = new LuaTable();
+        c.set("pet", kept.view());
+        globals.set("c", c);
+        return globals.load("return function() return c.pet.speed end", "module").call();
+    }
+
+    @Test
+    void aPropertyIsReadOncePerTickAndAgainOnTheNextTick() {
+        PetLuaTable.Ticks ticks = new PetLuaTable.Ticks();
+        int[] reads = {0};
+        LuaValue read = readThrough(ticks, () -> {
+            reads[0]++;
+            return LuaValue.valueOf(speed);
+        });
+        Object body = new Object();
+
+        assertEquals(1D, read.call().todouble());
+        speed = 2D;
+        assertEquals(2D, read.call().todouble(), "before any callback binds a tick, every read asks");
+
+        ticks.bind(7L, 100L, body);
+        assertEquals(2D, read.call().todouble());
+        speed = 3D;
+        int before = reads[0];
+        assertEquals(2D, read.call().todouble(), "the same tick keeps its value");
+        ticks.bind(7L, 100L, body);
+        assertEquals(2D, read.call().todouble(), "another callback on the same tick keeps it too");
+        assertEquals(before, reads[0]);
+
+        ticks.bind(8L, 101L, body);
+        assertEquals(3D, read.call().todouble(), "the next tick reads it again");
+    }
+
+    @Test
+    void aMoveAnotherBodyOrAnotherClockReadsAfresh() {
+        PetLuaTable.Ticks ticks = new PetLuaTable.Ticks();
+        LuaValue read = readThrough(ticks, () -> LuaValue.valueOf(speed));
+        Object body = new Object();
+        ticks.bind(7L, 100L, body);
+        assertEquals(1D, read.call().todouble());
+
+        speed = 2D;
+        ticks.moved();
+        assertEquals(2D, read.call().todouble(), "c.pet moved the body");
+        speed = 3D;
+        ticks.bind(7L, 100L, new Object());
+        assertEquals(3D, read.call().todouble(), "another body");
+        speed = 4D;
+        ticks.bind(7L, 55L, body);
+        assertEquals(4D, read.call().todouble(), "another world's game tick");
+        speed = 5D;
+        ticks.bind(9L, 55L, body);
+        assertEquals(5D, read.call().todouble(), "the next pet tick in a world whose time stands still");
+    }
+
+    @Test
+    void aFailedReadIsReportedAndNotKept() {
+        PetLuaTable.Ticks ticks = new PetLuaTable.Ticks();
+        boolean[] broken = {true};
+        LuaValue read = readThrough(ticks, () -> {
+            if (broken[0]) throw new IllegalStateException("the body is gone");
+            return LuaValue.valueOf(speed);
+        });
+        ticks.bind(7L, 100L, new Object());
+
+        assertThrows(LuaError.class, read::call);
+        assertEquals(1, messages.size());
+        broken[0] = false;
+        assertEquals(1D, read.call().todouble(), "the same tick asks again after a failure");
+    }
+
+    @Test
+    void aKeptLocationGivesAFreshTableOnEveryRead() {
+        PetLuaTable.Ticks ticks = new PetLuaTable.Ticks();
+        Supplier<Location> kept = ticks.perTick(() -> new Location(world, 1.5D, 64D, -2D));
+        ticks.bind(7L, 100L, new Object());
+        LuaString name = LuaValue.valueOf("world");
+        LuaTable first = LuaTableSupport.locationToTable(kept.get(), name);
+        first.set("x", 99);
+        LuaTable second = LuaTableSupport.locationToTable(kept.get(), name);
+        assertSame(kept.get(), kept.get(), "one location for the tick");
+        assertEquals(1.5D, second.get("x").todouble());
+        assertEquals("world", second.get("world").tojstring());
+        assertEquals(64D, second.get("y").todouble());
     }
 
     @Test
