@@ -14,6 +14,7 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -24,10 +25,11 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The parts of the pet manager that need no server: how warnings name a species' program, writing a shipped behavior
- * module, and logging a failed Mind callback once.
+ * module and clearing what an interrupted write left, and logging a failed Mind callback once.
  */
 class PetManagerTest {
     private static final String PROGRAM = "fmm:pet/creature/jellyfish/em_pet_jellyfish";
@@ -49,11 +51,41 @@ class PetManagerTest {
 
     @Test
     void warningsSayWhenAListIsTheLocomotionsDefault() {
-        assertEquals("jellyfish.pet.yml", PetManager.where("jellyfish.pet.yml", true, MindBodyLocomotion.FLYING));
+        assertEquals("jellyfish.pet.yml", PetManager.where("jellyfish.pet.yml", true, MindBodyLocomotion.FLYING,
+                "em_pet_jellyfish_gold", true));
         assertEquals("jellyfish.pet.yml (default behaviors for FLYING)",
-                PetManager.where("jellyfish.pet.yml", false, MindBodyLocomotion.FLYING));
+                PetManager.where("jellyfish.pet.yml", false, MindBodyLocomotion.FLYING, "em_pet_jellyfish", false));
         assertEquals("fox.pet.yml (default behaviors for GROUNDED)",
-                PetManager.where("fox.pet.yml", false, MindBodyLocomotion.GROUNDED));
+                PetManager.where("fox.pet.yml", false, MindBodyLocomotion.GROUNDED, "fox", false));
+        // A variant with a list of its own adds to the defaults; warnings about its entries say whose they are.
+        assertEquals("jellyfish.pet.yml (default behaviors for FLYING, plus variant em_pet_jellyfish_gold's list)",
+                PetManager.where("jellyfish.pet.yml", false, MindBodyLocomotion.FLYING, "em_pet_jellyfish_gold", true));
+    }
+
+    @Test
+    void onlyOldLeftoverDefaultsAreRemoved() throws IOException {
+        long now = System.currentTimeMillis();
+        FileTime old = FileTime.fromMillis(now - 120_000L), recent = FileTime.fromMillis(now - 10_000L);
+        for (String name : List.of("drift.lua.k3j2h1abc.tmp", "night_glow.lua.0.tmp", "drift.lua.writing.tmp",
+                "drift.lua", "notes.tmp", "drift.lua.tmp", "drift.lua.K3J2.tmp", "my.drift.lua.abc.tmp",
+                "drift.lua.abcdefghijklmn.tmp")) {
+            Files.writeString(folder.resolve(name), "-- kept unless a leftover");
+            Files.setLastModifiedTime(folder.resolve(name), name.contains("writing") ? recent : old);
+        }
+        Path directory = Files.createDirectory(folder.resolve("hover.lua.abc.tmp"));
+        Files.setLastModifiedTime(directory, old);
+        Path nested = Files.createDirectory(folder.resolve("mine")).resolve("swim.lua.abc.tmp");
+        Files.writeString(nested, "-- below the folder");
+        Files.setLastModifiedTime(nested, old);
+
+        PetManager.removeLeftoverDefaults(folder, now);
+
+        // Gone: the two old files named as writeDefault names them. One being written, a minute young, stays.
+        assertEquals(List.of("drift.lua", "drift.lua.K3J2.tmp", "drift.lua.abcdefghijklmn.tmp", "drift.lua.tmp",
+                "drift.lua.writing.tmp", "hover.lua.abc.tmp", "mine", "my.drift.lua.abc.tmp", "notes.tmp"), files());
+        assertTrue(Files.exists(nested));
+        // A folder that does not exist yet is nothing to clean.
+        PetManager.removeLeftoverDefaults(folder.resolve("missing"), now);
     }
 
     @Test
@@ -119,21 +151,32 @@ class PetManagerTest {
     }
 
     @Test
-    void theMessageNamesTheCallbackAndSaysThePetGoesOn() {
-        String after = ". Its behavior or sensor runs again later, and the pet keeps its other behaviors. This is logged"
-                + " once per program, callback and kind of failure until the next reload.";
+    void theMessageNamesTheCallbackAndSaysWhatStillRuns() {
+        String behavior = ". MagmaCore stops that behavior, or does not start it, and tries it again from the next"
+                + " tick; while it keeps failing, lower-priority behaviors that move or turn the pet may not run. The"
+                + " pet's sensors keep running.";
+        String once = " This is logged once per program, callback and kind of failure until the next reload.";
         assertEquals("The pet behavior callback " + TICK + " in " + PROGRAM + " failed: pet_behaviors/drift.lua:3 attempt"
-                        + " to index ? (a nil value)" + after,
+                        + " to index ? (a nil value)" + behavior + once,
                 PetManager.FailureLog.message(failure(PROGRAM, TICK, MindFailure.Kind.CALLBACK_EXCEPTION,
                         new LuaError("pet_behaviors/drift.lua:3 attempt to index ? (a nil value)"))));
         assertEquals("The pet behavior callback " + TICK + " in " + PROGRAM + " ran past its CPU time or instruction"
-                        + " limit: Lua callback exceeded 20000 instructions" + after,
+                        + " limit: Lua callback exceeded 20000 instructions" + behavior + once,
                 PetManager.FailureLog.message(failure(PROGRAM, TICK, MindFailure.Kind.RUNAWAY_LIMIT_EXCEEDED,
                         new MindRunawayException("Lua callback exceeded 20000 instructions", null))));
         // A Java failure keeps its type, which says more than its message alone.
         assertEquals("The pet behavior callback " + TICK + " in " + PROGRAM + " failed: java.lang.IllegalStateException:"
-                        + " no body" + after,
+                        + " no body" + behavior + once,
                 PetManager.FailureLog.message(failure(PROGRAM, TICK, MindFailure.Kind.CALLBACK_EXCEPTION,
                         new IllegalStateException("no body"))));
+        // A behavior without can_continue fails its can_start under can_continue's name.
+        assertEquals("The pet behavior callback fmm:pet/drift.can_continue (or can_start, which runs there when a"
+                        + " behavior has no can_continue) in " + PROGRAM + " failed: boom" + behavior + once,
+                PetManager.FailureLog.message(failure(PROGRAM, "fmm:pet/drift.can_continue",
+                        MindFailure.Kind.CALLBACK_EXCEPTION, new LuaError("boom"))));
+        assertEquals("The pet behavior callback fmm:pet/sting_players.sense in " + PROGRAM + " failed: boom. MagmaCore"
+                        + " runs that sensor again at its next interval; the pet's behaviors keep running." + once,
+                PetManager.FailureLog.message(failure(PROGRAM, "fmm:pet/sting_players.sense",
+                        MindFailure.Kind.CALLBACK_EXCEPTION, new LuaError("boom"))));
     }
 }

@@ -8,8 +8,11 @@ import com.magmaguy.freeminecraftmodels.config.PetsConfig;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.pets.behavior.PetBehaviorCatalog;
+import com.magmaguy.freeminecraftmodels.pets.behavior.PetBehaviorEntry;
 import com.magmaguy.freeminecraftmodels.pets.behavior.PetPrograms;
 import com.magmaguy.freeminecraftmodels.pets.interactions.PetInteractionRuntime;
+import com.magmaguy.freeminecraftmodels.pets.interactions.PetInteractions;
+import com.magmaguy.magmacore.MagmaCore;
 import com.magmaguy.magmacore.ai.MindBodyLocomotion;
 import com.magmaguy.magmacore.ai.MindBodyProfile;
 import com.magmaguy.magmacore.ai.MindFailure;
@@ -41,13 +44,16 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.UncheckedIOException;
-import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
+import java.nio.file.DirectoryIteratorException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -63,6 +69,7 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
@@ -76,6 +83,11 @@ import java.util.stream.Stream;
 public final class PetManager {
     private static final double BREED_DISTANCE = 8D;
     private static final int INTERACTION_DEBOUNCE_TICKS = 5;
+    /** A temporary file {@link #writeDefault} leaves only when the server stops in the middle of writing a default. */
+    private static final Pattern LEFTOVER_DEFAULT = Pattern.compile("[a-z0-9_]+\\.lua\\.[0-9a-z]{1,13}\\.tmp");
+    private static final long LEFTOVER_DEFAULT_MILLIS = 60_000L;
+    // Spawn refusals said in one load, past which more stay quiet.
+    private static final int MAX_REFUSALS_SAID = 64;
 
     // The Mind host belongs to this plugin enable and survives content reloads; NMSManager shuts it down on disable.
     private static MindHost host;
@@ -95,6 +107,8 @@ public final class PetManager {
     private PetBehaviorCatalog behaviors;
     private PetPrograms programs;
     private PetLuaTable.Warnings warnings;
+    // Each species and cause a spawn was refused for this load, so the retries stay quiet.
+    private final Set<String> refusals = new HashSet<>();
     private final Map<UUID, PetControl> byBody = new HashMap<>();
     private final Map<UUID, PetCollection> collections = new HashMap<>();
     private final Map<UUID, Map<String, PetControl>> ownedBodies = new HashMap<>();
@@ -228,12 +242,13 @@ public final class PetManager {
 
     /**
      * Loads the behavior modules from plugins/FreeMinecraftModels/pet_behaviors/, writing each missing shipped default
-     * there first, then builds the program of every species for its own model and each variant. Building them all now
-     * puts every warning about a pet file's list in the load's log, and keeps the building out of Lua callbacks, as
-     * PetPrograms requires.
+     * there first, then builds the program of every species for its own model, each variant and its migration look.
+     * Building them all now puts every warning about a pet file's list in the load's log, and keeps the building out
+     * of Lua callbacks, as PetPrograms requires.
      */
     private void loadBehaviors() {
         Path folder = new File(MetadataHandler.PLUGIN.getDataFolder(), "pet_behaviors").toPath();
+        removeLeftoverDefaults(folder, System.currentTimeMillis());
         behaviors = PetBehaviorCatalog.load(folder, PetBehaviorCatalog.DEFAULTS,
                 name -> writeDefault(folder, name, MetadataHandler.PLUGIN::getResource), Logger::warn);
         programs = new PetPrograms(behaviors, Logger::warn);
@@ -241,30 +256,65 @@ public final class PetManager {
         for (PetSpecies pet : species.values()) {
             program(pet, pet.model());
             for (PetSpecies.Variant variant : pet.variants()) program(pet, variant.model());
+            // Migrants may all wear one model of their own.
+            PetInteractions.Migration look = pet.interactions().migration();
+            if (look != null && look.model() != null) program(pet, look.model());
         }
         if (!species.isEmpty()) Logger.info("Loaded " + behaviors.names().size() + " pet behaviors.");
     }
 
     /** The program a pet of the species wearing this variant runs; the first call for a variant builds it. */
     private PetPrograms.Program program(PetSpecies pet, String variant) {
-        return programs.program(pet.id(), variant, pet.behaviors(variant),
-                where(pet.file().getName(), pet.listsBehaviors(), pet.locomotion()));
+        List<PetBehaviorEntry> entries = pet.behaviors(variant);
+        return programs.program(pet.id(), variant, entries, where(pet.file().getName(), pet.listsBehaviors(),
+                pet.locomotion(), variant, !entries.equals(pet.behaviors(null))));
     }
 
     /**
      * How warnings about a species' program name it: its pet file, and when that file lists no behaviors, that the
-     * list is its locomotion's defaults, for example {@code jellyfish.pet.yml (default behaviors for FLYING)}.
+     * list is its locomotion's defaults, for example {@code jellyfish.pet.yml (default behaviors for FLYING)}, with
+     * the variant's own list when {@code variantAdds}: {@code jellyfish.pet.yml (default behaviors for FLYING, plus
+     * variant em_pet_jellyfish_gold's list)}.
      */
-    static String where(String fileName, boolean listsBehaviors, MindBodyLocomotion locomotion) {
-        return listsBehaviors ? fileName : fileName + " (default behaviors for " + locomotion.name() + ")";
+    static String where(String fileName, boolean listsBehaviors, MindBodyLocomotion locomotion, String variant,
+                        boolean variantAdds) {
+        if (listsBehaviors) return fileName;
+        return fileName + " (default behaviors for " + locomotion.name()
+                + (variantAdds ? ", plus variant " + variant + "'s list" : "") + ")";
+    }
+
+    /**
+     * Deletes the temporary files {@link #writeDefault} left directly in the folder when a server stopped in the
+     * middle of writing a default, once they are a minute old, so one being written now is never touched. Only regular
+     * files named exactly as it names them go; anything else stays, and so does what cannot be deleted, which no load
+     * reads anyway.
+     */
+    static void removeLeftoverDefaults(Path folder, long nowMillis) {
+        if (!Files.isDirectory(folder)) return;
+        try (DirectoryStream<Path> files = Files.newDirectoryStream(folder)) {
+            for (Path file : files) {
+                if (!LEFTOVER_DEFAULT.matcher(file.getFileName().toString()).matches()) continue;
+                try {
+                    BasicFileAttributes attributes = Files.readAttributes(file, BasicFileAttributes.class,
+                            LinkOption.NOFOLLOW_LINKS);
+                    if (attributes.isRegularFile()
+                            && nowMillis - attributes.lastModifiedTime().toMillis() > LEFTOVER_DEFAULT_MILLIS)
+                        Files.deleteIfExists(file);
+                } catch (IOException ignored) {
+                    // It stays.
+                }
+            }
+        } catch (IOException | DirectoryIteratorException ignored) {
+            // The catalog reports a folder it cannot read.
+        }
     }
 
     /**
      * Writes the shipped behavior module {@code name} to {@code folder/name.lua} from the resource
      * pet_behaviors/name.lua that {@code resources} opens (null when there is none). It goes to a temporary file
-     * beside it first, which no load reads since its name does not end in .lua, and is then moved into place in one
-     * step, or with a plain move that never replaces a file where the file system cannot move atomically. So a crash
-     * never leaves a partly written default, which the next load would keep as an owner's edit. Throws
+     * beside it first, which no load reads since its name does not end in .lua, forced to disk, and is then moved into
+     * place in one step, or with a plain move that never replaces a file where the atomic move fails. So a crash never
+     * leaves a partly written default, which the next load would keep as an owner's edit. Throws
      * {@link UncheckedIOException} when it cannot write; the catalog asks only where no file is.
      */
     static void writeDefault(Path folder, String name, Function<String, InputStream> resources) {
@@ -277,17 +327,16 @@ public final class PetManager {
             if (source == null) throw new FileNotFoundException("the plugin jar has no " + resource);
             // A file of our own rather than Files.createTempFile, which on Linux would leave the module readable by
             // the server's user only.
-            try (OutputStream target = Files.newOutputStream(temporary, StandardOpenOption.CREATE_NEW,
+            try (FileChannel target = FileChannel.open(temporary, StandardOpenOption.CREATE_NEW,
                     StandardOpenOption.WRITE)) {
                 leftOver = true;
-                source.transferTo(target);
+                source.transferTo(Channels.newOutputStream(target));
+                // On disk before the move, so a crash just after it cannot leave an empty module behind.
+                target.force(true);
             }
-            Path file = folder.resolve(name + ".lua");
-            try {
-                Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE);
-            } catch (AtomicMoveNotSupportedException unsupported) {
-                Files.move(temporary, file);
-            }
+            // Windows can hold a file just written for a moment (Defender, the indexer); MagmaCore retries the move
+            // through that, then moves atomically, or else plainly without replacing.
+            MagmaCore.movePath(temporary, folder.resolve(name + ".lua"));
             leftOver = false;
         } catch (IOException failure) {
             throw new UncheckedIOException(failure);
@@ -377,8 +426,11 @@ public final class PetManager {
             mind = host.open(UUID.randomUUID(),
                     program.definition().instantiate(new PetLuaContext(control, program, warnings)));
         } catch (RuntimeException failure) {
-            Logger.warn("Could not spawn pet " + pet.id() + ": its behaviors could not start ("
-                    + failure.getMessage() + ").");
+            String reason = failure.getMessage() != null ? failure.getMessage() : failure.getClass().getSimpleName();
+            // The watchdog tries again every second and chunk stocking a few times over, so it is said once.
+            if (refusals.size() < MAX_REFUSALS_SAID && refusals.add(pet.id() + "\n" + reason))
+                Logger.warn("Could not spawn pet " + pet.id() + ": its behaviors could not start (" + reason
+                        + "). This is logged once per species and cause until the next reload.");
             return null;
         }
         double scale = pet.scale() * (baby ? pet.babyScale() : 1D) * sizeMultiplier;
@@ -824,9 +876,11 @@ public final class PetManager {
 
     /**
      * Logs a failed Mind callback once per program, callback and kind of failure until {@link #clear}, which each load
-     * calls: a module failing on every tick of a hundred pets says so once. A failure costs only that callback's turn:
-     * MagmaCore stops a behavior whose start or tick failed and may start it again later, runs a failed sensor at its
-     * next interval, and keeps running the pet's other behaviors. Server thread only.
+     * calls: a module failing on every tick of a hundred pets says so once. MagmaCore stops a behavior whose callback
+     * failed, or does not start it, and tries it again from the next tick. A behavior that keeps passing can_start and
+     * failing after it holds its controls each tick it runs, so lower-priority behaviors that move or turn the pet may
+     * never run meanwhile: a failing drift tick keeps hover from running. A failed sensor runs again at its next
+     * interval. Server thread only.
      */
     static final class FailureLog {
         private final Consumer<String> sink;
@@ -853,9 +907,18 @@ public final class PetManager {
                     : (cause instanceof LuaError || runaway) && cause.getMessage() != null ? cause.getMessage()
                     : cause.toString();
             String what = runaway ? "ran past its CPU time or instruction limit" : "failed";
-            return "The pet behavior callback " + failure.callbackIdentifier() + " in " + failure.programIdentifier()
-                    + " " + what + ": " + reason + ". Its behavior or sensor runs again later, and the pet keeps its other"
-                    + " behaviors. This is logged once per program, callback and kind of failure until the next reload.";
+            String callback = failure.callbackIdentifier();
+            // MagmaCore runs can_start in place of a missing can_continue, under can_continue's name.
+            String also = callback.endsWith(".can_continue") ? " (or can_start, which runs there when a behavior has"
+                    + " no can_continue)" : "";
+            String outcome = callback.endsWith(".sense")
+                    ? "MagmaCore runs that sensor again at its next interval; the pet's behaviors keep running."
+                    : "MagmaCore stops that behavior, or does not start it, and tries it again from the next tick;"
+                    + " while it keeps failing, lower-priority behaviors that move or turn the pet may not run. The"
+                    + " pet's sensors keep running.";
+            return "The pet behavior callback " + callback + also + " in " + failure.programIdentifier() + " " + what
+                    + ": " + reason + ". " + outcome + " This is logged once per program, callback and kind of failure"
+                    + " until the next reload.";
         }
     }
 }
