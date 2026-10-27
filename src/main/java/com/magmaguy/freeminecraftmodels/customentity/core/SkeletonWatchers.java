@@ -31,6 +31,8 @@ public class SkeletonWatchers {
     private final Set<UUID> javaViewers = new CopyOnWriteArraySet<>();
     // Java viewers that track the model's hidden body as an invisible, bare entity so the bones can ride it.
     private final Set<UUID> bodyViewers = new CopyOnWriteArraySet<>();
+    // Players a plugin hid this model from; the watcher list never admits them until they are shown it again.
+    private final Set<UUID> hiddenFrom = new CopyOnWriteArraySet<>();
     private int trackedBodyId = -1;
     // Whether every Java viewer's client tracks the model's entity, refreshed on the primary thread. A client that
     // lacks the entity drops the bones' mount and stops drawing them, so the bones ride it only while this holds.
@@ -58,6 +60,25 @@ public class SkeletonWatchers {
 
     public boolean hasObservers() {
         return !viewers.isEmpty();
+    }
+
+    /** Hides the whole model from one player until {@link #showToPlayer(Player)}, while other viewers keep it. */
+    public void hideFromPlayer(Player player) {
+        UUID uuid = player.getUniqueId();
+        if (!hiddenFrom.add(uuid) || !viewers.contains(uuid)) return;
+        if (Bukkit.isPrimaryThread()) hideFrom(uuid);
+        else Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+            if (hiddenFrom.contains(uuid) && viewers.contains(uuid)) hideFrom(uuid);
+        });
+    }
+
+    /** Lets a hidden player back in; the next watcher update shows them the model if it is in range and in sight. */
+    public void showToPlayer(Player player) {
+        hiddenFrom.remove(player.getUniqueId());
+    }
+
+    public boolean isHiddenFrom(Player player) {
+        return hiddenFrom.contains(player.getUniqueId());
     }
 
     /** Whether every Java viewer's client tracked the model's entity at the last primary-thread check. */
@@ -205,6 +226,8 @@ public class SkeletonWatchers {
         int worldViewDistance = filmicMode ? currentLocation.getWorld().getViewDistance() : 0;
 
         for (Player player : currentLocation.getWorld().getPlayers()) {
+            // Left out of newPlayers, a hidden player who is still a viewer gets dropped below.
+            if (hiddenFrom.contains(player.getUniqueId())) continue;
             double distance = player.getLocation().distanceSquared(currentLocation);
 
             boolean visible = filmicMode

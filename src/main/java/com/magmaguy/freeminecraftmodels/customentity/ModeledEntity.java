@@ -253,6 +253,25 @@ public class ModeledEntity {
         return skeleton.getSkeletonWatchers().getViewers();
     }
 
+    /**
+     * Hides this model from one player while everyone else keeps seeing it. The bones, nameplate, particles,
+     * Bedrock model and click hitbox all disappear for that player, and stay hidden until {@link #showTo(Player)}
+     * or until the model is removed.
+     */
+    public void hideFrom(Player player) {
+        skeleton.getSkeletonWatchers().hideFromPlayer(player);
+    }
+
+    /** Undoes {@link #hideFrom(Player)}. The player sees the model again once it is in range and in sight. */
+    public void showTo(Player player) {
+        skeleton.getSkeletonWatchers().showToPlayer(player);
+    }
+
+    /** Whether {@link #hideFrom(Player)} has hidden this model from the player. */
+    public boolean isHiddenFrom(Player player) {
+        return skeleton.getSkeletonWatchers().isHiddenFrom(player);
+    }
+
     public Location getSpawnLocation() {
         return spawnLocation.clone();
     }
