@@ -32,6 +32,16 @@ public interface MagicAttackResolver {
     }
 
     /**
+     * Whether the weapon's enchantments and worn item sets shape this cast (missile count and damage, blast
+     * radius, ignition). Returning false casts the weapon's plain attack, for example where the integrating
+     * plugin keeps item powers off for this player.
+     */
+    default boolean enchantmentsActive(org.bukkit.entity.Player player, org.bukkit.inventory.ItemStack weapon,
+                                       MagicAttackKind attackKind) {
+        return true;
+    }
+
+    /**
      * Optionally narrows FMM's generic living-target rules for an integrating combat system.
      * FMM still performs acquisition, flight, collision and the eventual damage application.
      */

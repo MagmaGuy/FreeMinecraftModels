@@ -288,7 +288,8 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         java.util.Map<String,Object> effects;
         java.util.Map<String, Double> resolverFacts;
         try {
-            definition = MagicEnchantmentModifiers.apply(player, capturedWeapon, capturedEquipment, definition, attackKind);
+            if (resolver == null || resolver.enchantmentsActive(player, capturedWeapon.clone(), attackKind))
+                definition = MagicEnchantmentModifiers.apply(player, capturedWeapon, capturedEquipment, definition, attackKind);
             resolverFacts = MagicAttackRequest.copyResolverFacts(resolver == null ? java.util.Map.of()
                     : resolver.capture(player, capturedWeapon.clone(), attackKind));
             effects = com.magmaguy.magmacore.enchantments.EnchantmentInputs.capture(player, capturedWeapon,
