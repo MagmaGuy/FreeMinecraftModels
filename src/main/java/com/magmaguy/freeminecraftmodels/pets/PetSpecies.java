@@ -706,17 +706,52 @@ public final class PetSpecies {
         return variant(variants, model);
     }
 
-    /** A variant model by weight, or the species' model when it lists none. */
+    /** A variant model by weight, or the species' model when no variant has a share of the picks. */
     public String pickVariant(Random random) {
+        return pick(variants, model, random, any -> true);
+    }
+
+    /** The variant a baby of these two parents takes; see {@link #inherit(String, String, List, String, Random)}. */
+    public String inherit(String mother, String father, Random random) {
+        return inherit(mother, father, variants, model, random);
+    }
+
+    /**
+     * A variant model by weight among those {@code allowed} takes: the species' model when no variant has a share of
+     * the picks at all, and null when some have one but none of those is allowed.
+     */
+    static String pick(List<Variant> variants, String speciesModel, Random random, Predicate<Variant> allowed) {
         double total = 0D;
-        for (Variant variant : variants) total += variant.weight();
-        if (total <= 0D) return model;
-        double roll = random.nextDouble() * total;
+        boolean weighted = false;
         for (Variant variant : variants) {
+            if (variant.weight() <= 0D) continue;
+            weighted = true;
+            if (allowed.test(variant)) total += variant.weight();
+        }
+        if (!weighted) return speciesModel;
+        if (total <= 0D) return null;
+        double roll = random.nextDouble() * total;
+        Variant last = null;
+        for (Variant variant : variants) {
+            if (variant.weight() <= 0D || !allowed.test(variant)) continue;
+            last = variant;
             roll -= variant.weight();
             if (roll < 0D) return variant.model();
         }
-        return variants.get(variants.size() - 1).model();
+        return last.model();
+    }
+
+    /**
+     * The variant a baby takes: its mother's or its father's as their records name it, half and half, as Minecraft's
+     * variant-bearing animals do. A variant whose inheritChance is below 1 breeds true only that often; otherwise, and
+     * for a parent with no recorded model, the baby gets a pick by weight, as a wild one would.
+     */
+    static String inherit(String mother, String father, List<Variant> variants, String speciesModel, Random random) {
+        String parent = random.nextBoolean() ? mother : father;
+        if (parent == null) return pick(variants, speciesModel, random, any -> true);
+        Variant variant = variant(variants, parent);
+        if (variant == null || variant.inheritChance() >= 1D || random.nextDouble() < variant.inheritChance()) return parent;
+        return pick(variants, speciesModel, random, any -> true);
     }
 
     public double followDistance() {
