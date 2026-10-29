@@ -47,9 +47,17 @@ class WildPetStoreTest {
     @Test
     void anEntryRoundTripsThroughItsLine() {
         WildPetStore.Entry entry = new WildPetStore.Entry("jellyfish", "em_pet_jellyfish_baby", true, -120.5D, 64D, 33.25D,
-                -118D, 63.5D, 30D);
-        assertEquals("jellyfish;em_pet_jellyfish_baby;true;-120.50;64.00;33.25;-118.00;63.50;30.00", entry.encode());
+                -118D, 63.5D, 30D, 7.5D, 1793300000000L);
+        assertEquals("jellyfish;em_pet_jellyfish_baby;true;-120.50;64.00;33.25;-118.00;63.50;30.00;7.50;1793300000000",
+                entry.encode());
         assertEquals(entry, WildPetStore.Entry.decode(entry.encode()));
+    }
+
+    @Test
+    void aLineFromBeforeHealthAndBirthsReadsAsFullAndUnborn() {
+        assertEquals(new WildPetStore.Entry("jellyfish", "em_pet_jellyfish_baby", true, -120.5D, 64D, 33.25D, -118D, 63.5D,
+                        30D, 0D, 0L),
+                WildPetStore.Entry.decode("jellyfish;em_pet_jellyfish_baby;true;-120.50;64.00;33.25;-118.00;63.50;30.00"));
     }
 
     @Test

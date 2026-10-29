@@ -42,6 +42,8 @@ public final class PetControl {
     // Where a wild pet drifts around; an owned pet drifts around its owner instead.
     private Location home;
     private long loveUntilTick;
+    // Epoch milliseconds a wild baby was born (one set free keeps its own); an owned pet's is on its record.
+    private long wildBornAt;
     private long lastInteractionTick = Long.MIN_VALUE / 2;
     // Set on a wild pet flying a migration; null for every other pet.
     private MigrationRoute route;
@@ -100,6 +102,15 @@ public final class PetControl {
 
     public boolean isBaby() {
         return baby;
+    }
+
+    /** Epoch milliseconds the pet was born or tamed; 0 for a wild adult. */
+    public long bornAt() {
+        return record != null ? record.bornAt : wildBornAt;
+    }
+
+    void setWildBornAt(long bornAt) {
+        this.wildBornAt = bornAt;
     }
 
     public LivingEntity body() {

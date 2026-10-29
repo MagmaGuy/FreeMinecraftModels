@@ -392,11 +392,26 @@ public final class PetManager {
         return spawn(pet, null, null, model, false, at, location);
     }
 
-    /** Puts an equipped pet from the collection into the world beside its owner. */
+    /**
+     * Puts an equipped pet from the collection into the world: beside its owner, or where it was told to stay, as a
+     * sitting wolf keeps its spot. A staying pet whose spot is not loaded waits for it (null); one whose world is gone
+     * follows its owner again.
+     */
     public PetControl spawnOwned(Player owner, PetRecord record) {
         PetSpecies pet = species(record.species);
         if (pet == null) return null;
         unspawnOwned(owner.getUniqueId(), record);
+        if (record.stay != null) {
+            Location spot = stayLocation(record.stay);
+            if (spot != null) {
+                if (!PetMotion.loaded(spot)) return null;
+                PetControl staying = spawn(pet, owner.getUniqueId(), record, record.model, record.baby, spot, null);
+                if (staying != null) staying.setStay(true, spot);
+                return staying;
+            }
+            record.stay = null;
+            collection(owner).save();
+        }
         Location at = PetMotion.hoverPoint(new PetControl(pet, owner.getUniqueId(), record, record.model, record.baby, null),
                 owner.getLocation(), 2D);
         return spawn(pet, owner.getUniqueId(), record, record.model, record.baby, at, null);
@@ -455,6 +470,7 @@ public final class PetManager {
             return refuse(pet, "its body could not spawn (" + reason(failure) + ")");
         }
         LivingEntity entity = body.entity();
+        if (record != null) restoreHealth(entity, record.health);
         DynamicEntity modeled = DynamicEntity.create(modelId, entity);
         if (modeled == null) {
             mind.close();
@@ -508,8 +524,29 @@ public final class PetManager {
         }
     }
 
-    /** Removes a pet body from the world and from every map. */
+    /** Gives a body the health it had when last seen, up to its maximum; 0 or less means full. */
+    private static void restoreHealth(LivingEntity body, double health) {
+        if (health <= 0D) return;
+        AttributeInstance max = body.getAttribute(Attribute.MAX_HEALTH);
+        body.setHealth(Math.min(health, max == null ? body.getHealth() : max.getValue()));
+    }
+
+    /** Keeps an owned pet's current health on its record; whether that changed it. */
+    private static boolean rememberHealth(PetControl control) {
+        PetRecord record = control.record();
+        LivingEntity body = control.body();
+        if (record == null || body == null || body.isDead() || body.getHealth() <= 0D || body.getHealth() == record.health)
+            return false;
+        record.health = body.getHealth();
+        return true;
+    }
+
+    /** Removes a pet body from the world and from every map; an owned pet's health stays on its record. */
     public void despawn(PetControl control) {
+        if (rememberHealth(control)) {
+            PetCollection collection = collections.get(control.ownerId());
+            if (collection != null) collection.save();
+        }
         forget(control);
         MindHandle mind = control.mind();
         if (mind != null) {
@@ -533,6 +570,27 @@ public final class PetManager {
             Map<String, PetControl> owned = ownedBodies.get(control.ownerId());
             if (owned != null) owned.remove(control.record().id, control);
         }
+    }
+
+    /** Tells an owned pet to stay where it is, or to follow again. The order is kept on its record, so it lasts. */
+    private void setStay(Player owner, PetControl control, boolean stay, Location at) {
+        control.setStay(stay, at);
+        PetRecord record = control.record();
+        if (record == null) return;
+        record.stay = stay && at != null && at.getWorld() != null
+                ? new PetRecord.StaySpot(at.getWorld().getUID().toString(), at.getX(), at.getY(), at.getZ(), at.getYaw()) : null;
+        collection(owner).save();
+    }
+
+    /** Where a stay spot is, or null when its world is not loaded. */
+    private static Location stayLocation(PetRecord.StaySpot spot) {
+        World world = null;
+        try {
+            if (spot.world != null) world = Bukkit.getWorld(UUID.fromString(spot.world));
+        } catch (IllegalArgumentException malformed) {
+            // Not a world id: the spot is gone.
+        }
+        return world == null ? null : new Location(world, spot.x, spot.y, spot.z, spot.yaw, 0F);
     }
 
     private void unspawnOwned(UUID owner, PetRecord record) {
@@ -635,6 +693,8 @@ public final class PetManager {
     }
 
     public void unequip(Player player, PetRecord record) {
+        // Sent home, it comes back beside its owner next time, wherever it was told to stay.
+        record.stay = null;
         record.equipped = false;
         collection(player).save();
         unspawnOwned(player.getUniqueId(), record);
@@ -670,10 +730,13 @@ public final class PetManager {
         PetControl live = liveBody(player.getUniqueId(), record);
         LivingEntity body = live == null ? null : live.body();
         Location at = body == null || !body.isValid() ? null : body.getLocation();
+        double health = body == null ? 0D : body.getHealth();
         if (live != null) despawn(live);
         collection(player).remove(record);
-        if (pet != null && at != null && PetsConfig.mode == PetsConfig.Mode.CREATURES)
-            spawn(pet, null, null, record.model, record.baby, at, at);
+        if (pet != null && at != null && PetsConfig.mode == PetsConfig.Mode.CREATURES) {
+            PetControl wild = spawn(pet, null, null, record.model, record.baby, at, at);
+            if (wild != null) restoreHealth(wild.body(), health);
+        }
         player.sendMessage(ChatColorConverter.convert(PetsConfig.releasedMessage.replace("$pet", displayName(record))));
     }
 
@@ -772,7 +835,7 @@ public final class PetManager {
         if (pet.canStay()) {
             boolean stay = !control.isStaying();
             LivingEntity body = control.body();
-            control.setStay(stay, body == null ? player.getLocation() : body.getLocation());
+            setStay(player, control, stay, body == null ? player.getLocation() : body.getLocation());
             player.sendMessage(ChatColorConverter.convert((stay ? PetsConfig.stayMessage : PetsConfig.followMessage)
                     .replace("$pet", displayName(control.record()))));
         }
@@ -881,7 +944,10 @@ public final class PetManager {
         PetCollection collection = collection(owner);
         if (PetsConfig.petsDiePermanently) collection.remove(control.record());
         else {
+            // It goes home and recovers there.
             control.record().equipped = false;
+            control.record().stay = null;
+            control.record().health = 0D;
             collection.save();
         }
     }
@@ -893,6 +959,7 @@ public final class PetManager {
         for (Player player : Bukkit.getOnlinePlayers()) {
             PetCollection collection = collections.get(player.getUniqueId());
             if (collection == null) continue;
+            boolean healthChanged = false;
             for (PetRecord record : collection.equipped()) {
                 PetSpecies pet = species(record.species);
                 if (pet == null) continue;
@@ -904,12 +971,23 @@ public final class PetManager {
                 }
                 PetControl live = liveBody(player.getUniqueId(), record);
                 LivingEntity body = live == null ? null : live.body();
+                if (live != null && body != null && body.isValid()) healthChanged |= rememberHealth(live);
+                if (record.stay != null) {
+                    // Told to stay: it keeps its spot in its own world, as a sitting wolf does. While that chunk is
+                    // unloaded it waits, and it comes back once the chunk loads.
+                    if (body == null || !body.isValid()) {
+                        if (live != null) despawn(live);
+                        spawnOwned(player, record);
+                    }
+                    continue;
+                }
                 // Lost to a chunk unload, a world change or a teleport too far: bring the pet back beside its owner.
                 if (body == null || !body.isValid() || body.getWorld() != player.getWorld()) {
                     if (live != null) despawn(live);
                     spawnOwned(player, record);
                 }
             }
+            if (healthChanged) collection.save();
         }
         for (PetControl control : new ArrayList<>(byBody.values())) {
             if (!control.isWild()) continue;
@@ -987,15 +1065,20 @@ public final class PetManager {
         if (body == null) return;
         Location at = body.getLocation(), home = control.home() == null ? at : control.home();
         wildStore.put(body.getWorld().getUID(), new WildPetStore.Entry(control.species().id(), control.model(), control.isBaby(),
-                at.getX(), at.getY(), at.getZ(), home.getX(), home.getY(), home.getZ()));
+                at.getX(), at.getY(), at.getZ(), home.getX(), home.getY(), home.getZ(), body.isDead() ? 0D : body.getHealth(),
+                control.isBaby() ? control.bornAt() : 0L));
     }
 
     /** Brings back the pets waiting in a loaded chunk; pets of a species that is not installed keep waiting. */
     private void restore(World world, int cx, int cz) {
         for (WildPetStore.Entry entry : wildStore.take(world.getUID(), cx, cz)) {
             PetSpecies pet = species(entry.species());
-            if (pet == null || spawn(pet, null, null, entry.model(), entry.baby(), entry.at(world), entry.home(world)) == null)
+            PetControl back = pet == null ? null : spawn(pet, null, null, entry.model(), entry.baby(), entry.at(world), entry.home(world));
+            if (back == null) {
                 wildStore.put(world.getUID(), entry);
+                continue;
+            }
+            restoreHealth(back.body(), entry.health());
         }
     }
 
