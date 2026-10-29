@@ -578,6 +578,14 @@ public final class PetManager {
     }
 
     /**
+     * Whether a body is below its max health. Health is kept as a float, so a pet whose stats give it a max like 17.92
+     * reads back a hair under it at full health; that hair is not a wound.
+     */
+    static boolean wounded(LivingEntity body) {
+        return body.getHealth() < maxHealth(body) - 0.001D;
+    }
+
+    /**
      * Shows the pet's health display, as EliteMobs shows its elites', for the next healthBarSeconds; while it shows, it
      * follows the pet's health.
      */
@@ -636,7 +644,7 @@ public final class PetManager {
             LivingEntity body = control.body();
             if (body == null || !body.isValid() || body.isDead()) continue;
             double max = maxHealth(body);
-            if (body.getHealth() >= max) {
+            if (!wounded(body)) {
                 control.setNextRegenTick(ticks + every);
                 continue;
             }
@@ -942,7 +950,7 @@ public final class PetManager {
         // A hurt pet eats to heal, as a tamed wolf does; at full health its breeding food is for love.
         LivingEntity fed = control.body();
         if ((pet.isBreedingFood(held) || pet.isTamingFood(held)) && PetsConfig.feedingHeals > 0D && fed != null
-                && fed.isValid() && fed.getHealth() < maxHealth(fed)) {
+                && fed.isValid() && wounded(fed)) {
             consume(player, held);
             fed.setHealth(Math.min(maxHealth(fed), fed.getHealth() + PetsConfig.feedingHeals));
             particles(control, Particle.HEART, 3);
