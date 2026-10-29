@@ -17,6 +17,7 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityRemoveEvent;
+import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
@@ -149,12 +150,24 @@ public final class PetListeners implements Listener {
         else if (attacker != null) pet.hurtBy(attacker.getUniqueId(), PetManager.ticks());
     }
 
+    /**
+     * Pets target no one; their modules pick their foes. Mobs leave pets alone, as zombies leave wolves, but fight back
+     * against one that hurt them or their kin, a pet defending its owner included, so pets are not unkillable in a fight.
+     * Cosmetic pets, which cannot be hurt, are never a target.
+     */
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void onTargeted(EntityTargetLivingEntityEvent event) {
         PetManager manager = PetManager.get();
-        // Pets are no one's target and target no one.
-        if (manager != null && (manager.pet(event.getEntity()) != null || manager.pet(event.getTarget()) != null))
+        if (manager == null) return;
+        if (manager.pet(event.getEntity()) != null) {
             event.setCancelled(true);
+            return;
+        }
+        if (manager.pet(event.getTarget()) == null) return;
+        EntityTargetEvent.TargetReason reason = event.getReason();
+        boolean fightsBack = reason == EntityTargetEvent.TargetReason.TARGET_ATTACKED_ENTITY
+                || reason == EntityTargetEvent.TargetReason.TARGET_ATTACKED_NEARBY_ENTITY;
+        if (!fightsBack || PetsConfig.mode == PetsConfig.Mode.COSMETIC) event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
