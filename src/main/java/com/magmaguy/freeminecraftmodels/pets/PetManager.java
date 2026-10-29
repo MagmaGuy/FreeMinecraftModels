@@ -580,9 +580,9 @@ public final class PetManager {
         player.sendMessage(ChatColorConverter.convert(PetsConfig.unequippedMessage.replace("$pet", displayName(record))));
     }
 
-    /** Adds a new adult of the species to the player's collection and brings it out. */
-    public PetRecord give(Player player, PetSpecies pet) {
-        PetRecord record = new PetRecord(pet.id(), pet.pickVariant(ThreadLocalRandom.current()), false, System.currentTimeMillis());
+    /** Adds a new adult of the species wearing this variant to the player's collection and brings it out. */
+    public PetRecord give(Player player, PetSpecies pet, String model) {
+        PetRecord record = new PetRecord(pet.id(), model, false, System.currentTimeMillis());
         int limit = PetsConfig.maxEquippedPets;
         PetCollection collection = collection(player);
         if (limit > 0 && collection.equipped().size() >= limit) record.equipped = false;
