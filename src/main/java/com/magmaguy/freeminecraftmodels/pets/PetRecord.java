@@ -19,6 +19,28 @@ public final class PetRecord {
     public List<String> parents;
     /** 1 for a tamed or given pet, one more than its older parent's for a bred one; 0 in records from before. */
     public int generation;
+    /** Where it was told to stay, while it stays there; null while it follows its owner. */
+    public StaySpot stay;
+    /** Its health when last seen; 0 means full, as in records from before. */
+    public double health;
+
+    /** A place in a world, by the world's id, as Gson keeps it. */
+    public static final class StaySpot {
+        public String world;
+        public double x, y, z;
+        public float yaw;
+
+        public StaySpot() {
+        }
+
+        public StaySpot(String world, double x, double y, double z, float yaw) {
+            this.world = world;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.yaw = yaw;
+        }
+    }
 
     public PetRecord() {
     }

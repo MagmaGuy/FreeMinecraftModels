@@ -204,10 +204,11 @@ public final class PetListeners implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onWorldChange(PlayerChangedWorldEvent event) {
-        // The watchdog brings equipped pets to the new world; bodies left behind go now.
+        // The watchdog brings equipped pets to the new world; bodies left behind go now, but for pets told to stay,
+        // which keep their spot.
         PetManager manager = PetManager.get();
         if (manager == null) return;
         for (PetControl control : new ArrayList<>(manager.pets()))
-            if (control.isOwnedBy(event.getPlayer())) manager.despawn(control);
+            if (control.isOwnedBy(event.getPlayer()) && !control.isStaying()) manager.despawn(control);
     }
 }
