@@ -121,6 +121,7 @@ public class DynamicEntity extends ModeledEntity {
     public static DynamicEntity create(String entityID, LivingEntity livingEntity) {
         FileModelConverter fileModelConverter = FileModelConverter.getModel(entityID);
         if (fileModelConverter == null) return null;
+        removePreviousModel(livingEntity);
         DynamicEntity dynamicEntity = new DynamicEntity(entityID, livingEntity.getLocation());
         dynamicEntity.spawn(livingEntity);
         boolean bedrockUsesUnderlyingEntity = DefaultConfig.sendCustomModelsToBedrockClientsV2
@@ -159,6 +160,7 @@ public class DynamicEntity extends ModeledEntity {
     public static DynamicEntity createWithInvisibility(String entityID, LivingEntity livingEntity) {
         FileModelConverter fileModelConverter = FileModelConverter.getModel(entityID);
         if (fileModelConverter == null) return null;
+        removePreviousModel(livingEntity);
         DynamicEntity dynamicEntity = new DynamicEntity(entityID, livingEntity.getLocation());
         dynamicEntity.spawn(livingEntity);
 
@@ -170,6 +172,15 @@ public class DynamicEntity extends ModeledEntity {
 
         livingEntity.getPersistentDataContainer().set(namespacedKey, PersistentDataType.BYTE, (byte) 0);
         return dynamicEntity;
+    }
+
+    /**
+     * A mob wears one model. Without this, the model it already had kept running and drawing next to the new one,
+     * and the lookups only found the new one, so nothing could reach the old one to hide or remove it.
+     */
+    private static void removePreviousModel(LivingEntity livingEntity) {
+        DynamicEntity previous = dynamicEntities.get(livingEntity.getUniqueId());
+        if (previous != null) previous.removeKeepingBody();
     }
 
     public void spawn(LivingEntity entity) {
@@ -410,10 +421,17 @@ public class DynamicEntity extends ModeledEntity {
     public void remove() {
         super.remove();
         // Null guard: a DynamicEntity constructed but never spawned has no underlying entity.
-        if (underlyingEntity != null) dynamicEntities.remove(underlyingEntity.getUniqueId());
+        // Two-argument remove: a model replaced on its mob must not drop the entry of the model that took its place.
+        if (underlyingEntity != null) dynamicEntities.remove(underlyingEntity.getUniqueId(), this);
         // A horse /fmm mount spawned exists for its model; without it, it is an invisible saddled horse.
         if (underlyingEntity != null && com.magmaguy.freeminecraftmodels.commands.MountCommand.isMountHorse(underlyingEntity))
             underlyingEntity.remove();
+    }
+
+    @Override
+    protected void removeKeepingBody() {
+        super.removeKeepingBody();
+        if (underlyingEntity != null) dynamicEntities.remove(underlyingEntity.getUniqueId(), this);
     }
 
     public static void shutdown() {
