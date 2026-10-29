@@ -873,6 +873,7 @@ public final class PetManager {
         if (modeled != null && !modeled.isRemoved()) modeled.remove();
         Player owner = control.owner().orElse(null);
         if (owner == null || control.record() == null) return;
+        owner.sendMessage(ChatColorConverter.convert(PetsConfig.diedMessage.replace("$pet", displayName(control.record()))));
         PetCollection collection = collection(owner);
         if (PetsConfig.petsDiePermanently) collection.remove(control.record());
         else {

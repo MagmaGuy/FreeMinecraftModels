@@ -44,6 +44,7 @@ public class PetsConfig extends ConfigurationFile {
     public static String releasedMessage;
     public static String breedingCooldownMessage;
     public static String bornMessage;
+    public static String diedMessage;
     private static PetsConfig instance;
 
     public PetsConfig() {
@@ -81,11 +82,13 @@ public class PetsConfig extends ConfigurationFile {
                         "stay babies."),
                 fileConfiguration, "babiesGrowUp", true);
         petsInvulnerableToPlayers = ConfigurationEngine.setBoolean(
-                List.of("Whether owned pets ignore damage from players. Pets are always invulnerable in COSMETIC mode."),
-                fileConfiguration, "petsInvulnerableToPlayers", true);
+                List.of("Whether owned pets ignore damage from players, their owner included. When false they are mortal,",
+                        "like tamed wolves. Pets are always invulnerable in COSMETIC mode."),
+                fileConfiguration, "petsInvulnerableToPlayers", false);
         petsDiePermanently = ConfigurationEngine.setBoolean(
-                List.of("Whether a pet that dies leaves its owner's collection. When false it goes home until re-equipped."),
-                fileConfiguration, "petsDiePermanently", false);
+                List.of("Whether a pet that dies leaves its owner's collection for good, as a tamed wolf does. When false it",
+                        "goes home until re-equipped."),
+                fileConfiguration, "petsDiePermanently", true);
         wildGenerationChance = ConfigurationEngine.setDouble(
                 List.of("CREATURES mode: wild pets live like vanilla's farm animals. They come with the world, stay where",
                         "they are, wait while their chunk is unloaded and never despawn. This is the chance, 0 to 0.9, that",
@@ -126,6 +129,7 @@ public class PetsConfig extends ConfigurationFile {
         breedingCooldownMessage = ConfigurationEngine.setString(fileConfiguration, "breedingCooldownMessage",
                 "&7Your $pet &7is not ready to breed again yet.");
         bornMessage = ConfigurationEngine.setString(fileConfiguration, "bornMessage", "&aA $pet &awas born!");
+        diedMessage = ConfigurationEngine.setString(fileConfiguration, "diedMessage", "&cYour $pet &cdied.");
         PetMigrations.loadSettings(fileConfiguration);
     }
 }
