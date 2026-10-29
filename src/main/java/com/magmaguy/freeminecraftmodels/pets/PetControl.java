@@ -47,6 +47,11 @@ public final class PetControl {
     private MigrationRoute route;
     // Its place among the pets its owner has out: which spot around the trail point it follows to. 0 for a wild pet.
     private int slot;
+    // The player whose hit on this pet last went through, the pet clock tick of that hit, and how many such hits it
+    // has taken; the retaliate module answers each hit once.
+    private UUID hurtBy;
+    private long hurtTick = Long.MIN_VALUE / 2;
+    private int hurtCount;
     // Players whose touch reached this wild pet's model since its sting last looked, each with the pet clock tick of
     // their latest touch; a map, so a long touch counts once.
     private final Map<UUID, Long> contacts = new LinkedHashMap<>();
@@ -126,6 +131,23 @@ public final class PetControl {
 
     void setModeled(DynamicEntity modeled) {
         this.modeled = modeled;
+    }
+
+    /** A player's hit on this pet went through. */
+    void hurtBy(UUID player, long tick) {
+        hurtBy = player;
+        hurtTick = tick;
+        hurtCount++;
+    }
+
+    /** The player who last hurt it, while that hit is at most {@code withinTicks} old; null otherwise. */
+    public UUID attacker(long now, long withinTicks) {
+        return hurtBy != null && now - hurtTick <= withinTicks ? hurtBy : null;
+    }
+
+    /** How many times a player has hurt it since its body spawned. */
+    public int hurtCount() {
+        return hurtCount;
     }
 
     /** Its place among the pets its owner has out, from 0; the first keeps the trail point itself. */
