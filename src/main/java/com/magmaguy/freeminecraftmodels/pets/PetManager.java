@@ -556,12 +556,14 @@ public final class PetManager {
         body.setHealth(Math.min(health, max == null ? body.getHealth() : max.getValue()));
     }
 
-    /** Keeps an owned pet's current health on its record; whether that changed it. */
+    /**
+     * Keeps an owned pet's current health on its record; whether that changed it. A body its chunk already unloaded
+     * reads as dead but still has its last health; only a body at 0 health is skipped, as one that died.
+     */
     private static boolean rememberHealth(PetControl control) {
         PetRecord record = control.record();
         LivingEntity body = control.body();
-        if (record == null || body == null || body.isDead() || body.getHealth() <= 0D || body.getHealth() == record.health)
-            return false;
+        if (record == null || body == null || body.getHealth() <= 0D || body.getHealth() == record.health) return false;
         record.health = body.getHealth();
         return true;
     }
@@ -1222,7 +1224,8 @@ public final class PetManager {
         if (body == null) return;
         Location at = body.getLocation(), home = control.home() == null ? at : control.home();
         wildStore.put(body.getWorld().getUID(), new WildPetStore.Entry(control.species().id(), control.model(), control.isBaby(),
-                at.getX(), at.getY(), at.getZ(), home.getX(), home.getY(), home.getZ(), body.isDead() ? 0D : body.getHealth(),
+                // A body its chunk already unloaded reads as dead, but keeps its last health.
+                at.getX(), at.getY(), at.getZ(), home.getX(), home.getY(), home.getZ(), Math.max(0D, body.getHealth()),
                 control.isBaby() ? control.bornAt() : 0L, control.stats()));
         syncChunk(body.getWorld(), at.getBlockX() >> 4, at.getBlockZ() >> 4);
     }
