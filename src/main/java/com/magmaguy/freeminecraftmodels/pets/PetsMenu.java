@@ -72,24 +72,19 @@ public final class PetsMenu {
         else if (record.model != null && pet != null && !record.model.equals(pet.model()))
             lore.add(ChatColorConverter.convert("&7Colour: &f" + record.model));
         if (pet != null && !pet.variants().isEmpty())
-            lore.add(ChatColorConverter.convert("&7Rarity: &f" + rarity(pet.wildShare(record.model))));
+            lore.add(ChatColorConverter.convert("&7Rarity: &f" + pet.rarityTier(record.model)));
         lore.add(ChatColorConverter.convert("&7Generation: &f" + record.generationOrFirst()));
         if (record.parents != null && record.parents.size() == 2)
             lore.add(ChatColorConverter.convert("&7Parents: &f") + record.parents.get(0) + ChatColorConverter.convert(" &7& &f")
                     + record.parents.get(1));
         lore.add(ChatColorConverter.convert(record.baby ? "&7Age: &fbaby" : "&7Age: &fadult"));
-        lore.add(ChatColorConverter.convert(record.equipped ? "&aWith you &7- click to send home" : "&7At home &7- click to bring along"));
+        lore.add(ChatColorConverter.convert(record.equipped ? "&aWith you &7- left-click to send home"
+                : "&7At home &7- left-click to bring along"));
+        lore.add(ChatColorConverter.convert("&eRight-click for its passport"));
         lore.add(ChatColorConverter.convert("&8Shift-right-click to set it free"));
         meta.setLore(lore);
         item.setItemMeta(meta);
         return item;
-    }
-
-    /** A colour's wild share as a passport line: "1 in 21 wild ones", "common" past a half, or never wild. */
-    static String rarity(double share) {
-        if (share <= 0D) return "never found wild";
-        if (share >= 0.5D) return "common";
-        return "1 in " + Math.round(1D / share) + " wild ones";
     }
 
     public static void shutdown() {
@@ -125,6 +120,14 @@ public final class PetsMenu {
                     if (!player.isOnline()) return;
                     if (manager.collection(player).pets().isEmpty()) player.closeInventory();
                     else open(player);
+                });
+                return;
+            }
+            if (event.getClick() == ClickType.RIGHT) {
+                // Its passport, a book, opens once the menu has closed.
+                player.closeInventory();
+                Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
+                    if (player.isOnline()) PetPassport.open(manager, player, record);
                 });
                 return;
             }

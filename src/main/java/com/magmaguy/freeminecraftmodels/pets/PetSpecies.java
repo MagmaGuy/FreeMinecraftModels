@@ -132,6 +132,7 @@ public final class PetSpecies {
     private final EntityType body;
     private final double scale;
     private final double health;
+    private final double statCap;
     private final Material icon;
     private final NamespacedKey iconItemModel;
     private final List<Material> tamingFood;
@@ -180,6 +181,7 @@ public final class PetSpecies {
         this.body = bodyType;
         this.scale = Math.max(0.0625D, config.getDouble("scale", 1D));
         this.health = Math.max(1D, config.getDouble("health", 20D));
+        this.statCap = Math.max(1D, section(config, "stats").getDouble("cap", 2D));
         Material iconMaterial = Material.matchMaterial(config.getString("icon", "GLOW_BERRIES"));
         this.icon = iconMaterial == null || !iconMaterial.isItem() ? Material.GLOW_BERRIES : iconMaterial;
         String iconModel = config.getString("iconItemModel", "");
@@ -977,6 +979,49 @@ public final class PetSpecies {
     /** The modules a pet wearing this model runs: the species' list or its locomotion's defaults, then the variant's. */
     public List<PetBehaviorEntry> behaviors(String model) {
         return behaviors(behaviors, locomotion, variants, model);
+    }
+
+    /** How far breeding can push a stat, as a factor of its base: the pet file's stats.cap, 2 by default. */
+    public double statCap() {
+        return statCap;
+    }
+
+    /** The effect this colour's sting module is set to give, or null when it keeps the module's own. */
+    public String stingEffect(String model) {
+        for (PetBehaviorEntry entry : behaviors(model))
+            if (entry.module().equals("sting") && entry.settings().get("effect") instanceof String effect) return effect;
+        return null;
+    }
+
+    /** How common a colour is in the wild, as a passport says it: see {@link #rarityTier(double, double)}. */
+    public String rarityTier(String model) {
+        if (variants.isEmpty()) return "common";
+        Variant variant = variant(model);
+        double most = variants.stream().mapToDouble(Variant::weight).max().orElse(0D);
+        return rarityTier(variant == null ? 0D : variant.weight(), most);
+    }
+
+    /**
+     * A colour's rarity tier from its weight against the commonest colour's: common at half as often or more,
+     * uncommon at a fifth or more, rare below that, and never wild at weight 0.
+     */
+    static String rarityTier(double weight, double mostCommon) {
+        if (weight <= 0D || mostCommon <= 0D) return "never wild";
+        double ratio = weight / mostCommon;
+        if (ratio >= 0.5D) return "common";
+        if (ratio >= 0.2D) return "uncommon";
+        return "rare";
+    }
+
+    /**
+     * A number the sting module gets from this colour's behaviors list, such as its damage or duration_ticks; NaN when
+     * the list does not set it, and the module uses its own default.
+     */
+    public double stingSetting(String model, String setting) {
+        for (PetBehaviorEntry entry : behaviors(model))
+            if (entry.module().equals("sting") && entry.settings().get(setting) instanceof Number number)
+                return number.doubleValue();
+        return Double.NaN;
     }
 
     /** How the model leans with its travel. */

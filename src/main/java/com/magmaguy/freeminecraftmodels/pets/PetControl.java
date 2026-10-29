@@ -44,6 +44,8 @@ public final class PetControl {
     private long loveUntilTick;
     // Epoch milliseconds a wild baby was born (one set free keeps its own); an owned pet's is on its record.
     private long wildBornAt;
+    // A wild pet's stats; an owned pet's are on its record.
+    private PetStats wildStats;
     private long lastInteractionTick = Long.MIN_VALUE / 2;
     // Set on a wild pet flying a migration; null for every other pet.
     private MigrationRoute route;
@@ -111,6 +113,20 @@ public final class PetControl {
 
     void setWildBornAt(long bornAt) {
         this.wildBornAt = bornAt;
+    }
+
+    /** Its stats: an owned pet's from its record, a wild one's as it rolled or brought them; the base when unknown. */
+    public PetStats stats() {
+        return PetStats.orBase(record != null ? record.stats : wildStats);
+    }
+
+    void setWildStats(PetStats stats) {
+        this.wildStats = stats;
+    }
+
+    /** Its share of its stats while a baby: health, sting and poison are halved until it grows up. */
+    public double babyShare() {
+        return baby ? PetStats.BABY_SHARE : 1D;
     }
 
     public LivingEntity body() {

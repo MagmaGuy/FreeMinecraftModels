@@ -23,6 +23,35 @@ public final class PetRecord {
     public StaySpot stay;
     /** Its health when last seen; 0 means full, as in records from before. */
     public double health;
+    /** Its stats; null in records from before, which roll a wild pet's once on load. */
+    public PetStats stats;
+    /** How it joined: tamed, bred, mutated (bred, in a colour neither parent had) or given; null in records from before. */
+    public String origin;
+    /** Its parents as they were at its birth, each with their own parents under them; null unless bred since kept. */
+    public List<Relative> family;
+    /** The babies it has had, oldest first. */
+    public List<Relative> babies;
+
+    public static final String TAMED = "tamed", BRED = "bred", MUTATED = "mutated", GIVEN = "given";
+
+    /** A relative as it was when the record took it down: its record id, name tag name if any, and colour. */
+    public static final class Relative {
+        public String id;
+        public String name;
+        public String model;
+        /** Only on a parent: its own parents, without theirs. */
+        public List<Relative> parents;
+
+        public Relative() {
+        }
+
+        public Relative(String id, String name, String model, List<Relative> parents) {
+            this.id = id;
+            this.name = name;
+            this.model = model;
+            this.parents = parents;
+        }
+    }
 
     /** A place in a world, by the world's id, as Gson keeps it. */
     public static final class StaySpot {
