@@ -20,6 +20,11 @@ return ai.module {
                     local ground = c.pet:ground_below(here, 12)
                     if ground ~= nil then
                         local wanted = ground + c.pet.species.hover_height
+                        -- Never more than 3 blocks under its anchor (the owner, or home when wild), as a drift's point
+                        -- never is: over a drop, or beside an owner in the air, there is no ground in reach to hover
+                        -- over, and it would sink on and on.
+                        local anchor = c.pet.anchor
+                        if anchor ~= nil and anchor.world == here.world then wanted = math.max(wanted, anchor.y - 3) end
                         if math.abs(here.y - wanted) > c.settings.correct_above then y = wanted end
                     end
                     c.memory:set('hover_target', { world = here.world, x = here.x, y = y, z = here.z })
