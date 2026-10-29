@@ -594,13 +594,13 @@ public final class PetManager {
     public String displayName(PetRecord record) {
         if (record.name != null && !record.name.isBlank()) return ChatColorConverter.convert(record.name);
         PetSpecies pet = species(record.species);
-        String name = pet == null ? record.species : ChatColorConverter.convert(pet.name());
+        String name = pet == null ? record.species : ChatColorConverter.convert(pet.name(record.model));
         return record.baby ? ChatColorConverter.convert("&7Baby ") + name : name;
     }
 
     private String displayName(PetControl control) {
         if (control.record() != null) return displayName(control.record());
-        return ChatColorConverter.convert(control.species().name());
+        return ChatColorConverter.convert(control.species().name(control.model()));
     }
 
     // ---- interactions ----------------------------------------------------------------------------------------
@@ -623,7 +623,7 @@ public final class PetManager {
                 tame(player, control);
             } else {
                 particles(control, Particle.SMOKE, 8);
-                player.sendMessage(ChatColorConverter.convert(PetsConfig.tameFailedMessage.replace("$pet", ChatColorConverter.convert(pet.name()))));
+                player.sendMessage(ChatColorConverter.convert(PetsConfig.tameFailedMessage.replace("$pet", displayName(control))));
             }
             return true;
         }

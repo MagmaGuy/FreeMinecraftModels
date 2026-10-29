@@ -219,6 +219,17 @@ class PetSpeciesVariantsTest {
     }
 
     @Test
+    void aPetShowsItsVariantsNameElseTheSpecies() {
+        List<PetSpecies.Variant> variants = List.of(
+                new PetSpecies.Variant(WAR, 1D, List.of(), "&9Man o' War", null, Set.of(), 1D),
+                new PetSpecies.Variant(BLUE, 1D, List.of()));
+        assertEquals("&9Man o' War", PetSpecies.name(variants, "&bJellyfish", WAR));
+        assertEquals("&bJellyfish", PetSpecies.name(variants, "&bJellyfish", BLUE));
+        assertEquals("&bJellyfish", PetSpecies.name(variants, "&bJellyfish", "em_pet_jellyfish_old"));
+        assertEquals("&bJellyfish", PetSpecies.name(variants, "&bJellyfish", null));
+    }
+
+    @Test
     void aVariantIsFoundByItsExactNameFirstThenAsAModelName() {
         PetSpecies.Variant upper = new PetSpecies.Variant("EM_Pet_Gold", 1D, List.of());
         PetSpecies.Variant lower = new PetSpecies.Variant("em_pet_gold", 1D, List.of());
