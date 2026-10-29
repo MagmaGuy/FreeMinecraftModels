@@ -202,7 +202,7 @@ public final class PetSpecies {
         ConfigurationSection follow = section(config, "follow");
         this.followDistance = follow.getDouble("distance", 5D);
         this.leashDistance = follow.getDouble("leashDistance", 12D);
-        this.teleportDistance = follow.getDouble("teleportDistance", 24D);
+        this.teleportDistance = follow.getDouble("teleportDistance", 40D);
         this.roamRadius = follow.getDouble("roamRadius", 5D);
         this.speed = Math.max(0.05D, follow.getDouble("speed", 1D));
         this.canStay = follow.getBoolean("stay", true);

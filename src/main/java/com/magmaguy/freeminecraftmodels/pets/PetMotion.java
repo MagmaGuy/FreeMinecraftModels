@@ -21,6 +21,8 @@ import java.util.concurrent.ThreadLocalRandom;
 public final class PetMotion {
     /** How far from the owner a catch-up spot must be, so a walker or swimmer never lands on the owner's own block. */
     static final double CATCH_UP_CLEARANCE = 1D;
+    /** How far behind the owner a catch-up aims, so the pet comes up from behind them instead of onto them. */
+    static final double CATCH_UP_BEHIND = 4D;
     /** Golden angle in radians: each follow slot turns this far from the last, which spreads the spots evenly. */
     private static final double GOLDEN_ANGLE = Math.PI * (3D - Math.sqrt(5D));
 
@@ -189,9 +191,7 @@ public final class PetMotion {
      */
     public static Location trailPoint(PetControl control, Player owner, double back, double height) {
         Location at = owner.getLocation();
-        // The facing from the yaw alone, so an owner looking straight up or down still has a behind.
-        double yaw = Math.toRadians(at.getYaw());
-        Location point = at.clone().add(Math.sin(yaw) * back, 0D, -Math.cos(yaw) * back);
+        Location point = behind(at, back);
         boolean flying = control.species().locomotion() == MindBodyLocomotion.FLYING;
         point.setY(at.getY() + (flying ? height : 0D));
         Vector offset = slotOffset(control.slot(), spacing(control), flying,
@@ -234,16 +234,18 @@ public final class PetMotion {
      * it back instead. False too when the spot found is not at least a block nearer the owner than the body already
      * is, so a catch-up never moves a pet away from its owner, nor hops it from one spot beside them to another. A
      * ground or water spot is at least {@link #CATCH_UP_CLEARANCE} across from the owner, never on their own block; a
-     * hover point is drawn as {@link #hoverPoint} draws it.
+     * hover point is drawn as {@link #hoverPoint} draws it. The spot is within radius of a point
+     * {@link #CATCH_UP_BEHIND} blocks behind where the owner faces, so the pet comes up from behind them; within
+     * radius of the owner when nothing behind them fits.
      */
     public static boolean teleportNearOwner(PetControl control, LivingEntity body, double radius) {
         Player owner = control.owner().orElse(null);
         if (owner == null || owner.getWorld() != body.getWorld()) return false;
         Location at = owner.getLocation();
         MindBodyLocomotion locomotion = control.species().locomotion();
-        // Water is looked for at least 6 blocks out, since an owner on a shore or a boat may have none closer.
-        Location spot = restPoint(control, at, radius, Math.max(radius, 6D), CATCH_UP_CLEARANCE);
-        if (spot == null || !loaded(spot) || !closesIn(at.distance(spot), at.distance(body.getLocation()))) return false;
+        Location spot = catchUpSpot(control, behind(at, CATCH_UP_BEHIND), at, body, radius);
+        if (spot == null) spot = catchUpSpot(control, at, at, body, radius);
+        if (spot == null) return false;
         // Ground and water spots are built facing south, so they take the body's yaw; a hover point keeps the
         // owner's, as the Java follow did.
         if (locomotion != MindBodyLocomotion.FLYING) spot.setYaw(body.getLocation().getYaw());
@@ -316,6 +318,23 @@ public final class PetMotion {
     }
 
     /** Whether a catch-up spot this far from the owner is worth it for a body this far: at least a block nearer. */
+    /** A catch-up spot within radius of center that is loaded and brings the body nearer the owner; null otherwise. */
+    private static Location catchUpSpot(PetControl control, Location center, Location owner, LivingEntity body, double radius) {
+        // Water is looked for at least 6 blocks out, since an owner on a shore or a boat may have none closer.
+        Location spot = restPoint(control, center, radius, Math.max(radius, 6D), CATCH_UP_CLEARANCE);
+        if (spot == null || !loaded(spot) || !closesIn(owner.distance(spot), owner.distance(body.getLocation()))) return null;
+        return spot;
+    }
+
+    /**
+     * back blocks behind where the location faces, at its height. The facing comes from the yaw alone, so someone
+     * looking straight up or down still has a behind.
+     */
+    static Location behind(Location at, double back) {
+        double yaw = Math.toRadians(at.getYaw());
+        return at.clone().add(Math.sin(yaw) * back, 0D, -Math.cos(yaw) * back);
+    }
+
     static boolean closesIn(double spotDistance, double bodyDistance) {
         return spotDistance <= bodyDistance - 1D;
     }
