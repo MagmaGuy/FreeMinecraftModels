@@ -42,6 +42,11 @@ public final class PetControl {
     // Where a wild pet drifts around; an owned pet drifts around its owner instead.
     private Location home;
     private long loveUntilTick;
+    // The pet clock tick its health display goes away (0 while none shows), and the health it last showed.
+    private long healthBarUntil;
+    private double shownHealth = -1D;
+    // The pet clock tick it next regains a point of health on its own.
+    private long nextRegenTick;
     // Epoch milliseconds a wild baby was born (one set free keeps its own); an owned pet's is on its record.
     private long wildBornAt;
     // A wild pet's stats; an owned pet's are on its record.
@@ -104,6 +109,30 @@ public final class PetControl {
 
     public boolean isBaby() {
         return baby;
+    }
+
+    long healthBarUntil() {
+        return healthBarUntil;
+    }
+
+    void setHealthBarUntil(long tick) {
+        this.healthBarUntil = tick;
+    }
+
+    double shownHealth() {
+        return shownHealth;
+    }
+
+    void setShownHealth(double health) {
+        this.shownHealth = health;
+    }
+
+    long nextRegenTick() {
+        return nextRegenTick;
+    }
+
+    void setNextRegenTick(long tick) {
+        this.nextRegenTick = tick;
     }
 
     /** Epoch milliseconds the pet was born or tamed; 0 for a wild adult. */

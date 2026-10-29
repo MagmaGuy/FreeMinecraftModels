@@ -21,6 +21,7 @@ import com.magmaguy.magmacore.ai.MindHost;
 import com.magmaguy.magmacore.ai.MobBody;
 import com.magmaguy.magmacore.scripting.tables.LuaLivingEntityTable;
 import com.magmaguy.magmacore.util.ChatColorConverter;
+import com.magmaguy.magmacore.util.HealthBarText;
 import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
@@ -217,6 +218,8 @@ public final class PetManager {
         if (manager == null) return;
         if (ticks % WATCH_TICKS == 0) manager.watch();
         if (ticks % OwnerPace.SAMPLE_TICKS == 0) manager.samplePaces();
+        if (ticks % WATCH_TICKS == 0) manager.regenerate();
+        manager.tickHealthBars();
         manager.workChunks();
         if (ticks >= manager.nextWildSpawnTick) {
             manager.nextWildSpawnTick = ticks + Math.max(20, PetsConfig.wildSpawnIntervalTicks);
@@ -568,6 +571,76 @@ public final class PetManager {
         return true;
     }
 
+    /** A body's max health, or its health when it has no such attribute. */
+    static double maxHealth(LivingEntity body) {
+        AttributeInstance max = body.getAttribute(Attribute.MAX_HEALTH);
+        return max == null ? body.getHealth() : max.getValue();
+    }
+
+    /**
+     * Shows the pet's health display, as EliteMobs shows its elites', for the next healthBarSeconds; while it shows, it
+     * follows the pet's health.
+     */
+    public void showHealth(PetControl control) {
+        if (!PetsConfig.showHealthBar) return;
+        control.setHealthBarUntil(ticks + Math.max(1, PetsConfig.healthBarSeconds) * 20L);
+        control.setShownHealth(-1D);
+    }
+
+    /** Keeps every shown health display in step with its pet's health, and takes it down once its time is up. */
+    private void tickHealthBars() {
+        for (PetControl control : byBody.values()) {
+            if (control.healthBarUntil() == 0L) continue;
+            DynamicEntity modeled = control.modeled();
+            LivingEntity body = control.body();
+            if (modeled == null || modeled.isRemoved() || body == null || !body.isValid()) continue;
+            if (ticks >= control.healthBarUntil() || !PetsConfig.showHealthBar) {
+                control.setHealthBarUntil(0L);
+                modeled.setDisplayName(nameplate(control));
+                continue;
+            }
+            double health = body.getHealth();
+            if (health == control.shownHealth()) continue;
+            control.setShownHealth(health);
+            modeled.setDisplayNameLines(healthLines(nameplate(control), health, maxHealth(body),
+                    control.stats().health * control.babyShare()));
+        }
+    }
+
+    /**
+     * The nameplate while the health display shows: the pet's name, if a name tag gave it one, over EliteMobs' numeric
+     * row and bars, which grow with its health stat as an elite's grow with its health multiplier.
+     */
+    static List<String> healthLines(String name, double health, double maxHealth, double healthMultiplier) {
+        List<String> lines = new ArrayList<>();
+        if (name != null) lines.add(name);
+        lines.add(HealthBarText.numericLine(health, maxHealth, PetsConfig.healthBarSeparator));
+        lines.addAll(HealthBarText.barLines(health, maxHealth, healthMultiplier, false));
+        return lines;
+    }
+
+    /**
+     * Every second: a hurt pet regains a point of health each regenSeconds. Its body's own healing is held back
+     * (PetListeners), so this is all it gets besides food.
+     */
+    private void regenerate() {
+        if (PetsConfig.regenSeconds <= 0) return;
+        long every = PetsConfig.regenSeconds * 20L;
+        for (PetControl control : byBody.values()) {
+            LivingEntity body = control.body();
+            if (body == null || !body.isValid() || body.isDead()) continue;
+            double max = maxHealth(body);
+            if (body.getHealth() >= max) {
+                control.setNextRegenTick(ticks + every);
+                continue;
+            }
+            if (ticks < control.nextRegenTick()) continue;
+            body.setHealth(Math.min(max, body.getHealth() + 1D));
+            control.setNextRegenTick(ticks + every);
+            showHealth(control);
+        }
+    }
+
     /** Removes a pet body from the world and from every map; an owned pet's health stays on its record. */
     public void despawn(PetControl control) {
         if (rememberHealth(control)) {
@@ -858,6 +931,16 @@ public final class PetManager {
                 if (player.getGameMode() != GameMode.CREATIVE) held.setAmount(held.getAmount() - 1);
                 particles(control, Particle.HEART, 3);
             } else player.sendMessage(ChatColorConverter.convert(PetsConfig.nameTagBlankMessage));
+            return true;
+        }
+        // A hurt pet eats to heal, as a tamed wolf does; at full health its breeding food is for love.
+        LivingEntity fed = control.body();
+        if ((pet.isBreedingFood(held) || pet.isTamingFood(held)) && PetsConfig.feedingHeals > 0D && fed != null
+                && fed.isValid() && fed.getHealth() < maxHealth(fed)) {
+            consume(player, held);
+            fed.setHealth(Math.min(maxHealth(fed), fed.getHealth() + PetsConfig.feedingHeals));
+            particles(control, Particle.HEART, 3);
+            showHealth(control);
             return true;
         }
         if (!control.isBaby() && pet.isBreedingFood(held)) {

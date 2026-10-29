@@ -25,6 +25,18 @@ class PetManagerTest {
     }
 
     @Test
+    void theHealthDisplayIsTheNameOverEliteMobsNumbersAndBars() {
+        com.magmaguy.freeminecraftmodels.config.PetsConfig.healthBarSeparator = " &7/ ";
+        List<String> named = PetManager.healthLines("Bubbles", 10D, 20D, 1D);
+        assertEquals(3, named.size());
+        assertEquals("Bubbles", named.get(0));
+        assertEquals(com.magmaguy.magmacore.util.HealthBarText.numericLine(10D, 20D, " &7/ "), named.get(1));
+        assertEquals(com.magmaguy.magmacore.util.HealthBarText.barLines(10D, 20D, 1D, false), named.subList(2, 3));
+        // No name tag: no name line. A pet bred to double health gets two rows of bars, as a sturdier elite does.
+        assertEquals(3, PetManager.healthLines(null, 30D, 40D, 2D).size());
+    }
+
+    @Test
     void warningsSayWhenAListIsTheLocomotionsDefault() {
         assertEquals("jellyfish.pet.yml", PetManager.where("jellyfish.pet.yml", true, MindBodyLocomotion.FLYING,
                 "em_pet_jellyfish_gold", true));
