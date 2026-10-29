@@ -142,6 +142,8 @@ public final class PetSpecies {
     private final long breedingCooldownMillis;
     private final int loveTicks;
     private final List<Variant> variants;
+    /** Whether any variant names its own biomes, so wild spawns need to look up the biome. */
+    private final boolean variantBiomes;
     private final double followDistance;
     private final double leashDistance;
     private final double teleportDistance;
@@ -191,6 +193,7 @@ public final class PetSpecies {
         this.loveTicks = (int) (config.getDouble("loveSeconds", 30D) * 20D);
         this.variants = variants(config.get("variants"), filename, Logger::warn);
         warnUnknownBiomes(variants, filename, key -> Registry.BIOME.get(key) != null, Logger::warn);
+        this.variantBiomes = variants.stream().anyMatch(variant -> !variant.biomes().isEmpty());
         ConfigurationSection follow = section(config, "follow");
         this.followDistance = follow.getDouble("distance", 5D);
         this.leashDistance = follow.getDouble("leashDistance", 12D);
@@ -709,6 +712,39 @@ public final class PetSpecies {
     /** A variant model by weight, or the species' model when no variant has a share of the picks. */
     public String pickVariant(Random random) {
         return pick(variants, model, random, any -> true);
+    }
+
+    /**
+     * A variant model for a wild one spawning here, by weight among the variants that live in the spot's biome, or
+     * null when none does; {@link #mayStandWild} rules that out for the spots wild ones spawn at.
+     */
+    public String pickWildVariant(Random random, Location at) {
+        if (!variantBiomes) return pickVariant(random);
+        NamespacedKey biome = biome(at);
+        return pick(variants, model, random, variant -> variant.allowsBiome(biome));
+    }
+
+    /** Whether a wild one may spawn at this spot: its wildSpawn rules allow it, and some variant lives in its biome. */
+    public boolean mayStandWild(Location at) {
+        return wildSpawn.allows(at) && (!variantBiomes || hasWildVariant(variants, biome(at)));
+    }
+
+    /**
+     * Whether a wild pick in this biome finds a model: a variant with a share of the picks that lives there, or no
+     * variant with a share at all, when wild ones wear the species' model.
+     */
+    static boolean hasWildVariant(List<Variant> variants, NamespacedKey biome) {
+        boolean weighted = false;
+        for (Variant variant : variants) {
+            if (variant.weight() <= 0D) continue;
+            if (variant.allowsBiome(biome)) return true;
+            weighted = true;
+        }
+        return !weighted;
+    }
+
+    private static NamespacedKey biome(Location at) {
+        return at.getWorld().getBiome(at.getBlockX(), at.getBlockY(), at.getBlockZ()).getKey();
     }
 
     /** The variant a baby of these two parents takes; see {@link #inherit(String, String, List, String, Random)}. */

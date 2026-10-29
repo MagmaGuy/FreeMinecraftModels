@@ -368,9 +368,17 @@ public final class PetManager {
 
     // ---- spawning --------------------------------------------------------------------------------------------
 
+    /** A wild one of a variant that lives in the location's biome. */
     public PetControl spawnWild(PetSpecies pet, Location location) {
+        String model = pet.pickWildVariant(ThreadLocalRandom.current(), location);
+        if (model == null) return refuse(pet, "none of its variants lives in the biome it was spawned in");
+        return spawnWild(pet, location, model);
+    }
+
+    /** A wild one wearing this variant, wherever it is. */
+    public PetControl spawnWild(PetSpecies pet, Location location, String model) {
         Location at = PetMotion.hoverPoint(new PetControl(pet, null, null, null, false, location), location, 0D);
-        return spawn(pet, null, null, pet.pickVariant(ThreadLocalRandom.current()), false, at, location);
+        return spawn(pet, null, null, model, false, at, location);
     }
 
     /** Puts an equipped pet from the collection into the world beside its owner. */
