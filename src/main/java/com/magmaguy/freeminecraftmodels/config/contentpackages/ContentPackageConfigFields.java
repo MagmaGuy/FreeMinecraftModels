@@ -26,6 +26,11 @@ public class ContentPackageConfigFields extends CustomConfigFields {
     @Getter
     @Setter
     private List<String> scriptFilePrefixes;
+    // Set by a premade that is not released yet; never read from or written to its file, so the release that drops
+    // the mark frees the package on every server.
+    @Getter
+    @Setter
+    private boolean comingSoon = false;
 
     public ContentPackageConfigFields(String filename,
                                       boolean isEnabled,

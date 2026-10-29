@@ -14,5 +14,7 @@ public class DriftjellyPetPack extends ContentPackageConfigFields {
                 "https://nightbreak.io/plugin/freeminecraftmodels/",
                 "fmm_driftjelly");
         setNightbreakSlug("driftjelly-pet-pack");
+        // In final testing: /fmm setup lists it under Coming soon and nothing downloads it. Remove this line to release it.
+        setComingSoon(true);
     }
 }

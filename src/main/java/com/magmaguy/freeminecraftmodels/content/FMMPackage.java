@@ -166,6 +166,11 @@ public class FMMPackage extends AbstractNightbreakContentPackage {
     }
 
     @Override
+    public boolean isMarkedComingSoon() {
+        return contentPackageConfigFields.isComingSoon();
+    }
+
+    @Override
     public String getDisplayName() {
         return contentPackageConfigFields.getName();
     }
