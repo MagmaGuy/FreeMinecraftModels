@@ -85,10 +85,13 @@ public final class PetListeners implements Listener {
         if (pet != null && protectedFrom(pet, event.getPlayer())) event.setCancelled(true);
     }
 
-    /** Owned pets are safe from their owner, from everyone in COSMETIC mode, and from players when so configured. */
+    /**
+     * Owned pets are safe from everyone in COSMETIC mode, and from players, their owner included, when so configured.
+     * Otherwise they are mortal, like tamed wolves.
+     */
     private static boolean protectedFrom(PetControl pet, Player attacker) {
         if (pet.isWild()) return false;
-        return PetsConfig.mode == PetsConfig.Mode.COSMETIC || pet.isOwnedBy(attacker) || PetsConfig.petsInvulnerableToPlayers;
+        return PetsConfig.mode == PetsConfig.Mode.COSMETIC || PetsConfig.petsInvulnerableToPlayers;
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
@@ -104,7 +107,7 @@ public final class PetListeners implements Listener {
         }
         if (!(event instanceof EntityDamageByEntityEvent byEntity)) return;
         Player attacker = attacker(byEntity.getDamager());
-        if (attacker != null && (pet.isOwnedBy(attacker) || PetsConfig.petsInvulnerableToPlayers)) event.setCancelled(true);
+        if (attacker != null && PetsConfig.petsInvulnerableToPlayers) event.setCancelled(true);
     }
 
     /**
