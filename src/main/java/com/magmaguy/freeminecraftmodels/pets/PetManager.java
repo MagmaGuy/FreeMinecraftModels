@@ -460,7 +460,7 @@ public final class PetManager {
         modeled.setClickSurface(true);
         modeled.setTravelOrientation(pet.orientation());
         modeled.setCenteredOnBody(pet.centerOnBody());
-        modeled.setDisplayName(displayName(control));
+        modeled.setDisplayName(nameplate(control));
         byBody.put(entity.getUniqueId(), control);
         if (owner != null && record != null) {
             Map<String, PetControl> owned = ownedBodies.computeIfAbsent(owner, ignored -> new HashMap<>());
@@ -675,6 +675,12 @@ public final class PetManager {
         return ChatColorConverter.convert(control.species().name(control.model()));
     }
 
+    /** What floats above the pet: like any mob, only the name a name tag gave it; none until then. */
+    private static String nameplate(PetControl control) {
+        PetRecord record = control.record();
+        return record == null || record.name == null || record.name.isBlank() ? null : ChatColorConverter.convert(record.name);
+    }
+
     // ---- interactions ----------------------------------------------------------------------------------------
 
     /**
@@ -711,7 +717,7 @@ public final class PetManager {
                 control.record().name = tag.getDisplayName();
                 collection(player).save();
                 DynamicEntity modeled = control.modeled();
-                if (modeled != null && !modeled.isRemoved()) modeled.setDisplayName(displayName(control));
+                if (modeled != null && !modeled.isRemoved()) modeled.setDisplayName(nameplate(control));
                 if (player.getGameMode() != GameMode.CREATIVE) held.setAmount(held.getAmount() - 1);
                 particles(control, Particle.HEART, 3);
             }
