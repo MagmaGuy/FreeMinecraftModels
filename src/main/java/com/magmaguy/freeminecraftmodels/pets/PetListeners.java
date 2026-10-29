@@ -16,6 +16,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityRegainHealthEvent;
 import org.bukkit.event.entity.EntityRemoveEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
@@ -107,6 +108,24 @@ public final class PetListeners implements Listener {
     private static boolean protectedFrom(PetControl pet, Player attacker) {
         if (pet.isWild()) return false;
         return PetsConfig.mode == PetsConfig.Mode.COSMETIC || PetsConfig.petsInvulnerableToPlayers;
+    }
+
+    /** A pet body's own healing (an allay's 2 health a second) never applies: pets heal as pets.yml says. */
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onRegain(EntityRegainHealthEvent event) {
+        PetManager manager = PetManager.get();
+        if (manager == null || manager.pet(event.getEntity()) == null) return;
+        EntityRegainHealthEvent.RegainReason reason = event.getRegainReason();
+        if (reason == EntityRegainHealthEvent.RegainReason.REGEN || reason == EntityRegainHealthEvent.RegainReason.SATIATED)
+            event.setCancelled(true);
+    }
+
+    /** Damage that went through shows the pet's health display. */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onHurt(EntityDamageEvent event) {
+        PetManager manager = PetManager.get();
+        PetControl pet = manager == null ? null : manager.pet(event.getEntity());
+        if (pet != null) manager.showHealth(pet);
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)

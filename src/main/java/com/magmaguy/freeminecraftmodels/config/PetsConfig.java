@@ -24,6 +24,11 @@ public class PetsConfig extends ConfigurationFile {
     public static int maxEquippedPets;
     public static int maxOwnedPets;
     public static boolean babiesGrowUp;
+    public static boolean showHealthBar;
+    public static int healthBarSeconds;
+    public static String healthBarSeparator;
+    public static int regenSeconds;
+    public static double feedingHeals;
     public static boolean petsInvulnerableToPlayers;
     public static boolean petsDiePermanently;
     public static double wildGenerationChance;
@@ -84,6 +89,22 @@ public class PetsConfig extends ConfigurationFile {
                 List.of("Whether babies, owned ones and ones set free, grow into adults after their species'",
                         "babyGrowthMinutes. When false they stay babies."),
                 fileConfiguration, "babiesGrowUp", true);
+        showHealthBar = ConfigurationEngine.setBoolean(
+                List.of("Whether a pet whose health changes shows EliteMobs' overhead health display: its health in",
+                        "numbers over a bar, sturdier pets getting more bars."),
+                fileConfiguration, "showHealthBar", true);
+        healthBarSeconds = ConfigurationEngine.setInt(
+                List.of("How many seconds the health display stays up after a pet's health last changed."),
+                fileConfiguration, "healthBarSeconds", 30);
+        healthBarSeparator = ConfigurationEngine.setString(fileConfiguration, "healthBarSeparator", " &7/ ");
+        regenSeconds = ConfigurationEngine.setInt(
+                List.of("A hurt pet regains 1 health every this many seconds on its own; 0 turns that off. Its body's",
+                        "own faster healing (an allay's 2 health a second) never applies."),
+                fileConfiguration, "regenSeconds", 5);
+        feedingHeals = ConfigurationEngine.setDouble(
+                List.of("Health a hurt owned pet regains from one of its food, as a tamed wolf heals from meat. At full",
+                        "health its breeding food puts it in love instead."),
+                fileConfiguration, "feedingHeals", 4D);
         petsInvulnerableToPlayers = ConfigurationEngine.setBoolean(
                 List.of("Whether owned pets ignore damage from players, their owner included. When false they are mortal,",
                         "like tamed wolves. Pets are always invulnerable in COSMETIC mode."),
