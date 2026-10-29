@@ -5,6 +5,7 @@ import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
+import com.magmaguy.freeminecraftmodels.customentity.core.SkeletonWatchers;
 import com.magmaguy.freeminecraftmodels.customentity.core.TravelOrientation;
 import com.magmaguy.freeminecraftmodels.customentity.core.TravelTilt;
 import com.magmaguy.freeminecraftmodels.customentity.core.TurnInertia;
@@ -21,8 +22,10 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityRemoveEvent;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -485,6 +488,13 @@ public class DynamicEntity extends ModeledEntity {
             DynamicEntity dynamicEntity = DynamicEntity.getDynamicEntity(event.getEntity());
             if (dynamicEntity == null) return;
             dynamicEntity.removeWithDeathAnimation();
+        }
+
+        @EventHandler(priority = EventPriority.MONITOR)
+        public void onEntityRemove(EntityRemoveEvent event) {
+            // An unloaded entity comes back with the same id, and the model rebuilt on it keeps its hidden players.
+            if (event.getCause() == EntityRemoveEvent.Cause.UNLOAD) return;
+            SkeletonWatchers.forgetHiddenPlayers(event.getEntity().getUniqueId());
         }
     }
 }

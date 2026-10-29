@@ -189,6 +189,8 @@ public final class FreeMinecraftModels extends JavaPlugin {
         ModeledEntity.shutdown();
         PropEntity.shutdown();
         DynamicEntity.shutdown();
+        // Only here: /fmm reload rebuilds props on the same armor stands, and they stay hidden from the same players.
+        com.magmaguy.freeminecraftmodels.customentity.core.SkeletonWatchers.clearHiddenPlayers();
         ConfigurationLocation.shutdown();
         HandlerList.unregisterAll(MetadataHandler.PLUGIN);
     }

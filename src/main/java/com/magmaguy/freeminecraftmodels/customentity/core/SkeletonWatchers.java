@@ -21,6 +21,7 @@ import org.bukkit.util.Vector;
 import org.joml.Vector3d;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -31,8 +32,13 @@ public class SkeletonWatchers {
     private final Set<UUID> javaViewers = new CopyOnWriteArraySet<>();
     // Java viewers that track the model's hidden body as an invisible, bare entity so the bones can ride it.
     private final Set<UUID> bodyViewers = new CopyOnWriteArraySet<>();
-    // Players a plugin hid this model from; the watcher list never admits them until they are shown it again.
-    private final Set<UUID> hiddenFrom = new CopyOnWriteArraySet<>();
+    // Players a plugin hid the models on each body from; the watcher list never admits them until they are shown it
+    // again. Keyed by the body, so a model rebuilt on it (a prop reloading with its chunk or after /fmm reload, a new
+    // model on the same mob) keeps them hidden. An entry lasts until its body is gone for good or the plugin stops.
+    private static final Map<UUID, Set<UUID>> hiddenFromByBody = new ConcurrentHashMap<>();
+    // Players hidden from a model with no body, or hidden before it got one.
+    private final Set<UUID> ownHiddenFrom = new CopyOnWriteArraySet<>();
+    private volatile UUID bodyId;
     private int trackedBodyId = -1;
     // Whether every Java viewer's client tracks the model's entity, refreshed on the primary thread. A client that
     // lacks the entity drops the bones' mount and stops drawing them, so the bones ride it only while this holds.
@@ -62,23 +68,72 @@ public class SkeletonWatchers {
         return !viewers.isEmpty();
     }
 
+    /** Shares the hidden players of every model on this body; players hidden before the model got it move over. */
+    public void bindBody(UUID bodyId) {
+        this.bodyId = bodyId;
+        if (ownHiddenFrom.isEmpty()) return;
+        hiddenFromByBody.compute(bodyId, (ignored, players) -> {
+            Set<UUID> hidden = players == null ? new CopyOnWriteArraySet<>() : players;
+            hidden.addAll(ownHiddenFrom);
+            return hidden;
+        });
+        ownHiddenFrom.clear();
+    }
+
     /** Hides the whole model from one player until {@link #showToPlayer(Player)}, while other viewers keep it. */
     public void hideFromPlayer(Player player) {
         UUID uuid = player.getUniqueId();
-        if (!hiddenFrom.add(uuid) || !viewers.contains(uuid)) return;
+        if (!addHidden(uuid) || !viewers.contains(uuid)) return;
         if (Bukkit.isPrimaryThread()) hideFrom(uuid);
         else Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, () -> {
-            if (hiddenFrom.contains(uuid) && viewers.contains(uuid)) hideFrom(uuid);
+            if (hiddenFrom().contains(uuid) && viewers.contains(uuid)) hideFrom(uuid);
         });
     }
 
     /** Lets a hidden player back in; the next watcher update shows them the model if it is in range and in sight. */
     public void showToPlayer(Player player) {
-        hiddenFrom.remove(player.getUniqueId());
+        UUID uuid = player.getUniqueId();
+        UUID body = bodyId;
+        if (body == null) {
+            ownHiddenFrom.remove(uuid);
+            return;
+        }
+        hiddenFromByBody.computeIfPresent(body, (ignored, players) -> {
+            players.remove(uuid);
+            return players.isEmpty() ? null : players;
+        });
     }
 
     public boolean isHiddenFrom(Player player) {
-        return hiddenFrom.contains(player.getUniqueId());
+        return hiddenFrom().contains(player.getUniqueId());
+    }
+
+    /** Forgets who was hidden from the models on a body that is gone for good. */
+    public static void forgetHiddenPlayers(UUID bodyId) {
+        hiddenFromByBody.remove(bodyId);
+    }
+
+    public static void clearHiddenPlayers() {
+        hiddenFromByBody.clear();
+    }
+
+    private boolean addHidden(UUID uuid) {
+        UUID body = bodyId;
+        if (body == null) return ownHiddenFrom.add(uuid);
+        boolean[] added = new boolean[1];
+        hiddenFromByBody.compute(body, (ignored, players) -> {
+            Set<UUID> hidden = players == null ? new CopyOnWriteArraySet<>() : players;
+            added[0] = hidden.add(uuid);
+            return hidden;
+        });
+        return added[0];
+    }
+
+    private Set<UUID> hiddenFrom() {
+        UUID body = bodyId;
+        if (body == null) return ownHiddenFrom;
+        Set<UUID> players = hiddenFromByBody.get(body);
+        return players == null ? Set.of() : players;
     }
 
     /** Whether every Java viewer's client tracked the model's entity at the last primary-thread check. */
@@ -224,10 +279,11 @@ public class SkeletonWatchers {
         // mode, so anything inside the view distance stays visible regardless of chunks.
         boolean filmicMode = FilmicMode.isEnabled();
         int worldViewDistance = filmicMode ? currentLocation.getWorld().getViewDistance() : 0;
+        Set<UUID> hidden = hiddenFrom();
 
         for (Player player : currentLocation.getWorld().getPlayers()) {
             // Left out of newPlayers, a hidden player who is still a viewer gets dropped below.
-            if (hiddenFrom.contains(player.getUniqueId())) continue;
+            if (hidden.contains(player.getUniqueId())) continue;
             double distance = player.getLocation().distanceSquared(currentLocation);
 
             boolean visible = filmicMode

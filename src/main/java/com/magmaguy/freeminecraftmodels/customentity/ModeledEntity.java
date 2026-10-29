@@ -204,6 +204,7 @@ public class ModeledEntity {
                 .get(RegisterModelEntity.ENTITY_KEY, PersistentDataType.STRING);
         spawnRegistrationRollbackArmed = true;
         loadedModeledEntitiesWithUnderlyingEntities.put(underlyingEntity, this);
+        skeleton.getSkeletonWatchers().bindBody(underlyingEntity.getUniqueId());
         RegisterModelEntity.registerModelEntity(underlyingEntity, getSkeletonBlueprint().getModelName());
         hitboxComponent.setCustomHitboxOnUnderlyingEntity();
     }
@@ -255,8 +256,10 @@ public class ModeledEntity {
 
     /**
      * Hides this model from one player while everyone else keeps seeing it. The bones, nameplate, particles,
-     * Bedrock model and click hitbox all disappear for that player, and stay hidden until {@link #showTo(Player)}
-     * or until the model is removed.
+     * Bedrock model and click hitbox all disappear for that player, and stay hidden until {@link #showTo(Player)}.
+     * The hide belongs to the entity the model is on, so a model rebuilt on the same entity (a prop reloading with
+     * its chunk or after /fmm reload, a new model created on the same mob) stays hidden too, until that entity is
+     * gone for good. A model without an entity keeps its hides until it is removed. Nothing is saved to disk.
      */
     public void hideFrom(Player player) {
         skeleton.getSkeletonWatchers().hideFromPlayer(player);
