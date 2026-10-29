@@ -136,6 +136,14 @@ public final class PetListeners implements Listener {
     public void onAttacked(EntityDamageByEntityEvent event) {
         PetManager manager = PetManager.get();
         if (manager == null) return;
+        // A creature an owned pet hurts, a mob it stung say, becomes one its owner's pets fight for a while, as a wolf
+        // keeps at what it bit: they press in on it, within its reach, so the fight goes both ways. Players become
+        // aggressors only by attacking, as before.
+        PetControl hurter = manager.pet(event.getDamager());
+        if (hurter != null && !hurter.isWild() && event.getEntity() instanceof LivingEntity hurt && !(hurt instanceof Player)) {
+            PetControl hurtPet = manager.pet(hurt);
+            if (hurtPet == null || !hurter.ownerId().equals(hurtPet.ownerId())) manager.attacked(hurter.ownerId(), hurt.getUniqueId());
+        }
         Player attacker = attacker(event.getDamager());
         UUID aggressor = aggressor(manager, event.getDamager());
         if (aggressor == null) return;
