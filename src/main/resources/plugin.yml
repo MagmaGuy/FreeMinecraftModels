@@ -32,6 +32,7 @@ permissions:
       freeminecraftmodels.disguise.others: true
       freeminecraftmodels.bypassregionprotection: true
       freeminecraftmodels.pets.admin: true
+      freeminecraftmodels.pets.give: true
   freeminecraftmodels.admin:
     description: Allows access to the admin content browser
     default: op
@@ -58,4 +59,7 @@ permissions:
     default: true
   freeminecraftmodels.pets.admin:
     description: Allows /fmm petadmin and /fmm petmigrate
+    default: op
+  freeminecraftmodels.pets.give:
+    description: Allows /fmm givepet, which gives a player a pet (for shops and rewards; works from the console)
     default: op
