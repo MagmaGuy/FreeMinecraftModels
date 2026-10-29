@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -20,8 +21,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
  */
 class PetSpeciesVariantsTest {
     private static final String FILE = "jellyfish.pet.yml";
-    private static final String BLUE = "em_pet_jellyfish_blue", WAR = "em_pet_jellyfish_man_o_war",
-            WAR_BABY = "em_pet_jellyfish_man_o_war_baby";
+    private static final String SPECIES = "em_pet_jellyfish", SPECIES_BABY = "em_pet_jellyfish_baby",
+            BLUE = "em_pet_jellyfish_blue", WAR = "em_pet_jellyfish_man_o_war", WAR_BABY = "em_pet_jellyfish_man_o_war_baby";
+    private static final Predicate<String> ALL_LOADED = model -> true;
     private static final NamespacedKey WARM_OCEAN = NamespacedKey.minecraft("warm_ocean"),
             BEACH = NamespacedKey.minecraft("beach");
 
@@ -151,6 +153,36 @@ class PetSpeciesVariantsTest {
         PetSpecies.warnUnknownBiomes(variants, FILE, key -> key.equals(WARM_OCEAN), warnings::add);
         assertEquals(List.of("jellyfish.pet.yml, variant em_pet_jellyfish_man_o_war: this server has no biome "
                 + "minecraft:coral_reef; it never matches."), warnings);
+    }
+
+    @Test
+    void aBabyWearsItsVariantsBabyModelThenTheSpeciesBabyModelThenItsAdultLook() {
+        List<PetSpecies.Variant> variants = List.of(new PetSpecies.Variant(WAR, 1D, List.of(), null, WAR_BABY, Set.of(), 1D),
+                new PetSpecies.Variant(BLUE, 1D, List.of()));
+        assertEquals(WAR_BABY, PetSpecies.babyLook(WAR, variants, SPECIES_BABY, ALL_LOADED));
+        assertEquals(SPECIES_BABY, PetSpecies.babyLook(BLUE, variants, SPECIES_BABY, ALL_LOADED));
+        assertNull(PetSpecies.babyLook(BLUE, variants, null, ALL_LOADED), "no baby model: its adult look, scaled down");
+        assertEquals(SPECIES_BABY, PetSpecies.babyLook(SPECIES, variants, SPECIES_BABY, ALL_LOADED),
+                "the species' own model is no variant");
+        // A baby model that is not loaded falls through to the next look instead of refusing the spawn.
+        assertEquals(SPECIES_BABY, PetSpecies.babyLook(WAR, variants, SPECIES_BABY, model -> !model.equals(WAR_BABY)));
+        assertNull(PetSpecies.babyLook(WAR, variants, SPECIES_BABY, model -> false));
+    }
+
+    @Test
+    void babyModelsThatAreNotLoadedAreReportedWithWhatTheBabiesWearInstead() {
+        List<PetSpecies.Variant> variants = List.of(new PetSpecies.Variant(WAR, 1D, List.of(), null, WAR_BABY, Set.of(), 1D),
+                new PetSpecies.Variant(BLUE, 1D, List.of(), null, "em_pet_jellyfish_blue_baby", Set.of(), 1D));
+        assertEquals(List.of(), PetSpecies.babyModelProblems(FILE, variants, SPECIES_BABY, ALL_LOADED));
+        assertEquals(List.of("jellyfish.pet.yml, variant em_pet_jellyfish_man_o_war: babyModel " + WAR_BABY
+                        + " is not loaded; its babies wear " + SPECIES_BABY + "."),
+                PetSpecies.babyModelProblems(FILE, variants, SPECIES_BABY, model -> !model.equals(WAR_BABY)));
+        assertEquals(List.of("jellyfish.pet.yml: babyModel " + SPECIES_BABY + " is not loaded; babies wear their own "
+                        + "model, scaled down.",
+                        "jellyfish.pet.yml, variant em_pet_jellyfish_man_o_war: babyModel " + WAR_BABY + " is not loaded; "
+                                + "its babies wear its own model, scaled down."),
+                PetSpecies.babyModelProblems(FILE, variants, SPECIES_BABY,
+                        model -> !model.equals(WAR_BABY) && !model.equals(SPECIES_BABY)));
     }
 
     @Test

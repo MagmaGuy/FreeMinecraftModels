@@ -244,6 +244,8 @@ public final class PetManager {
             program(pet, pet.model());
             for (PetSpecies.Variant variant : pet.variants()) program(pet, variant.model());
             checkMigrants(pet);
+            PetSpecies.babyModelProblems(pet.file().getName(), pet.variants(), pet.babyModel(), PetManager::loaded)
+                    .forEach(Logger::warn);
         }
         if (!species.isEmpty()) Logger.info("Loaded " + behaviors.names().size() + " pet behaviors.");
     }
@@ -405,7 +407,9 @@ public final class PetManager {
                              double sizeMultiplier) {
         if (host == null || at.getWorld() == null) return null;
         String variant = wornVariant(pet.model(), model, PetManager::loaded);
-        String modelId = baby && pet.babyModel() != null ? pet.babyModel() : variant;
+        // A baby's look comes from the variant it was born as, even when that adult model is missing here.
+        String babyLook = baby ? PetSpecies.babyLook(model, pet.variants(), pet.babyModel(), PetManager::loaded) : null;
+        String modelId = babyLook != null ? babyLook : variant;
         if (FileModelConverter.getModel(modelId) == null) return refuse(pet, "model " + modelId + " is not loaded");
         PetControl control = new PetControl(pet, owner, record, variant, baby, home);
         MindHandle mind;
