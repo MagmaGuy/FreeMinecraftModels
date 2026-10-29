@@ -8,6 +8,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -43,7 +44,7 @@ class PetSpeciesWildSpawnTest {
         assertEquals(4, wild.cap());
         assertEquals(List.of(), wild.worlds());
         assertEquals(List.of(), wild.environments());
-        assertEquals(List.of(), wild.biomes());
+        assertEquals(Set.of(), wild.biomes());
     }
 
     @Test
@@ -65,7 +66,7 @@ class PetSpeciesWildSpawnTest {
                   maxY: 90
                 """, MindBodyLocomotion.FLYING);
         assertEquals(new PetSpecies.WildSpawn(false, 25, 2, 4, PetSpecies.Placement.WATER_SURFACE, 3, 12, 6, List.of("world"),
-                List.of(World.Environment.NORMAL, World.Environment.THE_END), List.of(), PetSpecies.TimeOfDay.NIGHT, 40, 90), wild);
+                List.of(World.Environment.NORMAL, World.Environment.THE_END), Set.of(), PetSpecies.TimeOfDay.NIGHT, 40, 90), wild);
     }
 
     @Test
