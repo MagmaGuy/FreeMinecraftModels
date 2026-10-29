@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.pets;
 
+import com.magmaguy.magmacore.thirdparty.CustomBiomeCompatibility;
 import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -227,6 +229,58 @@ class PetSpeciesVariantsTest {
         assertEquals("&bJellyfish", PetSpecies.name(variants, "&bJellyfish", BLUE));
         assertEquals("&bJellyfish", PetSpecies.name(variants, "&bJellyfish", "em_pet_jellyfish_old"));
         assertEquals("&bJellyfish", PetSpecies.name(variants, "&bJellyfish", null));
+    }
+
+    @Test
+    void customBiomesFromOtherPluginsWarnOnlyWhenTheyAreVanillaNames() {
+        NamespacedKey volcanic = NamespacedKey.fromString("terralith:volcanic_peaks");
+        List<PetSpecies.Variant> variants = List.of(
+                new PetSpecies.Variant(WAR, 1D, List.of(), null, null, Set.of(volcanic, NamespacedKey.minecraft("coral_reef")), 1D));
+        List<String> warnings = new ArrayList<>();
+        // A world generator's biome is taken as written, as BetterStructures does; only a vanilla name is checked.
+        PetSpecies.warnUnknownBiomes(variants, FILE, key -> false, warnings::add);
+        assertEquals(List.of("jellyfish.pet.yml, variant em_pet_jellyfish_man_o_war: this server has no biome "
+                + "minecraft:coral_reef; it never matches."), warnings);
+    }
+
+    @Test
+    void aVanillaBiomeAlsoMatchesTheCustomBiomesMagmaCoreMapsToIt() {
+        NamespacedKey reef = NamespacedKey.fromString("terralith:warm_reef");
+        NamespacedKey volcanic = NamespacedKey.fromString("terralith:volcanic_peaks");
+        Map<String, List<String>> mapped = Map.of("minecraft:warm_ocean", List.of("terralith:warm_reef", "Not A Key!"));
+        List<PetSpecies.Variant> variants = PetSpecies.withCustomBiomes(List.of(
+                new PetSpecies.Variant(WAR, 1D, List.of(), null, null, Set.of(WARM_OCEAN, volcanic), 1D),
+                new PetSpecies.Variant(BLUE, 1D, List.of())), key -> mapped.getOrDefault(key, List.of()));
+        assertEquals(Set.of(WARM_OCEAN, reef, volcanic), variants.get(0).biomes(),
+                "the vanilla biome gains its mapped custom biome; an unreadable mapping is skipped");
+        assertEquals(Set.of(), variants.get(1).biomes(), "a variant without biomes stays unrestricted");
+        assertTrue(variants.get(0).allowsBiome(reef));
+    }
+
+    @Test
+    void magmaCoresOwnMappingsReachTheVanillaBiomesAPackLists() {
+        CustomBiomeCompatibility.initializeMappings();
+        try {
+            List<String> plains = CustomBiomeCompatibility.getCustomBiomes("minecraft:plains");
+            assertFalse(plains.isEmpty(), "MagmaCore maps custom biomes to plains");
+            PetSpecies.Variant variant = PetSpecies.withCustomBiomes(List.of(new PetSpecies.Variant(BLUE, 1D, List.of(), null,
+                    null, Set.of(NamespacedKey.minecraft("plains")), 1D)), CustomBiomeCompatibility::getCustomBiomes).getFirst();
+            for (String custom : plains) assertTrue(variant.allowsBiome(NamespacedKey.fromString(custom)), custom);
+        } finally {
+            CustomBiomeCompatibility.shutdown();
+        }
+    }
+
+    @Test
+    void wildSpawnBiomesKeepCustomBiomesDropUnknownVanillaOnesAndGainMappedOnes() {
+        List<String> warnings = new ArrayList<>();
+        Set<NamespacedKey> biomes = PetSpecies.wildBiomes(List.of("warm_ocean", "terralith:volcanic_peaks", "coral_reef", "Not A Key!"),
+                FILE, key -> key.equals(WARM_OCEAN), key -> key.equals("minecraft:warm_ocean") ? List.of("terralith:warm_reef") : List.of(),
+                warnings::add);
+        assertEquals(Set.of(WARM_OCEAN, NamespacedKey.fromString("terralith:volcanic_peaks"), NamespacedKey.fromString("terralith:warm_reef")),
+                biomes);
+        assertEquals(List.of("Unknown biome coral_reef in wildSpawn.biomes of jellyfish.pet.yml",
+                "Unknown biome Not A Key! in wildSpawn.biomes of jellyfish.pet.yml"), warnings);
     }
 
     @Test

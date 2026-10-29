@@ -7,13 +7,13 @@ import com.magmaguy.freeminecraftmodels.pets.behavior.PetPrograms;
 import com.magmaguy.freeminecraftmodels.pets.interactions.PetInteractions;
 import com.magmaguy.freeminecraftmodels.utils.StringToResourcePackFilename;
 import com.magmaguy.magmacore.ai.MindBodyLocomotion;
+import com.magmaguy.magmacore.thirdparty.CustomBiomeCompatibility;
 import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
 import org.bukkit.World;
-import org.bukkit.block.Biome;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.EntityType;
@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -91,13 +92,14 @@ public final class PetSpecies {
     /**
      * How the species appears wild in CREATURES mode, shaped like a vanilla mob's entry in a biome's spawn list: a
      * weight against the other species that may spawn at the same spot, a group size, where the group may stand, and
-     * the light, world, environment, biome and height it needs. Empty lists allow everything. {@code time} and
-     * {@code cap} only hold back the top-up spawns around players: {@code cap} is how many of this species may be
-     * wild around one player, and new chunks are stocked whatever the time.
+     * the light, world, environment, biome and height it needs. Empty lists allow everything; the biomes include the
+     * custom ones MagmaCore maps to each vanilla biome listed (see {@link #wildBiomes}). {@code time} and {@code cap}
+     * only hold back the top-up spawns around players: {@code cap} is how many of this species may be wild around one
+     * player, and new chunks are stocked whatever the time.
      */
     public record WildSpawn(boolean enabled, int weight, int minGroup, int maxGroup, Placement placement, int minLight,
                             int maxLight, int cap, List<String> worlds, List<World.Environment> environments,
-                            List<Biome> biomes, TimeOfDay time, int minY, int maxY) {
+                            Set<NamespacedKey> biomes, TimeOfDay time, int minY, int maxY) {
         /** Whether this world could ever hold the species, before looking at any spot in it. */
         public boolean allowsWorld(World world) {
             if (world == null) return false;
@@ -117,8 +119,7 @@ public final class PetSpecies {
             World world = location.getWorld();
             if (!allowsWorld(world)) return false;
             if (location.getBlockY() < minY || location.getBlockY() > maxY) return false;
-            if (!biomes.isEmpty() && !biomes.contains(world.getBiome(location.getBlockX(), location.getBlockY(), location.getBlockZ())))
-                return false;
+            if (!biomes.isEmpty() && !biomes.contains(biome(location))) return false;
             int light = location.getBlock().getLightLevel();
             return light >= minLight && light <= maxLight;
         }
@@ -191,8 +192,9 @@ public final class PetSpecies {
         this.babyGrowthMillis = (long) (config.getDouble("babyGrowthMinutes", 20D) * 60_000D);
         this.breedingCooldownMillis = (long) (config.getDouble("breedingCooldownMinutes", 5D) * 60_000D);
         this.loveTicks = (int) (config.getDouble("loveSeconds", 30D) * 20D);
-        this.variants = variants(config.get("variants"), filename, Logger::warn);
-        warnUnknownBiomes(variants, filename, key -> Registry.BIOME.get(key) != null, Logger::warn);
+        List<Variant> listed = variants(config.get("variants"), filename, Logger::warn);
+        warnUnknownBiomes(listed, filename, key -> Registry.BIOME.get(key) != null, Logger::warn);
+        this.variants = withCustomBiomes(listed, CustomBiomeCompatibility::getCustomBiomes);
         this.variantBiomes = variants.stream().anyMatch(variant -> !variant.biomes().isEmpty());
         ConfigurationSection follow = section(config, "follow");
         this.followDistance = follow.getDouble("distance", 5D);
@@ -303,7 +305,9 @@ public final class PetSpecies {
         int maxLight = Math.max(minLight, Math.min(15, wild.getInt("maxLight", 15)));
         return new WildSpawn(wild.getBoolean("enabled", true), Math.max(0, weight), minGroup, maxGroup, placement,
                 minLight, maxLight, Math.max(0, wild.getInt("cap", 4)), List.copyOf(wild.getStringList("worlds")),
-                environments(wild.getStringList("environments"), filename), biomes(wild.getStringList("biomes"), filename),
+                environments(wild.getStringList("environments"), filename),
+                wildBiomes(wild.getStringList("biomes"), filename, key -> Registry.BIOME.get(key) != null,
+                        CustomBiomeCompatibility::getCustomBiomes, Logger::warn),
                 time, wild.getInt("minY", -64), wild.getInt("maxY", 320));
     }
 
@@ -319,15 +323,46 @@ public final class PetSpecies {
         return List.copyOf(environments);
     }
 
-    private static List<Biome> biomes(List<String> names, String filename) {
-        List<Biome> biomes = new ArrayList<>();
+    /**
+     * The wildSpawn biomes: each name as a biome key, with the custom biomes MagmaCore maps to each vanilla one, as
+     * BetterStructures widens its generators' biomes. A name in another plugin's namespace is a world generator's
+     * biome and is kept as written; a vanilla name the server does not have ({@code registry}) is reported and dropped.
+     */
+    static Set<NamespacedKey> wildBiomes(List<String> names, String filename, Predicate<NamespacedKey> registry,
+                                         Function<String, List<String>> customBiomes, Consumer<String> warn) {
+        Set<NamespacedKey> biomes = new LinkedHashSet<>();
         for (String name : names) {
-            NamespacedKey key = NamespacedKey.fromString(name.toLowerCase(Locale.ROOT));
-            Biome biome = key == null ? null : Registry.BIOME.get(key);
-            if (biome == null) Logger.warn("Unknown biome " + name + " in wildSpawn.biomes of " + filename);
-            else biomes.add(biome);
+            NamespacedKey key = name.isBlank() ? null : NamespacedKey.fromString(name.trim().toLowerCase(Locale.ROOT));
+            if (key == null || isVanilla(key) && !registry.test(key)) warn.accept("Unknown biome " + name + " in wildSpawn.biomes of " + filename);
+            else biomes.add(key);
         }
-        return List.copyOf(biomes);
+        return withCustomBiomes(biomes, customBiomes);
+    }
+
+    /** These biomes plus every custom biome {@code customBiomes} maps to a vanilla one among them. */
+    static Set<NamespacedKey> withCustomBiomes(Set<NamespacedKey> biomes, Function<String, List<String>> customBiomes) {
+        Set<NamespacedKey> widened = new LinkedHashSet<>(biomes);
+        for (NamespacedKey biome : biomes) {
+            if (!isVanilla(biome)) continue;
+            for (String custom : customBiomes.apply(biome.toString())) {
+                NamespacedKey key = custom == null || custom.isBlank() ? null : NamespacedKey.fromString(custom.toLowerCase(Locale.ROOT));
+                if (key != null) widened.add(key);
+            }
+        }
+        return Set.copyOf(widened);
+    }
+
+    /** The variants, each with its biomes widened by {@link #withCustomBiomes(Set, Function)}. */
+    static List<Variant> withCustomBiomes(List<Variant> variants, Function<String, List<String>> customBiomes) {
+        List<Variant> widened = new ArrayList<>();
+        for (Variant variant : variants)
+            widened.add(new Variant(variant.model(), variant.weight(), variant.behaviors(), variant.name(), variant.babyModel(),
+                    withCustomBiomes(variant.biomes(), customBiomes), variant.inheritChance()));
+        return List.copyOf(widened);
+    }
+
+    private static boolean isVanilla(NamespacedKey biome) {
+        return NamespacedKey.MINECRAFT.equals(biome.getNamespace());
     }
 
     /**
@@ -490,8 +525,9 @@ public final class PetSpecies {
 
     /**
      * The biomes a variant spawns wild in: one name or a list of them, like minecraft:warm_ocean (warm_ocean means the
-     * same). What cannot be a biome's name is skipped after a warning; whether this server has the biome is checked by
-     * {@link #warnUnknownBiomes}, since that needs its registry.
+     * same), or a world generator's biome in its own namespace. What cannot be a biome's name is skipped after a
+     * warning; whether this server has a vanilla biome is checked by {@link #warnUnknownBiomes}, since that needs its
+     * registry, and the custom biomes mapped to the vanilla ones are added by {@link #withCustomBiomes(List, Function)}.
      */
     private static Set<NamespacedKey> biomes(Object value, String where, Consumer<String> warn) {
         List<?> entries;
@@ -514,12 +550,15 @@ public final class PetSpecies {
         return biomes;
     }
 
-    /** Warns about each biome a variant lists that {@code known} says this server does not have. */
+    /**
+     * Warns about each vanilla biome a variant lists that {@code known} says this server does not have. A biome in
+     * another namespace belongs to a world generator and is taken as written, as BetterStructures takes it.
+     */
     static void warnUnknownBiomes(List<Variant> variants, String filename, Predicate<NamespacedKey> known,
                                   Consumer<String> warn) {
         for (Variant variant : variants)
             for (NamespacedKey biome : variant.biomes())
-                if (!known.test(biome))
+                if (isVanilla(biome) && !known.test(biome))
                     warn.accept(filename + ", variant " + variant.model() + ": this server has no biome " + biome
                             + "; it never matches.");
     }
