@@ -735,7 +735,10 @@ public final class PetManager {
         collection(player).remove(record);
         if (pet != null && at != null && PetsConfig.mode == PetsConfig.Mode.CREATURES) {
             PetControl wild = spawn(pet, null, null, record.model, record.baby, at, at);
-            if (wild != null) restoreHealth(wild.body(), health);
+            if (wild != null) {
+                restoreHealth(wild.body(), health);
+                if (record.baby) wild.setWildBornAt(record.bornAt);
+            }
         }
         player.sendMessage(ChatColorConverter.convert(PetsConfig.releasedMessage.replace("$pet", displayName(record))));
     }
@@ -992,6 +995,16 @@ public final class PetManager {
         for (PetControl control : new ArrayList<>(byBody.values())) {
             if (!control.isWild()) continue;
             LivingEntity body = control.body();
+            // A wild baby (one set free) grows up as an owned one does, where it is, keeping its health.
+            if (control.isBaby() && control.route() == null && body != null && body.isValid() && PetsConfig.babiesGrowUp
+                    && now >= control.bornAt() + control.species().babyGrowthMillis()) {
+                Location at = body.getLocation();
+                double health = body.getHealth();
+                despawn(control);
+                PetControl grown = spawn(control.species(), null, null, control.model(), false, at, control.home());
+                if (grown != null) restoreHealth(grown.body(), health);
+                continue;
+            }
             // A migrant's flock decides when it leaves, whatever the mode; a lost migrant just goes.
             if (control.route() != null) {
                 if (body == null || !body.isValid()) despawn(control);
@@ -1079,6 +1092,8 @@ public final class PetManager {
                 continue;
             }
             restoreHealth(back.body(), entry.health());
+            // A baby from before births were kept starts growing now.
+            if (entry.baby()) back.setWildBornAt(entry.bornAt() > 0L ? entry.bornAt() : System.currentTimeMillis());
         }
     }
 

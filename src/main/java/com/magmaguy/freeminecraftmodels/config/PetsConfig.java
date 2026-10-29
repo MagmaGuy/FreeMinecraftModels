@@ -80,8 +80,8 @@ public class PetsConfig extends ConfigurationFile {
                         "set one free from /fmm pets. 0 means no limit."),
                 fileConfiguration, "maxOwnedPets", 0);
         babiesGrowUp = ConfigurationEngine.setBoolean(
-                List.of("Whether owned babies grow into adults after their species' babyGrowthMinutes. When false they",
-                        "stay babies."),
+                List.of("Whether babies, owned ones and ones set free, grow into adults after their species'",
+                        "babyGrowthMinutes. When false they stay babies."),
                 fileConfiguration, "babiesGrowUp", true);
         petsInvulnerableToPlayers = ConfigurationEngine.setBoolean(
                 List.of("Whether owned pets ignore damage from players, their owner included. When false they are mortal,",
