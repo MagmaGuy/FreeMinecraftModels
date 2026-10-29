@@ -80,9 +80,11 @@ public final class PetLuaTable {
     /** Every name a module can read on c.pet. */
     public static final Set<String> PROPERTIES = Set.of("wild", "staying", "settled", "baby", "migrating", "model",
             "species", "position", "home", "anchor", "stay_anchor", "owner_location", "owner_distance", "night", "day",
-            "raining", "speed", "route_cruise", "threat");
+            "raining", "speed", "route_cruise", "threat", "attacker", "hurt_count");
     /** How far from its owner an owned pet looks for someone to defend them against. */
     static final double THREAT_RANGE = 16D;
+    /** How long a wild pet keeps the player who hurt it in mind: 30 seconds. */
+    static final long ATTACKER_TICKS = 20L * 30L;
     /** Every method a module can call on c.pet. */
     public static final Set<String> METHODS = Set.of("steer_to", "stop", "hover_point", "rest_point", "ground_below",
             "ground_point", "water_point", "trail_point", "teleport_near_owner", "distance_to", "route_target",
@@ -185,6 +187,12 @@ public final class PetLuaTable {
         // nil for a wild pet, or when nobody attacked the owner or their pets lately.
         Supplier<Location> threat = ticks.perTick(this::threat);
         property("threat", () -> location(threat.get()));
+        // The middle of the player who last hurt this wild pet, for 30 seconds after the hit while they are alive, can
+        // be hurt and are in its world; nil otherwise. hurt_count is how many player hits it has taken, so a module can
+        // answer each one once.
+        Supplier<Location> attacker = ticks.perTick(this::attacker);
+        property("attacker", () -> location(attacker.get()));
+        property("hurt_count", ticks.perTick(() -> LuaValue.valueOf(control.hurtCount())));
 
         // steer_to(point, cruise): one tick toward the point; false when the body cannot go there. cruise is 0 to 4
         // (positive infinity means 4 and negative infinity 0). A flying body flies at cruise blocks per tick. A walking
@@ -517,6 +525,17 @@ public final class PetLuaTable {
         return pet != null && !pet.isWild() && aggressors.contains(pet.ownerId());
     }
 
+    /** The middle of the player who last hurt this wild pet, within ATTACKER_TICKS of the hit, or null. */
+    private Location attacker() {
+        if (!control.isWild()) return null;
+        UUID id = control.attacker(PetManager.ticks(), ATTACKER_TICKS);
+        Player player = id == null ? null : Bukkit.getPlayer(id);
+        if (player == null || player.isDead() || player.getWorld() != body().getWorld()) return null;
+        GameMode mode = player.getGameMode();
+        if (mode == GameMode.CREATIVE || mode == GameMode.SPECTATOR) return null;
+        return player.getLocation().add(0D, player.getHeight() * 0.5D, 0D);
+    }
+
     /** The middle of the nearest one its owner's pets defend against, within THREAT_RANGE of the owner, or null. */
     private Location threat() {
         PetManager manager = PetManager.get();
@@ -799,8 +818,8 @@ public final class PetLuaTable {
         victim.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, at, 8, 0.25D, 0.3D, 0.25D, 0.05D);
         victim.getWorld().playSound(at, Sound.ENTITY_BEE_STING, 0.6F, 1.6F);
         DynamicEntity modeled = control.modeled();
-        // Babies have no attack animation.
-        if (!control.isBaby() && modeled != null && !modeled.isRemoved() && modeled.hasAnimation("attack"))
+        // Every model that has an attack animation plays it, babies' included.
+        if (modeled != null && !modeled.isRemoved() && modeled.hasAnimation("attack"))
             modeled.playAnimation("attack", true, false);
         return true;
     }

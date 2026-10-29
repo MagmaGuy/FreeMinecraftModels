@@ -121,6 +121,8 @@ class ShippedPetModulesTest {
             "fmm:pet/night_glow set_glow(15, lantern, glow)", "fmm:pet/night_glow clear_glow()",
             "fmm:pet/sting sting_contacts(true, SLOWNESS, 60, 0, 0, 60)",
             "fmm:pet/sting sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)",
+            "fmm:pet/retaliate distance_to(L)", "fmm:pet/retaliate steer_to(L, 0.45)", "fmm:pet/retaliate rest_point(L, 3)",
+            "fmm:pet/retaliate stop()",
             "fmm:pet/crop_drizzle drizzle(4, 0.1)",
             "fmm:pet/owner_effect owner_effect(NIGHT_VISION, 300, 0, 16)",
             "fmm:pet/wander ground_point(L, 5)", "fmm:pet/wander ground_point(L, 4)", "fmm:pet/wander distance_to(L)",
@@ -258,7 +260,8 @@ class ShippedPetModulesTest {
      */
     private static final Map<String, Integer> PROBE_INTERVALS = Map.ofEntries(
             Map.entry("fmm:pet/stay", 4), Map.entry("fmm:pet/follow_owner", 4), Map.entry("fmm:pet/hover", 4),
-            Map.entry("fmm:pet/defend_owner", 4),
+            Map.entry("fmm:pet/defend_owner", 4), Map.entry("fmm:pet/retaliate_flee", 2),
+            Map.entry("fmm:pet/retaliate_charge", 2),
             Map.entry("fmm:pet/migrate", 10), Map.entry("fmm:pet/campfire", 10), Map.entry("fmm:pet/day_perch", 10),
             Map.entry("fmm:pet/rain_bloom", 10), Map.entry("fmm:pet/drift", 10), Map.entry("fmm:pet/wander", 10),
             Map.entry("fmm:pet/swim", 10), Map.entry("fmm:pet/idle_look", 10));
@@ -782,6 +785,10 @@ class ShippedPetModulesTest {
             properties.put("route_cruise", () -> LuaValue.valueOf(owner == Owner.WILD ? 0.3 : 0));
             // Someone to defend the owner against, 2 blocks off, whenever the owner is there and the answers are not nothing.
             properties.put("threat", () -> owner.present() && !answersNothing("threat") ? place(x() + 2, 70, 0.5) : LuaValue.NIL);
+            // The player who hurt a wild pet, by turns within reach and 4 blocks off, so it both charges and flees.
+            properties.put("attacker", () -> owner == Owner.WILD && !answersNothing("attacker")
+                    ? place(x() + (tick % 40 < 20 ? 1 : 4), 70, 0.5) : LuaValue.NIL);
+            properties.put("hurt_count", () -> LuaValue.valueOf(owner == Owner.WILD ? 1 : 0));
             assertEquals(PetLuaTable.PROPERTIES, properties.keySet(), "the stand-in's properties match PetLuaTable's");
 
             // Shapes: L a location, N a finite number, C a cruise (a number that may be infinite), T a list of text,

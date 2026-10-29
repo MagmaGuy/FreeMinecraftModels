@@ -110,7 +110,8 @@ public final class PetListeners implements Listener {
     /**
      * An attack that went through on a player, or on an owned pet: the victim's owner's pets defend against the
      * attacking player for a while. A pet's own sting counts as its owner attacking, so a fight between two players'
-     * pets draws both swarms in. Whether PvP is on is the server's call: a cancelled attack never gets here.
+     * pets draws both swarms in. Whether PvP is on is the server's call: a cancelled attack never gets here. A player's
+     * hit on a wild pet is remembered on that pet instead.
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onAttacked(EntityDamageByEntityEvent event) {
@@ -126,7 +127,10 @@ public final class PetListeners implements Listener {
             return;
         }
         PetControl pet = manager.pet(event.getEntity());
-        if (pet != null && !pet.isWild()) manager.attacked(pet.ownerId(), aggressor);
+        if (pet == null) return;
+        if (!pet.isWild()) manager.attacked(pet.ownerId(), aggressor);
+        // A wild pet remembers the player who hurt it, for its retaliate module.
+        else if (attacker != null) pet.hurtBy(attacker.getUniqueId(), PetManager.ticks());
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
