@@ -32,14 +32,15 @@ import java.util.concurrent.ThreadLocalRandom;
 public final class PetMigrations {
     /** The pets.yml settings of the schedule and of every flock. */
     public record Settings(boolean enabled, double chancePerNight, int minFlockSize, int maxFlockSize, double altitude,
-                           double speed, int durationTicks, int viewDistance, int maxActiveFlocks, List<String> species) {
+                           double speed, int durationTicks, int viewDistance, int maxActiveFlocks, List<String> species,
+                           double rareFlockChance) {
     }
 
     private record Roll(UUID world, long night, long startAt) {
     }
 
     private static final int SCHEDULE_TICKS = 100;
-    private static Settings settings = new Settings(true, 0.15D, 8, 14, 28D, 0.15D, 1800, 160, 3, List.of());
+    private static Settings settings = new Settings(true, 0.15D, 8, 14, 28D, 0.15D, 1800, 160, 3, List.of(), 0.1D);
 
     private final Plugin plugin;
     private final Map<UUID, Roll> rolls = new HashMap<>();
@@ -83,12 +84,17 @@ public final class PetMigrations {
         List<?> species = ConfigurationEngine.setList(
                 List.of("Species ids that may migrate. Empty means every species that can (see enabled above)."),
                 config, "migrations.species", List.of());
+        double rare = ConfigurationEngine.setDouble(
+                List.of("Chance, 0 to 1, that a flock is a rare one: every member wears the same colour, picked so that",
+                        "the species' rarest colours (lowest variant weight) come up most. Only for a species with",
+                        "colours (variants) and no fixed migration model."),
+                config, "migrations.rareFlockChance", 0.1D);
         List<String> ids = new ArrayList<>();
         for (Object id : species) if (id != null) ids.add(id.toString().toLowerCase(Locale.ROOT));
         int fewest = Math.max(1, minSize);
         settings = new Settings(enabled, Math.max(0D, Math.min(1D, chance)), fewest, Math.max(fewest, maxSize),
                 Math.max(4D, altitude), Math.max(0.02D, speed), (int) Math.max(100D, duration * 20D),
-                Math.max(16, viewDistance), Math.max(1, maxActive), List.copyOf(ids));
+                Math.max(16, viewDistance), Math.max(1, maxActive), List.copyOf(ids), Math.max(0D, Math.min(1D, rare)));
     }
 
     public static Settings settings() {
