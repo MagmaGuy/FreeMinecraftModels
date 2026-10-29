@@ -42,6 +42,9 @@ class ExpressionKeyframeTest {
     private FileModelConverter converter;
     private AnimationComponent animation;
     private Bone body;
+    // LogManager keeps named loggers only weakly: unheld, a GC during load drops the one captureWarnings listens on
+    // and Bukkit.getLogger() hands the warning to a fresh logger without the handler.
+    private java.util.logging.Logger warningLogger;
 
     @BeforeEach
     void fakePlugin() {
@@ -142,7 +145,8 @@ class ExpressionKeyframeTest {
             installedServer = true;
         }
         List<String> warnings = new ArrayList<>();
-        Bukkit.getLogger().addHandler(new Handler() {
+        warningLogger = Bukkit.getLogger();
+        warningLogger.addHandler(new Handler() {
             @Override
             public void publish(LogRecord record) {
                 warnings.add(record.getMessage());
