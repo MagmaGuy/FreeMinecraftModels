@@ -720,6 +720,10 @@ public final class PetManager {
         PetSpecies pet = control.species();
         ItemStack held = player.getInventory().getItemInMainHand();
         if (control.isWild()) {
+            if (held.getType() == Material.NAME_TAG) {
+                player.sendMessage(ChatColorConverter.convert(PetsConfig.nameTagWildMessage.replace("$pet", displayName(control))));
+                return true;
+            }
             if (PetsConfig.mode != PetsConfig.Mode.CREATURES || control.isBaby() || !pet.isTamingFood(held)) return held.getType() != Material.LEAD;
             if (atOwnedCap(player)) {
                 sayOwnedCap(player);
@@ -745,7 +749,7 @@ public final class PetManager {
                 if (modeled != null && !modeled.isRemoved()) modeled.setDisplayName(nameplate(control));
                 if (player.getGameMode() != GameMode.CREATIVE) held.setAmount(held.getAmount() - 1);
                 particles(control, Particle.HEART, 3);
-            }
+            } else player.sendMessage(ChatColorConverter.convert(PetsConfig.nameTagBlankMessage));
             return true;
         }
         if (!control.isBaby() && pet.isBreedingFood(held)) {
