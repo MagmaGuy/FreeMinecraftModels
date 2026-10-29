@@ -25,12 +25,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * One pet species, read from a {@code <species>.pet.yml} file that sits beside its model in the models folder, so a
@@ -41,7 +43,8 @@ import java.util.function.Consumer;
 public final class PetSpecies {
     public static final String FILE_SUFFIX = ".pet.yml";
     /** The keys a variant written as a map may hold. */
-    private static final List<String> VARIANT_KEYS = List.of("model", "weight", "behaviors");
+    private static final List<String> VARIANT_KEYS = List.of("model", "weight", "behaviors", "name", "babyModel", "biomes",
+            "inheritChance");
     /** The world interaction sections pet files had before behavior modules, each with the module that replaces it. */
     private static final Map<String, String> LEGACY_SECTIONS = new LinkedHashMap<>();
 
@@ -56,11 +59,24 @@ public final class PetSpecies {
 
     /**
      * A model the species' pets may wear, its share of the picks, and the behavior modules it adds to the species'.
-     * The behaviors are copied; null means none.
+     * It may also have its own name (null: the species'), the model its babies wear (null: the species' baby look),
+     * the biomes it spawns wild in (empty: wherever the species does) and the chance a baby that takes after a parent
+     * of this variant keeps it (1: always). The behaviors and biomes are copied; null means none.
      */
-    public record Variant(String model, double weight, List<PetBehaviorEntry> behaviors) {
+    public record Variant(String model, double weight, List<PetBehaviorEntry> behaviors, String name, String babyModel,
+                          Set<NamespacedKey> biomes, double inheritChance) {
         public Variant {
             behaviors = behaviors == null ? List.of() : List.copyOf(behaviors);
+            biomes = biomes == null ? Set.of() : Set.copyOf(biomes);
+        }
+
+        public Variant(String model, double weight, List<PetBehaviorEntry> behaviors) {
+            this(model, weight, behaviors, null, null, Set.of(), 1D);
+        }
+
+        /** Whether a wild one may spawn in this biome. */
+        public boolean allowsBiome(NamespacedKey biome) {
+            return biomes.isEmpty() || biomes.contains(biome);
         }
     }
 
@@ -174,6 +190,7 @@ public final class PetSpecies {
         this.breedingCooldownMillis = (long) (config.getDouble("breedingCooldownMinutes", 5D) * 60_000D);
         this.loveTicks = (int) (config.getDouble("loveSeconds", 30D) * 20D);
         this.variants = variants(config.get("variants"), filename, Logger::warn);
+        warnUnknownBiomes(variants, filename, key -> Registry.BIOME.get(key) != null, Logger::warn);
         ConfigurationSection follow = section(config, "follow");
         this.followDistance = follow.getDouble("distance", 5D);
         this.leashDistance = follow.getDouble("leashDistance", 12D);
@@ -353,10 +370,10 @@ public final class PetSpecies {
     }
 
     /**
-     * Variants as "model", "model:weight", or a map with a model, a weight and its own behaviors list; the species'
-     * own model is the only variant when none are listed. A malformed entry is reported through {@code warn}, naming
-     * the file, and skipped. A weight that is not a number counts as 1, and one below 0 as 0. A model listed more than
-     * once is reported and kept, as picking has always taken it.
+     * Variants as "model", "model:weight", or a map with a model and its own settings (see {@link Variant}); the
+     * species' own model is the only variant when none are listed. A malformed entry is reported through
+     * {@code warn}, naming the file, and skipped. A weight that is not a number counts as 1, and one below 0 as 0. A
+     * model listed more than once is reported and kept, as picking has always taken it.
      */
     static List<Variant> variants(Object raw, String filename, Consumer<String> warn) {
         if (raw == null) return List.of();
@@ -425,7 +442,7 @@ public final class PetSpecies {
         return new Variant(model, weight, List.of());
     }
 
-    /** A variant written as a map with a model, a weight and its own behaviors, or null after a warning. */
+    /** A variant written as a map with a model and its own settings, or null after a warning. */
     private static Variant mapVariant(Map<?, ?> map, String filename, Consumer<String> warn) {
         Object named = map.get("model");
         String model = named instanceof String || named instanceof Number ? String.valueOf(named).trim() : "";
@@ -442,13 +459,93 @@ public final class PetSpecies {
         // YAML reads "~:" and "null:" as a key that is no text at all.
         for (Object key : map.keySet())
             if (!(key instanceof String name) || !VARIANT_KEYS.contains(name))
-                warn.accept(where + ": a variant has no setting " + key + " (its settings are model, weight and behaviors); ignored.");
+                warn.accept(where + ": a variant has no setting " + key + " (its settings are "
+                        + String.join(", ", VARIANT_KEYS.subList(0, VARIANT_KEYS.size() - 1)) + " and "
+                        + VARIANT_KEYS.getLast() + "); ignored.");
         double weight = map.containsKey("weight") ? weight(map.get("weight"), where, warn) : 1D;
         // A blank "behaviors:" counts as absent, as it does for the species; read returns null after a warning for a
-        // value that is not a list, and the variant then adds nothing either.
+        // value that is not a list, and the variant then adds nothing either. The other settings read blank the same way.
         List<PetBehaviorEntry> behaviors = map.get("behaviors") != null
                 ? PetBehaviorEntry.read(map.get("behaviors"), where, warn) : null;
-        return new Variant(model, weight, behaviors);
+        String name = text(map.get("name"), "name must be text", where, warn);
+        String babyModel = text(map.get("babyModel"), "babyModel must be a model's name", where, warn);
+        Set<NamespacedKey> biomes = map.get("biomes") != null ? biomes(map.get("biomes"), where, warn) : Set.of();
+        double inheritChance = map.get("inheritChance") != null ? inheritChance(map.get("inheritChance"), where, warn) : 1D;
+        return new Variant(model, weight, behaviors, name, babyModel, biomes, inheritChance);
+    }
+
+    /** A setting written as text (or a number, as YAML reads some names), or null when blank or, after a warning, not text. */
+    private static String text(Object value, String rule, String where, Consumer<String> warn) {
+        if (value == null) return null;
+        if (!(value instanceof String) && !(value instanceof Number)) {
+            warn.accept(where + ": " + rule + ", not " + PetBehaviorYaml.plain(value) + "; ignored.");
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    /**
+     * The biomes a variant spawns wild in: one name or a list of them, like minecraft:warm_ocean (warm_ocean means the
+     * same). What cannot be a biome's name is skipped after a warning; whether this server has the biome is checked by
+     * {@link #warnUnknownBiomes}, since that needs its registry.
+     */
+    private static Set<NamespacedKey> biomes(Object value, String where, Consumer<String> warn) {
+        List<?> entries;
+        if (value instanceof List<?> list) entries = list;
+        else if (value instanceof String || value instanceof Number) entries = List.of(value);
+        else {
+            warn.accept(where + ": biomes must be a list of biomes like minecraft:warm_ocean, not "
+                    + PetBehaviorYaml.plain(value) + "; it spawns in every biome.");
+            return Set.of();
+        }
+        Set<NamespacedKey> biomes = new LinkedHashSet<>();
+        for (Object entry : entries) {
+            String text = entry instanceof String || entry instanceof Number ? String.valueOf(entry).trim() : "";
+            NamespacedKey key = text.isEmpty() ? null : NamespacedKey.fromString(text.toLowerCase(Locale.ROOT));
+            if (key == null)
+                warn.accept(where + ": skipping " + PetBehaviorYaml.describe(entry) + " in biomes; a biome is written like "
+                        + "minecraft:warm_ocean.");
+            else biomes.add(key);
+        }
+        return biomes;
+    }
+
+    /** Warns about each biome a variant lists that {@code known} says this server does not have. */
+    static void warnUnknownBiomes(List<Variant> variants, String filename, Predicate<NamespacedKey> known,
+                                  Consumer<String> warn) {
+        for (Variant variant : variants)
+            for (NamespacedKey biome : variant.biomes())
+                if (!known.test(biome))
+                    warn.accept(filename + ", variant " + variant.model() + ": this server has no biome " + biome
+                            + "; it never matches.");
+    }
+
+    /** How often a variant breeds true: a number from 0 to 1, or text that reads as one; otherwise 1, clamped into 0 to 1. */
+    private static double inheritChance(Object value, String where, Consumer<String> warn) {
+        double chance = number(value);
+        if (Double.isNaN(chance)) {
+            warn.accept(where + ": inheritChance must be a number from 0 to 1, not " + PetBehaviorYaml.typed(value)
+                    + "; using 1.");
+            return 1D;
+        }
+        if (chance < 0D || chance > 1D) {
+            double clamped = chance < 0D ? 0D : 1D;
+            warn.accept(where + ": inheritChance must be from 0 to 1, not " + PetBehaviorYaml.plain(value) + "; using "
+                    + PetBehaviorYaml.plain(clamped) + ".");
+            return clamped;
+        }
+        return chance;
+    }
+
+    /** A number, or text that reads as one ("0.5"); NaN otherwise. */
+    private static double number(Object value) {
+        try {
+            return value instanceof Number number ? number.doubleValue()
+                    : value instanceof String text ? new BigDecimal(text.strip()).doubleValue() : Double.NaN;
+        } catch (NumberFormatException notANumber) {
+            return Double.NaN;
+        }
     }
 
     /** A variant's weight: a number, or text that reads as one ("0.5"); otherwise 1, and below 0 it is 0. */
@@ -457,13 +554,7 @@ public final class PetSpecies {
             warn.accept(where + ": weight has no value; using 1.");
             return 1D;
         }
-        double weight;
-        try {
-            weight = value instanceof Number number ? number.doubleValue()
-                    : value instanceof String text ? new BigDecimal(text.strip()).doubleValue() : Double.NaN;
-        } catch (NumberFormatException notANumber) {
-            weight = Double.NaN;
-        }
+        double weight = number(value);
         if (!Double.isFinite(weight)) {
             warn.accept(where + ": weight must be a number, not " + PetBehaviorYaml.typed(value) + "; using 1.");
             return 1D;
@@ -480,22 +571,28 @@ public final class PetSpecies {
     }
 
     /**
+     * The variant a pet wearing this model is: the first named exactly as the model, else the first whose name matches
+     * as FreeMinecraftModels names models (lower case, other characters as '_'), else null. A pet wears the model its
+     * record names exactly, so a variant whose name the file later wrote in another case still is that pet's.
+     */
+    static Variant variant(List<Variant> variants, String model) {
+        if (model == null) return null;
+        for (Variant variant : variants) if (variant.model().equals(model)) return variant;
+        String id = StringToResourcePackFilename.convert(model);
+        for (Variant variant : variants)
+            if (StringToResourcePackFilename.convert(variant.model()).equals(id)) return variant;
+        return null;
+    }
+
+    /**
      * The modules a pet wearing this model runs: the file's list, or the locomotion's defaults when it has none, then
-     * the modules of the first variant named exactly as the model, else of the first whose name matches as
-     * FreeMinecraftModels names models (lower case, other characters as '_'). A pet wears the model its record names
-     * exactly, so a variant whose name the file later wrote in another case still gives that pet its modules.
+     * the modules of its {@link #variant(List, String) variant}.
      */
     static List<PetBehaviorEntry> behaviors(List<PetBehaviorEntry> listed, MindBodyLocomotion locomotion,
                                             List<Variant> variants, String model) {
         List<PetBehaviorEntry> base = listed != null ? listed : PetPrograms.defaults(locomotion);
-        if (model == null) return base;
-        for (Variant variant : variants)
-            if (variant.model().equals(model)) return PetBehaviorEntry.overlay(base, variant.behaviors());
-        String id = StringToResourcePackFilename.convert(model);
-        for (Variant variant : variants)
-            if (StringToResourcePackFilename.convert(variant.model()).equals(id))
-                return PetBehaviorEntry.overlay(base, variant.behaviors());
-        return base;
+        Variant variant = variant(variants, model);
+        return variant == null ? base : PetBehaviorEntry.overlay(base, variant.behaviors());
     }
 
     public String id() {
@@ -577,6 +674,11 @@ public final class PetSpecies {
 
     public List<Variant> variants() {
         return variants;
+    }
+
+    /** The variant a pet wearing this model is, or null when it is the species' own model or no longer listed. */
+    public Variant variant(String model) {
+        return variant(variants, model);
     }
 
     /** A variant model by weight, or the species' model when it lists none. */

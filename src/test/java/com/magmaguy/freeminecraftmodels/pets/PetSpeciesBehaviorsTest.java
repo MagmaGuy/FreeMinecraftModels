@@ -150,7 +150,7 @@ class PetSpeciesBehaviorsTest {
                 - null: 2
                 """, warnings));
         assertEquals(List.of("jellyfish.pet.yml, variant em_pet_jellyfish_gold: a variant has no setting null (its "
-                        + "settings are model, weight and behaviors); ignored.",
+                        + "settings are model, weight, behaviors, name, babyModel, biomes and inheritChance); ignored.",
                 "jellyfish.pet.yml: skipping \"null: 2\" in variants; a variant written as a map needs \"model: <model name>\"."),
                 warnings);
     }
@@ -230,7 +230,7 @@ class PetSpeciesBehaviorsTest {
                   behaviors: [stay, stay]
                 """, warnings));
         assertEquals(List.of("jellyfish.pet.yml, variant em_pet_jellyfish_gold: a variant has no setting behaviours (its "
-                        + "settings are model, weight and behaviors); ignored.",
+                        + "settings are model, weight, behaviors, name, babyModel, biomes and inheritChance); ignored.",
                 "jellyfish.pet.yml, variant em_pet_jellyfish_gold: behaviors lists stay twice; keeping the first."), warnings);
     }
 
