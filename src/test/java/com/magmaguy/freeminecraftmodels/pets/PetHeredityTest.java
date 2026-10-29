@@ -39,22 +39,22 @@ class PetHeredityTest {
 
     @Test
     void aBabyTakesTheMothersOrTheFathersVariant() {
-        assertEquals(BLUE, PetSpecies.inherit(BLUE, GOLD, VARIANTS, SPECIES, scripted(true)));
-        assertEquals(GOLD, PetSpecies.inherit(BLUE, GOLD, VARIANTS, SPECIES, scripted(false)));
+        assertEquals(BLUE, PetSpecies.inherit(BLUE, GOLD, VARIANTS, SPECIES, 0D, scripted(true)));
+        assertEquals(GOLD, PetSpecies.inherit(BLUE, GOLD, VARIANTS, SPECIES, 0D, scripted(false)));
     }
 
     @Test
     void aVariantThatAlwaysBreedsTrueRollsNothingMore() {
         // No doubles scripted: a roll would throw.
-        assertEquals(BLUE, PetSpecies.inherit(BLUE, WAR, VARIANTS, SPECIES, scripted(true)));
+        assertEquals(BLUE, PetSpecies.inherit(BLUE, WAR, VARIANTS, SPECIES, 0D, scripted(true)));
     }
 
     @Test
     void aRareVariantBreedsTrueOnlyAtItsInheritChanceAndOtherwiseTakesAWildPick() {
-        assertEquals(WAR, PetSpecies.inherit(WAR, WAR, VARIANTS, SPECIES, scripted(true, 0.2D)));
-        assertEquals(BLUE, PetSpecies.inherit(WAR, WAR, VARIANTS, SPECIES, scripted(true, 0.3D, 0D)));
-        assertEquals(GOLD, PetSpecies.inherit(WAR, WAR, VARIANTS, SPECIES, scripted(true, 0.3D, 0.8D)));
-        assertEquals(WAR, PetSpecies.inherit(WAR, WAR, VARIANTS, SPECIES, scripted(true, 0.3D, 0.99D)),
+        assertEquals(WAR, PetSpecies.inherit(WAR, WAR, VARIANTS, SPECIES, 0D, scripted(true, 0.2D)));
+        assertEquals(BLUE, PetSpecies.inherit(WAR, WAR, VARIANTS, SPECIES, 0D, scripted(true, 0.3D, 0D)));
+        assertEquals(GOLD, PetSpecies.inherit(WAR, WAR, VARIANTS, SPECIES, 0D, scripted(true, 0.3D, 0.8D)));
+        assertEquals(WAR, PetSpecies.inherit(WAR, WAR, VARIANTS, SPECIES, 0D, scripted(true, 0.3D, 0.99D)),
                 "the wild pick can still land on the rare variant");
     }
 
@@ -62,23 +62,41 @@ class PetHeredityTest {
     void anInheritChanceOfZeroNeverBreedsTrue() {
         List<PetSpecies.Variant> variants = List.of(new PetSpecies.Variant(BLUE, 1D, List.of()),
                 new PetSpecies.Variant(WAR, 0D, List.of(), null, null, Set.of(), 0D));
-        assertEquals(BLUE, PetSpecies.inherit(WAR, WAR, variants, SPECIES, scripted(true, 0D, 0.5D)));
+        assertEquals(BLUE, PetSpecies.inherit(WAR, WAR, variants, SPECIES, 0D, scripted(true, 0D, 0.5D)));
     }
 
     @Test
     void aParentWhoseModelIsNoVariantPassesItOn() {
         // An old record (the species' model, or a variant since removed from the file); spawning settles the look.
-        assertEquals("em_pet_jellyfish_old", PetSpecies.inherit("em_pet_jellyfish_old", BLUE, VARIANTS, SPECIES, scripted(true)));
-        assertEquals(SPECIES, PetSpecies.inherit(SPECIES, BLUE, VARIANTS, SPECIES, scripted(true)));
+        assertEquals("em_pet_jellyfish_old", PetSpecies.inherit("em_pet_jellyfish_old", BLUE, VARIANTS, SPECIES, 0D, scripted(true)));
+        assertEquals(SPECIES, PetSpecies.inherit(SPECIES, BLUE, VARIANTS, SPECIES, 0D, scripted(true)));
     }
 
     @Test
     void aParentWithNoRecordedModelPassesOnAWildPick() {
-        assertEquals(GOLD, PetSpecies.inherit(null, BLUE, VARIANTS, SPECIES, scripted(true, 0.8D)));
+        assertEquals(GOLD, PetSpecies.inherit(null, BLUE, VARIANTS, SPECIES, 0D, scripted(true, 0.8D)));
     }
 
     @Test
     void aSpeciesWithoutVariantsBreedsItsOwnModel() {
-        assertEquals(SPECIES, PetSpecies.inherit(null, SPECIES, List.of(), SPECIES, scripted(true)));
+        assertEquals(SPECIES, PetSpecies.inherit(null, SPECIES, List.of(), SPECIES, 0D, scripted(true)));
+    }
+
+    @Test
+    void aMutationGivesAnyColourByRarityWhateverTheParents() {
+        // The 1% roll comes first; under it the baby gets a pick by weight, here gold (0.8 of 4.2), from two blue parents.
+        assertEquals(GOLD, PetSpecies.inherit(BLUE, BLUE, VARIANTS, SPECIES, 0.01D, scripted(true, 0.005D, 0.8D)));
+        assertEquals(WAR, PetSpecies.inherit(BLUE, BLUE, VARIANTS, SPECIES, 0.01D, scripted(true, 0.005D, 0.99D)),
+                "a mutation can land on a rare colour");
+        // Over the roll the parents decide as before, and blue breeds true without another roll.
+        assertEquals(BLUE, PetSpecies.inherit(BLUE, GOLD, VARIANTS, SPECIES, 0.01D, scripted(true, 0.5D)));
+    }
+
+    @Test
+    void aMutationChanceReadsFromZeroToOne() {
+        assertEquals(0.01D, PetSpecies.mutationChance(null));
+        assertEquals(0D, PetSpecies.mutationChance(-1D));
+        assertEquals(1D, PetSpecies.mutationChance(4D));
+        assertEquals(0.05D, PetSpecies.mutationChance(0.05D));
     }
 }

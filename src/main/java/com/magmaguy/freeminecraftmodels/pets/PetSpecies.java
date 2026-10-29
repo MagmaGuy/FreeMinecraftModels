@@ -142,6 +142,8 @@ public final class PetSpecies {
     private final long babyGrowthMillis;
     private final long breedingCooldownMillis;
     private final int loveTicks;
+    /** The chance a baby ignores its parents and gets any colour by rarity. */
+    private final double mutationChance;
     private final List<Variant> variants;
     /** Whether any variant names its own biomes, so wild spawns need to look up the biome. */
     private final boolean variantBiomes;
@@ -192,6 +194,7 @@ public final class PetSpecies {
         this.babyGrowthMillis = (long) (config.getDouble("babyGrowthMinutes", 20D) * 60_000D);
         this.breedingCooldownMillis = (long) (config.getDouble("breedingCooldownMinutes", 5D) * 60_000D);
         this.loveTicks = (int) (config.getDouble("loveSeconds", 30D) * 20D);
+        this.mutationChance = mutationChance(config.isSet("mutationChance") ? config.getDouble("mutationChance") : null);
         List<Variant> listed = variants(config.get("variants"), filename, Logger::warn);
         warnUnknownBiomes(listed, filename, key -> Registry.BIOME.get(key) != null, Logger::warn);
         this.variants = withCustomBiomes(listed, CustomBiomeCompatibility::getCustomBiomes);
@@ -796,9 +799,51 @@ public final class PetSpecies {
         return at.getWorld().getBiome(at.getBlockX(), at.getBlockY(), at.getBlockZ()).getKey();
     }
 
-    /** The variant a baby of these two parents takes; see {@link #inherit(String, String, List, String, Random)}. */
+    /** The variant a baby of these two parents takes; see {@link #inherit(String, String, List, String, double, Random)}. */
     public String inherit(String mother, String father, Random random) {
-        return inherit(mother, father, variants, model, random);
+        return inherit(mother, father, variants, model, mutationChance, random);
+    }
+
+    /** The share of wild picks this model gets, 0 to 1: its weight over all weights, or 1 for a species without any. */
+    public double wildShare(String model) {
+        return wildShare(variants, this.model, model);
+    }
+
+    /** A colour for a rare migration flock; see {@link #pickRare(List, Random)}. */
+    public String pickRareVariant(Random random) {
+        return pickRare(variants, random);
+    }
+
+    static double wildShare(List<Variant> variants, String speciesModel, String model) {
+        double total = 0D;
+        for (Variant variant : variants) total += variant.weight();
+        if (total <= 0D) return model != null && model.equals(speciesModel) ? 1D : 0D;
+        Variant variant = variant(variants, model);
+        return variant == null ? 0D : variant.weight() / total;
+    }
+
+    /**
+     * A colour picked by the inverse of its weight among those with a share of the wild picks, so the rarest colours
+     * lead the unusual flocks; null when no colour has a share.
+     */
+    static String pickRare(List<Variant> variants, Random random) {
+        double total = 0D;
+        for (Variant variant : variants) if (variant.weight() > 0D) total += 1D / variant.weight();
+        if (total <= 0D) return null;
+        double roll = random.nextDouble() * total;
+        Variant last = null;
+        for (Variant variant : variants) {
+            if (variant.weight() <= 0D) continue;
+            last = variant;
+            roll -= 1D / variant.weight();
+            if (roll < 0D) return variant.model();
+        }
+        return last.model();
+    }
+
+    /** The species' mutationChance, 0 to 1; 0.01 when the file leaves it out. */
+    static double mutationChance(Double value) {
+        return value == null ? 0.01D : Math.max(0D, Math.min(1D, value));
     }
 
     /**
@@ -829,9 +874,12 @@ public final class PetSpecies {
     /**
      * The variant a baby takes: its mother's or its father's as their records name it, half and half, as Minecraft's
      * variant-bearing animals do. A variant whose inheritChance is below 1 breeds true only that often; otherwise, and
-     * for a parent with no recorded model, the baby gets a pick by weight, as a wild one would.
+     * for a parent with no recorded model, the baby gets a pick by weight, as a wild one would. Before any of that, a
+     * mutation ({@code mutationChance}, 0.01 by default) gives the baby a pick by weight whatever its parents are.
      */
-    static String inherit(String mother, String father, List<Variant> variants, String speciesModel, Random random) {
+    static String inherit(String mother, String father, List<Variant> variants, String speciesModel, double mutationChance,
+                          Random random) {
+        if (mutationChance > 0D && random.nextDouble() < mutationChance) return pick(variants, speciesModel, random, any -> true);
         String parent = random.nextBoolean() ? mother : father;
         if (parent == null) return pick(variants, speciesModel, random, any -> true);
         Variant variant = variant(variants, parent);

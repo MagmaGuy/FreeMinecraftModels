@@ -284,6 +284,34 @@ class PetSpeciesVariantsTest {
     }
 
     @Test
+    void aColoursRarityIsItsShareOfTheWildPicks() {
+        List<PetSpecies.Variant> variants = List.of(new PetSpecies.Variant(BLUE, 3D, List.of()),
+                new PetSpecies.Variant(WAR, 1D, List.of()), new PetSpecies.Variant("em_pet_jellyfish_lost", 0D, List.of()));
+        assertEquals(0.75D, PetSpecies.wildShare(variants, SPECIES, BLUE));
+        assertEquals(0.25D, PetSpecies.wildShare(variants, SPECIES, WAR));
+        assertEquals(0D, PetSpecies.wildShare(variants, SPECIES, "em_pet_jellyfish_lost"), "a colour without a share is never wild");
+        assertEquals(1D, PetSpecies.wildShare(List.of(), SPECIES, SPECIES), "a species without colours is all its own model");
+        assertEquals(0D, PetSpecies.wildShare(variants, SPECIES, "em_pet_jellyfish_old"), "a colour no longer listed");
+    }
+
+    @Test
+    void aRareFlockPicksTheRarerColoursMoreOften() {
+        List<PetSpecies.Variant> variants = List.of(new PetSpecies.Variant(BLUE, 9D, List.of()),
+                new PetSpecies.Variant(WAR, 1D, List.of()), new PetSpecies.Variant("em_pet_jellyfish_lost", 0D, List.of()));
+        Random random = new Random(11);
+        int war = 0, blue = 0;
+        for (int pick = 0; pick < 2000; pick++) {
+            String model = PetSpecies.pickRare(variants, random);
+            if (WAR.equals(model)) war++;
+            else if (BLUE.equals(model)) blue++;
+            else throw new AssertionError("a colour without a share joined a flock: " + model);
+        }
+        // Inverse weights 1/9 and 1: the man o' war leads nine to one.
+        assertTrue(war > blue * 6, war + " man o' war against " + blue + " blue");
+        assertNull(PetSpecies.pickRare(List.of(), random), "no colours: the flock keeps the usual picks");
+    }
+
+    @Test
     void aVariantIsFoundByItsExactNameFirstThenAsAModelName() {
         PetSpecies.Variant upper = new PetSpecies.Variant("EM_Pet_Gold", 1D, List.of());
         PetSpecies.Variant lower = new PetSpecies.Variant("em_pet_gold", 1D, List.of());

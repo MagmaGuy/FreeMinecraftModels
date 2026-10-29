@@ -80,13 +80,16 @@ public final class MigrationFlock implements MigrationRoute {
         int size = settings.minFlockSize() + random.nextInt(settings.maxFlockSize() - settings.minFlockSize() + 1);
         MigrationFlock flock = new MigrationFlock(world, heading, start, settings.speed(), height, settings.durationTicks());
         double spread = SPREAD_BASE + SPREAD_PER_ROOT * Math.sqrt(size);
+        // A rare flock: one unusual colour for every member. Otherwise each member picks its own, like a wild spawn.
+        String model = look.model();
+        if (model == null && random.nextDouble() < settings.rareFlockChance()) model = species.pickRareVariant(random);
         for (int index = 0; index < size; index++) {
             double around = random.nextDouble() * Math.PI * 2D, out = Math.sqrt(random.nextDouble()) * spread;
             Slot slot = new Slot(Math.cos(around) * out, (random.nextDouble() - 0.5D) * HEIGHT_SPREAD, Math.sin(around) * out,
                     random.nextDouble() * Math.PI * 2D);
             Location at = new Location(world, start.getX() + slot.x(), height + slot.y(), start.getZ() + slot.z());
             if (!world.isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4)) continue;
-            PetControl member = manager.spawnMigrant(species, at, look.model(), look.scale(), settings.viewDistance(), flock);
+            PetControl member = manager.spawnMigrant(species, at, model, look.scale(), settings.viewDistance(), flock);
             if (member == null) continue;
             if (look.animation() != null) member.modeled().playAnimation(look.animation(), false, true);
             flock.members.put(member, slot);
