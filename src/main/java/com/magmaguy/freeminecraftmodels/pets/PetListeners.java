@@ -120,12 +120,12 @@ public final class PetListeners implements Listener {
             event.setCancelled(true);
     }
 
-    /** Damage that went through shows the pet's health display. */
+    /** Damage that went through shows the pet's health display and holds back its own healing a while. */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onHurt(EntityDamageEvent event) {
         PetManager manager = PetManager.get();
         PetControl pet = manager == null ? null : manager.pet(event.getEntity());
-        if (pet != null) manager.showHealth(pet);
+        if (pet != null) manager.hurt(pet);
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
