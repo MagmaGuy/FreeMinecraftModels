@@ -437,7 +437,9 @@ public final class PetManager {
             return refuse(pet, "its behaviors could not start (" + reason(failure) + ")");
         }
         double scale = pet.scale() * (baby ? pet.babyScale() : 1D) * sizeMultiplier;
-        MindBodyProfile profile = new MindBodyProfile(pet.locomotion(), scale, false, pet.body().getKey().toString());
+        // Collidable, as vanilla mobs are: bodies push each other apart instead of stacking, and players brush them
+        // aside. The model sizes its body to its hitbox bone when it attaches.
+        MindBodyProfile profile = new MindBodyProfile(pet.locomotion(), scale, true, pet.body().getKey().toString());
         MobBody body;
         try {
             body = host.spawnBody(at, profile, prepared -> {
