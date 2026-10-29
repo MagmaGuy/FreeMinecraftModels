@@ -45,6 +45,7 @@ public class PetsConfig extends ConfigurationFile {
     public static String breedingCooldownMessage;
     public static String bornMessage;
     public static String diedMessage;
+    public static String givenMessage;
     public static String nameTagBlankMessage;
     public static String nameTagWildMessage;
     private static PetsConfig instance;
@@ -132,6 +133,8 @@ public class PetsConfig extends ConfigurationFile {
                 "&7Your $pet &7is not ready to breed again yet.");
         bornMessage = ConfigurationEngine.setString(fileConfiguration, "bornMessage", "&aA $pet &awas born!");
         diedMessage = ConfigurationEngine.setString(fileConfiguration, "diedMessage", "&cYour $pet &cdied.");
+        givenMessage = ConfigurationEngine.setString(fileConfiguration, "givenMessage",
+                "&aYou got a $pet&a! &f/fmm pets &amanages your pets.");
         nameTagBlankMessage = ConfigurationEngine.setString(fileConfiguration, "nameTagBlankMessage",
                 "&7Rename the name tag in an anvil first, then use it on your pet.");
         nameTagWildMessage = ConfigurationEngine.setString(fileConfiguration, "nameTagWildMessage",

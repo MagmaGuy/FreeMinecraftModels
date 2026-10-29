@@ -297,6 +297,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         manager.registerCommand(new com.magmaguy.freeminecraftmodels.commands.PetsCommand());
         manager.registerCommand(new com.magmaguy.freeminecraftmodels.commands.PetAdminCommand());
         manager.registerCommand(new com.magmaguy.freeminecraftmodels.commands.PetMigrateCommand());
+        manager.registerCommand(new com.magmaguy.freeminecraftmodels.commands.GivePetCommand());
 
         VaultEconomyHook.initialize();
         if (ShopConfig.isEnabled() && VaultEconomyHook.isEnabled()) {
