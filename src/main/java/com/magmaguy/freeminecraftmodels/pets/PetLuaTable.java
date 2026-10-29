@@ -203,7 +203,8 @@ public final class PetLuaTable {
         // steer_to(point, cruise): one tick toward the point; false when the body cannot go there. cruise is 0 to 4
         // (positive infinity means 4 and negative infinity 0). A flying body flies at cruise blocks per tick. A walking
         // or swimming body paths there natively, at 4 x cruise times its body type's movement speed, never under a
-        // quarter of it; a cruise of 0 stops it and reads false. Needs a behavior holding MOVE and LOOK.
+        // quarter of it; a cruise of 0 stops it and reads false. The pet's speed stat multiplies the cruise, except on a
+        // migration. Needs a behavior holding MOVE and LOOK.
         method("steer_to", args -> {
             Location target = at(args, 1);
             double cruise = cruise(args, 2);
@@ -582,7 +583,12 @@ public final class PetLuaTable {
         return raining;
     }
 
+    /**
+     * One tick toward the target at the cruise a module asks for, times the pet's speed stat; a migrant keeps its
+     * flock's pace.
+     */
     private boolean steerTo(Location target, double cruise) {
+        if (control.route() == null) cruise *= control.stats().speed;
         if (control.species().locomotion() == MindBodyLocomotion.FLYING) return PetMotion.steerFlight(context, target, cruise);
         return path.steer(context, target, cruise);
     }
@@ -818,10 +824,14 @@ public final class PetLuaTable {
         if (readyAt != null && now < readyAt) return false;
         if (stingReadyAt.size() > 32) stingReadyAt.values().removeIf(at -> at <= now);
         stingReadyAt.put(victim.getUniqueId(), now + sting.cooldown());
+        // The pet's sting and poison stats scale what the module asks for; a baby's are halved until it grows up.
+        PetStats stats = control.stats();
+        double share = control.babyShare();
         PotionEffectType effect = knownEffect(sting.effect(), call);
-        if (effect != null)
-            victim.addPotionEffect(new PotionEffect(effect, sting.duration(), sting.amplifier(), false, true, true));
-        if (sting.damage() > 0D) victim.damage(sting.damage(), body());
+        int duration = (int) Math.max(1L, Math.round(sting.duration() * stats.poison * share));
+        if (effect != null) victim.addPotionEffect(new PotionEffect(effect, duration, sting.amplifier(), false, true, true));
+        double damage = sting.damage() * stats.sting * share;
+        if (damage > 0D) victim.damage(damage, body());
         Location at = victim.getLocation().add(0D, victim.getHeight() * 0.5D, 0D);
         victim.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, at, 8, 0.25D, 0.3D, 0.25D, 0.05D);
         victim.getWorld().playSound(at, Sound.ENTITY_BEE_STING, 0.6F, 1.6F);

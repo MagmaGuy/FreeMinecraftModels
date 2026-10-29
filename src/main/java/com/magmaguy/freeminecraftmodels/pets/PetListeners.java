@@ -24,6 +24,7 @@ import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
+import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.event.world.EntitiesLoadEvent;
 import org.bukkit.event.world.WorldSaveEvent;
 import org.bukkit.inventory.EquipmentSlot;
@@ -181,12 +182,23 @@ public final class PetListeners implements Listener {
             if (PetManager.isPetBody(entity) && (manager == null || manager.pet(entity) == null)) entity.remove();
     }
 
-    /** New chunks are stocked with wild pets as they generate, like vanilla's farm animals. */
+    /**
+     * New chunks are stocked with wild pets as they generate, like vanilla's farm animals; a chunk loading again brings
+     * back the wild pets its persistent data keeps.
+     */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onChunkLoad(ChunkLoadEvent event) {
         PetManager manager = PetManager.get();
-        if (manager != null && event.isNewChunk())
-            manager.chunkGenerated(event.getWorld(), event.getChunk().getX(), event.getChunk().getZ());
+        if (manager == null) return;
+        if (event.isNewChunk()) manager.chunkGenerated(event.getWorld(), event.getChunk().getX(), event.getChunk().getZ());
+        else manager.chunkLoaded(event.getChunk());
+    }
+
+    /** A chunk unloading keeps its wild pets in its persistent data, saved with it. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onChunkUnload(ChunkUnloadEvent event) {
+        PetManager manager = PetManager.get();
+        if (manager != null) manager.chunkUnloading(event.getChunk());
     }
 
     /** A live wild pet another plugin removed stays gone; one whose chunk stopped ticking waits to come back. */

@@ -26,6 +26,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Chunk;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
@@ -38,6 +39,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -83,6 +85,7 @@ public final class PetManager {
     private static final int WATCH_TICKS = 20;
     private static long ticks;
     private static NamespacedKey bodyKey;
+    private static NamespacedKey wildKey;
     private static PetManager instance;
     private static final PetFailureLog FAILURES = new PetFailureLog(Logger::warn);
     // Whether a Lua player table was built since these classes loaded; see warmEntityTables.
@@ -107,7 +110,13 @@ public final class PetManager {
     private final Map<UUID, OwnerPace> paces = new HashMap<>();
     /** How long an owner's pets keep defending them against an attacker after its latest hit: 15 seconds. */
     static final long AGGRESSION_TICKS = 20L * 15L;
-    private final WildPetStore wildStore = WildPetStore.load(new File(MetadataHandler.PLUGIN.getDataFolder(), "data/wild_pets.yml"));
+    /**
+     * The wild pets waiting to come back. Each chunk's are also in that chunk's persistent data (wildKey), written
+     * whenever they change while it is loaded, as it unloads, and at shutdown, so Minecraft saves them with the chunk.
+     */
+    private final WildPetStore wildStore = new WildPetStore();
+    /** Where wild pets waited before they moved into chunk data; read once, deleted once they are all moved. */
+    private final File legacyWildFile = new File(MetadataHandler.PLUGIN.getDataFolder(), "data/wild_pets.yml");
     // Newly generated chunks, stocked with wild pets the tick after they load.
     private final ArrayDeque<PendingChunk> toStock = new ArrayDeque<>();
     private long nextWildSpawnTick;
@@ -136,6 +145,7 @@ public final class PetManager {
     /** Creates the Mind host and the pet clock, then loads the species. Once per plugin enable, after the NMS adapter. */
     public static void start(Plugin plugin) {
         bodyKey = new NamespacedKey(plugin, "pet_body");
+        wildKey = new NamespacedKey(plugin, "wild_pets");
         NMSAdapter adapter = NMSManager.getAdapter();
         if (adapter == null) {
             Logger.info("Pets are off: FreeMinecraftModels has no NMS adapter for this server version.");
@@ -175,6 +185,7 @@ public final class PetManager {
         PetManager manager = new PetManager();
         manager.loadSpecies();
         manager.loadBehaviors();
+        manager.loadWild();
         instance = manager;
         for (Player player : Bukkit.getOnlinePlayers()) manager.playerJoined(player);
     }
@@ -191,7 +202,7 @@ public final class PetManager {
             if (control.isWild() && control.route() == null) manager.stash(control);
             else manager.despawn(control);
         }
-        manager.wildStore.save();
+        manager.flushWild();
         manager.collections.clear();
         manager.ownedBodies.clear();
         manager.aggressors.clear();
@@ -425,7 +436,7 @@ public final class PetManager {
     public PetControl spawnMigrant(PetSpecies pet, Location at, String model, double sizeMultiplier, int viewDistance,
                                    MigrationRoute route) {
         PetControl control = spawn(pet, null, null, model != null ? model : pet.pickVariant(ThreadLocalRandom.current()), false,
-                at, at, sizeMultiplier);
+                at, at, sizeMultiplier, null);
         if (control == null) return null;
         control.setRoute(route);
         control.modeled().setViewDistanceOverride(viewDistance);
@@ -434,11 +445,16 @@ public final class PetManager {
     }
 
     private PetControl spawn(PetSpecies pet, UUID owner, PetRecord record, String model, boolean baby, Location at, Location home) {
-        return spawn(pet, owner, record, model, baby, at, home, 1D);
+        return spawn(pet, owner, record, model, baby, at, home, 1D, null);
     }
 
+    /**
+     * Puts a pet's body and model in the world. An owned pet's stats are on its record (rolled now for a record from
+     * before stats); a wild one brings wildStats, or rolls a wild pet's when null. Its stats set its max health and,
+     * with sizeMultiplier, its size.
+     */
     private PetControl spawn(PetSpecies pet, UUID owner, PetRecord record, String model, boolean baby, Location at, Location home,
-                             double sizeMultiplier) {
+                             double sizeMultiplier, PetStats wildStats) {
         if (host == null || at.getWorld() == null) return null;
         String variant = wornVariant(pet.model(), model, PetManager::loaded);
         // A baby's look comes from the variant it was born as, even when that adult model is missing here.
@@ -446,6 +462,14 @@ public final class PetManager {
         String modelId = babyLook != null ? babyLook : variant;
         if (FileModelConverter.getModel(modelId) == null) return refuse(pet, "model " + modelId + " is not loaded");
         PetControl control = new PetControl(pet, owner, record, variant, baby, home);
+        PetStats stats;
+        if (record != null) {
+            if (record.stats == null) record.stats = PetStats.wild(ThreadLocalRandom.current());
+            stats = record.stats;
+        } else {
+            stats = wildStats != null ? wildStats : PetStats.wild(ThreadLocalRandom.current());
+            control.setWildStats(stats);
+        }
         MindHandle mind;
         try {
             PetPrograms.Program program = program(pet, variant);
@@ -455,7 +479,8 @@ public final class PetManager {
         } catch (RuntimeException failure) {
             return refuse(pet, "its behaviors could not start (" + reason(failure) + ")");
         }
-        double scale = pet.scale() * (baby ? pet.babyScale() : 1D) * sizeMultiplier;
+        double scale = pet.scale() * (baby ? pet.babyScale() : 1D) * sizeMultiplier * PetStats.size(stats, pet.statCap());
+        double maxHealth = Math.max(1D, pet.health() * stats.health * control.babyShare());
         // Collidable, as vanilla mobs are: bodies push each other apart instead of stacking, and players brush them
         // aside. The model sizes its body to its hitbox bone when it attaches.
         MindBodyProfile profile = new MindBodyProfile(pet.locomotion(), scale, true, pet.body().getKey().toString());
@@ -463,7 +488,7 @@ public final class PetManager {
         try {
             body = host.spawnBody(at, profile, prepared -> {
                 mind.attachBody(prepared);
-                prepare(prepared.entity(), pet);
+                prepare(prepared.entity(), maxHealth);
             });
         } catch (RuntimeException failure) {
             mind.close();
@@ -511,7 +536,7 @@ public final class PetManager {
         return failure.getMessage() != null ? failure.getMessage() : failure.getClass().getSimpleName();
     }
 
-    private static void prepare(LivingEntity entity, PetSpecies pet) {
+    private static void prepare(LivingEntity entity, double health) {
         entity.getPersistentDataContainer().set(bodyKey, PersistentDataType.BYTE, (byte) 1);
         // Never saved with its chunk: the manager re-creates owned pets beside their owner, and wild ones are transient.
         entity.setPersistent(false);
@@ -519,8 +544,8 @@ public final class PetManager {
         entity.setCanPickupItems(false);
         AttributeInstance maxHealth = entity.getAttribute(Attribute.MAX_HEALTH);
         if (maxHealth != null) {
-            maxHealth.setBaseValue(pet.health());
-            entity.setHealth(pet.health());
+            maxHealth.setBaseValue(health);
+            entity.setHealth(health);
         }
     }
 
@@ -610,6 +635,13 @@ public final class PetManager {
         warmEntityTables(player);
         PetCollection collection = PetCollection.load(player);
         collections.put(player.getUniqueId(), collection);
+        boolean rolled = false;
+        for (PetRecord record : collection.pets())
+            if (record.stats == null) {
+                record.stats = PetStats.wild(ThreadLocalRandom.current());
+                rolled = true;
+            }
+        if (rolled) collection.save();
         for (PetRecord record : collection.equipped()) spawnOwned(player, record);
     }
 
@@ -734,7 +766,7 @@ public final class PetManager {
         if (live != null) despawn(live);
         collection(player).remove(record);
         if (pet != null && at != null && PetsConfig.mode == PetsConfig.Mode.CREATURES) {
-            PetControl wild = spawn(pet, null, null, record.model, record.baby, at, at);
+            PetControl wild = spawn(pet, null, null, record.model, record.baby, at, at, 1D, record.stats);
             if (wild != null) {
                 restoreHealth(wild.body(), health);
                 if (record.baby) wild.setWildBornAt(record.bornAt);
@@ -746,6 +778,8 @@ public final class PetManager {
     /** Adds a new adult of the species wearing this variant to the player's collection and brings it out. */
     public PetRecord give(Player player, PetSpecies pet, String model) {
         PetRecord record = new PetRecord(pet.id(), model, false, System.currentTimeMillis());
+        record.stats = PetStats.wild(ThreadLocalRandom.current());
+        record.origin = PetRecord.GIVEN;
         int limit = PetsConfig.maxEquippedPets;
         PetCollection collection = collection(player);
         if (limit > 0 && collection.equipped().size() >= limit) record.equipped = false;
@@ -805,6 +839,12 @@ public final class PetManager {
             return true;
         }
         if (!control.isOwnedBy(player)) return true;
+        // Sneaking, a click opens its passport, unless the click is a name tag, its food or a lead, which keep their use.
+        if (player.isSneaking() && held.getType() != Material.NAME_TAG && held.getType() != Material.LEAD
+                && !pet.isBreedingFood(held)) {
+            PetPassport.open(this, player, control.record());
+            return true;
+        }
         // A named name tag names it, as it names any mob; it is used up outside creative. A blank one does nothing.
         if (held.getType() == Material.NAME_TAG) {
             ItemMeta tag = held.getItemMeta();
@@ -851,6 +891,8 @@ public final class PetManager {
         LivingEntity body = wild.body();
         Location at = body == null ? player.getLocation() : body.getLocation();
         PetRecord record = new PetRecord(pet.id(), wild.model(), false, System.currentTimeMillis());
+        record.stats = wild.stats().copy();
+        record.origin = PetRecord.TAMED;
         PetCollection collection = collection(player);
         int limit = PetsConfig.maxEquippedPets;
         if (limit > 0 && collection.equipped().size() >= limit) record.equipped = false;
@@ -891,9 +933,18 @@ public final class PetManager {
         // From the parents' records, not the models they wear: a parent whose variant model is missing here wears the
         // species' model, and its baby would keep that for good.
         String model = pet.inherit(mother.record().model, father.record().model, ThreadLocalRandom.current());
+        PetRecord mum = mother.record(), dad = father.record();
         PetRecord baby = new PetRecord(pet.id(), model, true, System.currentTimeMillis());
-        baby.parents = List.of(displayName(mother.record()), displayName(father.record()));
-        baby.generation = PetRecord.childGeneration(mother.record(), father.record());
+        baby.parents = List.of(displayName(mum), displayName(dad));
+        baby.generation = PetRecord.childGeneration(mum, dad);
+        baby.stats = PetStats.inherit(mum.stats, dad.stats, pet.statCap(), ThreadLocalRandom.current());
+        baby.origin = model.equals(mum.model) || model.equals(dad.model) ? PetRecord.BRED : PetRecord.MUTATED;
+        baby.family = List.of(asParent(mum), asParent(dad));
+        PetRecord.Relative born = new PetRecord.Relative(baby.id, null, baby.model, null);
+        for (PetRecord parent : List.of(mum, dad)) {
+            if (parent.babies == null) parent.babies = new ArrayList<>();
+            parent.babies.add(born);
+        }
         PetCollection collection = collection(owner);
         int limit = PetsConfig.maxEquippedPets;
         if (limit > 0 && collection.equipped().size() >= limit) baby.equipped = false;
@@ -908,6 +959,15 @@ public final class PetManager {
             spawn(pet, owner.getUniqueId(), baby, model, true, body == null ? owner.getLocation() : body.getLocation(), null);
         }
         owner.sendMessage(ChatColorConverter.convert(PetsConfig.bornMessage.replace("$pet", displayName(baby))));
+    }
+
+    /** A parent as its baby's family keeps it: its id, name and colour, with its own parents but not theirs. */
+    static PetRecord.Relative asParent(PetRecord parent) {
+        List<PetRecord.Relative> grandparents = new ArrayList<>();
+        if (parent.family != null)
+            for (PetRecord.Relative grandparent : parent.family)
+                grandparents.add(new PetRecord.Relative(grandparent.id, grandparent.name, grandparent.model, null));
+        return new PetRecord.Relative(parent.id, parent.name, parent.model, grandparents);
     }
 
     private static void consume(Player player, ItemStack held) {
@@ -1001,7 +1061,8 @@ public final class PetManager {
                 Location at = body.getLocation();
                 double health = body.getHealth();
                 despawn(control);
-                PetControl grown = spawn(control.species(), null, null, control.model(), false, at, control.home());
+                PetControl grown = spawn(control.species(), null, null, control.model(), false, at, control.home(), 1D,
+                        control.stats());
                 if (grown != null) restoreHealth(grown.body(), health);
                 continue;
             }
@@ -1036,9 +1097,92 @@ public final class PetManager {
         bodyDied(control);
     }
 
-    /** Writes the waiting wild pets to disk; called with every world save. */
+    /** Brings each loaded chunk's persistent data up to date with its waiting wild pets; called with every world save. */
     public void saveWild() {
-        wildStore.save();
+        for (UUID worldId : wildStore.worlds()) {
+            World world = Bukkit.getWorld(worldId);
+            if (world == null) continue;
+            for (long chunk : wildStore.chunks(worldId)) {
+                int cx = (int) (chunk >> 32), cz = (int) chunk;
+                if (world.isChunkLoaded(cx, cz)) writeChunk(world.getChunkAt(cx, cz));
+            }
+        }
+    }
+
+    /**
+     * At shutdown: every waiting wild pet goes into its chunk's persistent data, loading a chunk that is not loaded (one
+     * whose pet was lost after it unloaded). Once all are there, the old wild_pets.yml goes.
+     */
+    private void flushWild() {
+        boolean all = true;
+        for (UUID worldId : wildStore.worlds()) {
+            World world = Bukkit.getWorld(worldId);
+            if (world == null) {
+                all = false;
+                continue;
+            }
+            for (long chunk : wildStore.chunks(worldId)) {
+                Chunk loaded = world.getChunkAt((int) (chunk >> 32), (int) chunk);
+                writeChunk(loaded);
+                wildStore.take(worldId, loaded.getX(), loaded.getZ());
+            }
+        }
+        if (all && legacyWildFile.isFile() && !legacyWildFile.delete())
+            Logger.warn("Could not delete " + legacyWildFile + "; its wild pets are in chunk data now, so delete it by hand.");
+    }
+
+    /** Writes a loaded chunk's waiting wild pets into its persistent data, or clears it when none wait there. */
+    private void writeChunk(Chunk chunk) {
+        List<WildPetStore.Entry> entries = wildStore.peek(chunk.getWorld().getUID(), chunk.getX(), chunk.getZ());
+        PersistentDataContainer data = chunk.getPersistentDataContainer();
+        if (entries.isEmpty()) data.remove(wildKey);
+        else data.set(wildKey, PersistentDataType.STRING, WildPetStore.encodeAll(entries));
+    }
+
+    /** Keeps a loaded chunk's persistent data in step after its waiting pets changed; an unloaded one waits. */
+    private void syncChunk(World world, int cx, int cz) {
+        if (world.isChunkLoaded(cx, cz)) writeChunk(world.getChunkAt(cx, cz));
+    }
+
+    /**
+     * A chunk loaded: the wild pets its persistent data keeps join any that were lost there while it was unloaded, and
+     * wait in the store for a player to come near. Wild pets from the old wild_pets.yml join their chunk the same way.
+     */
+    public void chunkLoaded(Chunk chunk) {
+        UUID worldId = chunk.getWorld().getUID();
+        List<WildPetStore.Entry> saved = WildPetStore.decodeAll(
+                chunk.getPersistentDataContainer().get(wildKey, PersistentDataType.STRING));
+        List<WildPetStore.Entry> pending = wildStore.take(worldId, chunk.getX(), chunk.getZ());
+        if (saved.isEmpty() && pending.isEmpty()) return;
+        for (WildPetStore.Entry entry : saved) wildStore.put(worldId, entry);
+        for (WildPetStore.Entry entry : pending) wildStore.put(worldId, entry);
+        writeChunk(chunk);
+    }
+
+    /**
+     * A chunk is unloading: its live wild pets join the store, and its waiting pets go into its persistent data, saved
+     * with it; they leave memory until it loads again.
+     */
+    public void chunkUnloading(Chunk chunk) {
+        World world = chunk.getWorld();
+        for (PetControl control : new ArrayList<>(byBody.values())) {
+            LivingEntity body = control.body();
+            if (!control.isWild() || control.route() != null || body == null || body.getWorld() != world) continue;
+            Location at = body.getLocation();
+            if (at.getBlockX() >> 4 == chunk.getX() && at.getBlockZ() >> 4 == chunk.getZ()) {
+                store(control);
+                despawn(control);
+            }
+        }
+        writeChunk(chunk);
+        wildStore.take(world.getUID(), chunk.getX(), chunk.getZ());
+    }
+
+    /** At load: the old file's pets and those in the chunks already loaded (a reload keeps them) join the store. */
+    private void loadWild() {
+        for (Map.Entry<UUID, List<WildPetStore.Entry>> world : WildPetStore.readLegacy(legacyWildFile).entrySet())
+            for (WildPetStore.Entry entry : world.getValue()) wildStore.put(world.getKey(), entry);
+        for (World world : Bukkit.getWorlds()) for (Chunk chunk : world.getLoadedChunks()) chunkLoaded(chunk);
     }
 
     private void workChunks() {
@@ -1079,14 +1223,16 @@ public final class PetManager {
         Location at = body.getLocation(), home = control.home() == null ? at : control.home();
         wildStore.put(body.getWorld().getUID(), new WildPetStore.Entry(control.species().id(), control.model(), control.isBaby(),
                 at.getX(), at.getY(), at.getZ(), home.getX(), home.getY(), home.getZ(), body.isDead() ? 0D : body.getHealth(),
-                control.isBaby() ? control.bornAt() : 0L));
+                control.isBaby() ? control.bornAt() : 0L, control.stats()));
+        syncChunk(body.getWorld(), at.getBlockX() >> 4, at.getBlockZ() >> 4);
     }
 
     /** Brings back the pets waiting in a loaded chunk; pets of a species that is not installed keep waiting. */
     private void restore(World world, int cx, int cz) {
         for (WildPetStore.Entry entry : wildStore.take(world.getUID(), cx, cz)) {
             PetSpecies pet = species(entry.species());
-            PetControl back = pet == null ? null : spawn(pet, null, null, entry.model(), entry.baby(), entry.at(world), entry.home(world));
+            PetControl back = pet == null ? null
+                    : spawn(pet, null, null, entry.model(), entry.baby(), entry.at(world), entry.home(world), 1D, entry.stats());
             if (back == null) {
                 wildStore.put(world.getUID(), entry);
                 continue;
@@ -1095,6 +1241,7 @@ public final class PetManager {
             // A baby from before births were kept starts growing now.
             if (entry.baby()) back.setWildBornAt(entry.bornAt() > 0L ? entry.bornAt() : System.currentTimeMillis());
         }
+        writeChunk(world.getChunkAt(cx, cz));
     }
 
     // ---- wild spawning ----------------------------------------------------------------------------------------

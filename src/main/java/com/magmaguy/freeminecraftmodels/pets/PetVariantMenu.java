@@ -62,7 +62,7 @@ public final class PetVariantMenu {
         } else {
             meta.setDisplayName(ChatColorConverter.convert("&f") + ChatColorConverter.convert(species.name(model)));
             lore.add(ChatColorConverter.convert("&7Model: &f" + model));
-            if (!species.variants().isEmpty()) lore.add(ChatColorConverter.convert("&7Rarity: &f" + PetsMenu.rarity(species.wildShare(model))));
+            if (!species.variants().isEmpty()) lore.add(ChatColorConverter.convert("&7Rarity: &f" + species.rarityTier(model)));
             PetSpecies.Variant variant = species.variant(model);
             if (variant != null && !variant.biomes().isEmpty())
                 lore.add(ChatColorConverter.convert("&7Biomes: &f" + variant.biomes().stream().map(NamespacedKey::getKey).sorted()
