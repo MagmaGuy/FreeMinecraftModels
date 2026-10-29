@@ -188,8 +188,9 @@ public final class PetLuaTable {
         property("speed", () -> LuaValue.valueOf(body().getVelocity().length()));
         property("route_cruise", ticks.perTick(() ->
                 LuaValue.valueOf(control.route() == null ? 0D : control.route().cruise())));
-        // The middle of the nearest player or pet its owner's pets defend against within THREAT_RANGE of the owner;
-        // nil for a wild pet, or when nobody attacked the owner or their pets lately.
+        // The middle of the nearest attacker its owner's pets defend against within THREAT_RANGE of the owner: a
+        // player or one of their pets, a mob or a wild pet that hurt the owner or their pets lately. nil for a wild
+        // pet, or when nobody did.
         Supplier<Location> threat = ticks.perTick(this::threat);
         property("threat", () -> location(threat.get()));
         // The middle of the player who last hurt this wild pet, for 30 seconds after the hit while they are alive, can
@@ -338,7 +339,7 @@ public final class PetLuaTable {
             return LuaValue.valueOf(stung);
         });
         // sting_enemies(reach, effect, duration, amplifier, damage, cooldown): reach 0 to 4. Hostile mobs, and the
-        // players its owner's pets defend against (see threat) and those players' pets.
+        // attackers its owner's pets defend against (see threat): players and their pets, mobs and wild pets.
         method("sting_enemies", args -> {
             double reach = number(args, 1, 0D, MAX_STING_REACH);
             Sting sting = sting(args, 2);
@@ -527,7 +528,9 @@ public final class PetLuaTable {
                     && mode != GameMode.SPECTATOR;
         }
         PetControl pet = manager.pet(entity);
-        return pet != null && !pet.isWild() && aggressors.contains(pet.ownerId());
+        if (pet != null && !pet.isWild()) return aggressors.contains(pet.ownerId());
+        // A mob or a wild pet that hurt the owner or one of their pets.
+        return aggressors.contains(entity.getUniqueId()) && !entity.isDead();
     }
 
     /** The middle of the player who last hurt this wild pet, within ATTACKER_TICKS of the hit, or null. */

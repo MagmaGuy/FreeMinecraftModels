@@ -7,6 +7,7 @@ import com.magmaguy.freeminecraftmodels.config.PetsConfig;
 import com.magmaguy.freeminecraftmodels.pets.interactions.PetSting;
 import org.bukkit.Material;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
@@ -32,6 +33,18 @@ import java.util.UUID;
 
 /** Routes clicks, damage, deaths, removals, new chunks, world saves and player sessions to {@link PetManager}. */
 public final class PetListeners implements Listener {
+    /**
+     * Who an attack counts against: the creature that made it, or that shot the projectile, but the owner for an owned
+     * pet's attack. Null when no creature is behind it, as for a dispenser's arrow.
+     */
+    private static UUID aggressor(PetManager manager, Entity damager) {
+        Entity source = damager instanceof Projectile projectile && projectile.getShooter() instanceof Entity shooter
+                ? shooter : damager;
+        PetControl pet = manager.pet(source);
+        if (pet != null && !pet.isWild()) return pet.ownerId();
+        return source instanceof LivingEntity ? source.getUniqueId() : null;
+    }
+
     private static Player attacker(Entity damager) {
         if (damager instanceof Player player) return player;
         if (damager instanceof Projectile projectile && projectile.getShooter() instanceof Player player) return player;
@@ -112,18 +125,17 @@ public final class PetListeners implements Listener {
 
     /**
      * An attack that went through on a player, or on an owned pet: the victim's owner's pets defend against the
-     * attacking player for a while. A pet's own sting counts as its owner attacking, so a fight between two players'
-     * pets draws both swarms in. Whether PvP is on is the server's call: a cancelled attack never gets here. A player's
-     * hit on a wild pet is remembered on that pet instead.
+     * attacker for a while, as wolves do. That is a player, a mob or a wild pet, or the shooter of a projectile. An
+     * owned pet's own sting counts as its owner attacking, so a fight between two players' pets draws both swarms in.
+     * Whether PvP is on is the server's call: a cancelled attack never gets here. A player's hit on a wild pet is
+     * remembered on that pet instead.
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onAttacked(EntityDamageByEntityEvent event) {
         PetManager manager = PetManager.get();
         if (manager == null) return;
         Player attacker = attacker(event.getDamager());
-        PetControl attackingPet = attacker == null ? manager.pet(event.getDamager()) : null;
-        UUID aggressor = attacker != null ? attacker.getUniqueId()
-                : attackingPet != null && !attackingPet.isWild() ? attackingPet.ownerId() : null;
+        UUID aggressor = aggressor(manager, event.getDamager());
         if (aggressor == null) return;
         if (event.getEntity() instanceof Player victim) {
             manager.attacked(victim.getUniqueId(), aggressor);
