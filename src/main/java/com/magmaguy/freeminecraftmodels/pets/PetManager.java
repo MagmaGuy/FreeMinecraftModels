@@ -657,9 +657,9 @@ public final class PetManager {
     }
 
     /**
-     * A player's attack on an owner, or on one of the owner's pets, went through, so PvP is on where it happened: for
-     * {@link #AGGRESSION_TICKS} after it, the owner's pets defend them against that player and that player's pets.
-     * Only owners with a pet out are tracked, and nobody is their own aggressor.
+     * Someone's attack on an owner, or on one of the owner's pets, went through (for a player, PvP is on where it
+     * happened): for {@link #AGGRESSION_TICKS} after it, the owner's pets defend them against that attacker, a player
+     * with their pets, a mob or a wild pet. Only owners with a pet out are tracked, and nobody is their own aggressor.
      */
     public void attacked(UUID owner, UUID attacker) {
         if (owner == null || attacker == null || owner.equals(attacker) || !ownedBodies.containsKey(owner)) return;

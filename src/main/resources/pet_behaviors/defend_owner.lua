@@ -1,6 +1,6 @@
--- Goes for whoever just attacked its owner or one of its owner's pets: a player whose attack the server let through
--- (so PvP is on there), or one of that player's pets. It only goes after them near its owner, and sting then stings
--- them on touch. A pet told to stay stays out of it.
+-- Goes for whoever just attacked its owner or one of its owner's pets, as a wolf does: a mob, a wild pet, or a player
+-- whose attack the server let through (so PvP is on there) and that player's pets. It only goes after them near its
+-- owner, and sting then stings them on touch. A pet told to stay stays out of it.
 return ai.module {
     id = 'fmm:pet/defend_owner', revision = 1,
     -- speed is in blocks per tick at species speed 1 for a flying body; for a walking or swimming one, 4 x speed x the
