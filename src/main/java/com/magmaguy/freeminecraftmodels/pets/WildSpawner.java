@@ -71,6 +71,9 @@ final class WildSpawner {
             for (PetSpecies pet : candidates) if (surfaceSpot(pet, world, x, z) != null) fitting.add(pet);
             PetSpecies pet = pickWeighted(fitting, candidate -> candidate.wildSpawn().weight(), random);
             if (pet == null) continue;
+            // A biome whose colours are all rare gets their groups as rarely.
+            Location first = surfaceSpot(pet, world, x, z);
+            if (first == null || random.nextDouble() >= pet.wildOdds(first)) continue;
             int group = pet.wildSpawn().minGroup() + random.nextInt(pet.wildSpawn().maxGroup() - pet.wildSpawn().minGroup() + 1);
             int startX = x, startZ = z;
             for (int member = 0; member < group; member++) {
@@ -172,6 +175,9 @@ final class WildSpawner {
                 if (pet == null) {
                     pet = pick(candidates, world, players, x, startY, z, random);
                     if (pet == null) continue;
+                    // A biome whose colours are all rare gets their packs as rarely; this pack is skipped.
+                    Location first = spot(pet, world, players, x, startY, z);
+                    if (first == null || random.nextDouble() >= pet.wildOdds(first)) break;
                     steps = pet.wildSpawn().minGroup() + random.nextInt(pet.wildSpawn().maxGroup() - pet.wildSpawn().minGroup() + 1);
                 }
                 Location at = spot(pet, world, players, x, startY, z);

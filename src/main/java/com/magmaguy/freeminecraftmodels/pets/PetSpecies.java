@@ -782,6 +782,25 @@ public final class PetSpecies {
     }
 
     /**
+     * The odds, 0 to 1, that a wild group spawns at this spot once the species is picked for it: the weight of the
+     * colours that live in its biome against the most common colour's, so a biome whose colours are all rare gets their
+     * groups as rarely. 1 for a species without colours or biomes of their own.
+     */
+    public double wildOdds(Location at) {
+        return variantBiomes ? wildOdds(variants, biome(at)) : 1D;
+    }
+
+    static double wildOdds(List<Variant> variants, NamespacedKey biome) {
+        double most = 0D, living = 0D;
+        for (Variant variant : variants) {
+            if (variant.weight() <= 0D) continue;
+            most = Math.max(most, variant.weight());
+            if (variant.allowsBiome(biome)) living += variant.weight();
+        }
+        return most <= 0D ? 1D : Math.min(1D, living / most);
+    }
+
+    /**
      * Whether a wild pick in this biome finds a model: a variant with a share of the picks that lives there, or no
      * variant with a share at all, when wild ones wear the species' model.
      */
