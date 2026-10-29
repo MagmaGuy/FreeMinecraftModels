@@ -103,6 +103,8 @@ public final class PetManager {
     private final Map<UUID, Map<String, PetControl>> ownedBodies = new HashMap<>();
     /** Players whose attack on an owner or one of their pets went through, by owner, until the tick they are let go. */
     private final Map<UUID, Map<UUID, Long>> aggressors = new HashMap<>();
+    /** Whether each owner with a pet out is on the move, which sets how far their pets range. */
+    private final Map<UUID, OwnerPace> paces = new HashMap<>();
     /** How long an owner's pets keep defending them against an attacker after its latest hit: 15 seconds. */
     static final long AGGRESSION_TICKS = 20L * 15L;
     private final WildPetStore wildStore = WildPetStore.load(new File(MetadataHandler.PLUGIN.getDataFolder(), "data/wild_pets.yml"));
@@ -193,6 +195,7 @@ public final class PetManager {
         manager.collections.clear();
         manager.ownedBodies.clear();
         manager.aggressors.clear();
+        manager.paces.clear();
         if (manager.behaviors != null) manager.behaviors.close();
     }
 
@@ -202,6 +205,7 @@ public final class PetManager {
         PetManager manager = instance;
         if (manager == null) return;
         if (ticks % WATCH_TICKS == 0) manager.watch();
+        if (ticks % OwnerPace.SAMPLE_TICKS == 0) manager.samplePaces();
         manager.workChunks();
         if (ticks >= manager.nextWildSpawnTick) {
             manager.nextWildSpawnTick = ticks + Math.max(20, PetsConfig.wildSpawnIntervalTicks);
@@ -573,6 +577,25 @@ public final class PetManager {
         if (owned != null) for (PetControl control : new ArrayList<>(owned.values())) despawn(control);
         collections.remove(player.getUniqueId());
         aggressors.remove(player.getUniqueId());
+        paces.remove(player.getUniqueId());
+    }
+
+    /** Where each owner with a pet out is now; owners whose pets are all away are forgotten. */
+    private void samplePaces() {
+        paces.keySet().retainAll(ownedBodies.keySet());
+        for (UUID owner : ownedBodies.keySet()) {
+            Player player = Bukkit.getPlayer(owner);
+            if (player == null) continue;
+            Location at = player.getLocation();
+            paces.computeIfAbsent(owner, ignored -> new OwnerPace())
+                    .sample(ticks, at.getWorld() == null ? null : at.getWorld().getName(), at.getX(), at.getY(), at.getZ());
+        }
+    }
+
+    /** Whether the owner went {@link OwnerPace#MOVING_BLOCKS} or more within the last three seconds. */
+    public boolean ownerMoving(UUID owner) {
+        OwnerPace pace = owner == null ? null : paces.get(owner);
+        return pace != null && pace.moving();
     }
 
     /**

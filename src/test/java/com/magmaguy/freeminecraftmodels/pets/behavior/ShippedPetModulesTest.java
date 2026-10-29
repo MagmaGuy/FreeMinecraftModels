@@ -100,7 +100,8 @@ class ShippedPetModulesTest {
      * a wild pet; a drizzle looks 4 blocks down at chance 0.1. owner_effect is new: night vision for 300 ticks within 16
      * blocks. So are the walking and swimming modules: a walk and a swim at 0.15 to a spot within the roam
      * radius (an owned pet's within 0.8 of the follow distance), the swim 0.5 to 3 blocks under the surface, and a look
-     * at the nearest player within 8 blocks. stay bobs as before, now in the body's own medium.
+     * at the nearest player within 8 blocks. stay bobs as before, now in the body's own medium. A drift, walk or swim
+     * round the owner ends within the pet's roam range: 0.8 of its follow range, 4 here, where the owner is on the move.
      */
     private static final Set<String> DEFAULT_CALLS = Set.of(
             "fmm:pet/migrate route_target()", "fmm:pet/migrate steer_to(L, 0.3)", "fmm:pet/migrate stop()",
@@ -108,7 +109,8 @@ class ShippedPetModulesTest {
             "fmm:pet/follow_owner trail_point(1.5, 2)", "fmm:pet/follow_owner distance_to(L)",
             "fmm:pet/follow_owner teleport_near_owner(2)", "fmm:pet/defend_owner steer_to(L, 0.45)",
             "fmm:pet/follow_owner steer_to(L, 0.375)", "fmm:pet/follow_owner steer_to(L, 0.6)",
-            "fmm:pet/drift hover_point(L, 5)", "fmm:pet/drift distance_to(L)", "fmm:pet/drift steer_to(L, 0.09)",
+            "fmm:pet/drift hover_point(L, 5)", "fmm:pet/drift hover_point(L, 4)", "fmm:pet/drift distance_to(L)",
+            "fmm:pet/drift steer_to(L, 0.09)",
             "fmm:pet/hover ground_below(L, 12)", "fmm:pet/hover steer_to(L, 0.045)",
             "fmm:pet/campfire nearest_campfire(12, 100, {CAMPFIRE, SOUL_CAMPFIRE}, {}, 2.5)",
             "fmm:pet/campfire campfire_usable(L, {CAMPFIRE, SOUL_CAMPFIRE}, {}, 2.5)",
@@ -116,7 +118,8 @@ class ShippedPetModulesTest {
             "fmm:pet/day_perch find_perch(0.3, 2)", "fmm:pet/day_perch distance_to(L)",
             "fmm:pet/day_perch steer_to(L, 0.045)", "fmm:pet/day_perch steer_to(L, 0.09)",
             "fmm:pet/rain_bloom scale_toward(1, 1.25, 60, 4)", "fmm:pet/rain_bloom scale_toward(1.25, 1.25, 60, 4)",
-            "fmm:pet/rain_bloom hover_point(L, 5)", "fmm:pet/rain_bloom distance_to(L)",
+            "fmm:pet/rain_bloom hover_point(L, 5)", "fmm:pet/rain_bloom hover_point(L, 4)",
+            "fmm:pet/rain_bloom distance_to(L)",
             "fmm:pet/rain_bloom steer_to(L, 0.126)",
             "fmm:pet/night_glow set_glow(15, lantern, glow)", "fmm:pet/night_glow clear_glow()",
             "fmm:pet/sting sting_contacts(true, SLOWNESS, 60, 0, 0, 60)",
@@ -778,6 +781,9 @@ class ShippedPetModulesTest {
             properties.put("stay_anchor", () -> staying ? place(0.5, 70, 0.5) : LuaValue.NIL);
             properties.put("owner_location", () -> owner.present() ? ownerLocation() : LuaValue.NIL);
             properties.put("owner_distance", () -> LuaValue.valueOf(owner.distance));
+            // The owner is on the move, so the follow range is the follow distance and an owned pet roams 0.8 of it.
+            properties.put("follow_range", () -> LuaValue.valueOf(FOLLOW));
+            properties.put("roam_range", () -> LuaValue.valueOf(owner == Owner.WILD ? 5 : FOLLOW * 0.8));
             properties.put("night", () -> LuaValue.valueOf(night));
             properties.put("day", () -> LuaValue.valueOf(!night));
             properties.put("raining", () -> LuaValue.valueOf(night));

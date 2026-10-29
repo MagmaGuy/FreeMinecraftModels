@@ -148,6 +148,7 @@ public final class PetSpecies {
     /** Whether any variant names its own biomes, so wild spawns need to look up the biome. */
     private final boolean variantBiomes;
     private final double followDistance;
+    private final double idleDistance;
     private final double leashDistance;
     private final double teleportDistance;
     private final double roamRadius;
@@ -203,6 +204,7 @@ public final class PetSpecies {
         this.followDistance = follow.getDouble("distance", 5D);
         this.leashDistance = follow.getDouble("leashDistance", 12D);
         this.teleportDistance = follow.getDouble("teleportDistance", 40D);
+        this.idleDistance = idleDistance(followDistance, follow.getDouble("idleDistance", 20D), teleportDistance);
         this.roamRadius = follow.getDouble("roamRadius", 5D);
         this.speed = Math.max(0.05D, follow.getDouble("speed", 1D));
         this.canStay = follow.getBoolean("stay", true);
@@ -908,6 +910,19 @@ public final class PetSpecies {
 
     public double followDistance() {
         return followDistance;
+    }
+
+    /** How far an owned pet ranges from its owner while they stand about; followDistance while they are on the move. */
+    public double idleDistance() {
+        return idleDistance;
+    }
+
+    /**
+     * The idle distance a pet file asks for, kept between the follow distance and a block short of the teleport
+     * distance, so a pet ranging out never gets teleported back for it.
+     */
+    static double idleDistance(double followDistance, double asked, double teleportDistance) {
+        return Math.max(followDistance, Math.min(asked, teleportDistance - 1D));
     }
 
     public double leashDistance() {

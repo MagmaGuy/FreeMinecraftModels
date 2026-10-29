@@ -177,6 +177,31 @@ public final class PetControl {
     }
 
     /** Distance to the owner, or infinity when the owner is away or in another world. */
+    /**
+     * How far from its owner the pet ranges before following, and the most its owner can be from what it goes to
+     * (a fire, a perch): the follow distance while the owner is on the move, the idle distance while they stand about.
+     * A wild pet's is the follow distance.
+     */
+    public double followRange() {
+        PetManager manager = owner == null ? null : PetManager.get();
+        if (manager == null || manager.ownerMoving(owner)) return species.followDistance();
+        return species.idleDistance();
+    }
+
+    /**
+     * How far from its anchor a drift, walk or swim may end: the roam radius around home when wild; around the owner,
+     * the roam radius or 0.6 of the follow range, whichever is more, and never past 0.8 of it, so a pet arriving
+     * there is still in range.
+     */
+    public double roamRange() {
+        if (owner == null) return species.roamRadius();
+        return roamRange(species.roamRadius(), followRange());
+    }
+
+    static double roamRange(double roamRadius, double followRange) {
+        return Math.min(followRange * 0.8D, Math.max(roamRadius, followRange * 0.6D));
+    }
+
     public double ownerDistance(LivingEntity body) {
         Player player = owner().orElse(null);
         if (player == null || body == null || player.getWorld() != body.getWorld()) return Double.POSITIVE_INFINITY;
