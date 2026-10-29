@@ -80,7 +80,9 @@ public final class PetLuaTable {
     /** Every name a module can read on c.pet. */
     public static final Set<String> PROPERTIES = Set.of("wild", "staying", "settled", "baby", "migrating", "model",
             "species", "position", "home", "anchor", "stay_anchor", "owner_location", "owner_distance", "night", "day",
-            "raining", "speed", "route_cruise");
+            "raining", "speed", "route_cruise", "threat");
+    /** How far from its owner an owned pet looks for someone to defend them against. */
+    static final double THREAT_RANGE = 16D;
     /** Every method a module can call on c.pet. */
     public static final Set<String> METHODS = Set.of("steer_to", "stop", "hover_point", "rest_point", "ground_below",
             "ground_point", "water_point", "trail_point", "teleport_near_owner", "distance_to", "route_target",
@@ -179,6 +181,10 @@ public final class PetLuaTable {
         property("speed", () -> LuaValue.valueOf(body().getVelocity().length()));
         property("route_cruise", ticks.perTick(() ->
                 LuaValue.valueOf(control.route() == null ? 0D : control.route().cruise())));
+        // The middle of the nearest player or pet its owner's pets defend against within THREAT_RANGE of the owner;
+        // nil for a wild pet, or when nobody attacked the owner or their pets lately.
+        Supplier<Location> threat = ticks.perTick(this::threat);
+        property("threat", () -> location(threat.get()));
 
         // steer_to(point, cruise): one tick toward the point; false when the body cannot go there. cruise is 0 to 4
         // (positive infinity means 4 and negative infinity 0). A flying body flies at cruise blocks per tick. A walking
@@ -318,18 +324,22 @@ public final class PetLuaTable {
             }
             return LuaValue.valueOf(stung);
         });
-        // sting_enemies(reach, effect, duration, amplifier, damage, cooldown): reach 0 to 4.
+        // sting_enemies(reach, effect, duration, amplifier, damage, cooldown): reach 0 to 4. Hostile mobs, and the
+        // players its owner's pets defend against (see threat) and those players' pets.
         method("sting_enemies", args -> {
             double reach = number(args, 1, 0D, MAX_STING_REACH);
             Sting sting = sting(args, 2);
             PetManager manager = PetManager.get();
             if (manager == null) return LuaValue.valueOf(0);
             LivingEntity body = body();
+            Set<UUID> aggressors = manager.aggressors(control.ownerId());
             int stung = 0;
             for (Entity entity : body.getWorld().getNearbyEntities(body.getBoundingBox().expand(reach + 1.5D),
-                    candidate -> candidate instanceof Enemy && candidate instanceof LivingEntity && !(candidate instanceof Player))) {
+                    candidate -> candidate instanceof LivingEntity && (candidate instanceof Enemy && !(candidate instanceof Player)
+                            || !aggressors.isEmpty() && defendsAgainst(manager, aggressors, candidate)))) {
                 LivingEntity victim = (LivingEntity) entity;
-                if (victim.isDead() || manager.pet(victim) != null) continue;
+                if (victim.isDead()) continue;
+                if (manager.pet(victim) != null && !defendsAgainst(manager, aggressors, victim)) continue;
                 if (touches(victim, reach) && sting(victim, sting, "c.pet:sting_enemies")) stung++;
             }
             return LuaValue.valueOf(stung);
@@ -493,6 +503,42 @@ public final class PetLuaTable {
     }
 
     /** Owned: the owner. Wild: its home, or where it is when it has none. */
+    /**
+     * Whether an owned pet defends its owner against this entity: a player among the aggressors who can be hurt
+     * (alive, not in creative or spectator), or a pet one of them owns.
+     */
+    private static boolean defendsAgainst(PetManager manager, Set<UUID> aggressors, Entity entity) {
+        if (entity instanceof Player player) {
+            GameMode mode = player.getGameMode();
+            return aggressors.contains(player.getUniqueId()) && !player.isDead() && mode != GameMode.CREATIVE
+                    && mode != GameMode.SPECTATOR;
+        }
+        PetControl pet = manager.pet(entity);
+        return pet != null && !pet.isWild() && aggressors.contains(pet.ownerId());
+    }
+
+    /** The middle of the nearest one its owner's pets defend against, within THREAT_RANGE of the owner, or null. */
+    private Location threat() {
+        PetManager manager = PetManager.get();
+        Player owner = control.owner().orElse(null);
+        LivingEntity body = body();
+        if (manager == null || owner == null || owner.getWorld() != body.getWorld()) return null;
+        Set<UUID> aggressors = manager.aggressors(owner.getUniqueId());
+        if (aggressors.isEmpty()) return null;
+        Location here = body.getLocation();
+        Entity nearest = null;
+        double best = Double.POSITIVE_INFINITY;
+        for (Entity entity : owner.getWorld().getNearbyEntities(owner.getLocation(), THREAT_RANGE, THREAT_RANGE, THREAT_RANGE,
+                candidate -> candidate instanceof LivingEntity && defendsAgainst(manager, aggressors, candidate))) {
+            double distance = entity.getLocation().distanceSquared(here);
+            if (distance < best) {
+                best = distance;
+                nearest = entity;
+            }
+        }
+        return nearest == null ? null : nearest.getLocation().add(0D, nearest.getHeight() * 0.5D, 0D);
+    }
+
     private Location anchor() {
         if (!control.isWild()) return control.owner().map(Player::getLocation).orElse(null);
         Location home = control.home();

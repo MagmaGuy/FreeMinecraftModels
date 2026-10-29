@@ -106,7 +106,7 @@ class ShippedPetModulesTest {
             "fmm:pet/migrate route_target()", "fmm:pet/migrate steer_to(L, 0.3)", "fmm:pet/migrate stop()",
             "fmm:pet/stay rest_point(L, 0.5)", "fmm:pet/stay steer_to(L, 0.045)", "fmm:pet/stay stop()",
             "fmm:pet/follow_owner trail_point(1.5, 2)", "fmm:pet/follow_owner distance_to(L)",
-            "fmm:pet/follow_owner teleport_near_owner(2)",
+            "fmm:pet/follow_owner teleport_near_owner(2)", "fmm:pet/defend_owner steer_to(L, 0.45)",
             "fmm:pet/follow_owner steer_to(L, 0.375)", "fmm:pet/follow_owner steer_to(L, 0.6)",
             "fmm:pet/drift hover_point(L, 5)", "fmm:pet/drift distance_to(L)", "fmm:pet/drift steer_to(L, 0.09)",
             "fmm:pet/hover ground_below(L, 12)", "fmm:pet/hover steer_to(L, 0.045)",
@@ -258,6 +258,7 @@ class ShippedPetModulesTest {
      */
     private static final Map<String, Integer> PROBE_INTERVALS = Map.ofEntries(
             Map.entry("fmm:pet/stay", 4), Map.entry("fmm:pet/follow_owner", 4), Map.entry("fmm:pet/hover", 4),
+            Map.entry("fmm:pet/defend_owner", 4),
             Map.entry("fmm:pet/migrate", 10), Map.entry("fmm:pet/campfire", 10), Map.entry("fmm:pet/day_perch", 10),
             Map.entry("fmm:pet/rain_bloom", 10), Map.entry("fmm:pet/drift", 10), Map.entry("fmm:pet/wander", 10),
             Map.entry("fmm:pet/swim", 10), Map.entry("fmm:pet/idle_look", 10));
@@ -779,6 +780,8 @@ class ShippedPetModulesTest {
             properties.put("raining", () -> LuaValue.valueOf(night));
             properties.put("speed", () -> LuaValue.valueOf(answers == Answers.SOMETHING ? 0.05 : 0));
             properties.put("route_cruise", () -> LuaValue.valueOf(owner == Owner.WILD ? 0.3 : 0));
+            // Someone to defend the owner against, 2 blocks off, whenever the owner is there and the answers are not nothing.
+            properties.put("threat", () -> owner.present() && !answersNothing("threat") ? place(x() + 2, 70, 0.5) : LuaValue.NIL);
             assertEquals(PetLuaTable.PROPERTIES, properties.keySet(), "the stand-in's properties match PetLuaTable's");
 
             // Shapes: L a location, N a finite number, C a cruise (a number that may be infinite), T a list of text,

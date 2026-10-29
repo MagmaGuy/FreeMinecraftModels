@@ -276,8 +276,8 @@ class PetProgramsTest {
     @Test
     void onlyAProgramRunningMigrateCanFlyAMigration() throws IOException {
         write("route", module("route", "settings = { cruise = 1 }, dependencies = { 'fmm:pet/migrate' }"));
-        try (PetBehaviorCatalog catalog = catalog("migrate", "stay", "follow_owner", "drift", "hover", "wander",
-                "idle_look", "swim")) {
+        try (PetBehaviorCatalog catalog = catalog("migrate", "stay", "defend_owner", "follow_owner", "drift", "hover",
+                "wander", "idle_look", "swim")) {
             PetPrograms programs = new PetPrograms(catalog, warnings::add);
             // Only a flyer's default list includes migrate.
             assertTrue(programs.program("jellyfish", "flying", PetPrograms.defaults(MindBodyLocomotion.FLYING), FILE)
@@ -299,10 +299,11 @@ class PetProgramsTest {
 
     @Test
     void eachLocomotionHasADefaultList() {
-        assertEquals(List.of("migrate", "stay", "follow_owner", "drift", "hover"), names(MindBodyLocomotion.FLYING));
-        assertEquals(List.of("stay", "follow_owner", "wander", "idle_look"), names(MindBodyLocomotion.GROUNDED));
-        assertEquals(List.of("stay", "follow_owner", "wander", "idle_look"), names(MindBodyLocomotion.AMPHIBIOUS));
-        assertEquals(List.of("stay", "follow_owner", "swim"), names(MindBodyLocomotion.AQUATIC));
+        assertEquals(List.of("migrate", "stay", "defend_owner", "follow_owner", "drift", "hover"),
+                names(MindBodyLocomotion.FLYING));
+        assertEquals(List.of("stay", "defend_owner", "follow_owner", "wander", "idle_look"), names(MindBodyLocomotion.GROUNDED));
+        assertEquals(List.of("stay", "defend_owner", "follow_owner", "wander", "idle_look"), names(MindBodyLocomotion.AMPHIBIOUS));
+        assertEquals(List.of("stay", "defend_owner", "follow_owner", "swim"), names(MindBodyLocomotion.AQUATIC));
         assertEquals(List.of("stay", "follow_owner"), names(MindBodyLocomotion.STATIONARY));
     }
 

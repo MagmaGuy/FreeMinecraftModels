@@ -101,6 +101,10 @@ public final class PetManager {
     private final Map<UUID, PetControl> byBody = new HashMap<>();
     private final Map<UUID, PetCollection> collections = new HashMap<>();
     private final Map<UUID, Map<String, PetControl>> ownedBodies = new HashMap<>();
+    /** Players whose attack on an owner or one of their pets went through, by owner, until the tick they are let go. */
+    private final Map<UUID, Map<UUID, Long>> aggressors = new HashMap<>();
+    /** How long an owner's pets keep defending them against an attacker after its latest hit: 15 seconds. */
+    static final long AGGRESSION_TICKS = 20L * 15L;
     private final WildPetStore wildStore = WildPetStore.load(new File(MetadataHandler.PLUGIN.getDataFolder(), "data/wild_pets.yml"));
     // Newly generated chunks, stocked with wild pets the tick after they load.
     private final ArrayDeque<PendingChunk> toStock = new ArrayDeque<>();
@@ -188,6 +192,7 @@ public final class PetManager {
         manager.wildStore.save();
         manager.collections.clear();
         manager.ownedBodies.clear();
+        manager.aggressors.clear();
         if (manager.behaviors != null) manager.behaviors.close();
     }
 
@@ -559,6 +564,29 @@ public final class PetManager {
         Map<String, PetControl> owned = ownedBodies.remove(player.getUniqueId());
         if (owned != null) for (PetControl control : new ArrayList<>(owned.values())) despawn(control);
         collections.remove(player.getUniqueId());
+        aggressors.remove(player.getUniqueId());
+    }
+
+    /**
+     * A player's attack on an owner, or on one of the owner's pets, went through, so PvP is on where it happened: for
+     * {@link #AGGRESSION_TICKS} after it, the owner's pets defend them against that player and that player's pets.
+     * Only owners with a pet out are tracked, and nobody is their own aggressor.
+     */
+    public void attacked(UUID owner, UUID attacker) {
+        if (owner == null || attacker == null || owner.equals(attacker) || !ownedBodies.containsKey(owner)) return;
+        aggressors.computeIfAbsent(owner, ignored -> new HashMap<>()).put(attacker, ticks + AGGRESSION_TICKS);
+    }
+
+    /** The players this owner's pets defend against right now. */
+    public Set<UUID> aggressors(UUID owner) {
+        Map<UUID, Long> attackers = owner == null ? null : aggressors.get(owner);
+        if (attackers == null) return Set.of();
+        attackers.values().removeIf(until -> until <= ticks);
+        if (attackers.isEmpty()) {
+            aggressors.remove(owner);
+            return Set.of();
+        }
+        return Set.copyOf(attackers.keySet());
     }
 
     public boolean equip(Player player, PetRecord record) {
