@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.pets;
 
+import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.magmacore.ai.MindBodyLocomotion;
 import com.magmaguy.magmacore.ai.MindContext;
 import org.bukkit.Location;
@@ -20,6 +21,8 @@ import java.util.concurrent.ThreadLocalRandom;
 public final class PetMotion {
     /** How far from the owner a catch-up spot must be, so a walker or swimmer never lands on the owner's own block. */
     static final double CATCH_UP_CLEARANCE = 1D;
+    /** Golden angle in radians: each follow slot turns this far from the last, which spreads the spots evenly. */
+    private static final double GOLDEN_ANGLE = Math.PI * (3D - Math.sqrt(5D));
 
     private PetMotion() {
     }
@@ -177,14 +180,50 @@ public final class PetMotion {
         return null;
     }
 
-    /** Behind the owner: back blocks behind where they face, height above their feet when floating, at them otherwise. */
+    /**
+     * Behind the owner: back blocks behind where they face, height above their feet when floating, at them otherwise.
+     * Each pet the owner has out follows to its own spot around that point (see {@link #slotOffset}), a model's width
+     * or more from the others, so a group spreads out instead of piling onto one point. The spots keep their bearings
+     * whichever way the owner turns, and stay within the follow distance, so a pet in place does not set off again. A
+     * walker's spot inside a wall or a slope falls back to the point itself.
+     */
     public static Location trailPoint(PetControl control, Player owner, double back, double height) {
         Location at = owner.getLocation();
         // The facing from the yaw alone, so an owner looking straight up or down still has a behind.
         double yaw = Math.toRadians(at.getYaw());
         Location point = at.clone().add(Math.sin(yaw) * back, 0D, -Math.cos(yaw) * back);
-        point.setY(at.getY() + (control.species().locomotion() == MindBodyLocomotion.FLYING ? height : 0D));
-        return point;
+        boolean flying = control.species().locomotion() == MindBodyLocomotion.FLYING;
+        point.setY(at.getY() + (flying ? height : 0D));
+        Vector offset = slotOffset(control.slot(), spacing(control), flying,
+                Math.max(1D, control.species().followDistance() - back - 0.5D));
+        if (offset.lengthSquared() == 0D) return point;
+        Location spot = point.clone().add(offset);
+        if (!flying && loaded(spot) && !(spot.getBlock().isPassable() && spot.getBlock().getRelative(0, 1, 0).isPassable()))
+            return point;
+        return spot;
+    }
+
+    /**
+     * Where a slot follows to, from the shared trail point: a sunflower spiral, slot n at spacing x sqrt(n), so no two
+     * spots are closer than the spacing; capped at maxRadius, past which they share the edge. Flyers also take one of
+     * three heights half a spacing apart. Slot 0 keeps the point itself.
+     */
+    static Vector slotOffset(int slot, double spacing, boolean flying, double maxRadius) {
+        if (slot <= 0) return new Vector();
+        double radius = Math.min(spacing * Math.sqrt(slot), maxRadius);
+        double angle = slot * GOLDEN_ANGLE;
+        double y = flying ? (slot % 3 - 1) * spacing * 0.5D : 0D;
+        return new Vector(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
+    }
+
+    /** Room for one pet: its model's click box width, else its body's, with a third of a block to spare. */
+    static double spacing(PetControl control) {
+        double width = 0D;
+        DynamicEntity modeled = control.modeled();
+        if (modeled != null && !modeled.isRemoved()) width = modeled.getHitboxComponent().getPacketInteractionEntityWidth();
+        LivingEntity body = control.body();
+        if (width <= 0D && body != null) width = body.getWidth();
+        return Math.max(0.6D, width) + 0.3D;
     }
 
     /**

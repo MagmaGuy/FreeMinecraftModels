@@ -462,7 +462,13 @@ public final class PetManager {
         modeled.setCenteredOnBody(pet.centerOnBody());
         modeled.setDisplayName(displayName(control));
         byBody.put(entity.getUniqueId(), control);
-        if (owner != null && record != null) ownedBodies.computeIfAbsent(owner, ignored -> new HashMap<>()).put(record.id, control);
+        if (owner != null && record != null) {
+            Map<String, PetControl> owned = ownedBodies.computeIfAbsent(owner, ignored -> new HashMap<>());
+            List<Integer> taken = new ArrayList<>();
+            for (Map.Entry<String, PetControl> other : owned.entrySet()) if (!other.getKey().equals(record.id)) taken.add(other.getValue().slot());
+            control.setSlot(freeSlot(taken));
+            owned.put(record.id, control);
+        }
         return control;
     }
 
@@ -608,6 +614,13 @@ public final class PetManager {
         collection(player).save();
         unspawnOwned(player.getUniqueId(), record);
         player.sendMessage(ChatColorConverter.convert(PetsConfig.unequippedMessage.replace("$pet", displayName(record))));
+    }
+
+    /** The lowest follow slot none of these takes, so a pet brought out fills the gap a pet sent home left. */
+    static int freeSlot(Collection<Integer> taken) {
+        int slot = 0;
+        while (taken.contains(slot)) slot++;
+        return slot;
     }
 
     /** Whether the player owns as many pets as pets.yml's maxOwnedPets allows; never when it is 0. */

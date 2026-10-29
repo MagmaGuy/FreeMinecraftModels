@@ -45,6 +45,8 @@ public final class PetControl {
     private long lastInteractionTick = Long.MIN_VALUE / 2;
     // Set on a wild pet flying a migration; null for every other pet.
     private MigrationRoute route;
+    // Its place among the pets its owner has out: which spot around the trail point it follows to. 0 for a wild pet.
+    private int slot;
     // Players whose touch reached this wild pet's model since its sting last looked, each with the pet clock tick of
     // their latest touch; a map, so a long touch counts once.
     private final Map<UUID, Long> contacts = new LinkedHashMap<>();
@@ -124,6 +126,15 @@ public final class PetControl {
 
     void setModeled(DynamicEntity modeled) {
         this.modeled = modeled;
+    }
+
+    /** Its place among the pets its owner has out, from 0; the first keeps the trail point itself. */
+    public int slot() {
+        return slot;
+    }
+
+    void setSlot(int slot) {
+        this.slot = slot;
     }
 
     public boolean isStaying() {
