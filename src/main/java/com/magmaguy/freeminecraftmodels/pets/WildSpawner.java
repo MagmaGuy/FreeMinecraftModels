@@ -105,7 +105,7 @@ final class WildSpawner {
         int surface = world.getHighestBlockYAt(x, z);
         int y = pet.wildSpawn().placement() == PetSpecies.Placement.WATER ? surface : surface + 1;
         Location at = standingSpot(world, x, y, z, pet.wildSpawn().placement());
-        return at != null && pet.wildSpawn().allows(at) ? at : null;
+        return at != null && pet.mayStandWild(at) ? at : null;
     }
 
     // ---- topping up around players -----------------------------------------------------------------------------
@@ -185,7 +185,7 @@ final class WildSpawner {
     /** Where a member of the species may top up in this column at the pack's height, or null. */
     private static Location spot(PetSpecies pet, World world, List<Player> players, int x, int y, int z) {
         Location at = standingSpot(world, x, y, z, pet.wildSpawn().placement());
-        if (at == null || !pet.wildSpawn().allows(at) || !inRange(world, players, at)) return null;
+        if (at == null || !pet.mayStandWild(at) || !inRange(world, players, at)) return null;
         return at;
     }
 

@@ -6,13 +6,17 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
 import java.util.function.Predicate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * A variant's settings past its model, weight and behaviors: the name it shows, the model its babies wear, the biomes
@@ -25,7 +29,7 @@ class PetSpeciesVariantsTest {
             BLUE = "em_pet_jellyfish_blue", WAR = "em_pet_jellyfish_man_o_war", WAR_BABY = "em_pet_jellyfish_man_o_war_baby";
     private static final Predicate<String> ALL_LOADED = model -> true;
     private static final NamespacedKey WARM_OCEAN = NamespacedKey.minecraft("warm_ocean"),
-            BEACH = NamespacedKey.minecraft("beach");
+            BEACH = NamespacedKey.minecraft("beach"), PLAINS = NamespacedKey.minecraft("plains");
 
     private static List<PetSpecies.Variant> variants(String yaml, List<String> warnings) throws InvalidConfigurationException {
         YamlConfiguration config = new YamlConfiguration();
@@ -183,6 +187,35 @@ class PetSpeciesVariantsTest {
                                 + "its babies wear its own model, scaled down."),
                 PetSpecies.babyModelProblems(FILE, variants, SPECIES_BABY,
                         model -> !model.equals(WAR_BABY) && !model.equals(SPECIES_BABY)));
+    }
+
+    @Test
+    void aWildOnePicksAmongTheVariantsThatLiveInItsBiome() {
+        List<PetSpecies.Variant> variants = List.of(new PetSpecies.Variant(BLUE, 1D, List.of()),
+                new PetSpecies.Variant(WAR, 1D, List.of(), null, null, Set.of(WARM_OCEAN), 1D));
+        Random random = new Random(7);
+        Set<String> onPlains = new HashSet<>(), inWarmOcean = new HashSet<>();
+        for (int pick = 0; pick < 200; pick++) {
+            onPlains.add(PetSpecies.pick(variants, SPECIES, random, variant -> variant.allowsBiome(PLAINS)));
+            inWarmOcean.add(PetSpecies.pick(variants, SPECIES, random, variant -> variant.allowsBiome(WARM_OCEAN)));
+        }
+        assertEquals(Set.of(BLUE), onPlains);
+        assertEquals(Set.of(BLUE, WAR), inWarmOcean, "a variant without biomes lives everywhere the species does");
+    }
+
+    @Test
+    void aBiomeWhereNoVariantLivesHasNoWildOneUnlessNoVariantHasAShare() {
+        List<PetSpecies.Variant> variants = List.of(new PetSpecies.Variant(BLUE, 0D, List.of()),
+                new PetSpecies.Variant(WAR, 1D, List.of(), null, null, Set.of(WARM_OCEAN), 1D));
+        assertNull(PetSpecies.pick(variants, SPECIES, new Random(7), variant -> variant.allowsBiome(PLAINS)));
+        assertFalse(PetSpecies.hasWildVariant(variants, PLAINS), "a variant without a share never spawns wild");
+        assertTrue(PetSpecies.hasWildVariant(variants, WARM_OCEAN));
+        // Without variants, or with none that has a share, wild ones wear the species' model anywhere.
+        assertTrue(PetSpecies.hasWildVariant(List.of(), PLAINS));
+        assertEquals(SPECIES, PetSpecies.pick(List.of(), SPECIES, new Random(7), variant -> variant.allowsBiome(PLAINS)));
+        List<PetSpecies.Variant> unweighted = List.of(new PetSpecies.Variant(WAR, 0D, List.of(), null, null, Set.of(WARM_OCEAN), 1D));
+        assertTrue(PetSpecies.hasWildVariant(unweighted, PLAINS));
+        assertEquals(SPECIES, PetSpecies.pick(unweighted, SPECIES, new Random(7), variant -> variant.allowsBiome(PLAINS)));
     }
 
     @Test
