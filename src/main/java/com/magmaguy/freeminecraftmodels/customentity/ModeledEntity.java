@@ -467,6 +467,15 @@ public class ModeledEntity {
     }
 
     public void remove() {
+        removeModel(true);
+    }
+
+    /** Takes the model off its entity and leaves the entity in the world, for another model to take its place. */
+    protected void removeKeepingBody() {
+        removeModel(false);
+    }
+
+    private void removeModel(boolean removeBody) {
         if (!markRemoved()) return;
 
         // Clean up mount points
@@ -481,7 +490,7 @@ public class ModeledEntity {
         particleComponent.remove();
         nameplate.remove();
         skeleton.remove();
-        if (underlyingEntity != null) {
+        if (removeBody && underlyingEntity != null) {
             // Only actually despawn the underlying entity for non-persistent
             // cases — persistent props must serialize with the chunk.
             if (!(this instanceof PropEntity) ||
