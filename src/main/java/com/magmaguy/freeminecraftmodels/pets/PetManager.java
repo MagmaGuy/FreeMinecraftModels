@@ -587,6 +587,12 @@ public final class PetManager {
         control.setShownHealth(-1D);
     }
 
+    /** A pet was hurt: its health display shows, and its own healing waits a full regenSeconds before it resumes. */
+    public void hurt(PetControl control) {
+        control.setNextRegenTick(ticks + Math.max(0, PetsConfig.regenSeconds) * 20L);
+        showHealth(control);
+    }
+
     /** Keeps every shown health display in step with its pet's health, and takes it down once its time is up. */
     private void tickHealthBars() {
         for (PetControl control : byBody.values()) {
