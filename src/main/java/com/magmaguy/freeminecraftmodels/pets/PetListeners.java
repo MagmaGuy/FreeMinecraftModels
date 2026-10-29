@@ -28,6 +28,7 @@ import org.bukkit.event.world.WorldSaveEvent;
 import org.bukkit.inventory.EquipmentSlot;
 
 import java.util.ArrayList;
+import java.util.UUID;
 
 /** Routes clicks, damage, deaths, removals, new chunks, world saves and player sessions to {@link PetManager}. */
 public final class PetListeners implements Listener {
@@ -104,6 +105,28 @@ public final class PetListeners implements Listener {
         if (!(event instanceof EntityDamageByEntityEvent byEntity)) return;
         Player attacker = attacker(byEntity.getDamager());
         if (attacker != null && (pet.isOwnedBy(attacker) || PetsConfig.petsInvulnerableToPlayers)) event.setCancelled(true);
+    }
+
+    /**
+     * An attack that went through on a player, or on an owned pet: the victim's owner's pets defend against the
+     * attacking player for a while. A pet's own sting counts as its owner attacking, so a fight between two players'
+     * pets draws both swarms in. Whether PvP is on is the server's call: a cancelled attack never gets here.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onAttacked(EntityDamageByEntityEvent event) {
+        PetManager manager = PetManager.get();
+        if (manager == null) return;
+        Player attacker = attacker(event.getDamager());
+        PetControl attackingPet = attacker == null ? manager.pet(event.getDamager()) : null;
+        UUID aggressor = attacker != null ? attacker.getUniqueId()
+                : attackingPet != null && !attackingPet.isWild() ? attackingPet.ownerId() : null;
+        if (aggressor == null) return;
+        if (event.getEntity() instanceof Player victim) {
+            manager.attacked(victim.getUniqueId(), aggressor);
+            return;
+        }
+        PetControl pet = manager.pet(event.getEntity());
+        if (pet != null && !pet.isWild()) manager.attacked(pet.ownerId(), aggressor);
     }
 
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
