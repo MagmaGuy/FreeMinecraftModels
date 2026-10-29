@@ -48,7 +48,7 @@ return ai.module {
                 local anchor = c.pet.anchor
                 if anchor == nil then return end
                 -- nil in an unloaded chunk: this drift ends at once and the next waits its pause.
-                local to = c.pet:hover_point(anchor, c.pet.species.roam_radius)
+                local to = c.pet:hover_point(anchor, c.pet.roam_range)
                 if to == nil then return end
                 to.y = to.y + c.settings.rise
                 c.memory:set('rain_bloom_to', to)

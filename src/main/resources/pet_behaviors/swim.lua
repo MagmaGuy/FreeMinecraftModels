@@ -7,12 +7,10 @@
 -- or take a waypoint.
 local ARRIVED = 1.5
 
--- How far from its anchor a swim may end: the roam radius around home, and for an owned pet no farther than 0.8 of
--- the follow distance from its owner, so follow_owner does not take over the moment it arrives.
+-- How far from its anchor a swim may end: the roam radius around home, and for an owned pet within its follow range
+-- of the owner (no farther than 0.8 of it), so follow_owner does not take over the moment it arrives.
 local function trip_radius(c)
-    local species = c.pet.species
-    if c.pet.wild then return species.roam_radius end
-    return math.min(species.roam_radius, species.follow_distance * 0.8)
+    return c.pet.roam_range
 end
 
 return ai.module {

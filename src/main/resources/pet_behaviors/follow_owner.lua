@@ -1,6 +1,8 @@
--- Keeps up with the owner once they get past the follow distance, faster past the leash. Teleports beside them when
--- they get too far away, or after stuck_ticks without getting anywhere: no path toward them, a path that ends short of
--- them at a fence or a shore, or a wall in a flying body's way. A catch-up only ever lands nearer the owner.
+-- Keeps up with the owner once they get past its follow range, faster past the leash. The range is the follow
+-- distance while the owner is on the move, and the pet file's follow.idleDistance while they stand about, so a pet
+-- roams further then. Teleports up behind them when they get too far away, or after stuck_ticks without getting
+-- anywhere: no path toward them, a path that ends short of them at a fence or a shore, or a wall in a flying body's
+-- way. A catch-up only ever lands nearer the owner.
 return ai.module {
     id = 'fmm:pet/follow_owner', revision = 1,
     -- speed is in blocks per tick at species speed 1 for a flying body; for a walking or swimming one, 4 x speed x the
@@ -16,12 +18,12 @@ return ai.module {
             controls = { ai.controls.move, ai.controls.look },
             can_start = function(c)
                 if c.pet.staying or c.pet.owner_location == nil then return false end
-                return c.pet.owner_distance > c.pet.species.follow_distance
+                return c.pet.owner_distance > c.pet.follow_range
             end,
             can_continue = function(c)
                 if c.pet.staying or c.pet.owner_location == nil then return false end
                 local species = c.pet.species
-                if c.pet.owner_distance <= species.follow_distance * 0.6 then return false end
+                if c.pet.owner_distance <= c.pet.follow_range * 0.6 then return false end
                 -- At its trail point it is done, even when that point lies farther from the owner than the line
                 -- above, as for a pet hovering high over them: otherwise it would hold still there, catching up.
                 local target = c.pet:trail_point(c.settings.trail_back, species.hover_height)

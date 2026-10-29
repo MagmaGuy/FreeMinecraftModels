@@ -79,8 +79,8 @@ import java.util.function.Supplier;
 public final class PetLuaTable {
     /** Every name a module can read on c.pet. */
     public static final Set<String> PROPERTIES = Set.of("wild", "staying", "settled", "baby", "migrating", "model",
-            "species", "position", "home", "anchor", "stay_anchor", "owner_location", "owner_distance", "night", "day",
-            "raining", "speed", "route_cruise", "threat", "attacker", "hurt_count");
+            "species", "position", "home", "anchor", "stay_anchor", "owner_location", "owner_distance", "follow_range",
+            "roam_range", "night", "day", "raining", "speed", "route_cruise", "threat", "attacker", "hurt_count");
     /** How far from its owner an owned pet looks for someone to defend them against. */
     static final double THREAT_RANGE = 16D;
     /** How long a wild pet keeps the player who hurt it in mind: 30 seconds. */
@@ -176,6 +176,11 @@ public final class PetLuaTable {
         property("stay_anchor", () -> location(stayAnchor.get()));
         property("owner_location", () -> location(ownerLocation.get()));
         property("owner_distance", ticks.perTick(() -> LuaValue.valueOf(control.ownerDistance(body()))));
+        // How far from its owner the pet ranges before following: species.follow_distance while the owner is on the
+        // move, the pet file's follow.idleDistance while they stand about. roam_range is how far from its anchor a
+        // drift, walk or swim may end: the roam radius when wild, and within that range around the owner.
+        property("follow_range", ticks.perTick(() -> LuaValue.valueOf(control.followRange())));
+        property("roam_range", ticks.perTick(() -> LuaValue.valueOf(control.roamRange())));
         property("night", ticks.perTick(() -> LuaValue.valueOf(PetSky.isNight(body().getWorld()))));
         property("day", ticks.perTick(() -> LuaValue.valueOf(PetSky.isDay(body().getWorld()))));
         property("raining", ticks.perTick(() -> LuaValue.valueOf(raining())));
@@ -676,7 +681,7 @@ public final class PetLuaTable {
         if (control.isWild()) return true;
         Player owner = control.owner().orElse(null);
         return owner != null && owner.getWorld() == spot.getWorld()
-                && owner.getLocation().distance(spot) <= control.species().followDistance();
+                && owner.getLocation().distance(spot) <= control.followRange();
     }
 
     /** The fire kinds, soul variants and smoke height a campfire call gives, from argument {@code first}. */
@@ -705,7 +710,7 @@ public final class PetLuaTable {
             Player owner = control.owner().orElse(null);
             if (owner == null || owner.getWorld() != block.getWorld()) return false;
             Location above = block.getLocation().add(0.5D, height, 0.5D);
-            return owner.getLocation().distance(above) <= Math.max(1D, control.species().followDistance() - 1D);
+            return owner.getLocation().distance(above) <= Math.max(1D, control.followRange() - 1D);
         }
     }
 

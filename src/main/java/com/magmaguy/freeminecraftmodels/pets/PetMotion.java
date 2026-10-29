@@ -70,10 +70,10 @@ public final class PetMotion {
         return location.getWorld() != null && location.getWorld().isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4);
     }
 
-    /** Free to wander: not told to stay, and wild or within the follow distance of its owner. */
+    /** Free to wander: not told to stay, and wild or within the follow range of its owner. */
     public static boolean settled(PetControl control, LivingEntity body) {
         if (control.isStaying()) return false;
-        return control.isWild() || control.ownerDistance(body) <= control.species().followDistance();
+        return control.isWild() || control.ownerDistance(body) <= control.followRange();
     }
 
     /**

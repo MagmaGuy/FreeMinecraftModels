@@ -1,4 +1,5 @@
--- Drifts to a random point around its anchor (the owner, or home when wild), then rests a while.
+-- Drifts to a random point around its anchor (the owner, or home when wild), then rests a while. Round the owner it
+-- roams within their pet's follow range: wider while they stand about, close while they are on the move.
 return ai.module {
     id = 'fmm:pet/drift', revision = 1,
     -- speed is in blocks per tick at species speed 1. A rest lasts rest_ticks plus a random 0 to rest_random_ticks - 1
@@ -26,7 +27,7 @@ return ai.module {
                 local anchor = c.pet.anchor
                 if anchor == nil then return end
                 -- nil in an unloaded chunk: this drift ends at once, and its rest decides when the next one tries.
-                local to = c.pet:hover_point(anchor, c.pet.species.roam_radius)
+                local to = c.pet:hover_point(anchor, c.pet.roam_range)
                 if to == nil then return end
                 c.memory:set('drift_to', to)
                 c.memory:set('drift_until', c.tick + c.settings.drift_ticks)
