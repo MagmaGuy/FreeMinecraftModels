@@ -23,6 +23,7 @@ import com.magmaguy.magmacore.scripting.tables.LuaLivingEntityTable;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -35,6 +36,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
@@ -580,6 +582,35 @@ public final class PetManager {
         player.sendMessage(ChatColorConverter.convert(PetsConfig.unequippedMessage.replace("$pet", displayName(record))));
     }
 
+    /** Whether the player owns as many pets as pets.yml's maxOwnedPets allows; never when it is 0. */
+    public boolean atOwnedCap(Player player) {
+        return atCap(PetsConfig.maxOwnedPets, collection(player).pets().size());
+    }
+
+    static boolean atCap(int limit, int owned) {
+        return limit > 0 && owned >= limit;
+    }
+
+    private void sayOwnedCap(Player player) {
+        player.sendMessage(ChatColorConverter.convert(PetsConfig.maxOwnedMessage.replace("$amount", String.valueOf(PetsConfig.maxOwnedPets))));
+    }
+
+    /**
+     * Sets a pet free for good: it leaves the player's collection and the world. In CREATURES mode one that was out
+     * stays where it was as a wild pet of the same colour and age, for anyone to tame again.
+     */
+    public void release(Player player, PetRecord record) {
+        PetSpecies pet = species(record.species);
+        PetControl live = liveBody(player.getUniqueId(), record);
+        LivingEntity body = live == null ? null : live.body();
+        Location at = body == null || !body.isValid() ? null : body.getLocation();
+        if (live != null) despawn(live);
+        collection(player).remove(record);
+        if (pet != null && at != null && PetsConfig.mode == PetsConfig.Mode.CREATURES)
+            spawn(pet, null, null, record.model, record.baby, at, at);
+        player.sendMessage(ChatColorConverter.convert(PetsConfig.releasedMessage.replace("$pet", displayName(record))));
+    }
+
     /** Adds a new adult of the species wearing this variant to the player's collection and brings it out. */
     public PetRecord give(Player player, PetSpecies pet, String model) {
         PetRecord record = new PetRecord(pet.id(), model, false, System.currentTimeMillis());
@@ -618,6 +649,10 @@ public final class PetManager {
         ItemStack held = player.getInventory().getItemInMainHand();
         if (control.isWild()) {
             if (PetsConfig.mode != PetsConfig.Mode.CREATURES || control.isBaby() || !pet.isTamingFood(held)) return held.getType() != Material.LEAD;
+            if (atOwnedCap(player)) {
+                sayOwnedCap(player);
+                return true;
+            }
             consume(player, held);
             if (ThreadLocalRandom.current().nextDouble() < pet.tameChance()) {
                 tame(player, control);
@@ -628,9 +663,26 @@ public final class PetManager {
             return true;
         }
         if (!control.isOwnedBy(player)) return true;
+        // A named name tag names it, as it names any mob; it is used up outside creative. A blank one does nothing.
+        if (held.getType() == Material.NAME_TAG) {
+            ItemMeta tag = held.getItemMeta();
+            if (tag != null && tag.hasDisplayName() && !tag.getDisplayName().isBlank()) {
+                control.record().name = tag.getDisplayName();
+                collection(player).save();
+                DynamicEntity modeled = control.modeled();
+                if (modeled != null && !modeled.isRemoved()) modeled.setDisplayName(displayName(control));
+                if (player.getGameMode() != GameMode.CREATIVE) held.setAmount(held.getAmount() - 1);
+                particles(control, Particle.HEART, 3);
+            }
+            return true;
+        }
         if (!control.isBaby() && pet.isBreedingFood(held)) {
             if (!control.canBreed()) {
                 player.sendMessage(ChatColorConverter.convert(PetsConfig.breedingCooldownMessage.replace("$pet", displayName(control.record()))));
+                return true;
+            }
+            if (atOwnedCap(player)) {
+                sayOwnedCap(player);
                 return true;
             }
             consume(player, held);
@@ -698,6 +750,8 @@ public final class PetManager {
         // species' model, and its baby would keep that for good.
         String model = pet.inherit(mother.record().model, father.record().model, ThreadLocalRandom.current());
         PetRecord baby = new PetRecord(pet.id(), model, true, System.currentTimeMillis());
+        baby.parents = List.of(displayName(mother.record()), displayName(father.record()));
+        baby.generation = PetRecord.childGeneration(mother.record(), father.record());
         PetCollection collection = collection(owner);
         int limit = PetsConfig.maxEquippedPets;
         if (limit > 0 && collection.equipped().size() >= limit) baby.equipped = false;
@@ -765,7 +819,7 @@ public final class PetManager {
             for (PetRecord record : collection.equipped()) {
                 PetSpecies pet = species(record.species);
                 if (pet == null) continue;
-                if (record.baby && now >= record.bornAt + pet.babyGrowthMillis()) {
+                if (record.baby && PetsConfig.babiesGrowUp && now >= record.bornAt + pet.babyGrowthMillis()) {
                     record.baby = false;
                     collection.save();
                     spawnOwned(player, record);

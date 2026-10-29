@@ -22,6 +22,8 @@ public class PetsConfig extends ConfigurationFile {
 
     public static Mode mode = Mode.COSMETIC;
     public static int maxEquippedPets;
+    public static int maxOwnedPets;
+    public static boolean babiesGrowUp;
     public static boolean petsInvulnerableToPlayers;
     public static boolean petsDiePermanently;
     public static double wildGenerationChance;
@@ -37,6 +39,9 @@ public class PetsConfig extends ConfigurationFile {
     public static String equippedMessage;
     public static String unequippedMessage;
     public static String maxEquippedMessage;
+    public static String maxOwnedMessage;
+    public static String releaseConfirmMessage;
+    public static String releasedMessage;
     public static String breedingCooldownMessage;
     public static String bornMessage;
     private static PetsConfig instance;
@@ -67,6 +72,14 @@ public class PetsConfig extends ConfigurationFile {
         maxEquippedPets = ConfigurationEngine.setInt(
                 List.of("How many pets a player may have out at once. 0 means no limit."),
                 fileConfiguration, "maxEquippedPets", 0);
+        maxOwnedPets = ConfigurationEngine.setInt(
+                List.of("How many pets a player may own in all, home or out. Taming and breeding stop at it until they",
+                        "set one free from /fmm pets. 0 means no limit."),
+                fileConfiguration, "maxOwnedPets", 0);
+        babiesGrowUp = ConfigurationEngine.setBoolean(
+                List.of("Whether owned babies grow into adults after their species' babyGrowthMinutes. When false they",
+                        "stay babies."),
+                fileConfiguration, "babiesGrowUp", true);
         petsInvulnerableToPlayers = ConfigurationEngine.setBoolean(
                 List.of("Whether owned pets ignore damage from players. Pets are always invulnerable in COSMETIC mode."),
                 fileConfiguration, "petsInvulnerableToPlayers", true);
@@ -105,6 +118,11 @@ public class PetsConfig extends ConfigurationFile {
         unequippedMessage = ConfigurationEngine.setString(fileConfiguration, "unequippedMessage", "&7$pet &7went home.");
         maxEquippedMessage = ConfigurationEngine.setString(fileConfiguration, "maxEquippedMessage",
                 "&cYou can only have $amount pets with you at once.");
+        maxOwnedMessage = ConfigurationEngine.setString(fileConfiguration, "maxOwnedMessage",
+                "&cYou can only keep $amount pets. Set one free from &f/fmm pets &cfirst.");
+        releaseConfirmMessage = ConfigurationEngine.setString(fileConfiguration, "releaseConfirmMessage",
+                "&7Shift-right-click $pet &7again within 5 seconds to set it free for good.");
+        releasedMessage = ConfigurationEngine.setString(fileConfiguration, "releasedMessage", "&7You set $pet &7free.");
         breedingCooldownMessage = ConfigurationEngine.setString(fileConfiguration, "breedingCooldownMessage",
                 "&7Your $pet &7is not ready to breed again yet.");
         bornMessage = ConfigurationEngine.setString(fileConfiguration, "bornMessage", "&aA $pet &awas born!");
