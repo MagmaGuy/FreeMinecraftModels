@@ -585,6 +585,31 @@ public final class PetSpecies {
     }
 
     /**
+     * The model a baby of this variant wears: the variant's babyModel, else the species' babyModel, skipping one
+     * {@code loaded} says is not loaded; null when neither is, and the baby wears its adult look scaled down.
+     */
+    static String babyLook(String model, List<Variant> variants, String speciesBabyModel, Predicate<String> loaded) {
+        Variant variant = variant(variants, model);
+        if (variant != null && variant.babyModel() != null && loaded.test(variant.babyModel())) return variant.babyModel();
+        return speciesBabyModel != null && loaded.test(speciesBabyModel) ? speciesBabyModel : null;
+    }
+
+    /** A warning for each baby model the file names that is not loaded, saying what those babies wear instead. */
+    static List<String> babyModelProblems(String filename, List<Variant> variants, String speciesBabyModel,
+                                          Predicate<String> loaded) {
+        List<String> problems = new ArrayList<>();
+        boolean speciesBaby = speciesBabyModel != null && loaded.test(speciesBabyModel);
+        String scaled = "own model, scaled down.";
+        if (speciesBabyModel != null && !speciesBaby)
+            problems.add(filename + ": babyModel " + speciesBabyModel + " is not loaded; babies wear their " + scaled);
+        for (Variant variant : variants)
+            if (variant.babyModel() != null && !loaded.test(variant.babyModel()))
+                problems.add(filename + ", variant " + variant.model() + ": babyModel " + variant.babyModel()
+                        + " is not loaded; its babies wear " + (speciesBaby ? speciesBabyModel + "." : "its " + scaled));
+        return problems;
+    }
+
+    /**
      * The modules a pet wearing this model runs: the file's list, or the locomotion's defaults when it has none, then
      * the modules of its {@link #variant(List, String) variant}.
      */
