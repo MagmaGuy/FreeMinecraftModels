@@ -166,6 +166,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         magicEnchantmentCatalog = null;
         com.magmaguy.freeminecraftmodels.pets.PetManager.stop();
         com.magmaguy.freeminecraftmodels.pets.PetsMenu.shutdown();
+        com.magmaguy.freeminecraftmodels.pets.PetVariantMenu.shutdown();
         ModeledEntitiesClock.shutdown();
         OBBHitDetection.shutdown();
         Bukkit.getServer().getScheduler().cancelTasks(MetadataHandler.PLUGIN);
@@ -337,6 +338,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         initializationContext.step("Pets");
         Bukkit.getPluginManager().registerEvents(new com.magmaguy.freeminecraftmodels.pets.PetListeners(), this);
         Bukkit.getPluginManager().registerEvents(new com.magmaguy.freeminecraftmodels.pets.PetsMenu.Events(), this);
+        Bukkit.getPluginManager().registerEvents(new com.magmaguy.freeminecraftmodels.pets.PetVariantMenu.Events(), this);
         com.magmaguy.freeminecraftmodels.pets.PetManager.start(this);
 
         initializationContext.step("Metrics");
@@ -491,6 +493,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         // Pets go before the models they wear; they come back once the new models are active.
         com.magmaguy.freeminecraftmodels.pets.PetManager.shutdown();
         com.magmaguy.freeminecraftmodels.pets.PetsMenu.shutdown();
+        com.magmaguy.freeminecraftmodels.pets.PetVariantMenu.shutdown();
         ModeledEntitiesClock.shutdown();
         OBBHitDetection.pauseProjectileDetection();
         ModelMenuHelper.shutdown();

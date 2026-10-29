@@ -4,6 +4,7 @@ import com.magmaguy.freeminecraftmodels.config.PetsConfig;
 import com.magmaguy.freeminecraftmodels.pets.PetControl;
 import com.magmaguy.freeminecraftmodels.pets.PetManager;
 import com.magmaguy.freeminecraftmodels.pets.PetSpecies;
+import com.magmaguy.freeminecraftmodels.pets.PetVariantMenu;
 import com.magmaguy.magmacore.command.AdvancedCommand;
 import com.magmaguy.magmacore.command.CommandData;
 import com.magmaguy.magmacore.command.SenderType;
@@ -20,7 +21,8 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * Admin and testing switches for pets: {@code mode creatures|cosmetic} picks whether species also live wild,
  * {@code spawn <species> [variant]} puts a wild one where you look, {@code give <species> [variant]} adds an owned one
- * to your collection, {@code list} shows the loaded species.
+ * to your collection (without a variant, a menu of the species' colours to pick from), {@code list} shows the loaded
+ * species.
  */
 public class PetAdminCommand extends AdvancedCommand {
     public PetAdminCommand() {
@@ -97,7 +99,13 @@ public class PetAdminCommand extends AdvancedCommand {
                     Logger.sendMessage(player, "&cUnknown pet species. /fmm petadmin list shows them.");
                     return;
                 }
-                String model = model(player, species, commandData.getStringArgument("variant"));
+                String asked = commandData.getStringArgument("variant");
+                // Without a colour, a menu of the species' colours to pick from.
+                if (asked == null) {
+                    PetVariantMenu.open(player, species);
+                    return;
+                }
+                String model = model(player, species, asked);
                 if (model == null) return;
                 manager.give(player, species, model);
                 Logger.sendMessage(player, "&aAdded a " + species.id() + " (" + model + ") to your pets.");
