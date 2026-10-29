@@ -28,7 +28,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class PetSpeciesVariantsTest {
     private static final String FILE = "jellyfish.pet.yml";
     private static final String SPECIES = "em_pet_jellyfish", SPECIES_BABY = "em_pet_jellyfish_baby",
-            BLUE = "em_pet_jellyfish_blue", WAR = "em_pet_jellyfish_man_o_war", WAR_BABY = "em_pet_jellyfish_man_o_war_baby";
+            BLUE = "em_pet_jellyfish_blue", GOLD = "em_pet_jellyfish_gold", WAR = "em_pet_jellyfish_man_o_war",
+            WAR_BABY = "em_pet_jellyfish_man_o_war_baby";
     private static final Predicate<String> ALL_LOADED = model -> true;
     private static final NamespacedKey WARM_OCEAN = NamespacedKey.minecraft("warm_ocean"),
             BEACH = NamespacedKey.minecraft("beach"), PLAINS = NamespacedKey.minecraft("plains");
@@ -309,6 +310,23 @@ class PetSpeciesVariantsTest {
         // Inverse weights 1/9 and 1: the man o' war leads nine to one.
         assertTrue(war > blue * 6, war + " man o' war against " + blue + " blue");
         assertNull(PetSpecies.pickRare(List.of(), random), "no colours: the flock keeps the usual picks");
+    }
+
+    @Test
+    void aBiomeWhoseColoursAreRareGetsItsWildGroupsAsRarely() {
+        NamespacedKey jungle = NamespacedKey.minecraft("jungle");
+        List<PetSpecies.Variant> variants = List.of(
+                new PetSpecies.Variant(BLUE, 10D, List.of(), null, null, Set.of(jungle, WARM_OCEAN), 1D),
+                new PetSpecies.Variant(GOLD, 10D, List.of(), null, null, Set.of(jungle), 1D),
+                new PetSpecies.Variant(WAR, 1D, List.of(), null, null, Set.of(BEACH, WARM_OCEAN), 1D),
+                new PetSpecies.Variant("em_pet_jellyfish_lost", 0D, List.of(), null, null, Set.of(PLAINS), 1D));
+        // Odds against the most common colour: only the rare one lives on the beach, a tenth as common.
+        assertEquals(0.1D, PetSpecies.wildOdds(variants, BEACH), 1e-9);
+        assertEquals(1D, PetSpecies.wildOdds(variants, jungle), "commons spawn as before, together or alone");
+        assertEquals(1D, PetSpecies.wildOdds(variants, WARM_OCEAN), "a common beside the rare one keeps full odds");
+        assertEquals(0D, PetSpecies.wildOdds(variants, PLAINS), "a colour without a share never spawns wild");
+        assertEquals(1D, PetSpecies.wildOdds(List.of(), PLAINS), "no colours: the species' model, as before");
+        assertEquals(1D, PetSpecies.wildOdds(List.of(new PetSpecies.Variant(WAR, 0D, List.of())), PLAINS));
     }
 
     @Test
