@@ -639,6 +639,16 @@ public final class PetSpecies {
         return name;
     }
 
+    /** The name a pet wearing this model shows: its variant's own name, else the species'. */
+    public String name(String model) {
+        return name(variants, name, model);
+    }
+
+    static String name(List<Variant> variants, String speciesName, String model) {
+        Variant variant = variant(variants, model);
+        return variant != null && variant.name() != null ? variant.name() : speciesName;
+    }
+
     public EntityType body() {
         return body;
     }

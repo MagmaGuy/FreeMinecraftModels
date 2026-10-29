@@ -52,7 +52,9 @@ public final class PetsMenu {
         meta.setDisplayName(ChatColorConverter.convert((record.equipped ? "&a" : "&7")) + manager.displayName(record));
         List<String> lore = new ArrayList<>();
         lore.add(ChatColorConverter.convert("&7Species: &f" + record.species));
-        if (record.model != null && pet != null && !record.model.equals(pet.model()))
+        PetSpecies.Variant variant = pet == null ? null : pet.variant(record.model);
+        if (variant != null && variant.name() != null) lore.add(ChatColorConverter.convert("&7Variant: &f" + variant.name()));
+        else if (record.model != null && pet != null && !record.model.equals(pet.model()))
             lore.add(ChatColorConverter.convert("&7Variant: &f" + record.model));
         lore.add(ChatColorConverter.convert(record.baby ? "&7Age: &fbaby" : "&7Age: &fadult"));
         lore.add(ChatColorConverter.convert(record.equipped ? "&aWith you &7- click to send home" : "&7At home &7- click to bring along"));
