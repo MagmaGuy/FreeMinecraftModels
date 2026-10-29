@@ -35,8 +35,17 @@ public final class MigrationFlock implements MigrationRoute {
     private static final double BOB_HEIGHT = 1.5D, BOB_PERIOD_TICKS = 160D, HEIGHT_SPREAD = 5D;
     // A member may fly this much faster than the anchor to take or keep its slot.
     private static final double CATCH_UP = 1.8D;
+    // The ground under the route is read every SAMPLE_STEP blocks; the lowest member, at the bottom of its bob, still
+    // clears the highest of it by MIN_CLEARANCE.
+    private static final double SAMPLE_STEP = 4D, MIN_CLEARANCE = 2D;
 
     private record Slot(double x, double y, double z, double phase) {
+    }
+
+    /** The top of the ground at a block column, or Integer.MIN_VALUE where it is not loaded. */
+    @FunctionalInterface
+    interface Ground {
+        int height(int x, int z);
     }
 
     private final World world;
@@ -69,17 +78,22 @@ public final class MigrationFlock implements MigrationRoute {
         double angle = random.nextDouble() * Math.PI * 2D;
         Vector heading = new Vector(Math.cos(angle), 0D, Math.sin(angle));
         Location over = player.getLocation();
-        int ground = world.getHighestBlockYAt(over.getBlockX(), over.getBlockZ(), HeightMap.MOTION_BLOCKING);
-        double height = Math.min(world.getMaxHeight() - 4D, Math.max(over.getY(), ground) + settings.altitude());
         // Halfway through the flight the anchor passes over the player. It starts where its members still tick and
         // can be seen: inside the simulation distance and the view distance.
         double simulated = Math.max(32D, (world.getSimulationDistance() - 1) * 16D);
-        double approach = Math.min(settings.speed() * settings.durationTicks() / 2D,
-                Math.min(simulated * 0.8D, settings.viewDistance() * 0.9D));
-        Vector start = over.toVector().subtract(heading.clone().multiply(approach)).setY(height);
+        double length = settings.speed() * settings.durationTicks();
+        double approach = Math.min(length / 2D, Math.min(simulated * 0.8D, settings.viewDistance() * 0.9D));
+        Vector start = over.toVector().subtract(heading.clone().multiply(approach));
         int size = settings.minFlockSize() + random.nextInt(settings.maxFlockSize() - settings.minFlockSize() + 1);
-        MigrationFlock flock = new MigrationFlock(world, heading, start, settings.speed(), height, settings.durationTicks());
         double spread = SPREAD_BASE + SPREAD_PER_ROOT * Math.sqrt(size);
+        // The flock flies one height for its whole crossing, so it clears the highest ground anywhere under it, not
+        // just under the player: a hill where it starts would otherwise swallow members.
+        int ground = routeGround(start, heading, length, spread + SEPARATION_RADIUS, (x, z) -> world.isChunkLoaded(x >> 4, z >> 4)
+                ? world.getHighestBlockYAt(x, z, HeightMap.MOTION_BLOCKING) : Integer.MIN_VALUE);
+        double height = Math.min(world.getMaxHeight() - 4D, Math.max(over.getY(), ground)
+                + Math.max(settings.altitude(), HEIGHT_SPREAD / 2D + BOB_HEIGHT + MIN_CLEARANCE));
+        start.setY(height);
+        MigrationFlock flock = new MigrationFlock(world, heading, start, settings.speed(), height, settings.durationTicks());
         // A rare flock: one unusual colour for every member. Otherwise each member picks its own, like a wild spawn.
         String model = look.model();
         if (model == null && random.nextDouble() < settings.rareFlockChance()) model = species.pickRareVariant(random);
@@ -88,7 +102,7 @@ public final class MigrationFlock implements MigrationRoute {
             Slot slot = new Slot(Math.cos(around) * out, (random.nextDouble() - 0.5D) * HEIGHT_SPREAD, Math.sin(around) * out,
                     random.nextDouble() * Math.PI * 2D);
             Location at = new Location(world, start.getX() + slot.x(), height + slot.y(), start.getZ() + slot.z());
-            if (!world.isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4)) continue;
+            if (!world.isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4) || !at.getBlock().isPassable()) continue;
             PetControl member = manager.spawnMigrant(species, at, model, look.scale(), settings.viewDistance(), flock);
             if (member == null) continue;
             if (look.animation() != null) member.modeled().playAnimation(look.animation(), false, true);
@@ -100,6 +114,28 @@ public final class MigrationFlock implements MigrationRoute {
         }
         flock.task = Bukkit.getScheduler().runTaskTimer(plugin, flock::tick, 1L, 1L);
         return flock;
+    }
+
+    /**
+     * The highest ground under a route: the strip from the start along the heading for the length, reaching
+     * halfWidth past it on every side, as far as the formation around its anchor reaches. Columns the ground doesn't
+     * have loaded don't count, so looking never generates terrain. Integer.MIN_VALUE when none is loaded.
+     */
+    static int routeGround(Vector start, Vector heading, double length, double halfWidth, Ground ground) {
+        Vector side = new Vector(-heading.getZ(), 0D, heading.getX());
+        int highest = Integer.MIN_VALUE;
+        int alongSteps = (int) Math.ceil((length + 2D * halfWidth) / SAMPLE_STEP);
+        int acrossSteps = (int) Math.ceil(2D * halfWidth / SAMPLE_STEP);
+        for (int a = 0; a <= alongSteps; a++) {
+            double along = Math.min(length + halfWidth, -halfWidth + a * SAMPLE_STEP);
+            for (int c = 0; c <= acrossSteps; c++) {
+                double across = Math.min(halfWidth, -halfWidth + c * SAMPLE_STEP);
+                int x = (int) Math.floor(start.getX() + heading.getX() * along + side.getX() * across);
+                int z = (int) Math.floor(start.getZ() + heading.getZ() * along + side.getZ() * across);
+                highest = Math.max(highest, ground.height(x, z));
+            }
+        }
+        return highest;
     }
 
     private void tick() {
