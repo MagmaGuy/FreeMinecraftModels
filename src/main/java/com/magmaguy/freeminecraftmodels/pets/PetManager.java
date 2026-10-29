@@ -686,8 +686,9 @@ public final class PetManager {
         long cooldownUntil = System.currentTimeMillis() + pet.breedingCooldownMillis();
         mother.record().breedCooldownUntil = cooldownUntil;
         father.record().breedCooldownUntil = cooldownUntil;
-        // The baby takes one parent's colouring, as Minecraft's variant-bearing animals do.
-        String model = ThreadLocalRandom.current().nextBoolean() ? mother.model() : father.model();
+        // From the parents' records, not the models they wear: a parent whose variant model is missing here wears the
+        // species' model, and its baby would keep that for good.
+        String model = pet.inherit(mother.record().model, father.record().model, ThreadLocalRandom.current());
         PetRecord baby = new PetRecord(pet.id(), model, true, System.currentTimeMillis());
         PetCollection collection = collection(owner);
         int limit = PetsConfig.maxEquippedPets;
