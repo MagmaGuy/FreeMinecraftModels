@@ -33,3 +33,100 @@ scripts:
         - on_item_damage
         - on_fish
         - on_death
+
+# Earlier shipped pet behavior modules. FreeMinecraftModels writes a module only when its file is
+# missing, so an unedited copy of an old default would otherwise stay forever. Each hash is an earlier
+# version of that file with carriage returns removed (2.13.0 and tester builds); the current default
+# is never listed. A match is preserved in MagmaCore/outdated files and the current module is written
+# again on the same start. Edited copies never match and stay in place.
+pet_behaviors:
+  - files:
+      - campfire.lua
+    sha256:
+      - 13886834719d8c2fe1c59f3b688cfb02128a75b9bd889dc3b85a04acc8e171c2
+      - 72cbe101d7431703278d92616bec03422ab4ed42340e22e4999c28bd8588f908
+  - files:
+      - day_perch.lua
+    sha256:
+      - e6d5a5864a5ea5ef3b5b335ddc8e4db6524c7c3559ac62ab24579b34968ebf82
+  - files:
+      - defend_owner.lua
+    sha256:
+      - 3ea863756b6bd7c94b56fac0b19975e44c89983160fc1acecdd5cb5671ccb44c
+  - files:
+      - drift.lua
+    sha256:
+      - 1d72ae6c181b86d679e762575aa42eec8f748dab0d0fc556f6418d160243b7ef
+      - 25cd08674173b291d3cc2018dde1f6f3b81c92d2d82c311ab2c7d5edc11ea9d4
+      - 90356065d2ffbbe59cb5bcd711aa54c811765878fb72b46b6b54553b07f3168c
+      - bb302e944e03a2640ae83b51d7aa60624624ede848fe5bfc30a2c0f8f01f9a19
+  - files:
+      - follow_owner.lua
+    sha256:
+      - 01fd2bb6b6280f2ba68d13e09a1a3a055ff43a928444bf4ca051ac30985a5b1f
+      - 676db65f5bcf345d135ce0e271c5fb50d15667c9f12b877380bb627b822b3c90
+      - 6d8e529774749cd5f669d48ac60c328947688a58217de0b0c63f5688fb6523b3
+      - ac121daace1160c72cad8b5b60735ca910c52e56da6060923fa60a153ea278e4
+      - d7b8eeda3b4defbd559a3990510eacf4d81de24434da6a15db29671ea1c99438
+      - f467260683c8174cedaad7d8269fe4cbceb8d368240b8496a79b6eb4ab66b7b8
+  - files:
+      - hover.lua
+    sha256:
+      - 20d4d9d524dcb3c5ff298f93e959e6af288b32cc85cb6cd4bb8639a958ad93eb
+      - 80d2ec242ec4c880f7ccb127a36c3c12e16caff1f43911e7f9a6d3ab9eaca408
+      - ab64230ad9a9951750f20b741646b3463fca16ac8a03bd3736ab44b0e0b6d75a
+  - files:
+      - idle_look.lua
+    sha256:
+      - 3b2b20a4390382913e828cfe7deff157effdacd29b38bdc184c4fffd0821afe4
+      - d9c995383d39e7f23aa4c1fe83338a77746acfba348202ea925f3aedf277a1b4
+      - f20713d9e86a6031b9354b6bfd3828803467cf26aed716f09a11770cb3ddc4d8
+  - files:
+      - migrate.lua
+    sha256:
+      - 17747fbc66041ceb824a628d149639d8c42458365b32d80063029d8ba9112534
+      - c852f4869d4d02524ea4d530549e098a5f6bd047acee869fd263b42c8253c09a
+      - f708a4765a6002c04799301c7e81e9963d1f835ac5ce15640f91512a91fba104
+  - files:
+      - night_glow.lua
+    sha256:
+      - 6ec8e73d53d44325f2a8a373e778dbe73307ce33aa584b3469fc35577a7cea40
+  - files:
+      - owner_effect.lua
+    sha256:
+      - d59a6abffecfb4c7579d812df1f5f949e3af2e11ceeb94360ae23c221e7d8769
+  - files:
+      - rain_bloom.lua
+    sha256:
+      - 0e095e78dbdc5e5706063b40aea267fd05b051b576423926200d6fce8ccc53ef
+      - 21563880431fde091a3facde021fdb197b807566569b2753a5961de89f2a5091
+      - 3752d1d8ed7663b54056e027ee6495077689fd6ac55858cf65acf9d0bf012ad5
+      - 47fa1e368f4304fbc3709518d98ab9083605799b188b98c1b174ff56c7d409dc
+      - 966b084ddd8eee0741239680664c16e1c7def6c130ad958671a94938d2251d60
+  - files:
+      - stay.lua
+    sha256:
+      - 95bf6d2723668b560ae4a1886ab6f0e340dc21fe3f8cc97c2d9833327998dd0f
+      - a1f1e5e9cf0272f5edba954df0da87a41e2c1d6000d8f7fad3ba1f1e8061ef91
+      - c299bba52d76a299071a1fdccbb99720326b2a183d2c67f01ad3b0d06dfa6e68
+  - files:
+      - sting.lua
+    sha256:
+      - 15b6e20dc449ff30fa7506a22321dd5bd9efe768d03aee44e9c8a9ce40587082
+      - 24717e5fa7bfaa0dcb353a6fa01881e22c516555cc43a373ce40b27aaaba51db
+  - files:
+      - swim.lua
+    sha256:
+      - 04077d533c259e60334f3238516834c3e240907a11dfabdb27feb1c8c938ed7f
+      - 6914ce78d4fb34d9b0bb2109bf18c0140f30c05dc8038f40a50a1a30ad9df476
+      - 6ca93b3151e7b8d36273c20583be7795a0b467e4f090b1fdedc721f3a4a10df0
+      - a47aa6d26c8f386b1a39b69880866f5c2cb25666094f55ec43a47569e1cf2f14
+      - bb30f3546a1a598ecc2b1eeff5e64d8d82f5f1fa1062d9708b74038908bea9cb
+  - files:
+      - wander.lua
+    sha256:
+      - 05e1544ac115e735f618c3f385b37b23b1fc1a93b749e0fcbc46d2d730269c6e
+      - 5420f572b43fc7d65125ec4f234e4c2e270bc86743ec0a10c0eb2c939dd036d1
+      - 6c79dbc3c2c4bfe42baf08003c1b8f5d695975562cf3e6931cdae8f69afafa14
+      - 9e265d86e854ed772b7b5db22460bd8d35ba9dc6d1c0787ba74b980e1d60033e
+      - b4672d27bfd2e03c9544f08592c496ba9dc26b3ddcbfa31b7801790ef03d829a
