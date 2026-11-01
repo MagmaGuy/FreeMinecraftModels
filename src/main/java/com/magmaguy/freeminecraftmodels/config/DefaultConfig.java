@@ -21,6 +21,7 @@ public class DefaultConfig extends ConfigurationFile {
     public static boolean displayBonesRideTheirEntity;
     public static int riddenBoneInterpolationTicks;
     public static int riddenBoneUpdateIntervalTicks = 1;
+    public static boolean cullOffscreenBones = false;
     public static boolean modelViewersTrackHiddenBodies;
     public static int idleWalkBlendTicks;
     public static int deathBlendTicks;
@@ -118,6 +119,12 @@ public class DefaultConfig extends ConfigurationFile {
                         "2 (default) sends every other tick and glides over both, which halves the packets an animated",
                         "model sends while slow motion looks the same. Models take turns, so a crowd's updates spread out."),
                 fileConfiguration, "riddenBoneUpdateIntervalTicks", 2));
+        cullOffscreenBones = ConfigurationEngine.setBoolean(
+                List.of("When true (default), Java clients skip drawing each bone of a model while it is off screen, which",
+                        "saves them most of the work for models out of view. A bone that reaches far both above and below",
+                        "the spot it stands on is always drawn. Set to false if part of a model ever vanishes at the edge",
+                        "of the screen."),
+                fileConfiguration, "cullOffscreenBones", true);
         modelViewersTrackHiddenBodies = ConfigurationEngine.setBoolean(
                 List.of("When true (default), each Java client that can see a model whose entity is hidden also",
                         "tracks that entity as an invisible, bare body (its equipment is stripped on the way to",

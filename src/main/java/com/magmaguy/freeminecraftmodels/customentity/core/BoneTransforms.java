@@ -424,8 +424,86 @@ public class BoneTransforms {
         displayStateValid = false;
         riddenStateValid = false;
         forceNextUpdate = true;
+        sentLow = Double.NaN;
+        cullingHoldPoses = CULLING_HOLD_POSES;
         PacketModelEntity display = packetDisplayEntity;
         return vehicleId == -1 ? display::dismount : () -> display.mountTo(vehicleId);
+    }
+
+    // ---- off-screen culling ----------------------------------------------------
+    // Java viewers skip drawing a display whose culling box is off screen. The box stands on the entity, up from it
+    // or down from it when its height is negative, and viewers widen it by half a block on every side, so it can hold
+    // cubes that stay within CULLING_MARGIN of the entity on its other side. A bone reaching further both ways gets
+    // no box and is drawn wherever it is. A ridden display stands on the seat; a free one on its own display point.
+    private static final double CULLING_MARGIN = 0.45D;
+    // Poses after a change of placement that keep no box, while viewers move the display to its new spot.
+    private static final int CULLING_HOLD_POSES = 3;
+    private float cullingWidth, cullingHeight;
+    private double sentLow = Double.NaN, sentHigh, sentReach;
+    private int cullingHoldPoses;
+
+    /**
+     * Before a pose goes out, makes this display's culling box hold its cubes in that pose and in the one before it,
+     * which viewers are still gliding from. {@code centerY} and {@code centerReach} place the point the display
+     * stands on above, and away from the vertical axis of, the entity; the cubes stay within the bone's display reach,
+     * times its scale, of that point however it turns. The box only changes when the poses leave it, and the change
+     * goes out with this pose.
+     */
+    private void cullFor(double centerY, double centerReach, double[] scale) {
+        double reach = bone.getBoneBlueprint().getDisplayReach();
+        if (reach <= 0D) return;
+        double radius = reach * Math.max(Math.abs(scale[0]), Math.max(Math.abs(scale[1]), Math.abs(scale[2])));
+        double poseLow = centerY - radius, poseHigh = centerY + radius, poseReach = centerReach + radius;
+        double low = poseLow, high = poseHigh, across = poseReach;
+        if (!Double.isNaN(sentLow)) {
+            low = Math.min(low, sentLow);
+            high = Math.max(high, sentHigh);
+            across = Math.max(across, sentReach);
+        }
+        sentLow = poseLow;
+        sentHigh = poseHigh;
+        sentReach = poseReach;
+        if (!DefaultConfig.cullOffscreenBones || cullingHoldPoses > 0 || !Double.isFinite(low + high + across)) {
+            if (cullingHoldPoses > 0) cullingHoldPoses--;
+            applyCullingBox(0F, 0F);
+            return;
+        }
+        if (cullingBoxHolds(cullingWidth, cullingHeight, low, high, across)) return;
+        float[] box = cullingBoxFor(low, high, across);
+        applyCullingBox(box[0], box[1]);
+    }
+
+    /**
+     * Whether a culling box of this width and height, height negative when it hangs down, holds cubes spanning
+     * {@code low} to {@code high} above the entity and {@code across} from its vertical axis. No box holds nothing,
+     * so a bone without one gets a new box as soon as its cubes fit one.
+     */
+    static boolean cullingBoxHolds(float width, float height, double low, double high, double across) {
+        if (width <= 0F || height == 0F || across > width / 2D) return false;
+        return height > 0F ? low >= -CULLING_MARGIN && high <= height : high <= CULLING_MARGIN && low >= height;
+    }
+
+    /**
+     * A culling box with room to spare for cubes spanning {@code low} to {@code high} above the entity and
+     * {@code across} from its vertical axis: up from the entity when they stay above it, give or take the margin,
+     * down from it when they stay below, otherwise none ({0, 0}).
+     */
+    static float[] cullingBoxFor(double low, double high, double across) {
+        float width = padCulling(2D * across);
+        if (low >= -CULLING_MARGIN) return new float[]{width, padCulling(Math.max(high, 0.0625D))};
+        if (high <= CULLING_MARGIN) return new float[]{width, -padCulling(-low)};
+        return new float[]{0F, 0F};
+    }
+
+    private static float padCulling(double size) {
+        return (float) (size * 1.25D + 0.125D);
+    }
+
+    private void applyCullingBox(float width, float height) {
+        if (width == cullingWidth && height == cullingHeight) return;
+        cullingWidth = width;
+        cullingHeight = height;
+        packetDisplayEntity.setCullingBox(width, height);
     }
 
     /**
@@ -456,6 +534,7 @@ public class BoneTransforms {
         seatLocation.setX(origin.getX() + seatBuffer[0]);
         seatLocation.setY(origin.getY() + seatBuffer[1]);
         seatLocation.setZ(origin.getZ() + seatBuffer[2]);
+        cullFor(translationBuffer.y, Math.hypot(translationBuffer.x, translationBuffer.z), scaleBuffer);
         // Synched entity data keeps the vector it is given, so hand over a copy the next pass cannot change.
         packetDisplayEntity.generateRiddenTransformationPackets(packetBundle, seatLocation, new Vector3f(translationBuffer),
                 new EulerAngle(rotationBuffer[0], rotationBuffer[1], rotationBuffer[2]),
@@ -510,6 +589,8 @@ public class BoneTransforms {
 
     private void sendDisplayEntityUpdatePacket(AbstractPacketBundle packetBundle, Location loc, EulerAngle rot, double[] scale) {
         if (packetDisplayEntity != null) {
+            // A free display stands on its own display point.
+            cullFor(0D, 0D, scale);
             packetDisplayEntity.generateLocationAndRotationAndScalePackets(
                     packetBundle,
                     loc,
