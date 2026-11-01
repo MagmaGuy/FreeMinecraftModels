@@ -280,6 +280,14 @@ public class SkeletonWatchers {
         boolean filmicMode = FilmicMode.isEnabled();
         int worldViewDistance = filmicMode ? currentLocation.getWorld().getViewDistance() : 0;
         Set<UUID> hidden = hiddenFrom();
+        // Bones that ride the body need every viewer's client to track it: one viewer past the body's tracking range
+        // puts all viewers back on per-bone teleports, which doubles their packets and snaps the animation. A model
+        // given its own view distance (migration flocks) is meant to be seen from farther, so it keeps its full range.
+        Entity riddenBody = filmicMode || skeleton.getModeledEntity() == null
+                || skeleton.getModeledEntity().hasViewDistanceOverride() ? null
+                : skeleton.getModeledEntity().getRiddenBody();
+        NMSAdapter adapter = riddenBody == null ? null : NMSManager.getAdapter();
+        Location bodyLocation = adapter == null ? null : riddenBody.getLocation();
 
         for (Player player : currentLocation.getWorld().getPlayers()) {
             // Left out of newPlayers, a hidden player who is still a viewer gets dropped below.
@@ -291,6 +299,8 @@ public class SkeletonWatchers {
                             || FilmicMode.isWithinSentChunks(player, currentLocation, worldViewDistance)
                     : (proximityOverride && distance < MIN_VIEW_DISTANCE_SQUARED)
                             || (distance < maxViewDistanceSquared && isModelInSight(player, currentLocation));
+            if (visible && bodyLocation != null)
+                visible = withinBodyTracking(adapter, riddenBody, bodyLocation, player);
             if (visible) {
                 newPlayers.add(player.getUniqueId());
                 if (!viewers.contains(player.getUniqueId())) displayTo(player);
@@ -305,6 +315,24 @@ public class SkeletonWatchers {
 
         toRemove.forEach(viewers::remove);
         toRemove.forEach(this::hideFrom);
+    }
+
+    // A viewer enters this far inside the body's tracking distance and leaves this close to its edge, so a player
+    // standing at the edge does not flip in and out of view, and leaves before the server stops tracking the body.
+    private static final double BODY_TRACKING_ADMIT_MARGIN = 3;
+    private static final double BODY_TRACKING_KEEP_MARGIN = 1;
+
+    /** Whether the player's client tracks the ridden body, using the server tracker's own horizontal distance. */
+    private boolean withinBodyTracking(NMSAdapter adapter, Entity body, Location bodyLocation, Player player) {
+        double range = adapter.getTrackingDistance(body, player);
+        if (range < 0) return true;
+        double limit = range - (viewers.contains(player.getUniqueId())
+                ? BODY_TRACKING_KEEP_MARGIN : BODY_TRACKING_ADMIT_MARGIN);
+        if (limit <= 0) return false;
+        Location location = player.getLocation();
+        double dx = location.getX() - bodyLocation.getX();
+        double dz = location.getZ() - bodyLocation.getZ();
+        return dx * dx + dz * dz <= limit * limit;
     }
 
     /**
