@@ -106,6 +106,26 @@ public final class MolangParser {
         return program.endsWith(";") ? program : program + ";";
     }
 
+    /**
+     * Whether the program assigns a {@code variable.} name, which keeps its value after the evaluation; a
+     * {@code temp.} name does not. A source that does not tokenize assigns nothing, since it never runs.
+     */
+    public static boolean assignsVariables(String source) {
+        if (source == null) return false;
+        List<Token> tokens;
+        try {
+            tokens = tokenize(source);
+        } catch (MolangParseException malformed) {
+            return false;
+        }
+        for (int index = 0; index + 1 < tokens.size(); index++) {
+            Token token = tokens.get(index), next = tokens.get(index + 1);
+            if (token.kind == Kind.NAME && next.kind == Kind.OPERATOR && next.text.equals("=")
+                    && MolangContext.canonical(token.text).startsWith("variable.")) return true;
+        }
+        return false;
+    }
+
     private MolangExpression program() {
         List<Statement> statements = new ArrayList<>();
         boolean complex = false;

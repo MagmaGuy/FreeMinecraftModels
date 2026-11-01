@@ -29,14 +29,13 @@ public class Bone {
     private final Skeleton skeleton;
     @Getter
     private final BoneTransforms boneTransforms;
-    @Getter
-    private Vector3f animationTranslation = new Vector3f();
-    @Getter
-    private Vector3f animationRotation = new Vector3f();
-    @Getter
-    private Vector3f animationScale = new Vector3f(-1, -1, -1);
+    // The animation pose. A model nobody watches skips sampling it, so the public getters sample it first; the
+    // transforms read the fields directly, since a model only transforms while watched or on admission, both
+    // after the pose is sampled.
+    private final Vector3f animationTranslation = new Vector3f();
+    private final Vector3f animationRotation = new Vector3f();
+    private final Vector3f animationScale = new Vector3f(-1, -1, -1);
     // IK rotation override - when set, this takes priority over animation rotation
-    @Getter
     private Vector3f ikRotation = null;
 
     public Bone(BoneBlueprint boneBlueprint, Bone parent, Skeleton skeleton) {
@@ -46,6 +45,26 @@ public class Bone {
         this.boneTransforms = new BoneTransforms(this, parent);
         for (BoneBlueprint child : boneBlueprint.getBoneBlueprintChildren())
             boneChildren.add(new Bone(child, this, skeleton));
+    }
+
+    public Vector3f getAnimationTranslation() {
+        skeleton.freshenPose();
+        return animationTranslation;
+    }
+
+    public Vector3f getAnimationRotation() {
+        skeleton.freshenPose();
+        return animationRotation;
+    }
+
+    public Vector3f getAnimationScale() {
+        skeleton.freshenPose();
+        return animationScale;
+    }
+
+    public Vector3f getIkRotation() {
+        skeleton.freshenPose();
+        return ikRotation;
     }
 
     public void updateAnimationTranslation(float x, float y, float z) {
@@ -85,7 +104,21 @@ public class Bone {
      * @return The effective rotation in radians
      */
     public Vector3f getEffectiveRotation() {
+        skeleton.freshenPose();
+        return poseRotation();
+    }
+
+    /** The pose as last sampled, for the transforms. */
+    Vector3f poseTranslation() {
+        return animationTranslation;
+    }
+
+    Vector3f poseRotation() {
         return ikRotation != null ? ikRotation : animationRotation;
+    }
+
+    Vector3f poseScale() {
+        return animationScale;
     }
 
     //Note that several optimizations might be possible here, but that syncing with a base entity is necessary.

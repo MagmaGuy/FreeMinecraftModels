@@ -28,6 +28,8 @@ public class Animation {
     private final HashMap<IKChain, IKAnimationFrame[]> ikAnimationFrames = new HashMap<>();
     @Getter
     private final HashMap<IKChain, ExpressionTrack> ikExpressionTracks = new HashMap<>();
+    // Whether sampling assigns MoLang variables, which persist in the entity's context for later evaluations.
+    private final boolean writesVariables;
 
     public Animation(AnimationBlueprint animationBlueprint, Bone[] bones, Skeleton skeleton) {
         this.animationBlueprint = animationBlueprint;
@@ -54,6 +56,21 @@ public class Animation {
             IKChain chain = skeleton.getIKChain(entry.getKey());
             if (chain != null) ikExpressionTracks.put(chain, entry.getValue());
         }
+
+        boolean writes = false;
+        if (expressionTracks != null)
+            for (ExpressionTrack[] channels : expressionTracks)
+                if (channels != null) for (ExpressionTrack track : channels) writes |= track.assignsVariables();
+        for (ExpressionTrack track : ikExpressionTracks.values()) writes |= track.assignsVariables();
+        writesVariables = writes;
+    }
+
+    /**
+     * Whether sampling this animation changes the entity's MoLang state, so each tick's sample must run in turn.
+     * Any other animation's pose depends only on its frame and the entity's queries and can be sampled later.
+     */
+    public boolean writesVariables() {
+        return writesVariables;
     }
 
     /** Whether any channel or IK goal is sampled per entity rather than read from baked frames. */

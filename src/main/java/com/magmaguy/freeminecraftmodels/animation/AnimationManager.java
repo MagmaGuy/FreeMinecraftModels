@@ -82,6 +82,19 @@ public class AnimationManager {
     private final Pose finalPose;
     private boolean restWritten = false;
 
+    // What the last render showed: its playbacks at their frames, its fade and the queries it read. While nobody
+    // watches the model the render keeps its clock, particle keyframes and Bedrock state but skips sampling the
+    // pose, and the pose is sampled from these once something reads it: a new viewer, a fade from it, a getter.
+    private Playback shownBase, shownAction, shownFade;
+    private int shownBaseFrame, shownActionFrame, shownFadeFrame;
+    private boolean shownFadeFrozen;
+    private float shownFadeWeight = Float.NaN;
+    private int shownLifeTicks;
+    private double shownDistance;
+    private boolean shownMoving;
+    // Read without the clock's lock by the bone pose getters, which then take it to sample.
+    private volatile boolean poseStale = false;
+
     // MoLang state for expression keyframes, null for a model without any. Only the clock thread touches it.
     // Queries resolve lazily from these fields; the expressions' own variables live in the context.
     private final MolangContext molang;
@@ -105,11 +118,12 @@ public class AnimationManager {
 
         boolean expressions = animations.getAnimations().values().stream().anyMatch(Animation::usesExpressions);
         molang = expressions ? new MolangContext(new SplittableRandom()) : null;
+        // Queries read what the shown render saw, so a pose sampled later matches the one it stands for.
         if (molang != null) molang.setResolver((name, reading) -> switch (name) {
             case "query.anim_time" -> animTime;
-            case "query.life_time" -> lifeTicks / 20.0;
-            case "query.modified_distance_moved" -> distanceMoved;
-            case "query.is_moving" -> moving ? 1.0 : 0.0;
+            case "query.life_time" -> shownLifeTicks / 20.0;
+            case "query.modified_distance_moved" -> shownDistance;
+            case "query.is_moving" -> shownMoving ? 1.0 : 0.0;
             default -> null;
         });
 
@@ -283,6 +297,7 @@ public class AnimationManager {
     private void startDeath() {
         if (locomotion == Base.DEATH) return;
         // Fade from exactly what viewers saw last tick, the action layer included.
+        refreshPose();
         frozenPose.copyFrom(finalPose);
         endAction();
         takeover = false;
@@ -319,6 +334,7 @@ public class AnimationManager {
         if (fade > 0) {
             if (fadeActive() || previous == null) {
                 // An interrupted fade, or nothing playing: fade from the pose viewers saw last tick.
+                refreshPose();
                 frozenPose.copyFrom(basePose);
                 fadeFrom = null;
                 fadeFromFrozen = true;
@@ -352,27 +368,35 @@ public class AnimationManager {
             return;
         }
 
-        if (base != null) basePose.sample(base, sampling(base));
-        else basePose.setRest();
+        float fadeWeight = Float.NaN;
         if (fadeActive()) {
             fadeElapsed++;
             float t = Math.min(1f, fadeElapsed / (float) fadeTicks);
-            float weight = t * t * (3 - 2 * t);
-            if (fadeFromFrozen) basePose.blendFrom(frozenPose, weight);
-            else {
-                fromPose.sample(fadeFrom, sampling(fadeFrom));
-                basePose.blendFrom(fromPose, weight);
-            }
+            fadeWeight = t * t * (3 - 2 * t);
         }
-        finalPose.copyFrom(basePose);
-        if (action != null) finalPose.applyAction(action, sampling(action));
-        finalPose.writeTo(bones);
+        shownBase = base;
+        shownBaseFrame = base != null ? base.frame() : -1;
+        shownAction = action;
+        shownActionFrame = action != null ? action.frame() : -1;
+        shownFade = fadeFrom;
+        shownFadeFrame = fadeFrom != null ? fadeFrom.frame() : -1;
+        shownFadeFrozen = fadeFromFrozen;
+        shownFadeWeight = fadeWeight;
+        shownLifeTicks = lifeTicks;
+        shownDistance = distanceMoved;
+        shownMoving = moving;
+        // A variable an expression writes is read by later evaluations, so such an animation samples every tick.
+        if (isWatched() || writesVariables(shownBase) || writesVariables(shownAction) || writesVariables(shownFade)) {
+            poseStale = false;
+            samplePose();
+        } else {
+            poseStale = true;
+        }
         restWritten = !playing;
 
         if (base != null && base.fresh()) modeledEntity.getParticleComponent().onAnimationFrame(base.animation, base.frame());
         if (action != null && action.fresh())
             modeledEntity.getParticleComponent().onAnimationFrame(action.animation, action.frame());
-        solveInverseKinematics();
         modeledEntity.updateBedrockAnimations(base != null ? base.name() : null, action != null ? action.name() : null);
 
         if (base != null) base.advance();
@@ -381,13 +405,54 @@ public class AnimationManager {
         if (fadeActive() && fadeElapsed >= fadeTicks) clearFade();
     }
 
+    /** Whether anyone sees the model, whose bones only then take the pose. */
+    private boolean isWatched() {
+        return modeledEntity.getSkeleton().getSkeletonWatchers().hasObservers();
+    }
+
+    private static boolean writesVariables(Playback playback) {
+        return playback != null && playback.animation.writesVariables();
+    }
+
+    /** Whether the last render skipped the pose, which {@link #refreshPose()} then samples. */
+    public boolean isPoseStale() {
+        return poseStale;
+    }
+
+    /**
+     * Samples the pose the last render skipped, so the bones hold what they would have. Callers off the clock
+     * thread hold the skeleton's lock, as the clock does.
+     */
+    public void refreshPose() {
+        if (!poseStale) return;
+        poseStale = false;
+        samplePose();
+    }
+
+    /** Mixes the shown render's playbacks into the bones and solves their inverse kinematics. */
+    private void samplePose() {
+        if (shownBase != null) basePose.sample(shownBase.animation, shownBaseFrame, at(shownBaseFrame));
+        else basePose.setRest();
+        if (!Float.isNaN(shownFadeWeight)) {
+            if (shownFadeFrozen) basePose.blendFrom(frozenPose, shownFadeWeight);
+            else {
+                fromPose.sample(shownFade.animation, shownFadeFrame, at(shownFadeFrame));
+                basePose.blendFrom(fromPose, shownFadeWeight);
+            }
+        }
+        finalPose.copyFrom(basePose);
+        if (shownAction != null) finalPose.applyAction(shownAction.animation, shownActionFrame, at(shownActionFrame));
+        finalPose.writeTo(bones);
+        solveInverseKinematics();
+    }
+
     /** Each chain follows the topmost animation that drives it: the action, then the base, then a fading one. */
     private void solveInverseKinematics() {
         if (!modeledEntity.getSkeleton().hasIKChains()) return;
         for (IKChain chain : modeledEntity.getSkeleton().getIkChains()) {
-            IKAnimationFrame goal = ikGoal(action, chain);
-            if (goal == null) goal = ikGoal(base, chain);
-            if (goal == null) goal = ikGoal(fadeFrom, chain);
+            IKAnimationFrame goal = ikGoal(shownAction, shownActionFrame, chain);
+            if (goal == null) goal = ikGoal(shownBase, shownBaseFrame, chain);
+            if (goal == null) goal = ikGoal(shownFade, shownFadeFrame, chain);
             if (goal == null) {
                 chain.clearIKRotations();
                 continue;
@@ -397,25 +462,23 @@ public class AnimationManager {
         }
     }
 
-    private IKAnimationFrame ikGoal(Playback playback, IKChain chain) {
-        if (playback == null) return null;
-        int frame = playback.frame();
-        if (frame < 0) return null;
+    private IKAnimationFrame ikGoal(Playback playback, int frame, IKChain chain) {
+        if (playback == null || frame < 0) return null;
         IKAnimationFrame[] frames = playback.animation.getIkAnimationFrames().get(chain);
         if (frames != null) return frame < frames.length ? frames[frame] : null;
         ExpressionTrack track = playback.animation.getIkExpressionTracks().get(chain);
         if (track == null) return null;
         // One scratch goal serves every chain: the solver reads it before the next lookup.
-        MolangContext context = sampling(playback);
+        MolangContext context = at(frame);
         expressionGoal.goalX = track.sample(0, frame, context);
         expressionGoal.goalY = track.sample(1, frame, context);
         expressionGoal.goalZ = track.sample(2, frame, context);
         return expressionGoal;
     }
 
-    /** The entity's context with query.anim_time at this playback's frame; null for a model without expressions. */
-    private MolangContext sampling(Playback playback) {
-        animTime = playback.frame() / 20.0;
+    /** The entity's context with query.anim_time at this frame; null for a model without expressions. */
+    private MolangContext at(int frame) {
+        animTime = frame / 20.0;
         return molang;
     }
 

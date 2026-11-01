@@ -99,6 +99,35 @@ class ExpressionKeyframeTest {
     }
 
     @Test
+    void anUnwatchedModelSamplesItsPoseOnlyWhenItIsRead() throws Exception {
+        load(animation("wave", List.of(
+                rotation(0, "q.anim_time * 10"),
+                rotation(1.0, 20))));
+        assertTrue(animation.playAnimation("wave", false, true));
+
+        for (int tick = 0; tick <= 10; tick++) animation.tick();
+        assertTrue(animation.isPoseStale(), "nobody watches the model, so its ticks skip the pose");
+        assertEquals(-Math.toRadians(12.5), body.getAnimationRotation().x, 1e-6, "read, it shows frame 10");
+        assertFalse(animation.isPoseStale());
+        animation.tick();
+        assertTrue(animation.isPoseStale());
+        assertEquals(-Math.toRadians(13.475), body.getAnimationRotation().x, 1e-6, "the clock kept running: frame 11");
+    }
+
+    @Test
+    void anExpressionThatKeepsAVariableSamplesEveryTickUnwatched() throws Exception {
+        // Each evaluation counts up from the last, so skipping one would change every later pose.
+        load(animation("count", List.of(rotation(0, "v.count = (v.count ?? 0) + 1;\nv.count"))));
+        assertTrue(animation.playAnimation("count", false, true));
+
+        for (int tick = 0; tick < 3; tick++) {
+            animation.tick();
+            assertFalse(animation.isPoseStale(), "tick " + tick);
+        }
+        assertEquals(-Math.toRadians(3), body.getAnimationRotation().x, 1e-6);
+    }
+
+    @Test
     void aBrokenExpressionWarnsAndPlaysAsZero() throws Exception {
         List<String> warnings = captureWarnings();
         load(animation("broken", List.of(rotation(0, "math.nope(1)"), rotation(1.0, 20))));
