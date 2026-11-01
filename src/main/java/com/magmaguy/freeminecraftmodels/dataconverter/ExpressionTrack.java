@@ -17,6 +17,12 @@ public record ExpressionTrack(TransformationType channel, List<Keyframe> keyfram
         keyframes = List.copyOf(keyframes);
     }
 
+    /** Whether a keyframe's expression assigns a variable, so sampling the channel changes the entity's state. */
+    public boolean assignsVariables() {
+        for (Keyframe keyframe : keyframes) if (keyframe.assignsVariables()) return true;
+        return false;
+    }
+
     /** The channel's value on an axis (0 = x, 1 = y, 2 = z) at a tick, in the pose mixer's units. */
     public float sample(int axis, int tick, MolangContext context) {
         return AnimationTimeline.toPoseUnits(channel, axis,

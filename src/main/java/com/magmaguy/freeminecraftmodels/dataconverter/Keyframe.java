@@ -108,6 +108,12 @@ public class Keyframe {
         return sources[axis];
     }
 
+    /** Whether an expression axis assigns a variable, which later evaluations can read. */
+    public boolean assignsVariables() {
+        for (String source : sources) if (MolangParser.assignsVariables(source)) return true;
+        return false;
+    }
+
     /** Whether any axis is an expression, which keeps the whole channel from being baked at load. */
     public boolean isDynamic() {
         return expressions[0] != null || expressions[1] != null || expressions[2] != null;

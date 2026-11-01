@@ -134,14 +134,14 @@ public class BoneTransforms {
 
     private void translateAnimation() {
         localMatrix.translateLocal(
-                -bone.getAnimationTranslation().get(0),
-                bone.getAnimationTranslation().get(1),
-                bone.getAnimationTranslation().get(2));
+                -bone.poseTranslation().get(0),
+                bone.poseTranslation().get(1),
+                bone.poseTranslation().get(2));
     }
 
     private void rotateAnimation() {
         // Use IK rotation if available, otherwise use animation rotation
-        org.joml.Vector3f effectiveRotation = bone.getEffectiveRotation();
+        org.joml.Vector3f effectiveRotation = bone.poseRotation();
         animationRotationVector.setX(effectiveRotation.get(0));
         animationRotationVector.setY(-effectiveRotation.get(1));
         animationRotationVector.setZ(-effectiveRotation.get(2));
@@ -612,7 +612,7 @@ public class BoneTransforms {
     }
 
     protected Vector3f getDisplayEntityScale() {
-        Vector3f animScale = bone.getAnimationScale();
+        Vector3f animScale = bone.poseScale();
         float scaleX = animScale.x == -1 ? 2.5f : animScale.x * 2.5f;
         float scaleY = animScale.y == -1 ? 2.5f : animScale.y * 2.5f;
         float scaleZ = animScale.z == -1 ? 2.5f : animScale.z * 2.5f;

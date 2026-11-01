@@ -166,8 +166,20 @@ public class Skeleton {
         else Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, mountAll);
     }
 
+    /**
+     * Gives the bones the animation pose the model skipped while nobody watched it. The model clock samples under
+     * this skeleton's lock, so the sample here takes it too.
+     */
+    public void freshenPose() {
+        if (modeledEntity == null || !modeledEntity.getAnimationComponent().isPoseStale()) return;
+        synchronized (this) {
+            modeledEntity.getAnimationComponent().refreshPose();
+        }
+    }
+
     /** Recomputes bone transforms. Packets are only sent to existing viewers. */
     void transformBones() {
+        freshenPose();
         if (rootBone != null) rootBone.transform(null);
     }
 
@@ -280,6 +292,7 @@ public class Skeleton {
     }
 
     void prepareDisplayPose(AbstractPacketBundle packetBundle) {
+        freshenPose();
         if (rootBone != null) rootBone.prepareDisplayPose(packetBundle);
     }
 

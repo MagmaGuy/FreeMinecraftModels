@@ -75,6 +75,16 @@ public class AnimationComponent {
         return animationManager == null || animationManager.isOnlyLocomotionPlaying();
     }
 
+    /** Whether the bones still lack the pose of the last animation tick, skipped while nobody watched the model. */
+    public boolean isPoseStale() {
+        return animationManager != null && animationManager.isPoseStale();
+    }
+
+    /** Gives the bones the pose of the last animation tick if it was skipped. Hold the skeleton's lock. */
+    public void refreshPose() {
+        if (animationManager != null) animationManager.refreshPose();
+    }
+
     /**
      * Plays the "death" animation for the entity using the animation manager.
      * The animation is non-blending and non-looping.

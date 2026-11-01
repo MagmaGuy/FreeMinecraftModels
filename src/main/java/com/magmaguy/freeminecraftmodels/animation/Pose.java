@@ -37,13 +37,12 @@ final class Pose {
     }
 
     /**
-     * The animation's current frame scaled by its blend weight. A bone it does not key rests. The context is
-     * positioned at this playback's time and is only read when the animation has expression keyframes.
+     * The animation's frame scaled by its blend weight. A bone it does not key rests. The context is positioned at
+     * that frame's time and is only read when the animation has expression keyframes.
      */
-    void sample(Playback playback, MolangContext context) {
-        int frame = playback.frame();
-        AnimationFrame[][] tracks = playback.animation.getTracks();
-        float weight = (float) playback.animation.getAnimationBlueprint().getBlendWeight();
+    void sample(Animation animation, int frame, MolangContext context) {
+        AnimationFrame[][] tracks = animation.getTracks();
+        float weight = (float) animation.getAnimationBlueprint().getBlendWeight();
         for (int bone = 0; bone < tracks.length; bone++) {
             AnimationFrame keyed = keyed(tracks[bone], frame);
             int i = bone * 3;
@@ -61,7 +60,7 @@ final class Pose {
             scale[i + 1] = weighted(keyed.scaleY, weight);
             scale[i + 2] = weighted(keyed.scaleZ, weight);
         }
-        addExpressions(playback, context, weight);
+        addExpressions(animation, frame, context, weight);
     }
 
     /** Fades from another pose: weight 0 is all of {@code from}, 1 is all of this pose. */
@@ -75,11 +74,10 @@ final class Pose {
      * Layers an action over this pose on the bones it keys, by the Bedrock rule: an override animation replaces
      * those bones' pose, any other adds its rotation and translation and multiplies its scale.
      */
-    void applyAction(Playback action, MolangContext context) {
-        int frame = action.frame();
-        AnimationFrame[][] tracks = action.animation.getTracks();
-        float weight = (float) action.animation.getAnimationBlueprint().getBlendWeight();
-        boolean override = action.animation.getAnimationBlueprint().isOverride();
+    void applyAction(Animation action, int frame, MolangContext context) {
+        AnimationFrame[][] tracks = action.getTracks();
+        float weight = (float) action.getAnimationBlueprint().getBlendWeight();
+        boolean override = action.getAnimationBlueprint().isOverride();
         for (int bone = 0; bone < tracks.length; bone++) {
             AnimationFrame keyed = keyed(tracks[bone], frame);
             if (keyed == null) continue;
@@ -95,16 +93,15 @@ final class Pose {
             scale[i + 1] *= weighted(keyed.scaleY, weight);
             scale[i + 2] *= weighted(keyed.scaleZ, weight);
         }
-        addExpressions(action, context, weight);
+        addExpressions(action, frame, context, weight);
     }
 
     /**
      * Layers the expression channels over the frame just applied. Their baked values are the rest pose, so adding
      * rotation and translation and multiplying scale gives the same result whether the frame was set or added.
      */
-    private void addExpressions(Playback playback, MolangContext context, float weight) {
-        ExpressionTrack[][] expressions = playback.animation.getExpressionTracks();
-        int frame = playback.frame();
+    private void addExpressions(Animation animation, int frame, MolangContext context, float weight) {
+        ExpressionTrack[][] expressions = animation.getExpressionTracks();
         if (expressions == null || frame < 0) return;
         for (int bone = 0; bone < expressions.length; bone++) {
             ExpressionTrack[] channels = expressions[bone];

@@ -487,6 +487,11 @@ public class SkeletonWatchers {
             );
         }
         boolean wasAlreadyViewing = !viewers.add(player.getUniqueId());
+        // Unwatched, the model skipped sampling its pose; from here on the clock samples it every tick, and this
+        // catches up on the last one before the bones are shown in it.
+        synchronized (skeleton) {
+            skeleton.getModeledEntity().getAnimationComponent().refreshPose();
+        }
         if (!isBedrock) {
             javaViewers.add(player.getUniqueId());
             syncUnderlyingEntityForJavaViewer(player);
