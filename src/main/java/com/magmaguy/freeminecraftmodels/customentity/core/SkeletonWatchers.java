@@ -281,13 +281,16 @@ public class SkeletonWatchers {
         int worldViewDistance = filmicMode ? currentLocation.getWorld().getViewDistance() : 0;
         Set<UUID> hidden = hiddenFrom();
         // Bones that ride the body need every viewer's client to track it: one viewer past the body's tracking range
-        // puts all viewers back on per-bone teleports, which doubles their packets and snaps the animation. A model
-        // given its own view distance (migration flocks) is meant to be seen from farther, so it keeps its full range.
-        Entity riddenBody = filmicMode || skeleton.getModeledEntity() == null
-                || skeleton.getModeledEntity().hasViewDistanceOverride() ? null
-                : skeleton.getModeledEntity().getRiddenBody();
-        NMSAdapter adapter = riddenBody == null ? null : NMSManager.getAdapter();
-        Location bodyLocation = adapter == null ? null : riddenBody.getLocation();
+        // puts all viewers back on per-bone teleports, which doubles their packets and snaps the animation. The server
+        // is told to track the body as far as the model is seen, so the check below only turns away viewers whose own
+        // view distance is shorter. A model given its own view distance (migration flocks) is meant to be seen from
+        // farther, so it keeps its full range.
+        var modeledEntity = skeleton.getModeledEntity();
+        Entity body = modeledEntity == null ? null : modeledEntity.getRiddenBody();
+        NMSAdapter adapter = body == null ? null : NMSManager.getAdapter();
+        if (adapter != null) widenBodyTracking(adapter, body, effectiveViewDistance);
+        Entity riddenBody = filmicMode || modeledEntity == null || modeledEntity.hasViewDistanceOverride() ? null : body;
+        Location bodyLocation = adapter == null || riddenBody == null ? null : riddenBody.getLocation();
 
         for (Player player : currentLocation.getWorld().getPlayers()) {
             // Left out of newPlayers, a hidden player who is still a viewer gets dropped below.
@@ -321,6 +324,35 @@ public class SkeletonWatchers {
     // standing at the edge does not flip in and out of view, and leaves before the server stops tracking the body.
     private static final double BODY_TRACKING_ADMIT_MARGIN = 3;
     private static final double BODY_TRACKING_KEEP_MARGIN = 1;
+    // The body whose tracking range this model raised, given back its own range when the model goes away.
+    private Entity widenedBody;
+
+    /**
+     * Has the server track the ridden body as far as the model is seen, plus the admission margin, so viewers between
+     * the body type's own tracking range (48 blocks for animals and monsters by default) and the model's view distance
+     * still ride the bones. The body loses the range when it gets a new tracker (a chunk reload or a change of world),
+     * so each pass checks it again.
+     */
+    private void widenBodyTracking(NMSAdapter adapter, Entity body, int viewDistance) {
+        int wanted = viewDistance + (int) Math.ceil(BODY_TRACKING_ADMIT_MARGIN) + 1;
+        int range = adapter.getTrackingRange(body);
+        if (range < 0 || range >= wanted) return;
+        if (adapter.setTrackingRange(body, wanted)) widenedBody = body;
+    }
+
+    /** Gives the body back the server's own tracking range when the model goes away. */
+    public void restoreBodyTracking() {
+        Entity body = widenedBody;
+        widenedBody = null;
+        NMSAdapter adapter = body == null ? null : NMSManager.getAdapter();
+        if (adapter == null) return;
+        Runnable restore = () -> {
+            if (body.isValid()) adapter.setTrackingRange(body, -1);
+        };
+        if (Bukkit.isPrimaryThread()) restore.run();
+        else if (MetadataHandler.PLUGIN != null && MetadataHandler.PLUGIN.isEnabled())
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, restore);
+    }
 
     /** Whether the player's client tracks the ridden body, using the server tracker's own horizontal distance. */
     private boolean withinBodyTracking(NMSAdapter adapter, Entity body, Location bodyLocation, Player player) {

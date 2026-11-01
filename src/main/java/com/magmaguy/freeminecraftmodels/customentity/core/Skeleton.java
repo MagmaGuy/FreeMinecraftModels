@@ -215,6 +215,7 @@ public class Skeleton {
 
     public void remove() {
         skeletonWatchers.releaseTrackedBodies();
+        skeletonWatchers.restoreBodyTracking();
         if (rootBone != null) rootBone.remove();
     }
 

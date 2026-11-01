@@ -454,9 +454,10 @@ public class ModeledEntity {
     }
 
     /**
-     * The entity this model's display bones ride, or null when they are placed freely. Its watchers show the model
-     * only to players whose clients track this entity, since one viewer outside the entity's tracking range would put
-     * every viewer back on per-bone teleports. A model with its own view distance is exempt.
+     * The entity this model's display bones ride, or null when they are placed freely. Its watchers have the server
+     * track this entity as far as the model is seen, and show the model only to players whose clients track it, since
+     * one viewer outside the entity's tracking range would put every viewer back on per-bone teleports. A model with
+     * its own view distance is exempt from the second.
      */
     @Nullable
     public Entity getRiddenBody() {
