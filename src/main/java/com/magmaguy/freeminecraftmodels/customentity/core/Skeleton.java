@@ -108,6 +108,17 @@ public class Skeleton {
         return modeledEntity.getBoneTransformLocation();
     }
 
+    // The model's location for one transform pass, read once so its bones neither rebuild it each nor see it move
+    // halfway through. Only the thread running the pass, under this skeleton's lock, sets and reads it.
+    private Location passLocation;
+
+    /** The location of the transform pass running now, or the current location outside one. */
+    @Nullable
+    Location passLocation() {
+        Location location = passLocation;
+        return location != null ? location : getCurrentLocation();
+    }
+
     // Ridden placement: the display bones ride the underlying entity as packet passengers and send only their
     // pose relative to its seat, so viewers place them from the same smoothed entity position as its riders.
     // The model tick publishes this before the bones transform.
@@ -180,7 +191,13 @@ public class Skeleton {
     /** Recomputes bone transforms. Packets are only sent to existing viewers. */
     void transformBones() {
         freshenPose();
-        if (rootBone != null) rootBone.transform(null);
+        if (rootBone == null) return;
+        passLocation = getCurrentLocation();
+        try {
+            rootBone.transform(null);
+        } finally {
+            passLocation = null;
+        }
     }
 
     /**
@@ -287,13 +304,24 @@ public class Skeleton {
 
         riddenPoseCounter++;
         if (getSkeletonWatchers().hasObservers()) {
-            rootBone.transform(abstractPacketBundle);
+            passLocation = getCurrentLocation();
+            try {
+                rootBone.transform(abstractPacketBundle);
+            } finally {
+                passLocation = null;
+            }
         }
     }
 
     void prepareDisplayPose(AbstractPacketBundle packetBundle) {
         freshenPose();
-        if (rootBone != null) rootBone.prepareDisplayPose(packetBundle);
+        if (rootBone == null) return;
+        passLocation = getCurrentLocation();
+        try {
+            rootBone.prepareDisplayPose(packetBundle);
+        } finally {
+            passLocation = null;
+        }
     }
 
     public void tint() {

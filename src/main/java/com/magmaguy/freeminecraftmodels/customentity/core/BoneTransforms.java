@@ -54,11 +54,12 @@ public class BoneTransforms {
                 globalMatrix.getScale(scaleBuffer);
 
                 globalMatrix.resetRotation();
+                Location origin = bone.getSkeleton().passLocation();
                 Location gaze = bone.getSkeleton().hasLookTarget()
-                        ? bone.getSkeleton().getLookDirection(getMountPointTargetLocation()) : null;
+                        ? bone.getSkeleton().getLookDirection(getMountPointTargetLocation(origin)) : null;
                 float headYaw = gaze == null ? bone.getSkeleton().getCurrentHeadYaw() : gaze.getYaw();
                 // The head leads a slow-turning body but stays within ±75° of it, so the neck never twists around.
-                float bodyYaw = bone.getSkeleton().getCurrentLocation().getYaw();
+                float bodyYaw = origin.getYaw();
                 float twist = (float) TurnInertia.wrap(headYaw - bodyYaw);
                 headYaw = bodyYaw + Math.max(-MAX_HEAD_TWIST, Math.min(MAX_HEAD_TWIST, twist));
                 float headPitch = gaze == null ? bone.getSkeleton().getCurrentHeadPitch() : gaze.getPitch();
@@ -218,7 +219,7 @@ public class BoneTransforms {
     private void rotateByEntityYaw() {
         //rotate by yaw amount
         if (parent == null) {
-            localMatrix.rotateLocal(0, (float) -Math.toRadians(bone.getSkeleton().getCurrentLocation().getYaw() + 180), 0);
+            localMatrix.rotateLocal(0, (float) -Math.toRadians(bone.getSkeleton().passLocation().getYaw() + 180), 0);
         }
     }
 
@@ -245,7 +246,10 @@ public class BoneTransforms {
     protected Location getMountPointTargetLocation() {
         // Hoisted: getCurrentLocation() rebuilds a Location per call (NMS
         // body-rotation lookup + clone for dynamic entities) — snapshot once.
-        Location currentLocation = bone.getSkeleton().getCurrentLocation();
+        return getMountPointTargetLocation(bone.getSkeleton().getCurrentLocation());
+    }
+
+    private Location getMountPointTargetLocation(Location currentLocation) {
         double[] translatedGlobalMatrix = globalMatrix.getTranslation();
         return new Location(currentLocation.getWorld(),
                 translatedGlobalMatrix[0],
@@ -335,7 +339,7 @@ public class BoneTransforms {
         forceNextUpdate = false;
 
         if (packetArmorStandEntity != null && packetArmorStandEntity.hasViewers()) {
-            Location origin = bone.getSkeleton().getCurrentLocation();
+            Location origin = bone.getSkeleton().passLocation();
             readTargetPosition(origin, positionBuffer, true);
             readTargetRotation(rotationBuffer, true);
             if (force || armorStandChanged(positionBuffer, rotationBuffer)) {
@@ -356,7 +360,7 @@ public class BoneTransforms {
                 }
                 return;
             }
-            Location origin = bone.getSkeleton().getCurrentLocation();
+            Location origin = bone.getSkeleton().passLocation();
             readTargetPosition(origin, positionBuffer, false);
             readTargetRotation(rotationBuffer, false);
             globalMatrix.getScale(scaleBuffer);
@@ -371,7 +375,7 @@ public class BoneTransforms {
 
     /** Refresh packet-entity state once at admission, even when no viewer existed. */
     void prepareDisplayPose(AbstractPacketBundle packetBundle) {
-        Location origin = bone.getSkeleton().getCurrentLocation();
+        Location origin = bone.getSkeleton().passLocation();
         if (packetArmorStandEntity != null) {
             readTargetPosition(origin, positionBuffer, true);
             readTargetRotation(rotationBuffer, true);
@@ -529,14 +533,16 @@ public class BoneTransforms {
     }
 
     private void sendRiddenPosePacket(AbstractPacketBundle packetBundle, int interval) {
-        Location origin = bone.getSkeleton().getCurrentLocation();
-        seatLocation.setWorld(origin.getWorld());
+        Location origin = bone.getSkeleton().passLocation();
+        // Location.setWorld wraps the world in a new reference each call, so it only runs when the world changes.
+        if (!seatLocation.isWorldLoaded() || seatLocation.getWorld() != origin.getWorld())
+            seatLocation.setWorld(origin.getWorld());
         seatLocation.setX(origin.getX() + seatBuffer[0]);
         seatLocation.setY(origin.getY() + seatBuffer[1]);
         seatLocation.setZ(origin.getZ() + seatBuffer[2]);
         cullFor(translationBuffer.y, Math.hypot(translationBuffer.x, translationBuffer.z), scaleBuffer);
-        // Synched entity data keeps the vector it is given, so hand over a copy the next pass cannot change.
-        packetDisplayEntity.generateRiddenTransformationPackets(packetBundle, seatLocation, new Vector3f(translationBuffer),
+        // The packet layer copies the translation if it keeps it, so the buffer goes as it is.
+        packetDisplayEntity.generateRiddenTransformationPackets(packetBundle, seatLocation, translationBuffer,
                 new EulerAngle(rotationBuffer[0], rotationBuffer[1], rotationBuffer[2]),
                 (float) scaleBuffer[0] * 2.5f, (float) scaleBuffer[1] * 2.5f, (float) scaleBuffer[2] * 2.5f,
                 // Each pose glides over the whole interval, so viewers reach it as the next one arrives.

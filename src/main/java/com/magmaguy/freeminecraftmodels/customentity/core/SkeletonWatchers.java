@@ -4,6 +4,7 @@ import com.magmaguy.easyminecraftgoals.NMSAdapter;
 import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.easyminecraftgoals.internal.PacketEquipmentVeil;
+import com.magmaguy.easyminecraftgoals.internal.ViewerPlayers;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
@@ -44,6 +45,9 @@ public class SkeletonWatchers {
     // lacks the entity drops the bones' mount and stops drawing them, so the bones ride it only while this holds.
     private volatile boolean entityTrackedByJavaViewers = true;
     private volatile boolean wasInvisible = false;
+
+    // The online viewers in viewer order, rebuilt only when one changes.
+    private final ViewerPlayers viewerPlayers = new ViewerPlayers();
 
     public HashSet<UUID> getViewers() {
         return new HashSet<>(viewers);
@@ -212,8 +216,7 @@ public class SkeletonWatchers {
         // The nameplate rides the body whenever the bones do, through MagmaCore's shared text placement.
         modeledEntity.getNameplate().ride(skeleton.isRidden() ? modeledEntity.getUnderlyingEntity() : null);
         modeledEntity.getNameplate().move(modeledEntity.getNameplateLocation());
-        modeledEntity.getNameplate().syncViewers(isInvisible ? List.of()
-                : viewers.stream().map(Bukkit::getPlayer).filter(Objects::nonNull).toList());
+        modeledEntity.getNameplate().syncViewers(isInvisible ? List.of() : viewerPlayers.of(viewers));
     }
 
     private volatile long lastResyncTime = 0L;
