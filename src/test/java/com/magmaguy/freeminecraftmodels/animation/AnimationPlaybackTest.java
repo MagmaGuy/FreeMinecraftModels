@@ -59,6 +59,21 @@ class AnimationPlaybackTest {
     }
 
     @Test
+    void onlyIdleOrWalkCountsAsLocomotion() {
+        animation.tick();
+        assertTrue(animation.isOnlyLocomotionPlaying(), "Idle alone may send poses less often");
+        assertTrue(animation.playAnimation("sweep", true, true));
+        animation.tick();
+        assertFalse(animation.isOnlyLocomotionPlaying(), "A layered animation needs every pose");
+        animation.stopCurrentAnimations();
+        animation.tick();
+        assertTrue(animation.isOnlyLocomotionPlaying());
+        assertTrue(animation.playAnimation("pose", false, true));
+        animation.tick();
+        assertFalse(animation.isOnlyLocomotionPlaying(), "A takeover needs every pose");
+    }
+
+    @Test
     void playReplacementAndStopApplyActualBonePoses() {
         assertTrue(animation.playAnimation("sweep", false, true));
         animation.tick();

@@ -20,6 +20,7 @@ public class DefaultConfig extends ConfigurationFile {
     public static boolean useDeltaMetadataPackets;
     public static boolean displayBonesRideTheirEntity;
     public static int riddenBoneInterpolationTicks;
+    public static int riddenBoneUpdateIntervalTicks = 1;
     public static boolean modelViewersTrackHiddenBodies;
     public static int idleWalkBlendTicks;
     public static int deathBlendTicks;
@@ -112,6 +113,11 @@ public class DefaultConfig extends ConfigurationFile {
                 List.of("How many ticks Java clients take to glide a ridden bone to each new animation pose.",
                         "0 snaps every tick; 1 (default) glides over one tick, which also smooths rotations."),
                 fileConfiguration, "riddenBoneInterpolationTicks", 1);
+        riddenBoneUpdateIntervalTicks = Math.max(1, ConfigurationEngine.setInt(
+                List.of("How often, in ticks, a ridden bone sends Java clients its animation pose. 1 sends every tick.",
+                        "2 (default) sends every other tick and glides over both, which halves the packets an animated",
+                        "model sends while slow motion looks the same. Models take turns, so a crowd's updates spread out."),
+                fileConfiguration, "riddenBoneUpdateIntervalTicks", 2));
         modelViewersTrackHiddenBodies = ConfigurationEngine.setBoolean(
                 List.of("When true (default), each Java client that can see a model whose entity is hidden also",
                         "tracks that entity as an invisible, bare body (its equipment is stripped on the way to",
