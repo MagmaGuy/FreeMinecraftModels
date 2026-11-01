@@ -448,6 +448,21 @@ public class ModeledEntity {
         return false;
     }
 
+    /** Whether the bones ride the underlying entity for viewers that track it. */
+    protected boolean bonesCanRideUnderlyingEntity() {
+        return false;
+    }
+
+    /**
+     * The entity this model's display bones ride, or null when they are placed freely. Its watchers show the model
+     * only to players whose clients track this entity, since one viewer outside the entity's tracking range would put
+     * every viewer back on per-bone teleports. A model with its own view distance is exempt.
+     */
+    @Nullable
+    public Entity getRiddenBody() {
+        return DefaultConfig.displayBonesRideTheirEntity && bonesCanRideUnderlyingEntity() ? underlyingEntity : null;
+    }
+
     public void removeWithDeathAnimation() {
         isDying = true;
         // Cache the current location so animations can continue after the underlying entity is removed
@@ -846,6 +861,14 @@ public class ModeledEntity {
      */
     public int getEffectiveViewDistance() {
         return viewDistanceOverride > 0 ? viewDistanceOverride : DefaultConfig.maxModelViewDistance;
+    }
+
+    /**
+     * Whether this model has its own view distance. Such a model is shown out to that distance even past the range in
+     * which clients track its entity, where its bones fall back to per-bone teleports.
+     */
+    public boolean hasViewDistanceOverride() {
+        return viewDistanceOverride > 0;
     }
 
     /**
