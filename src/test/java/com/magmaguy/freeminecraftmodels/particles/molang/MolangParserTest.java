@@ -65,6 +65,23 @@ class MolangParserTest {
     }
 
     @Test
+    void terminatedForBedrockClosesOnlyComplexPrograms() {
+        String program = MolangParser.returningLastLine("v.t = q.anim_time * 60;\nv.w = math.sin(v.t);\nmath.atan2(1, 1) * 2\n");
+        String terminated = MolangParser.terminatedForBedrock(program);
+        assertEquals("v.t = q.anim_time * 60;\nv.w = math.sin(v.t);\nreturn math.atan2(1, 1) * 2;", terminated,
+                "a Blockbench program gets the ; Bedrock requires");
+        assertEquals(90, eval(terminated), 1e-9, "the closing ; keeps the returned value");
+        assertEquals("v.a = 1;", MolangParser.terminatedForBedrock("v.a = 1"), "a lone assignment is complex");
+        assertEquals("v.a = 1; return v.a;", MolangParser.terminatedForBedrock("v.a = 1; return v.a;"), "already closed");
+        assertEquals("loop(2, {v.i = v.i + 1;}); return v.i;",
+                MolangParser.terminatedForBedrock("loop(2, {v.i = v.i + 1;}); return v.i"));
+        assertEquals("math.sin(30)", MolangParser.terminatedForBedrock("math.sin(30)"), "a simple expression keeps its value");
+        assertEquals("q.x == 1 ? 2 : 3", MolangParser.terminatedForBedrock("q.x == 1 ? 2 : 3"), "== is not an assignment");
+        assertEquals("q.x >= 1", MolangParser.terminatedForBedrock("q.x >= 1"));
+        assertEquals("'a=b'", MolangParser.terminatedForBedrock("'a=b'"), "= inside a string is text");
+    }
+
+    @Test
     void unknownNamesReadAsZeroAndDivisionByZeroIsZero() {
         assertEquals(0, eval("query.anything + variable.missing"));
         assertEquals(0, eval("1 / 0"));

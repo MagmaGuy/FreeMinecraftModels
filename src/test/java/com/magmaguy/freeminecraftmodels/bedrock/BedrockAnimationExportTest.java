@@ -48,10 +48,14 @@ class BedrockAnimationExportTest {
                 "data_points", List.of(Map.of("x", 0, "y", 4, "z", 0)));
         Map<String, Object> expression = Map.of("channel", "rotation", "interpolation", "linear", "time", 0.25,
                 "data_points", List.of(Map.of("x", "q.anim_time * 10", "y", "", "z", 5)));
+        // A Blockbench program as the Driftjelly interact animation keys it: no return and no closing ;.
+        Map<String, Object> program = Map.of("channel", "rotation", "interpolation", "linear", "time", 0,
+                "data_points", List.of(Map.of("x", "v.w = math.sin(q.anim_time * 30);\nmath.atan2(1, 1) * v.w\n",
+                        "y", 0, "z", 0)));
         List<Object> animations = List.of(
                 animation("walk", false, "", keyframe), animation("idle", false, "", keyframe),
                 animation("death", false, "", keyframe), animation("attack", true, "0.5", keyframe),
-                animation("spin", false, "", expression));
+                animation("spin", false, "", expression), animation("sway", false, "", program));
         Path source = directory.resolve("blend_export.bbmodel");
         Files.writeString(source, new Gson().toJson(Map.of(
                 "meta", Map.of("format_version", "5.0", "model_format", "free"),
@@ -96,6 +100,11 @@ class BedrockAnimationExportTest {
         assertEquals("q.anim_time * 10", rotation.getAsJsonArray("0.25").get(0).getAsString());
         assertEquals(0, rotation.getAsJsonArray("0.25").get(1).getAsDouble(), 1e-9, "a blank axis is 0");
         assertEquals(5, rotation.getAsJsonArray("0.25").get(2).getAsDouble(), 1e-9, "a number stays as written");
+        JsonObject sway = find(animations, "sway").getAsJsonObject("bones").getAsJsonObject("body")
+                .getAsJsonObject("rotation");
+        assertEquals("v.w = math.sin(q.anim_time * 30);\nreturn math.atan2(1, 1) * v.w;",
+                sway.getAsJsonArray("0").get(0).getAsString(),
+                "a program returns its last line and ends with the ; Bedrock requires");
     }
 
     @Test

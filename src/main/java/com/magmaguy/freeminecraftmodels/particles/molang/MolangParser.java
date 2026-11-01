@@ -84,6 +84,28 @@ public final class MolangParser {
         return source.substring(0, first.offset) + "return " + source.substring(first.offset);
     }
 
+    /**
+     * The program as Bedrock accepts it. Bedrock rejects a complex expression, one with a {@code ;} or an
+     * assignment, unless it ends with {@code ;}, and a rejected keyframe stops every animation on the entity. This
+     * appends the missing {@code ;} to such a program. A simple expression comes back unchanged, because Bedrock
+     * gives a terminated program without {@code return} the value 0. So does a source that does not tokenize.
+     */
+    public static String terminatedForBedrock(String source) {
+        if (source == null) return null;
+        List<Token> tokens;
+        try {
+            tokens = tokenize(source);
+        } catch (MolangParseException malformed) {
+            return source;
+        }
+        boolean complex = false;
+        for (Token token : tokens)
+            if (token.kind == Kind.OPERATOR && (token.text.equals(";") || token.text.equals("="))) complex = true;
+        if (!complex) return source;
+        String program = source.stripTrailing();
+        return program.endsWith(";") ? program : program + ";";
+    }
+
     private MolangExpression program() {
         List<Statement> statements = new ArrayList<>();
         boolean complex = false;

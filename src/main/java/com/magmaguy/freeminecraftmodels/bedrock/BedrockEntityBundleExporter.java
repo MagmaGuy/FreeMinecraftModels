@@ -17,6 +17,7 @@ import com.magmaguy.freeminecraftmodels.dataconverter.ExpressionTrack;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.Keyframe;
 import com.magmaguy.freeminecraftmodels.dataconverter.ParsedTexture;
+import com.magmaguy.freeminecraftmodels.particles.molang.MolangParser;
 import com.magmaguy.freeminecraftmodels.utils.LoopType;
 import com.magmaguy.freeminecraftmodels.utils.StringToResourcePackFilename;
 import com.magmaguy.freeminecraftmodels.utils.TransformationType;
@@ -832,10 +833,11 @@ public final class BedrockEntityBundleExporter {
 
     /**
      * Writes an expression channel as the artist keyed it: Bedrock evaluates MoLang natively, so each axis goes
-     * through unchanged, numbers included, and the keys blend linearly whatever interpolation was authored. The
-     * baked channels below instead export the Java pose with FMM's format-5 mirroring undone, which on a format
-     * 4 model negates x and y rotation and x position relative to the authored numbers; an expression axis on
-     * such a model may therefore differ in sign between the Java path and Bedrock.
+     * through unchanged, numbers included, except for the closing {@code ;} Bedrock requires on a complex program
+     * ({@link MolangParser#terminatedForBedrock}). The keys blend linearly whatever interpolation was authored.
+     * The baked channels below instead export the Java pose with FMM's format-5 mirroring undone, which on a
+     * format 4 model negates x and y rotation and x position relative to the authored numbers; an expression axis
+     * on such a model may therefore differ in sign between the Java path and Bedrock.
      */
     private static JsonObject expressionChannel(ExpressionTrack track) {
         JsonObject keyframes = new JsonObject();
@@ -843,7 +845,7 @@ public final class BedrockEntityBundleExporter {
             JsonArray values = new JsonArray();
             for (int axis = 0; axis < 3; axis++) {
                 String source = keyframe.getSource(axis);
-                if (source != null) values.add(source);
+                if (source != null) values.add(MolangParser.terminatedForBedrock(source));
                 else values.add(round(keyframe.getData(axis)));
             }
             keyframes.add(timeKey(keyframe.getExactTimeInTicks() / 20.0), values);
