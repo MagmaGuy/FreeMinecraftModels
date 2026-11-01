@@ -170,6 +170,11 @@ public class AnimationManager {
         return animations.getAnimations().containsKey(animationName);
     }
 
+    /** Whether only the idle or walk loop plays: no attack, custom animation, spawn or death. Clock thread only. */
+    public boolean isOnlyLocomotionPlaying() {
+        return action == null && !takeover && (locomotion == Base.IDLE || locomotion == Base.WALK);
+    }
+
     public void tick() {
         Runnable request;
         while ((request = requests.poll()) != null) request.run();

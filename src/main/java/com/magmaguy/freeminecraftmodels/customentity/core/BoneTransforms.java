@@ -346,10 +346,13 @@ public class BoneTransforms {
         }
         if (packetDisplayEntity != null && packetDisplayEntity.hasViewers()) {
             if (isRidden()) {
+                // Between pose ticks viewers are still gliding to the last pose; a forced pose goes out at once.
+                int interval = bone.getSkeleton().riddenPoseInterval();
+                if (!force && !bone.getSkeleton().isRiddenPoseTick(interval)) return;
                 readRiddenPose();
                 if (force || riddenChanged()) {
                     if (packetBundle == null) packetBundle = packetDisplayEntity.createPacketBundle();
-                    sendRiddenPosePacket(packetBundle);
+                    sendRiddenPosePacket(packetBundle, interval);
                 }
                 return;
             }
@@ -378,7 +381,8 @@ public class BoneTransforms {
         if (packetDisplayEntity != null) {
             if (isRidden()) {
                 readRiddenPose();
-                sendRiddenPosePacket(packetBundle);
+                // Admission runs on the primary thread; the next clock pass sets the model's own interval.
+                sendRiddenPosePacket(packetBundle, 1);
                 return;
             }
             readTargetPosition(origin, positionBuffer, false);
@@ -446,7 +450,7 @@ public class BoneTransforms {
                 || !same(rdSx, scaleBuffer[0]) || !same(rdSy, scaleBuffer[1]) || !same(rdSz, scaleBuffer[2]);
     }
 
-    private void sendRiddenPosePacket(AbstractPacketBundle packetBundle) {
+    private void sendRiddenPosePacket(AbstractPacketBundle packetBundle, int interval) {
         Location origin = bone.getSkeleton().getCurrentLocation();
         seatLocation.setWorld(origin.getWorld());
         seatLocation.setX(origin.getX() + seatBuffer[0]);
@@ -456,7 +460,8 @@ public class BoneTransforms {
         packetDisplayEntity.generateRiddenTransformationPackets(packetBundle, seatLocation, new Vector3f(translationBuffer),
                 new EulerAngle(rotationBuffer[0], rotationBuffer[1], rotationBuffer[2]),
                 (float) scaleBuffer[0] * 2.5f, (float) scaleBuffer[1] * 2.5f, (float) scaleBuffer[2] * 2.5f,
-                Math.max(0, DefaultConfig.riddenBoneInterpolationTicks));
+                // Each pose glides over the whole interval, so viewers reach it as the next one arrives.
+                Math.max(0, DefaultConfig.riddenBoneInterpolationTicks) * interval);
         rdTx = translationBuffer.x;
         rdTy = translationBuffer.y;
         rdTz = translationBuffer.z;

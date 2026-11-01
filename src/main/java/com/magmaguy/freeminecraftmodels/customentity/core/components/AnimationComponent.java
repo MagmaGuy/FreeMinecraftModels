@@ -70,6 +70,11 @@ public class AnimationComponent {
         return animationManager.hasAnimation(animationName);
     }
 
+    /** Whether the model plays only its idle or walk loop, or has no animations at all. Clock thread only. */
+    public boolean isOnlyLocomotionPlaying() {
+        return animationManager == null || animationManager.isOnlyLocomotionPlaying();
+    }
+
     /**
      * Plays the "death" animation for the entity using the animation manager.
      * The animation is non-blending and non-looping.

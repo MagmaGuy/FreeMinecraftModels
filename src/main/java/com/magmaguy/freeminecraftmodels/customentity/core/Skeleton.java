@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
+import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.IKChainBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.LocatorBlueprint;
@@ -114,6 +115,22 @@ public class Skeleton {
     // half-written offset.
     private volatile int riddenVehicleId = -1;
     private volatile double[] seatOffset = new double[3];
+    // While only idle or walk plays, ridden poses go out once every riddenBoneUpdateIntervalTicks; attacks and other
+    // animations keep every tick. Each model starts at a random phase, so a crowd's poses spread over the interval
+    // instead of all landing in one client frame.
+    private int riddenPoseCounter = java.util.concurrent.ThreadLocalRandom.current().nextInt(1 << 16);
+
+    /** Ticks between this model's ridden poses right now; see DefaultConfig.riddenBoneUpdateIntervalTicks. */
+    int riddenPoseInterval() {
+        int interval = DefaultConfig.riddenBoneUpdateIntervalTicks;
+        if (interval <= 1 || !modeledEntity.getAnimationComponent().isOnlyLocomotionPlaying()) return 1;
+        return interval;
+    }
+
+    /** Whether ridden bones send their pose this tick. */
+    boolean isRiddenPoseTick(int interval) {
+        return interval <= 1 || riddenPoseCounter % interval == 0;
+    }
 
     public boolean isRidden() {
         return riddenVehicleId != -1;
@@ -255,6 +272,7 @@ public class Skeleton {
             }
         }
 
+        riddenPoseCounter++;
         if (getSkeletonWatchers().hasObservers()) {
             rootBone.transform(abstractPacketBundle);
         }
