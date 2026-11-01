@@ -176,6 +176,78 @@ public class BoneBlueprint {
         return new Vector3f(blueprintModelPivot);
     }
 
+    private double displayReach = Double.NaN;
+
+    /**
+     * How far this bone's own cubes reach from the point its display stands on, in blocks at scale 1, through any
+     * cube rotation. Moving, turning or scaling the bone keeps its cubes within this distance, times the bone's
+     * scale, of that point, which is what makes a ridden display safe to cull. The display stands on the model
+     * centre (see BoneTransforms.globalPoint); the centre of the cubes' box is measured too in case the two ever
+     * differ. 0 for a bone without cubes.
+     */
+    public double getDisplayReach() {
+        if (!Double.isNaN(displayReach)) return displayReach;
+        double[] low = {Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY};
+        double[] high = {Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY};
+        List<double[]> cubes = new ArrayList<>();
+        for (CubeBlueprint cube : cubeBlueprintChildren) {
+            Map<String, Object> json = cube.getOriginalCubeJSON();
+            double[] from = point(json.get("from")), to = point(json.get("to"));
+            if (from == null || to == null) continue;
+            double inflate = json.get("inflate") instanceof Number number ? Math.abs(number.doubleValue()) : 0D;
+            double[] cubeLow = new double[3], cubeHigh = new double[3];
+            for (int axis = 0; axis < 3; axis++) {
+                cubeLow[axis] = Math.min(from[axis], to[axis]) - inflate;
+                cubeHigh[axis] = Math.max(from[axis], to[axis]) + inflate;
+                low[axis] = Math.min(low[axis], cubeLow[axis]);
+                high[axis] = Math.max(high[axis], cubeHigh[axis]);
+            }
+            double[] center = {(cubeLow[0] + cubeHigh[0]) / 2D, (cubeLow[1] + cubeHigh[1]) / 2D, (cubeLow[2] + cubeHigh[2]) / 2D};
+            double halfDiagonal = distance(cubeLow, cubeHigh) / 2D;
+            double[] pivot = !rotated(json.get("rotation")) ? null
+                    : point(json.get("origin")) != null ? point(json.get("origin")) : new double[3];
+            // A rotated cube turns about its own origin, so its centre stays that far from it.
+            cubes.add(new double[]{center[0], center[1], center[2], halfDiagonal,
+                    pivot == null ? Double.NaN : pivot[0], pivot == null ? 0 : pivot[1], pivot == null ? 0 : pivot[2]});
+        }
+        if (cubes.isEmpty()) return displayReach = 0D;
+        Vector3f modelCenter = getModelCenter().mul(16f);
+        double[][] anchors = {
+                {(low[0] + high[0]) / 2D, (low[1] + high[1]) / 2D, (low[2] + high[2]) / 2D},
+                {modelCenter.x, modelCenter.y, modelCenter.z}};
+        double reach = 0D;
+        for (double[] anchor : anchors) {
+            for (double[] cube : cubes) {
+                double[] center = {cube[0], cube[1], cube[2]};
+                double centerDistance = Double.isNaN(cube[4]) ? distance(anchor, center)
+                        : distance(anchor, new double[]{cube[4], cube[5], cube[6]})
+                        + distance(new double[]{cube[4], cube[5], cube[6]}, center);
+                reach = Math.max(reach, centerDistance + cube[3]);
+            }
+        }
+        return displayReach = reach / 16D;
+    }
+
+    private static double[] point(Object value) {
+        if (!(value instanceof List<?> list) || list.size() < 3) return null;
+        double[] point = new double[3];
+        for (int axis = 0; axis < 3; axis++) {
+            if (!(list.get(axis) instanceof Number number)) return null;
+            point[axis] = number.doubleValue();
+        }
+        return point;
+    }
+
+    private static boolean rotated(Object rotation) {
+        double[] angles = point(rotation);
+        return angles != null && (angles[0] != 0D || angles[1] != 0D || angles[2] != 0D);
+    }
+
+    private static double distance(double[] a, double[] b) {
+        double x = a[0] - b[0], y = a[1] - b[1], z = a[2] - b[2];
+        return Math.sqrt(x * x + y * y + z * z);
+    }
+
     private void adjustCubes() {
         if (cubeBlueprintChildren.isEmpty()) return;
         //Get the lowest and highest coordinates of the cube, shifted by the origin, adjusted by the scaling of the resource pack to fit the rest of the cube data
