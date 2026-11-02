@@ -13,6 +13,7 @@ import com.magmaguy.easyminecraftgoals.thirdparty.BedrockChecker;
 import org.bukkit.Bukkit;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
@@ -25,6 +26,8 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntPredicate;
 
 public class SkeletonWatchers {
     private final Skeleton skeleton;
@@ -58,9 +61,19 @@ public class SkeletonWatchers {
 
     // Cadence at which ModeledEntitiesClock invokes tickPrimaryThread().
     private static final int VIEWER_STATE_INTERVAL_TICKS = 4;
+    // Models take turns across the interval, so their refreshes do not all land on the same tick.
+    private static final AtomicInteger NEXT_REFRESH_PHASE = new AtomicInteger();
+    private final int refreshPhase = Math.floorMod(NEXT_REFRESH_PHASE.getAndIncrement(), VIEWER_STATE_INTERVAL_TICKS);
+    // The sight point (0 the center, then the corners) each player last saw the model by, tried first next time.
+    private final Map<UUID, Integer> sightPoints = new HashMap<>();
 
     public SkeletonWatchers(Skeleton skeleton) {
         this.skeleton = skeleton;
+    }
+
+    /** The tick of each {@value #VIEWER_STATE_INTERVAL_TICKS}-tick interval on which this model refreshes, 0 to 3. */
+    public int getRefreshPhase() {
+        return refreshPhase;
     }
 
     /** Live view of the Java Edition viewers, safe to read from the model clock. */
@@ -328,6 +341,7 @@ public class SkeletonWatchers {
 
         toRemove.forEach(viewers::remove);
         toRemove.forEach(this::hideFrom);
+        if (!sightPoints.isEmpty()) sightPoints.keySet().retainAll(newPlayers);
     }
 
     // A viewer enters this far inside the body's tracking distance and leaves this close to its edge, so a player
@@ -406,52 +420,63 @@ public class SkeletonWatchers {
         OrientedBoundingBox hitbox = skeleton.getModeledEntity().getHitboxComponent().getObbHitbox();
         if (hitbox == null) return true;
 
-        // First try the center point (most efficient check)
-        Vector centerPoint = currentLocation.toVector();
-        if (isPointVisible(player, centerPoint)) {
-            return true;
+        // The model is in sight when any of its sight points is: the center, then one top and one bottom corner on
+        // each side. The answer does not depend on the order, so the point that last worked for this player goes
+        // first, which spares the rays before it while the player keeps seeing the model by it.
+        Location eyeLocation = player.getEyeLocation();
+        World world = eyeLocation.getWorld();
+        Vector eye = eyeLocation.toVector();
+        UUID uuid = player.getUniqueId();
+        // The corners are only worked out once a corner is tried.
+        Vector3d[][] corners = new Vector3d[1][];
+        int seen = firstVisiblePoint(sightPoints.get(uuid), point -> {
+            if (point > 0 && corners[0] == null) corners[0] = hitbox.getCorners();
+            return isPointVisible(world, eye, sightPoint(point, currentLocation, corners[0]));
+        });
+        if (seen < 0) {
+            sightPoints.remove(uuid);
+            return false;
         }
+        sightPoints.put(uuid, seen);
+        return true;
+    }
 
-        // If center isn't visible, check key points of the bounding box
-        Vector3d[] corners = hitbox.getCorners();
+    // The OBB corners checked after the center, top to bottom, one from each side:
+    // 0 top front right, 4 top front left, 2 bottom front right, 6 bottom front left.
+    private static final int[] SIGHT_CORNERS = {0, 4, 2, 6};
+    static final int SIGHT_POINTS = 1 + SIGHT_CORNERS.length;
 
-        // Check every other corner, prioritizing top to bottom
-        // OBB corner layout:
-        // 0: top front right, 1: top back right (top corners)
-        // 4: top front left, 5: top back left (top corners)
-        // 2: bottom front right, 3: bottom back right (bottom corners)
-        // 6: bottom front left, 7: bottom back left (bottom corners)
-
-        // Check top corners first (0, 4) - one from each side, skipping every other one
-        if (isPointVisible(player, new Vector(corners[0].x, corners[0].y, corners[0].z))) {
-            return true;
+    /**
+     * The first sight point {@code visible} accepts, trying {@code remembered} first and then the others in order,
+     * each once; -1 when it accepts none. Point 0 is the center, 1 to 4 the corners.
+     */
+    static int firstVisiblePoint(Integer remembered, IntPredicate visible) {
+        if (remembered != null && visible.test(remembered)) return remembered;
+        for (int point = 0; point < SIGHT_POINTS; point++) {
+            if (remembered != null && point == remembered) continue;
+            if (visible.test(point)) return point;
         }
-        if (isPointVisible(player, new Vector(corners[4].x, corners[4].y, corners[4].z))) {
-            return true;
-        }
+        return -1;
+    }
 
-        // Then check bottom corners (2, 6) - one from each side, maintaining top-to-bottom order
-        if (isPointVisible(player, new Vector(corners[2].x, corners[2].y, corners[2].z))) {
-            return true;
-        }
-        return isPointVisible(player, new Vector(corners[6].x, corners[6].y, corners[6].z));
-
-        // No points were visible
+    private static Vector sightPoint(int point, Location center, Vector3d[] corners) {
+        if (point == 0) return center.toVector();
+        Vector3d corner = corners[SIGHT_CORNERS[point - 1]];
+        return new Vector(corner.x, corner.y, corner.z);
     }
 
     /**
-     * Helper method to check if a specific point is visible to the player,
+     * Helper method to check if a specific point is visible from the eye,
      * with bounded traversal through non-occluding blocks.
      */
-    private boolean isPointVisible(Player player, Vector point) {
-        Location eyeLocation = player.getEyeLocation();
+    private static boolean isPointVisible(World world, Vector eye, Vector point) {
         return BlockVisibilityRay.isVisible(
-                eyeLocation.toVector(),
+                eye,
                 point,
                 5,
                 (origin, direction, distance) -> {
-                    var result = eyeLocation.getWorld().rayTraceBlocks(
-                            origin.toLocation(eyeLocation.getWorld()),
+                    var result = world.rayTraceBlocks(
+                            origin.toLocation(world),
                             direction,
                             distance,
                             FluidCollisionMode.NEVER,

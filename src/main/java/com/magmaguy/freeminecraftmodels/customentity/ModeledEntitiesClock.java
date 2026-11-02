@@ -5,6 +5,7 @@ import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.core.ModelDensity;
+import com.magmaguy.freeminecraftmodels.customentity.core.SkeletonWatchers;
 import com.magmaguy.freeminecraftmodels.debug.PacketDiagnostics;
 import com.magmaguy.freeminecraftmodels.particles.held.HeldItemParticles;
 import org.bukkit.Location;
@@ -34,6 +35,8 @@ public class ModeledEntitiesClock {
     private static BukkitTask hitboxClock = null;
     private static BukkitTask viewerStateClock = null;
     private static final int VIEWER_STATE_INTERVAL_TICKS = 4;
+    // The tick of the viewer-state interval this tick is: each model refreshes on its own one of them.
+    private static int viewerStatePhase = 0;
     private static final int PRIMARY_STATE_INTERVAL_TICKS = 2;
     private static final ReentrantReadWriteLock lifecycleLock =
             new ReentrantReadWriteLock();
@@ -69,6 +72,7 @@ public class ModeledEntitiesClock {
                 0,
                 PRIMARY_STATE_INTERVAL_TICKS);
         HeldItemParticles.start(MetadataHandler.PLUGIN);
+        viewerStatePhase = 0;
         viewerStateClock = new BukkitRunnable() {
             @Override
             public void run() {
@@ -77,7 +81,7 @@ public class ModeledEntitiesClock {
         }.runTaskTimer(
                 MetadataHandler.PLUGIN,
                 0,
-                VIEWER_STATE_INTERVAL_TICKS);
+                1);
     }
 
     public static void shutdown() {
@@ -218,16 +222,21 @@ public class ModeledEntitiesClock {
      * Bukkit world, player, potion, and ray-trace state is not safe to inspect
      * from the high-frequency packet clock. Keep that clock asynchronous, but
      * refresh viewer membership and visibility on the primary thread every
-     * {@value #VIEWER_STATE_INTERVAL_TICKS} ticks.
+     * {@value #VIEWER_STATE_INTERVAL_TICKS} ticks. The models take turns: each
+     * tick refreshes the ones whose phase it is, so every model still refreshes
+     * every {@value #VIEWER_STATE_INTERVAL_TICKS} ticks without them all landing
+     * on one tick.
      */
     private static void refreshViewerState() {
         if (!running) return;
-        ModelDensity.refresh();
+        int phase = viewerStatePhase;
+        viewerStatePhase = (phase + 1) % VIEWER_STATE_INTERVAL_TICKS;
+        if (phase == 0) ModelDensity.refresh();
         ModeledEntity.getLoadedModeledEntities().forEach(modeledEntity -> {
             if (!modeledEntity.isRemoved() &&
                     modeledEntity.getSkeleton() != null) {
-                modeledEntity.getSkeleton().getSkeletonWatchers()
-                        .tickPrimaryThread();
+                SkeletonWatchers watchers = modeledEntity.getSkeleton().getSkeletonWatchers();
+                if (watchers.getRefreshPhase() == phase) watchers.tickPrimaryThread();
             }
         });
     }
