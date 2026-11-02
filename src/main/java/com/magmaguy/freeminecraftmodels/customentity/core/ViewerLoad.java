@@ -1,7 +1,10 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
+import com.magmaguy.easyminecraftgoals.internal.ClientFrameLatency;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -19,12 +22,18 @@ import java.util.UUID;
  * {@link DefaultConfig#riddenBoneUpdateIntervalTicks} ticks. A model sends each pose to all its viewers at once, so one
  * busy viewer slows it for everyone watching it. The primary-thread viewer clock refreshes this after viewer lists
  * change.</p>
+ *
+ * <p>A player whose game runs below {@link DefaultConfig#riddenBoneUpdateIntervalSlowClientFps} frames a second is busy
+ * too, whatever their load: a struggling game gains most from fewer packets. {@link ClientFrameLatency} estimates each
+ * watching player's frame time from ping round trips; until it has an estimate, only the load counts.</p>
  */
 public final class ViewerLoad {
 
     // A busy player stays busy until their load drops below this share of the threshold, so a load near the threshold
     // does not switch the interval back and forth.
     private static final double RELEASE_SHARE = 0.75;
+    // A slow game stays slow until its frame rate climbs this far above the floor.
+    private static final double SLOW_CLIENT_RELEASE = 1.25;
 
     private static Set<UUID> busyPlayers = Set.of();
 
@@ -55,10 +64,18 @@ public final class ViewerLoad {
                 loads.merge(viewer, updates, Integer::sum);
         }
 
+        int slowClientFps = DefaultConfig.riddenBoneUpdateIntervalSlowClientFps;
         Set<UUID> previouslyBusy = busyPlayers;
         Set<UUID> busy = new HashSet<>();
-        loads.forEach((player, load) -> {
-            if (isBusy(load, threshold, previouslyBusy.contains(player))) busy.add(player);
+        loads.forEach((viewer, load) -> {
+            boolean wasBusy = previouslyBusy.contains(viewer);
+            boolean slowClient = false;
+            if (slowClientFps > 0) {
+                Player player = Bukkit.getPlayer(viewer);
+                if (player != null) ClientFrameLatency.track(player);
+                slowClient = isSlowClient(ClientFrameLatency.frameMillis(viewer), slowClientFps, wasBusy);
+            }
+            if (slowClient || isBusy(load, threshold, wasBusy)) busy.add(viewer);
         });
         busyPlayers = busy;
 
@@ -81,6 +98,12 @@ public final class ViewerLoad {
     /** Whether a player with this load is busy, given whether they were busy at the last refresh. */
     static boolean isBusy(int load, int threshold, boolean wasBusy) {
         return wasBusy ? load >= Math.ceil(threshold * RELEASE_SHARE) : load >= threshold;
+    }
+
+    /** Whether a game with this estimated frame time is too slow, given whether its player was busy before. */
+    static boolean isSlowClient(double frameMillis, int fps, boolean wasBusy) {
+        if (Double.isNaN(frameMillis)) return false;
+        return frameMillis >= 1000.0 / (wasBusy ? fps * SLOW_CLIENT_RELEASE : fps);
     }
 
     public static void clear() {
