@@ -254,6 +254,9 @@ public class SkeletonWatchers {
     }
 
     private static final int MIN_VIEW_DISTANCE = 10;
+    // A player is admitted inside the model's view distance and kept until this far past it, so a model wandering
+    // along the edge, such as a pet seen by a player standing near it, does not flip in and out of view.
+    private static final double VIEW_DISTANCE_KEEP_MARGIN = 4;
     private static final double MIN_VIEW_DISTANCE_SQUARED = MIN_VIEW_DISTANCE * (double) MIN_VIEW_DISTANCE;
 
     private void updateWatcherList() {
@@ -270,6 +273,8 @@ public class SkeletonWatchers {
                 ? skeleton.getModeledEntity().getEffectiveViewDistance()
                 : DefaultConfig.maxModelViewDistance;
         double maxViewDistanceSquared = (double) effectiveViewDistance * effectiveViewDistance;
+        double keepViewDistance = reachFor(effectiveViewDistance, true);
+        double keepViewDistanceSquared = keepViewDistance * keepViewDistance;
 
         // Pseudo load balancer: only honor the close-range proximity override (always-show
         // within MIN_VIEW_DISTANCE, skipping the raytrace) when this world isn't crowded.
@@ -285,7 +290,7 @@ public class SkeletonWatchers {
         Set<UUID> hidden = hiddenFrom();
         // Bones that ride the body need every viewer's client to track it: one viewer past the body's tracking range
         // puts all viewers back on per-bone teleports, which doubles their packets and snaps the animation. The server
-        // is told to track the body as far as the model is seen, so the check below only turns away viewers whose own
+        // is told to track the body as far as the model is kept, so the check below only turns away viewers whose own
         // view distance is shorter. A model given its own view distance (migration flocks) is meant to be seen from
         // farther, so it keeps its full range.
         var modeledEntity = skeleton.getModeledEntity();
@@ -299,17 +304,19 @@ public class SkeletonWatchers {
             // Left out of newPlayers, a hidden player who is still a viewer gets dropped below.
             if (hidden.contains(player.getUniqueId())) continue;
             double distance = player.getLocation().distanceSquared(currentLocation);
+            boolean viewing = viewers.contains(player.getUniqueId());
+            double reachSquared = viewing ? keepViewDistanceSquared : maxViewDistanceSquared;
 
             boolean visible = filmicMode
-                    ? distance < maxViewDistanceSquared
+                    ? distance < reachSquared
                             || FilmicMode.isWithinSentChunks(player, currentLocation, worldViewDistance)
                     : (proximityOverride && distance < MIN_VIEW_DISTANCE_SQUARED)
-                            || (distance < maxViewDistanceSquared && isModelInSight(player, currentLocation));
+                            || (distance < reachSquared && isModelInSight(player, currentLocation));
             if (visible && bodyLocation != null)
                 visible = withinBodyTracking(adapter, riddenBody, bodyLocation, player);
             if (visible) {
                 newPlayers.add(player.getUniqueId());
-                if (!viewers.contains(player.getUniqueId())) displayTo(player);
+                if (!viewing) displayTo(player);
             }
         }
 
@@ -331,16 +338,28 @@ public class SkeletonWatchers {
     private Entity widenedBody;
 
     /**
-     * Has the server track the ridden body as far as the model is seen, plus the admission margin, so viewers between
-     * the body type's own tracking range (48 blocks for animals and monsters by default) and the model's view distance
-     * still ride the bones. The body loses the range when it gets a new tracker (a chunk reload or a change of world),
-     * so each pass checks it again.
+     * Has the server track the ridden body as far as the model is kept, plus the body gate's margins, so viewers
+     * between the body type's own tracking range (48 blocks for animals and monsters by default) and the model's keep
+     * distance still ride the bones: a new viewer inside the view distance passes the admission margin, and a viewer
+     * kept up to {@link #VIEW_DISTANCE_KEEP_MARGIN} past it passes the keep margin. The body loses the range when it
+     * gets a new tracker (a chunk reload or a change of world), so each pass checks it again.
      */
     private void widenBodyTracking(NMSAdapter adapter, Entity body, int viewDistance) {
-        int wanted = viewDistance + (int) Math.ceil(BODY_TRACKING_ADMIT_MARGIN) + 1;
+        int wanted = bodyTrackingRangeFor(viewDistance);
         int range = adapter.getTrackingRange(body);
         if (range < 0 || range >= wanted) return;
         if (adapter.setTrackingRange(body, wanted)) widenedBody = body;
+    }
+
+    /** The tracking range a ridden body needs for a model seen this far: its keep distance and margins, plus one. */
+    static int bodyTrackingRangeFor(int viewDistance) {
+        return viewDistance + (int) Math.ceil(Math.max(BODY_TRACKING_ADMIT_MARGIN,
+                VIEW_DISTANCE_KEEP_MARGIN + BODY_TRACKING_KEEP_MARGIN)) + 1;
+    }
+
+    /** How far a player may be from the model and still get it: the view distance, or the keep distance for a viewer. */
+    static double reachFor(int viewDistance, boolean viewing) {
+        return viewing ? viewDistance + VIEW_DISTANCE_KEEP_MARGIN : viewDistance;
     }
 
     /** Gives the body back the server's own tracking range when the model goes away. */
