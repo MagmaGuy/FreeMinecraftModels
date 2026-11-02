@@ -21,7 +21,6 @@ public class DefaultConfig extends ConfigurationFile {
     public static boolean displayBonesRideTheirEntity;
     public static int riddenBoneInterpolationTicks;
     public static int riddenBoneUpdateIntervalTicks = 1;
-    public static int riddenBoneUpdateIntervalLoadThreshold = 640;
     public static int riddenBoneUpdateIntervalSlowClientFps = 30;
     public static boolean cullOffscreenBones = false;
     public static boolean modelViewersTrackHiddenBodies;
@@ -117,24 +116,19 @@ public class DefaultConfig extends ConfigurationFile {
                         "0 snaps every tick; 1 (default) glides over one tick, which also smooths rotations."),
                 fileConfiguration, "riddenBoneInterpolationTicks", 1);
         riddenBoneUpdateIntervalTicks = Math.max(1, ConfigurationEngine.setInt(
-                List.of("How often, in ticks, a ridden bone sends Java clients its idle or walk pose while a player watching",
-                        "its model is busy (see riddenBoneUpdateIntervalLoadThreshold). Other models send every tick.",
+                List.of("How often, in ticks, a ridden bone sends Java clients its idle or walk pose while a player whose",
+                        "game is slow watches its model (see riddenBoneUpdateIntervalSlowClientFps). Other models send",
+                        "every tick.",
                         "2 (default) sends every other tick and glides over both, which halves the packets an animated",
                         "model sends while slow motion looks the same. Models take turns, so a crowd's updates spread out.",
-                        "Attacks and other animations always send every tick. 1 sends every tick, whatever the load."),
+                        "Attacks and other animations always send every tick. 1 sends every tick, whatever the game."),
                 fileConfiguration, "riddenBoneUpdateIntervalTicks", 2));
-        riddenBoneUpdateIntervalLoadThreshold = Math.max(0, ConfigurationEngine.setInt(
-                List.of("How many bone updates per tick the models a Java player can see must add up to before that player",
-                        "counts as busy. Every model a busy player watches slows its idle and walk poses to",
-                        "riddenBoneUpdateIntervalTicks; the rest keep every tick. The player stops counting as busy once the",
-                        "total falls below three quarters of this. An idling adult Driftjelly sends about 41, so the default",
-                        "640 keeps up to fifteen of them at full rate. 0 slows every model, whatever the load."),
-                fileConfiguration, "riddenBoneUpdateIntervalLoadThreshold", 640));
         riddenBoneUpdateIntervalSlowClientFps = Math.max(0, ConfigurationEngine.setInt(
-                List.of("A Java player whose game draws fewer frames a second than this also counts as busy, whatever",
-                        "the models they see add up to, and counts as busy until it climbs back past a quarter above it.",
-                        "The server times how long each watching player's game takes to answer a ping, which it does once a",
-                        "frame. 30 (default) spares games that are already struggling. 0 turns this off."),
+                List.of("A Java player whose game draws fewer frames a second than this counts as slow until it climbs",
+                        "a quarter above it, and every model a slow player watches sends its idle and walk poses every",
+                        "riddenBoneUpdateIntervalTicks. The server times how long each watching player's game takes to",
+                        "answer a ping, which it does once a frame. 30 (default) spares games that are already struggling,",
+                        "however many models they see. 0 sends every tick to everyone."),
                 fileConfiguration, "riddenBoneUpdateIntervalSlowClientFps", 30));
         cullOffscreenBones = ConfigurationEngine.setBoolean(
                 List.of("When true (default), Java clients skip drawing each bone of a model while it is off screen, which",
