@@ -22,6 +22,7 @@ public class DefaultConfig extends ConfigurationFile {
     public static int riddenBoneInterpolationTicks;
     public static int riddenBoneUpdateIntervalTicks = 1;
     public static int riddenBoneUpdateIntervalLoadThreshold = 640;
+    public static int riddenBoneUpdateIntervalSlowClientFps = 30;
     public static boolean cullOffscreenBones = false;
     public static boolean modelViewersTrackHiddenBodies;
     public static int idleWalkBlendTicks;
@@ -129,6 +130,12 @@ public class DefaultConfig extends ConfigurationFile {
                         "total falls below three quarters of this. An idling adult Driftjelly sends about 41, so the default",
                         "640 keeps up to fifteen of them at full rate. 0 slows every model, whatever the load."),
                 fileConfiguration, "riddenBoneUpdateIntervalLoadThreshold", 640));
+        riddenBoneUpdateIntervalSlowClientFps = Math.max(0, ConfigurationEngine.setInt(
+                List.of("A Java player whose game draws fewer frames a second than this also counts as busy, whatever",
+                        "the models they see add up to, and counts as busy until it climbs back past a quarter above it.",
+                        "The server times how long each watching player's game takes to answer a ping, which it does once a",
+                        "frame. 30 (default) spares games that are already struggling. 0 turns this off."),
+                fileConfiguration, "riddenBoneUpdateIntervalSlowClientFps", 30));
         cullOffscreenBones = ConfigurationEngine.setBoolean(
                 List.of("When true (default), Java clients skip drawing each bone of a model while it is off screen, which",
                         "saves them most of the work for models out of view. A bone that reaches far both above and below",
