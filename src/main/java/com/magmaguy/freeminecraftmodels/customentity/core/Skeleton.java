@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.function.Consumer;
 
 public class Skeleton {
 
@@ -166,15 +167,28 @@ public class Skeleton {
         riddenVehicleId = vehicleId;
         // Mount packets list the vehicle's real passengers, which only the main thread may look up; the model
         // clock is asynchronous, so every bone mounts in one task on the next tick while its ridden pose starts now.
-        List<Runnable> mounts = new ArrayList<>();
+        List<Consumer<AbstractPacketBundle>> mounts = new ArrayList<>();
         for (Bone bone : boneMap.values()) {
-            Runnable mount = bone.getBoneTransforms().setRiddenVehicle(vehicleId);
+            Consumer<AbstractPacketBundle> mount = bone.getBoneTransforms().setRiddenVehicle(vehicleId);
             if (mount != null) mounts.add(mount);
         }
         if (mounts.isEmpty()) return;
-        Runnable mountAll = () -> mounts.forEach(Runnable::run);
+        // Every bone's passenger list re-seats the bones before it, and each re-seat turns them back with a rotation
+        // per bone. Sent one by one, a model's bones cost each viewer about half the bone count squared rotations; in
+        // one bundle only the vehicle's last list turns them back, once each.
+        Runnable mountAll = () -> {
+            AbstractPacketBundle bundle = createMountBundle();
+            mounts.forEach(mount -> mount.accept(bundle));
+            if (bundle != null) bundle.send();
+        };
         if (Bukkit.isPrimaryThread() || MetadataHandler.PLUGIN == null || !MetadataHandler.PLUGIN.isEnabled()) mountAll.run();
         else Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, mountAll);
+    }
+
+    private static AbstractPacketBundle createMountBundle() {
+        com.magmaguy.easyminecraftgoals.NMSAdapter adapter = com.magmaguy.easyminecraftgoals.NMSManager.getAdapter();
+        if (!com.magmaguy.easyminecraftgoals.NMSManager.isEnabled() || adapter == null) return null;
+        return adapter.createPacketBundle();
     }
 
     /**
