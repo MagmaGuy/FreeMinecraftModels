@@ -210,8 +210,7 @@ public class SkeletonWatchers {
                 // Entity became visible again - show bones to all viewers
                 viewers.forEach(uuid -> {
                     Player player = Bukkit.getPlayer(uuid);
-                    if (player != null && player.isValid())
-                        skeleton.getBones().forEach(bone -> bone.displayTo(player));
+                    if (player != null && player.isValid()) showBonesAgain(player);
                 });
             }
         }
@@ -574,6 +573,19 @@ public class SkeletonWatchers {
         // branch is suppressed, otherwise every resync fires another resync 10
         // ticks later and the model visibly flickers/resets twice per second.
         if (allowBedrockResyncSchedule && isBedrock && !wasAlreadyViewing) scheduleBedrockInitialResync(player);
+    }
+
+    /**
+     * Shows the bones to a viewer again once the entity stops being invisible. Like an admission, the bones go
+     * into one bundle for the viewer: each riding bone's spawn carries a passenger list that re-seats the bones
+     * before it, and in one bundle only the vehicle's last list turns them back, once each.
+     */
+    private void showBonesAgain(Player player) {
+        synchronized (skeleton) {
+            AbstractPacketBundle bundle = createInitialDisplayBundle();
+            skeleton.getBones().forEach(bone -> bone.displayTo(player, bundle));
+            if (bundle != null) bundle.send();
+        }
     }
 
     private AbstractPacketBundle createInitialDisplayBundle() {
