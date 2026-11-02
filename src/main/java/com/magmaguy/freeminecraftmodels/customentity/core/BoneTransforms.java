@@ -17,6 +17,8 @@ import org.joml.Quaterniondc;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 
+import java.util.function.Consumer;
+
 public class BoneTransforms {
 
     private static final float MAX_HEAD_TWIST = 75;
@@ -450,9 +452,10 @@ public class BoneTransforms {
 
     /**
      * Mounts the display on the vehicle, or frees it with -1; either way the next pass resends the full pose.
-     * Returns the mount packet step for the skeleton to run on the main thread, or null when nothing changes.
+     * Returns the mount packet step for the skeleton to run on the main thread into its bundle (which may be null),
+     * or null when nothing changes.
      */
-    Runnable setRiddenVehicle(int vehicleId) {
+    Consumer<AbstractPacketBundle> setRiddenVehicle(int vehicleId) {
         if (packetDisplayEntity == null || !packetDisplayEntity.supportsRiddenPlacement()) return null;
         if (riddenVehicleId == vehicleId) return null;
         riddenVehicleId = vehicleId;
@@ -467,7 +470,7 @@ public class BoneTransforms {
         sentLow = Double.NaN;
         cullingHoldPoses = CULLING_HOLD_POSES;
         PacketModelEntity display = packetDisplayEntity;
-        return vehicleId == -1 ? display::dismount : () -> display.mountTo(vehicleId);
+        return vehicleId == -1 ? bundle -> display.dismount(bundle) : bundle -> display.mountTo(vehicleId, bundle);
     }
 
     // ---- off-screen culling ----------------------------------------------------
