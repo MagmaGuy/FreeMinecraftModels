@@ -395,6 +395,7 @@ public class BoneTransforms {
                 if (force || riddenChanged()) {
                     if (packetBundle == null) packetBundle = packetDisplayEntity.createPacketBundle();
                     sendRiddenPosePacket(packetBundle, interval);
+                    bone.getSkeleton().countBoneUpdate();
                 }
                 return;
             }
@@ -403,6 +404,7 @@ public class BoneTransforms {
             readTargetRotation(rotationBuffer, false);
             globalMatrix.getScale(scaleBuffer);
             if (force || displayChanged(positionBuffer, rotationBuffer, scaleBuffer)) {
+                bone.getSkeleton().countBoneUpdate();
                 if (packetBundle == null) packetBundle = packetDisplayEntity.createPacketBundle();
                 sendDisplayEntityUpdatePacket(packetBundle, createTargetLocation(origin, positionBuffer, false),
                         new EulerAngle(rotationBuffer[0], rotationBuffer[1], rotationBuffer[2]), scaleBuffer);
