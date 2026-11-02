@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
+import com.magmaguy.easyminecraftgoals.internal.PacketModelEntity;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.packets.PacketEntityDisplayHelper;
@@ -142,7 +143,8 @@ public class Bone {
     }
 
     public void remove() {
-        if (boneTransforms.getPacketArmorStandEntity() != null) boneTransforms.getPacketArmorStandEntity().remove();
+        PacketModelEntity armorStand = boneTransforms.getPacketArmorStandEntity();
+        if (armorStand != null) armorStand.remove();
         if (boneTransforms.getPacketDisplayEntity() != null) boneTransforms.getPacketDisplayEntity().remove();
         boneChildren.forEach(Bone::remove);
     }
@@ -164,13 +166,7 @@ public class Bone {
 
     public void displayTo(Player player, AbstractPacketBundle packetBundle) {
         if (player == null || !player.isValid() || !player.isOnline()) return;
-        // Mount-point bones have a packet armor stand created in
-        // BoneTransforms.initializeMountPointBone for position tracking, but it has
-        // no model and no invisibility flags set. Without this early-return the
-        // bone is routed through the ARMOR_STAND branch below and a bare vanilla
-        // armor stand is sent to every viewer — visible on Bedrock (and Java if
-        // no resource-pack attachable covers it). The packet entity itself is only
-        // used server-side; it must never be displayed to a player.
+        // Mount points are empty and have no packet entity to show.
         if (boneBlueprint.isMountPoint()) return;
         boolean isBedrock = BedrockChecker.isBedrock(player);
         if (isBedrock && !DefaultConfig.sendCustomModelsToBedrockClientsV2) {
@@ -181,18 +177,19 @@ public class Bone {
             return;
         }
         if (boneBlueprint.isNameTag()) return; // ModeledEntity owns the complete nameplate.
-        if (boneTransforms.getPacketArmorStandEntity() != null &&
+        if (boneTransforms.hasArmorStand() &&
                 (!DefaultConfig.useDisplayEntitiesWhenPossible ||
                         isBedrock ||
                         VersionChecker.serverVersionOlderThan(19, 4))) {
+            PacketModelEntity armorStand = boneTransforms.armorStand();
             if (com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.enabled())
                 com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
                         "Bone.displayTo branch=ARMOR_STAND bedrock=" + isBedrock
                                 + " player=" + player.getName()
                                 + " bone=" + boneBlueprint.getBoneName()
                                 + " modelID=" + boneBlueprint.getModelID()
-                                + " packetClass=" + boneTransforms.getPacketArmorStandEntity().getClass().getSimpleName());
-            PacketEntityDisplayHelper.displayToPlayer(boneTransforms.getPacketArmorStandEntity(), player, packetBundle);
+                                + " packetClass=" + armorStand.getClass().getSimpleName());
+            PacketEntityDisplayHelper.displayToPlayer(armorStand, player, packetBundle);
         } else if (boneTransforms.getPacketDisplayEntity() != null) {
             if (com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.enabled())
                 com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
@@ -212,16 +209,15 @@ public class Bone {
     }
 
     public void hideFrom(UUID playerUUID) {
-        if (boneTransforms.getPacketArmorStandEntity() != null)
-            boneTransforms.getPacketArmorStandEntity().hideFrom(playerUUID);
+        PacketModelEntity armorStand = boneTransforms.getPacketArmorStandEntity();
+        if (armorStand != null) armorStand.hideFrom(playerUUID);
         if (boneTransforms.getPacketDisplayEntity() != null)
             boneTransforms.getPacketDisplayEntity().hideFrom(playerUUID);
     }
 
     public void setHorseLeatherArmorColor(Color color) {
         if (boneBlueprint.isMountPoint()) return;
-        if (boneTransforms.getPacketArmorStandEntity() != null)
-            boneTransforms.getPacketArmorStandEntity().setHorseLeatherArmorColor(color);
+        boneTransforms.setArmorStandTint(color);
         if (boneTransforms.getPacketDisplayEntity() != null)
             boneTransforms.getPacketDisplayEntity().setHorseLeatherArmorColor(color);
         // Tint lives in the entity-data (metadata) packet, which is now only resent
@@ -245,7 +241,8 @@ public class Bone {
             boneLocation = boneTransforms.getDisplayEntityTargetLocation();
             if (boneLocation.getWorld() == null) return;
             boneLocation.getWorld().spawnParticle(particle, boneLocation, 1, 1, 1, 1, speed);
-        } else if (boneTransforms.getPacketArmorStandEntity() != null) {
+        } else if (boneTransforms.getPacketArmorStandEntity() != null || boneBlueprint.isMountPoint()) {
+            // Mount points puff where their armor stand stood, though they no longer get one.
             boneLocation = boneTransforms.getArmorStandTargetLocation();
             if (boneLocation.getWorld() == null) return;
             boneLocation.getWorld().spawnParticle(particle, boneLocation, 1, 1, 1, 1, speed);

@@ -9,6 +9,7 @@ import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.utils.TransformationMatrix;
 import com.magmaguy.magmacore.util.VersionChecker;
 import lombok.Getter;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.util.EulerAngle;
 import org.bukkit.util.Vector;
@@ -32,8 +33,17 @@ public class BoneTransforms {
     // The root's body tilt about its pivot; created the first time the model leans.
     private TransformationMatrix tiltMatrix;
     private final Vector3d tiltAngles = new Vector3d();
+    // A display bone's packet armor stand shows it to viewers its display cannot reach: Bedrock players without a
+    // Bedrock model, and every viewer where display entities are off or missing. Next to a display it is built the
+    // first time such a viewer comes, in the pose and tint it would have held by then; without one it is built at
+    // once, since it then places the bone. Null until built.
     @Getter
-    private PacketModelEntity packetArmorStandEntity = null;
+    private volatile PacketModelEntity packetArmorStandEntity = null;
+    private boolean armorStandBone = false;
+    // The pose the armor stand takes when it is built: where the display was made, then each admission's.
+    private Location armorStandPoseLocation;
+    private EulerAngle armorStandPoseRotation;
+    private Color armorStandTint;
     @Getter
     private PacketModelEntity packetDisplayEntity = null;
     public BoneTransforms(Bone bone, Bone parent) {
@@ -167,13 +177,8 @@ public class BoneTransforms {
 
     public void generateDisplay() {
         transform();
-        if (bone.getBoneBlueprint().isMountPoint()) {
-            // Mount-point bones need a packet entity for position tracking
-            // (so getBoneLocation() works and tick updates follow animations)
-            // but no visible model since the bone is empty.
-            initializeMountPointBone();
-            return;
-        }
+        // A mount point is never shown and getBoneLocation reads it from the matrices, so it needs no packet entity.
+        if (bone.getBoneBlueprint().isMountPoint()) return;
         if (bone.getBoneBlueprint().isDisplayModel()) {
             if (bone.getBoneBlueprint().isNameTag()) {
                 return;
@@ -181,15 +186,6 @@ public class BoneTransforms {
             initializeDisplayEntityBone();
             initializeArmorStandBone();
         }
-    }
-
-    private void initializeMountPointBone() {
-        // Create an invisible packet armor stand just for position tracking.
-        // No model is set — this entity is never shown to players, it only
-        // provides a location that follows the skeleton's animation transforms.
-        Location loc = getMountPointTargetLocation();
-        packetArmorStandEntity = NMSManager.getAdapter().createPacketArmorStandEntity(loc);
-        packetArmorStandEntity.sendLocationAndRotationPacket(loc, new EulerAngle(0, 0, 0));
     }
 
     private void initializeDisplayEntityBone() {
@@ -205,15 +201,55 @@ public class BoneTransforms {
     }
 
     private void initializeArmorStandBone() {
-        //todo: add way to disable armor stands later via config
+        armorStandBone = true;
         Location armorStandLocation = getArmorStandTargetLocation();
-        packetArmorStandEntity = NMSManager.getAdapter().createPacketArmorStandEntity(armorStandLocation);
-        if (VersionChecker.serverVersionOlderThan(21, 4))
-            packetArmorStandEntity.initializeModel(armorStandLocation, Integer.parseInt(bone.getBoneBlueprint().getModelID()));
-        else
-            packetArmorStandEntity.initializeModel(armorStandLocation, bone.getBoneBlueprint().getModelID());
+        EulerAngle armorStandRotation = getArmorStandEntityRotation();
+        if (packetDisplayEntity == null) {
+            packetArmorStandEntity = buildArmorStand(armorStandLocation, armorStandRotation);
+        } else {
+            armorStandPoseLocation = armorStandLocation;
+            armorStandPoseRotation = armorStandRotation;
+        }
+    }
 
-        packetArmorStandEntity.sendLocationAndRotationPacket(armorStandLocation, getArmorStandEntityRotation());
+    private PacketModelEntity buildArmorStand(Location location, EulerAngle rotation) {
+        PacketModelEntity armorStand = NMSManager.getAdapter().createPacketArmorStandEntity(location);
+        if (VersionChecker.serverVersionOlderThan(21, 4))
+            armorStand.initializeModel(location, Integer.parseInt(bone.getBoneBlueprint().getModelID()));
+        else
+            armorStand.initializeModel(location, bone.getBoneBlueprint().getModelID());
+        armorStand.sendLocationAndRotationPacket(location, rotation);
+        if (armorStandTint != null) armorStand.setHorseLeatherArmorColor(armorStandTint);
+        return armorStand;
+    }
+
+    /** Whether this bone has a packet armor stand for viewers its display cannot reach, built or not yet. */
+    public boolean hasArmorStand() {
+        return armorStandBone;
+    }
+
+    /** The bone's packet armor stand, built now if no viewer needed it before; null for a bone without one. */
+    PacketModelEntity armorStand() {
+        PacketModelEntity armorStand = packetArmorStandEntity;
+        if (armorStand != null || !armorStandBone) return armorStand;
+        synchronized (bone.getSkeleton()) {
+            if (packetArmorStandEntity == null)
+                packetArmorStandEntity = buildArmorStand(armorStandPoseLocation, armorStandPoseRotation);
+            return packetArmorStandEntity;
+        }
+    }
+
+    /** Tints the armor stand, or the one built later. */
+    void setArmorStandTint(Color color) {
+        if (!armorStandBone) return;
+        PacketModelEntity armorStand = packetArmorStandEntity;
+        if (armorStand == null) {
+            synchronized (bone.getSkeleton()) {
+                armorStandTint = color;
+                armorStand = packetArmorStandEntity;
+            }
+        }
+        if (armorStand != null) armorStand.setHorseLeatherArmorColor(color);
     }
 
     private void rotateByEntityYaw() {
@@ -376,7 +412,7 @@ public class BoneTransforms {
     /** Refresh packet-entity state once at admission, even when no viewer existed. */
     void prepareDisplayPose(AbstractPacketBundle packetBundle) {
         Location origin = bone.getSkeleton().passLocation();
-        if (packetArmorStandEntity != null) {
+        if (armorStandBone) {
             readTargetPosition(origin, positionBuffer, true);
             readTargetRotation(rotationBuffer, true);
             sendArmorStandUpdatePacket(packetBundle, createTargetLocation(origin, positionBuffer, true),
@@ -577,12 +613,19 @@ public class BoneTransforms {
     }
 
     private void sendArmorStandUpdatePacket(AbstractPacketBundle packetBundle, Location loc, EulerAngle rot) {
-        if (packetArmorStandEntity != null) {
-            packetArmorStandEntity.generateLocationAndRotationAndScalePackets(
-                    packetBundle,
-                    loc,
-                    rot,
-                    1f);
+        if (armorStandBone) {
+            PacketModelEntity armorStand = packetArmorStandEntity;
+            if (armorStand != null) {
+                armorStand.generateLocationAndRotationAndScalePackets(
+                        packetBundle,
+                        loc,
+                        rot,
+                        1f);
+            } else {
+                // Not built yet: no viewer could receive the pose, so it is kept for the build.
+                armorStandPoseLocation = loc;
+                armorStandPoseRotation = rot;
+            }
             asLx = loc.getX();
             asLy = loc.getY();
             asLz = loc.getZ();
