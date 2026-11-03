@@ -218,7 +218,17 @@ public final class PacketDiagnostics {
         public void addPacket(Object packet, List<Player> viewers) {
             // Real behavior first — counting must never change what gets sent.
             delegate.addPacket(packet, viewers);
+            count(packet, viewers);
+        }
 
+        @Override
+        public void addPosePacket(Object packet, List<Player> viewers) {
+            // Kept a pose, so a viewer whose connection is behind still skips it while sampling.
+            delegate.addPosePacket(packet, viewers);
+            count(packet, viewers);
+        }
+
+        private void count(Object packet, List<Player> viewers) {
             if (packet == null || viewers == null || viewers.isEmpty()) return;
             int v = viewers.size();
             String type = packet.getClass().getSimpleName();
