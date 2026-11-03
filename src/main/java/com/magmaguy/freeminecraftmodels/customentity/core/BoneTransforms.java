@@ -392,7 +392,8 @@ public class BoneTransforms {
                 int interval = bone.getSkeleton().riddenPoseInterval();
                 if (!force && !bone.getSkeleton().isRiddenPoseTick(interval)) return;
                 readRiddenPose();
-                if (force || riddenChanged()) {
+                // A viewer whose connection fell behind skipped a pose, so a still bone sends it one more.
+                if (force || riddenChanged() || packetDisplayEntity.owesPose()) {
                     if (packetBundle == null) packetBundle = packetDisplayEntity.createPacketBundle();
                     sendRiddenPosePacket(packetBundle, interval);
                     bone.getSkeleton().countBoneUpdate();
@@ -403,7 +404,7 @@ public class BoneTransforms {
             readTargetPosition(origin, positionBuffer, false);
             readTargetRotation(rotationBuffer, false);
             globalMatrix.getScale(scaleBuffer);
-            if (force || displayChanged(positionBuffer, rotationBuffer, scaleBuffer)) {
+            if (force || displayChanged(positionBuffer, rotationBuffer, scaleBuffer) || packetDisplayEntity.owesPose()) {
                 bone.getSkeleton().countBoneUpdate();
                 if (packetBundle == null) packetBundle = packetDisplayEntity.createPacketBundle();
                 sendDisplayEntityUpdatePacket(packetBundle, createTargetLocation(origin, positionBuffer, false),
