@@ -1,7 +1,9 @@
 package com.magmaguy.freeminecraftmodels.customentity.core;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.joml.Quaterniond;
 import org.joml.Vector3d;
+import org.joml.Vector3dc;
 
 /**
  * Turns a model's travel into a tilt: each tick it reads where the body is, smooths that into a velocity, works out
@@ -57,13 +59,28 @@ public final class TravelTilt {
      * @return the tilt to apply, or null once the model is upright
      */
     public Quaterniond step(double x, double y, double z, float yaw, TravelOrientation settings, boolean free) {
+        return step(x, y, z, null, yaw, settings, free);
+    }
+
+    /**
+     * Advances one tick, given the body's exact velocity when its mover knows it, as a Mind's swim does: it moves the
+     * body by that velocity every tick. The tilt then leans with that velocity at once, held back only by its turn
+     * speed, so a swimmer's nose rises and dips in step with its wave. Smoothing the travel out of positions and easing
+     * onto it lagged a 2-second wave by about a quarter of it and cut the lean in half: the nose pointed up at the
+     * crest instead of on the way up.
+     *
+     * @param motion the body's velocity in blocks per tick, or null to smooth the travel out of its positions
+     */
+    public Quaterniond step(double x, double y, double z, @Nullable Vector3dc motion, float yaw,
+                            TravelOrientation settings, boolean free) {
         trackVelocity(x, y, z);
+        if (motion != null) velocity.set(motion);
         float yawRate = Float.isNaN(lastYaw) || Float.isNaN(yaw) ? 0F : (float) TurnInertia.wrap(yaw - lastYaw);
         lastYaw = yaw;
         if (!free || settings.style() == TravelOrientation.Style.UPRIGHT) target.identity();
         else if (settings.style() == TravelOrientation.Style.TOP_FIRST) topFirst(settings, yaw);
         else frontFirst(settings, yaw, yawRate);
-        turnTowardTarget(settings.turnSpeed() / 20D);
+        turnTowardTarget(settings.turnSpeed() / 20D, motion == null);
         return degrees(current) < UPRIGHT_EPSILON ? null : new Quaterniond(current);
     }
 
@@ -149,13 +166,15 @@ public final class TravelTilt {
         target.rotationAxis(Math.toRadians(bank), front.x, front.y, front.z).mul(pitchTurn);
     }
 
-    private void turnTowardTarget(double maxStepDegrees) {
+    /** Turns toward the target, no faster than the turn speed, easing onto it unless it follows an exact velocity. */
+    private void turnTowardTarget(double maxStepDegrees, boolean ease) {
         double remaining = Math.toDegrees(angleBetween(current, target));
         if (remaining <= 1.0E-6D) {
             current.set(target);
             return;
         }
-        double turn = Math.min(remaining, Math.min(maxStepDegrees, Math.max(remaining * EASE, MIN_STEP)));
+        double turn = ease ? Math.min(remaining, Math.min(maxStepDegrees, Math.max(remaining * EASE, MIN_STEP)))
+                : Math.min(remaining, maxStepDegrees);
         if (turn >= remaining) current.set(target);
         else current.slerp(target, turn / remaining);
         current.normalize();

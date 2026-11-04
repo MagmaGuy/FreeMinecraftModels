@@ -151,4 +151,49 @@ class TravelTiltTest {
     void frontFirstLevelFlightStaysLevel() {
         assertNull(travel(0, 0, 0.25D, 120, 0F, FRONT_FIRST));
     }
+
+    /** The front's pitch in degrees, up positive, for a model facing south. */
+    private static double pitch(Quaterniond rotation) {
+        return rotation == null ? 0D : Math.toDegrees(Math.asin(rotation.transform(new Vector3d(0, 0, 1)).y));
+    }
+
+    @Test
+    void anExactSwimPitchesInStepWithItsWave() {
+        // A penguin swimming south at 0.1 blocks per tick on a 0.5-block wave every 40 ticks, its mover reporting
+        // its velocity: the nose points up most while it rises fastest, is level at the crest and points down most
+        // while it dips fastest, so it glides along its wave rather than rocking behind it.
+        TravelOrientation swim = new TravelOrientation(TravelOrientation.Style.FRONT_FIRST, 0.3D, 2.5D, 35D, 120D);
+        double omega = Math.PI * 2D / 40D;
+        double fastestRise = 0D, crest = 0D, fastestDip = 0D, highest = 0D;
+        for (int tick = 0; tick < 200; tick++) {
+            double climb = 0.25D * omega * Math.cos(omega * tick);
+            z += 0.1D;
+            y += climb;
+            double pitch = pitch(tilt.step(x, y, z, new Vector3d(0D, climb, 0.1D), 0F, swim, true));
+            if (tick < 120) continue;
+            int phase = tick % 40;
+            if (phase == 0) fastestRise = pitch;
+            if (phase == 10) crest = pitch;
+            if (phase == 20) fastestDip = pitch;
+            highest = Math.max(highest, pitch);
+        }
+        assertTrue(highest > 12D, "the nose rises with the wave: at most " + highest);
+        assertEquals(highest, fastestRise, 1.5D, "the nose points up most while it rises fastest");
+        assertEquals(0D, crest, 2D, "level at the crest");
+        assertEquals(-highest, fastestDip, 1.5D, "and points down most while it dips fastest");
+    }
+
+    @Test
+    void anExactSwimStillTurnsNoFasterThanItsTurnSpeed() {
+        TravelOrientation slow = new TravelOrientation(TravelOrientation.Style.FRONT_FIRST, 0.3D, 2.5D, 35D, 40D);
+        double previous = 0D;
+        for (int tick = 0; tick < 30; tick++) {
+            z += 0.1D;
+            y += 0.1D;
+            double pitch = pitch(tilt.step(x, y, z, new Vector3d(0D, 0.1D, 0.1D), 0F, slow, true));
+            assertTrue(pitch - previous <= 2D + 1.0E-6D, "turned " + (pitch - previous) + " degrees in a tick");
+            previous = pitch;
+        }
+        assertEquals(35D, previous, 0.5D, "and reaches its lean");
+    }
 }
