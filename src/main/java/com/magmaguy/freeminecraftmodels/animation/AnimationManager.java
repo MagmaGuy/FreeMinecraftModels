@@ -24,14 +24,16 @@ import java.util.function.Predicate;
 /**
  * Plays a model's animations in two layers and mixes them into one pose per tick.
  * <ul>
- * <li>Base layer: a locomotion machine (spawn, idle, walk, death) driven by {@link #TRANSITIONS}, or a custom
- * animation played with {@code blend=false}, which takes the whole pose over while the machine keeps tracking
- * idle and walk underneath.</li>
+ * <li>Base layer: a locomotion machine (spawn, idle, long_idle, walk, ride, death) driven by {@link #TRANSITIONS},
+ * or a custom animation played with {@code blend=false}, which takes the whole pose over while the machine keeps
+ * tracking idle and walk underneath. A model with a {@code long_idle} animation plays it once after standing idle
+ * for a random {@code longIdleMinSeconds} to {@code longIdleMaxSeconds}; a steered mount with a ridden animation
+ * plays that in place of walk.</li>
  * <li>Action layer: attacks, {@code damaged}, and custom animations played with {@code blend=true}. An action
  * replaces the bones it keys when its Blockbench Override is set and adds to them otherwise.</li>
  * </ul>
- * Idle and walk cross-fade into each other and death fades in from whatever pose the model holds; every other
- * switch snaps. Custom animations outrank built-in ones, and only death interrupts them.
+ * Idle, long_idle, walk and ride cross-fade into each other and death fades in from whatever pose the model holds;
+ * every other switch snaps. Custom animations outrank built-in ones, and only death interrupts them.
  * <p>
  * Requests can come from any thread; they are queued and applied on the model clock, which owns all state here.
  */
@@ -39,23 +41,40 @@ public class AnimationManager {
     private static final Set<String> ATTACKS = Set.of("attack", "attack_melee", "attack_ranged");
     private static final String DAMAGED = "damaged";
 
-    private enum Base {SPAWN, IDLE, WALK, DEATH}
+    private enum Base {SPAWN, IDLE, LONG_IDLE, WALK, RIDE, DEATH}
 
     /** One row of the locomotion machine: a state change, whether it reads the mob's movement, when, and its fade. */
     private record Transition(Base from, Base to, boolean needsEntity,
                               Predicate<AnimationManager> when, IntSupplier fadeTicks) {
     }
 
+    // The first row that applies wins, so each ridden row comes before the walking one it replaces.
     private static final List<Transition> TRANSITIONS = List.of(
             new Transition(Base.SPAWN, Base.WALK, false, m -> m.base.finished() && m.moving, () -> 0),
             new Transition(Base.SPAWN, Base.IDLE, false, m -> m.base.finished(), () -> 0),
-            new Transition(Base.IDLE, Base.WALK, true, m -> m.moving, () -> DefaultConfig.idleWalkBlendTicks),
-            new Transition(Base.WALK, Base.IDLE, true, m -> !m.moving, () -> DefaultConfig.idleWalkBlendTicks));
+            new Transition(Base.IDLE, Base.RIDE, true, m -> m.moving && m.steered, AnimationManager::locomotionFade),
+            new Transition(Base.IDLE, Base.WALK, true, m -> m.moving && !m.rides(), AnimationManager::locomotionFade),
+            new Transition(Base.IDLE, Base.LONG_IDLE, false, AnimationManager::longIdleDue,
+                    AnimationManager::locomotionFade),
+            new Transition(Base.LONG_IDLE, Base.RIDE, true, m -> m.moving && m.steered,
+                    AnimationManager::locomotionFade),
+            new Transition(Base.LONG_IDLE, Base.WALK, true, m -> m.moving && !m.rides(),
+                    AnimationManager::locomotionFade),
+            // Anything else that starts cuts it short: an attack, a rider.
+            new Transition(Base.LONG_IDLE, Base.IDLE, false, m -> m.base.finished() || m.action != null || m.steered,
+                    AnimationManager::locomotionFade),
+            new Transition(Base.WALK, Base.RIDE, true, m -> m.moving && m.steered, AnimationManager::locomotionFade),
+            new Transition(Base.WALK, Base.IDLE, true, m -> !m.moving, AnimationManager::locomotionFade),
+            new Transition(Base.RIDE, Base.IDLE, true, m -> !m.moving, AnimationManager::locomotionFade),
+            new Transition(Base.RIDE, Base.WALK, true, m -> !m.rides(), AnimationManager::locomotionFade));
 
     private final ModeledEntity modeledEntity;
     private final Animations animations;
     private final Bone[] bones;
-    private final Animation idle, walk, spawn, death;
+    private final Animation idle, walk, spawn, death, longIdle;
+    // What a steered mount plays while it moves, in place of walk; null walks. Set on the clock thread.
+    private Animation ride;
+    private final SplittableRandom random = new SplittableRandom();
     private final ConcurrentLinkedQueue<Runnable> requests = new ConcurrentLinkedQueue<>();
     // Set by the request itself so later requests are refused at once: death is terminal.
     private volatile boolean dead = false;
@@ -67,6 +86,11 @@ public class AnimationManager {
     private Playback action;
     private boolean actionCustom = false;
     private boolean moving = false;
+    // Whether a player steers the mob this tick.
+    private boolean steered = false;
+    // Ticks the base has shown idle with nothing else playing, and how many the current wait for long_idle lasts.
+    private int idleTicks = 0;
+    private int longIdleWait = -1;
     // Where a steered mount was last seen; its client moves it with absolute positions, so it has no velocity here.
     private double lastX = Double.NaN, lastZ = Double.NaN;
 
@@ -111,6 +135,7 @@ public class AnimationManager {
         walk = animations.getAnimations().get("walk");
         spawn = animations.getAnimations().get("spawn");
         death = animations.getAnimations().get("death");
+        longIdle = animations.getAnimations().get("long_idle");
         basePose = new Pose(bones.length);
         fromPose = new Pose(bones.length);
         frozenPose = new Pose(bones.length);
@@ -184,9 +209,22 @@ public class AnimationManager {
         return animations.getAnimations().containsKey(animationName);
     }
 
-    /** Whether only the idle or walk loop plays: no attack, custom animation, spawn or death. Clock thread only. */
+    /**
+     * The animation a steered mount plays while it moves, in place of walk: a ridden pet's slide, say. Null, or a name
+     * the model lacks, walks as before.
+     */
+    public void setRiddenAnimation(String name) {
+        requests.add(() -> {
+            Animation next = name == null ? null : animations.getAnimations().get(name);
+            if (next == null && name != null) next = animations.getAnimations().get(name.toLowerCase(Locale.ROOT));
+            ride = next;
+            if (locomotion == Base.RIDE && !rides()) setLocomotion(moving ? Base.WALK : Base.IDLE, locomotionFade());
+        });
+    }
+
+    /** Whether only the base's own loops play: no attack, custom animation, spawn or death. Clock thread only. */
     public boolean isOnlyLocomotionPlaying() {
-        return action == null && !takeover && (locomotion == Base.IDLE || locomotion == Base.WALK);
+        return action == null && !takeover && isLocomotion(locomotion);
     }
 
     public void tick() {
@@ -208,7 +246,8 @@ public class AnimationManager {
         // Horizontal motion only, so gravity alone never starts the walk.
         Vector velocity = entity.getVelocity();
         moving = velocity.getX() != 0 || velocity.getZ() != 0;
-        if (!(modeledEntity instanceof DynamicEntity dynamicEntity) || !dynamicEntity.hasSteeringRider()) {
+        steered = modeledEntity instanceof DynamicEntity dynamicEntity && dynamicEntity.hasSteeringRider();
+        if (!steered) {
             lastX = Double.NaN;
             travel(velocity.getX(), velocity.getZ());
             return;
@@ -243,16 +282,50 @@ public class AnimationManager {
 
     private void runTransitions() {
         if (locomotion == Base.DEATH) return;
-        boolean hasEntity = modeledEntity.getUnderlyingEntity() != null;
-        for (Transition transition : TRANSITIONS) {
-            if (transition.from() != locomotion) continue;
-            if (transition.needsEntity() && !hasEntity) continue;
-            if (locomotion == Base.SPAWN && (takeover || base == null)) continue;
-            if (animationFor(transition.to()) == null) continue;
-            if (!transition.when().test(this)) continue;
-            setLocomotion(transition.to(), transition.fadeTicks().getAsInt());
+        try {
+            boolean hasEntity = modeledEntity.getUnderlyingEntity() != null;
+            for (Transition transition : TRANSITIONS) {
+                if (transition.from() != locomotion) continue;
+                if (transition.needsEntity() && !hasEntity) continue;
+                if (locomotion == Base.SPAWN && (takeover || base == null)) continue;
+                if (animationFor(transition.to()) == null) continue;
+                if (!transition.when().test(this)) continue;
+                setLocomotion(transition.to(), transition.fadeTicks().getAsInt());
+                return;
+            }
+        } finally {
+            countIdle();
+        }
+    }
+
+    /** Counts the ticks the base shows idle with nothing else playing; any other tick starts the wait over. */
+    private void countIdle() {
+        if (locomotion != Base.IDLE || takeover || action != null || steered || longIdle == null) {
+            idleTicks = 0;
             return;
         }
+        if (idleTicks++ == 0) longIdleWait = rollLongIdleWait();
+    }
+
+    /** A wait for long_idle in ticks, between the configured seconds; -1 when long_idle is turned off. */
+    private int rollLongIdleWait() {
+        int max = DefaultConfig.longIdleMaxSeconds;
+        if (max <= 0) return -1;
+        int min = Math.max(0, Math.min(DefaultConfig.longIdleMinSeconds, max));
+        return Math.max(1, 20 * min + random.nextInt(20 * (max - min) + 1));
+    }
+
+    private boolean longIdleDue() {
+        return longIdleWait > 0 && idleTicks >= longIdleWait;
+    }
+
+    /** Whether a player steers the mob and the model has a ridden animation for it. */
+    private boolean rides() {
+        return steered && ride != null;
+    }
+
+    private static int locomotionFade() {
+        return DefaultConfig.idleWalkBlendTicks;
     }
 
     private void requestLocomotion(Base target) {
@@ -270,7 +343,7 @@ public class AnimationManager {
             return;
         }
         if (target == locomotion && base != null) return;
-        int fade = isIdleOrWalk(locomotion) && isIdleOrWalk(target) ? DefaultConfig.idleWalkBlendTicks : 0;
+        int fade = isLocomotion(locomotion) && isLocomotion(target) ? DefaultConfig.idleWalkBlendTicks : 0;
         setLocomotion(target, fade);
     }
 
@@ -288,8 +361,9 @@ public class AnimationManager {
             return;
         }
         endAction();
-        // The machine keeps tracking idle and walk underneath; a spawn in progress is over.
-        if (locomotion == Base.SPAWN) locomotion = moving && walk != null ? Base.WALK : Base.IDLE;
+        // The machine keeps tracking idle and walk underneath; a spawn or long idle in progress is over.
+        if (locomotion == Base.SPAWN || locomotion == Base.LONG_IDLE)
+            locomotion = moving && walk != null ? Base.WALK : Base.IDLE;
         switchBase(new Playback(animation, loop), 0);
         takeover = true;
     }
@@ -486,7 +560,9 @@ public class AnimationManager {
         return switch (state) {
             case SPAWN -> spawn;
             case IDLE -> idle;
+            case LONG_IDLE -> longIdle;
             case WALK -> walk;
+            case RIDE -> ride;
             case DEATH -> death;
         };
     }
@@ -494,10 +570,12 @@ public class AnimationManager {
     private Playback locomotionPlayback(Base state) {
         Animation animation = animationFor(state);
         if (animation == null) return null;
-        return new Playback(animation, state == Base.IDLE || state == Base.WALK);
+        // Long idle plays once whatever Blockbench says, then the machine goes back to idle.
+        return new Playback(animation, isLocomotion(state) && state != Base.LONG_IDLE);
     }
 
-    private static boolean isIdleOrWalk(Base state) {
-        return state == Base.IDLE || state == Base.WALK;
+    /** The states the base cycles through on its own, which cross-fade into each other. */
+    private static boolean isLocomotion(Base state) {
+        return state == Base.IDLE || state == Base.LONG_IDLE || state == Base.WALK || state == Base.RIDE;
     }
 }

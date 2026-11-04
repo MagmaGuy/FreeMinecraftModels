@@ -26,6 +26,8 @@ public class DefaultConfig extends ConfigurationFile {
     public static boolean modelViewersTrackHiddenBodies;
     public static int idleWalkBlendTicks;
     public static int deathBlendTicks;
+    public static int longIdleMinSeconds;
+    public static int longIdleMaxSeconds;
     public static boolean weightedTurning;
     public static double turnSpeedCap;
     public static double turnAcceleration;
@@ -154,6 +156,14 @@ public class DefaultConfig extends ConfigurationFile {
                 List.of("Experimental. How many ticks a model takes to fade from whatever pose it holds into its",
                         "death animation. 0 switches instantly, as older versions did. Bedrock clients get the same time."),
                 fileConfiguration, "deathBlendTicks", 4);
+        longIdleMinSeconds = ConfigurationEngine.setInt(
+                List.of("How long a model with a long_idle animation stands idle before playing it once, at least.",
+                        "Each wait is a random number of seconds from longIdleMinSeconds to longIdleMaxSeconds."),
+                fileConfiguration, "longIdleMinSeconds", 15);
+        longIdleMaxSeconds = ConfigurationEngine.setInt(
+                List.of("How long a model with a long_idle animation stands idle before playing it once, at most.",
+                        "Moving, attacking, other animations and riding start the wait over. 0 never plays long_idle."),
+                fileConfiguration, "longIdleMaxSeconds", 30);
         weightedTurning = ConfigurationEngine.setBoolean(
                 List.of("Experimental. When true (default), a model turns toward its mob's facing with inertia: it spins up,",
                         "cruises and brakes, and bigger models turn slower. Only the model turns this way; the mob itself",

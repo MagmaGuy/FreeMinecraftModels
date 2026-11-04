@@ -50,13 +50,14 @@ final class PetRides {
     }
 
     /**
-     * Gets a new body ready: a rideable adult's saddle sits at the species' seat height, and one whose record has a
-     * saddle wears it.
+     * Gets a new body ready: a rideable adult's saddle sits at the species' seat height, its model plays the ridden
+     * animation while ridden and moving, and one whose record has a saddle wears it.
      */
     static void prepare(PetControl control, LivingEntity body, DynamicEntity modeled) {
         PetRiding riding = control.species().riding();
         if (riding == null || control.isBaby()) return;
         modeled.liftSaddleToHeight(riding.seatHeight());
+        modeled.getAnimationComponent().setRiddenAnimation(riding.animation());
         if (control.record() != null && control.record().saddled) putSaddleOn(body, control.ownerId());
     }
 
