@@ -31,6 +31,8 @@ public final class PetRecord {
     public List<Relative> family;
     /** The babies it has had, oldest first. */
     public List<Relative> babies;
+    /** Whether it wears a saddle its owner gave it, which shears take back and which drops when it dies or goes free. */
+    public boolean saddled;
 
     public static final String TAMED = "tamed", BRED = "bred", MUTATED = "mutated", GIVEN = "given";
 

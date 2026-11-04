@@ -4,7 +4,9 @@ import com.google.gson.Gson;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** A pet record keeps its stay order and health through the JSON a player's data holds, as PetCollection writes it. */
 class PetRecordPersistenceTest {
@@ -22,6 +24,15 @@ class PetRecordPersistenceTest {
         assertEquals(-33D, back.stay.z);
         assertEquals(90F, back.stay.yaw);
         assertEquals(7.5D, back.health);
+    }
+
+    @Test
+    void aSaddleStaysOnThroughSaving() {
+        PetRecord record = new PetRecord("penguin", "fmm_penguin_emperor", false, 1793300000000L);
+        record.saddled = true;
+        assertTrue(GSON.fromJson(GSON.toJson(record), PetRecord.class).saddled);
+        assertFalse(GSON.fromJson("{\"species\":\"penguin\",\"model\":\"fmm_penguin\"}", PetRecord.class).saddled,
+                "a record from before has no saddle");
     }
 
     @Test
