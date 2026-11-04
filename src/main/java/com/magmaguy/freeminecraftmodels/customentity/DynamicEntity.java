@@ -253,7 +253,14 @@ public class DynamicEntity extends ModeledEntity {
         if (underlyingEntity == null || !underlyingEntity.isValid()) return;
         Location at = underlyingEntity.getLocation();
         boolean free = !isDying() && syncMovement && !isRiddenByPlayer();
-        org.joml.Quaterniond lean = travelTilt.step(at.getX(), at.getY(), at.getZ(), modelYaw, orientation, free);
+        // A swim moves the body by its velocity every tick, so the lean follows that velocity as it is, in step with
+        // the swim's wave, instead of smoothing it out of positions a quarter of a wave late.
+        org.joml.Vector3d motion = null;
+        if (swimming && swim != null) {
+            org.bukkit.util.Vector velocity = underlyingEntity.getVelocity();
+            motion = new org.joml.Vector3d(velocity.getX(), velocity.getY(), velocity.getZ());
+        }
+        org.joml.Quaterniond lean = travelTilt.step(at.getX(), at.getY(), at.getZ(), motion, modelYaw, orientation, free);
         travelLeaning = lean != null;
         setBodyTilt(lean);
     }
