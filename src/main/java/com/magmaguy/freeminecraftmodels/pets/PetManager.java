@@ -116,6 +116,7 @@ public final class PetManager {
      * whenever they change while it is loaded, as it unloads, and at shutdown, so Minecraft saves them with the chunk.
      */
     private final WildPetStore wildStore = new WildPetStore();
+    private final PetRides rides = new PetRides(this);
     /** Where wild pets waited before they moved into chunk data; read once, deleted once they are all moved. */
     private final File legacyWildFile = new File(MetadataHandler.PLUGIN.getDataFolder(), "data/wild_pets.yml");
     // Newly generated chunks, stocked with wild pets the tick after they load.
@@ -220,6 +221,7 @@ public final class PetManager {
         if (ticks % OwnerPace.SAMPLE_TICKS == 0) manager.samplePaces();
         if (ticks % WATCH_TICKS == 0) manager.regenerate();
         manager.tickHealthBars();
+        manager.rides.tick();
         manager.workChunks();
         if (ticks >= manager.nextWildSpawnTick) {
             manager.nextWildSpawnTick = ticks + Math.max(20, PetsConfig.wildSpawnIntervalTicks);
@@ -529,6 +531,7 @@ public final class PetManager {
         modeled.setTravelOrientation(pet.orientation());
         modeled.setCenteredOnBody(pet.centerOnBody());
         modeled.setDisplayName(nameplate(control));
+        PetRides.prepare(control, entity, modeled);
         byBody.put(entity.getUniqueId(), control);
         if (owner != null && record != null) {
             Map<String, PetControl> owned = ownedBodies.computeIfAbsent(owner, ignored -> new HashMap<>());
@@ -675,6 +678,7 @@ public final class PetManager {
 
     /** Removes a pet body from the world and from every map; an owned pet's health stays on its record. */
     public void despawn(PetControl control) {
+        rides.getOff(control);
         if (rememberHealth(control)) {
             PetCollection collection = collections.get(control.ownerId());
             if (collection != null) collection.save();
@@ -705,6 +709,11 @@ public final class PetManager {
     }
 
     /** Tells an owned pet to stay where it is, or to follow again. The order is kept on its record, so it lasts. */
+    /** The pet follows its owner again, without the message the stay gesture sends. */
+    void follow(Player owner, PetControl control) {
+        setStay(owner, control, false, null);
+    }
+
     private void setStay(Player owner, PetControl control, boolean stay, Location at) {
         control.setStay(stay, at);
         PetRecord record = control.record();
@@ -871,6 +880,7 @@ public final class PetManager {
         Location at = body == null || !body.isValid() ? null : body.getLocation();
         double health = body == null ? 0D : body.getHealth();
         if (live != null) despawn(live);
+        PetRides.dropSaddle(record, at != null ? at : player.getLocation());
         collection(player).remove(record);
         if (pet != null && at != null && PetsConfig.mode == PetsConfig.Mode.CREATURES) {
             PetControl wild = spawn(pet, null, null, record.model, record.baby, at, at, 1D, record.stats);
@@ -990,6 +1000,7 @@ public final class PetManager {
             tryBreed(control);
             return true;
         }
+        if (rides.click(player, control, held)) return true;
         if (held.getType() == Material.LEAD) return false;
         // Anything else is the dog gesture: a click tells it to stay, the next one to follow again.
         if (pet.canStay()) {
@@ -1107,6 +1118,7 @@ public final class PetManager {
 
     /** A pet body died: drop it from the maps, and send an owned pet home or out of the collection. */
     public void bodyDied(PetControl control) {
+        rides.getOff(control);
         forget(control);
         MindHandle mind = control.mind();
         if (mind != null) {
@@ -1120,6 +1132,8 @@ public final class PetManager {
         if (modeled != null && !modeled.isRemoved()) modeled.remove();
         Player owner = control.owner().orElse(null);
         if (owner == null || control.record() == null) return;
+        LivingEntity body = control.body();
+        PetRides.dropSaddle(control.record(), body == null ? null : body.getLocation());
         owner.sendMessage(ChatColorConverter.convert(PetsConfig.diedMessage.replace("$pet", displayName(control.record()))));
         PetCollection collection = collection(owner);
         if (PetsConfig.petsDiePermanently) collection.remove(control.record());

@@ -126,7 +126,7 @@ public class MountCommand extends AdvancedCommand {
      * invisibility effect does not hide, so the horse's saddle and reins would show around the model. A horse counts
      * as saddled while the item can be equipped in its saddle slot, which needs no equipment model.
      */
-    private static ItemStack unseenSaddle() {
+    public static ItemStack unseenSaddle() {
         ItemStack saddle = new ItemStack(Material.SADDLE);
         if (VersionChecker.serverVersionOlderThan(21, 5)) return saddle;
         ItemMeta meta = saddle.getItemMeta();
