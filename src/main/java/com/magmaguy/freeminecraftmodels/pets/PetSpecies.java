@@ -166,6 +166,7 @@ public final class PetSpecies {
     private final TravelOrientation orientation;
     private final boolean centerOnBody;
     private final PetInteractions interactions;
+    private final PetRiding riding; // null: cannot be ridden
 
     private PetSpecies(File file, YamlConfiguration config) {
         this.file = file;
@@ -230,6 +231,9 @@ public final class PetSpecies {
         this.orientation = orientation(section(config, "orientation"), filename);
         this.centerOnBody = centerOnBody(config, movement);
         this.interactions = PetInteractions.read(config, filename, model);
+        PetRiding readRiding = PetRiding.read(config.getConfigurationSection("riding"), filename, Logger::warn);
+        this.riding = readRiding != null && PetRiding.supports(bodyType, movement, filename, Logger::warn)
+                ? readRiding : null;
     }
 
     /** How the model leans with its travel; upright unless the file asks for a top-first or front-first lean. */
@@ -818,6 +822,11 @@ public final class PetSpecies {
 
     public List<Variant> variants() {
         return variants;
+    }
+
+    /** How a saddled adult rides, or null when the species cannot be ridden. */
+    public PetRiding riding() {
+        return riding;
     }
 
     /** The variant a pet wearing this model is, or null when it is the species' own model or no longer listed. */
