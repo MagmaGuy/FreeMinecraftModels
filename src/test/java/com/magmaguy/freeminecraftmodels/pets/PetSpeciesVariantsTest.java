@@ -330,6 +330,39 @@ class PetSpeciesVariantsTest {
     }
 
     @Test
+    void anAddVariantsFileAppendsItsColoursAfterTheSpecies() {
+        List<String> warnings = new ArrayList<>();
+        PetSpecies.Variant blue = new PetSpecies.Variant(BLUE, 10D, List.of());
+        PetSpecies.Variant gold = new PetSpecies.Variant(GOLD, 2D, List.of());
+        PetSpecies.Variant war = new PetSpecies.Variant(WAR, 0.5D, List.of());
+        assertEquals(List.of(blue, gold, war), PetSpecies.mergeVariants(List.of(blue), SPECIES, List.of(gold, war),
+                "jellyfish_colours.pet.yml", warnings::add));
+        assertEquals(List.of(), warnings);
+    }
+
+    @Test
+    void anAddedColourTheSpeciesAlreadyListsIsSkippedWithAWarning() {
+        List<String> warnings = new ArrayList<>();
+        PetSpecies.Variant blue = new PetSpecies.Variant(BLUE, 10D, List.of());
+        PetSpecies.Variant again = new PetSpecies.Variant("EM_Pet_Jellyfish_Blue", 1D, List.of());
+        PetSpecies.Variant gold = new PetSpecies.Variant(GOLD, 2D, List.of());
+        assertEquals(List.of(blue, gold), PetSpecies.mergeVariants(List.of(blue), SPECIES, List.of(again, gold),
+                "jellyfish_colours.pet.yml", warnings::add));
+        assertEquals(1, warnings.size(), warnings.toString());
+        assertTrue(warnings.getFirst().contains("jellyfish_colours.pet.yml"), warnings.getFirst());
+        assertTrue(warnings.getFirst().contains("EM_Pet_Jellyfish_Blue"), warnings.getFirst());
+    }
+
+    @Test
+    void aSpeciesWithoutColoursKeepsItsOwnModelAsTheFirstWhenColoursAreAdded() {
+        List<String> warnings = new ArrayList<>();
+        PetSpecies.Variant gold = new PetSpecies.Variant(GOLD, 2D, List.of());
+        assertEquals(List.of(new PetSpecies.Variant(SPECIES, 1D, List.of()), gold),
+                PetSpecies.mergeVariants(List.of(), SPECIES, List.of(gold), "jellyfish_colours.pet.yml", warnings::add));
+        assertEquals(List.of(), warnings);
+    }
+
+    @Test
     void aVariantIsFoundByItsExactNameFirstThenAsAModelName() {
         PetSpecies.Variant upper = new PetSpecies.Variant("EM_Pet_Gold", 1D, List.of());
         PetSpecies.Variant lower = new PetSpecies.Variant("em_pet_gold", 1D, List.of());
