@@ -264,13 +264,21 @@ public class DynamicEntity extends ModeledEntity {
      * saddle height.
      */
     public void liftSaddleTo(Bone seat) {
+        liftSaddleToHeight(seat.getBoneBlueprint().getOriginalOrigin().y);
+    }
+
+    /**
+     * {@link #liftSaddleTo(Bone)} for a seat given as a height above the model's feet, in Blockbench pixels at the
+     * model's scale 1, for a model without a seat bone.
+     */
+    public void liftSaddleToHeight(double pixels) {
         Attribute scaleAttribute = AttributeManager.getAttribute("generic_scale");
         if (scaleAttribute == null || !(underlyingEntity instanceof LivingEntity livingEntity)) return;
         AttributeInstance scale = livingEntity.getAttribute(scaleAttribute);
         org.bukkit.util.Vector saddle = NMSManager.getAdapter().getPassengerSeatOffset(underlyingEntity, 0);
         if (scale == null || saddle == null || saddle.getY() <= 0) return;
         // The model's scale as the clock computes it, read here rather than waiting for the clock to publish it.
-        double seatHeight = seat.getBoneBlueprint().getOriginalOrigin().y / 16d * (scale.getValue() / seatScale);
+        double seatHeight = pixels / 16d * (scale.getValue() / seatScale);
         if (seatHeight <= 0) return;
         // The saddle height grows with the mob's scale, which the attribute caps at 1/16 to 16.
         double target = Math.max(0.0625, Math.min(16, scale.getBaseValue() * seatHeight / saddle.getY()));

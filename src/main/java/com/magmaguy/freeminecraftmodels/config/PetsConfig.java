@@ -53,6 +53,9 @@ public class PetsConfig extends ConfigurationFile {
     public static String givenMessage;
     public static String nameTagBlankMessage;
     public static String nameTagWildMessage;
+    public static String saddledMessage;
+    public static String unsaddledMessage;
+    public static String saddleTooYoungMessage;
     private static PetsConfig instance;
 
     public PetsConfig() {
@@ -160,6 +163,12 @@ public class PetsConfig extends ConfigurationFile {
                 "&7Rename the name tag in an anvil first, then use it on your pet.");
         nameTagWildMessage = ConfigurationEngine.setString(fileConfiguration, "nameTagWildMessage",
                 "&7Tame the $pet &7first, then name it.");
+        saddledMessage = ConfigurationEngine.setString(fileConfiguration, "saddledMessage",
+                "&7Your $pet &7wears a saddle. Right-click it with an empty hand to ride it; shears take it off.");
+        unsaddledMessage = ConfigurationEngine.setString(fileConfiguration, "unsaddledMessage",
+                "&7You took the saddle off your $pet&7.");
+        saddleTooYoungMessage = ConfigurationEngine.setString(fileConfiguration, "saddleTooYoungMessage",
+                "&7Your $pet &7is too young for a saddle.");
         PetMigrations.loadSettings(fileConfiguration);
     }
 }

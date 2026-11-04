@@ -214,6 +214,16 @@ public final class PetListeners implements Listener {
         PetSting.onContact(event);
     }
 
+    /**
+     * A ridden pet's body is a tamed horse, whose rider could open its inventory and take the saddle that only lets
+     * them steer; the pet's real saddle is on its record. Pet bodies keep their inventories shut.
+     */
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onInventoryOpen(org.bukkit.event.inventory.InventoryOpenEvent event) {
+        if (event.getInventory().getHolder() instanceof Entity holder && PetManager.isPetBody(holder))
+            event.setCancelled(true);
+    }
+
     /** Pet bodies are never saved, but a crash can leave one in a chunk; nothing would drive or show it. */
     @EventHandler
     public void onEntitiesLoad(EntitiesLoadEvent event) {
