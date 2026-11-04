@@ -78,14 +78,20 @@ public final class PetListeners implements Listener {
         if (consumed || event.getPlayer().getInventory().getItemInMainHand().getType() != Material.LEAD) event.setCancelled(true);
     }
 
-    /** A right-click on the model itself, which hides the body from clients. */
+    /**
+     * A right-click on the model itself, which hides the body from clients. A saddled pet's click never reaches
+     * FreeMinecraftModels' own mount seating, which would seat a player holding a lead without handing the body over
+     * from the pet's behaviors; the pet's own ride gesture does that.
+     */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onModelRightClick(ModeledEntityRightClickEvent event) {
         PetManager manager = PetManager.get();
         if (manager == null) return;
         Entity body = event.getEntity().getUnderlyingEntity();
         PetControl pet = body == null ? null : manager.pet(body);
-        if (pet != null && manager.interact(event.getPlayer(), pet)) event.setCancelled(true);
+        if (pet == null) return;
+        boolean consumed = manager.interact(event.getPlayer(), pet);
+        if (consumed || pet.modeled() != null && pet.modeled().isSteerableMount()) event.setCancelled(true);
     }
 
     /**
