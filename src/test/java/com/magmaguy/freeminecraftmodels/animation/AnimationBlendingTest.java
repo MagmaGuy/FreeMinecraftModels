@@ -36,6 +36,8 @@ class AnimationBlendingTest {
     private Plugin previousPlugin;
     private int previousIdleWalk;
     private int previousDeath;
+    private int previousLongIdleMin;
+    private int previousLongIdleMax;
     private FileModelConverter converter;
     private AnimationComponent animation;
     private Bone body;
@@ -51,8 +53,12 @@ class AnimationBlendingTest {
                 });
         previousIdleWalk = DefaultConfig.idleWalkBlendTicks;
         previousDeath = DefaultConfig.deathBlendTicks;
+        previousLongIdleMin = DefaultConfig.longIdleMinSeconds;
+        previousLongIdleMax = DefaultConfig.longIdleMaxSeconds;
         DefaultConfig.idleWalkBlendTicks = 5;
         DefaultConfig.deathBlendTicks = 4;
+        DefaultConfig.longIdleMinSeconds = 0;
+        DefaultConfig.longIdleMaxSeconds = 0;
 
         List<Object> animations = List.of(
                 // Idle moves the body one pixel per tick, so a fade shows whether idle keeps playing.
@@ -67,7 +73,9 @@ class AnimationBlendingTest {
                 animation("death", "once", 0.5, false, "", Map.of(
                         "body", List.of(key(0, -16)), "arm", List.of(key(0, -16)))),
                 animation("sneak", "loop", 0.5, false, "", Map.of("body", List.of(key(0, 8)))),
-                animation("jump", "once", 0.2, false, "", Map.of("body", List.of(key(0, 4)))));
+                animation("jump", "once", 0.2, false, "", Map.of("body", List.of(key(0, 4)))),
+                // Marked as a loop in Blockbench, as Dali's are; it still plays once.
+                animation("long_idle", "loop", 0.5, false, "", Map.of("body", List.of(key(0, 64)))));
         Path source = directory.resolve("blend_probe.bbmodel");
         Files.writeString(source, new Gson().toJson(Map.of(
                 "meta", Map.of("format_version", "5.0", "model_format", "free"),
@@ -87,6 +95,8 @@ class AnimationBlendingTest {
     void discardModel() {
         DefaultConfig.idleWalkBlendTicks = previousIdleWalk;
         DefaultConfig.deathBlendTicks = previousDeath;
+        DefaultConfig.longIdleMinSeconds = previousLongIdleMin;
+        DefaultConfig.longIdleMaxSeconds = previousLongIdleMax;
         FileModelConverter.shutdown();
         MetadataHandler.PLUGIN = previousPlugin;
     }
@@ -225,6 +235,70 @@ class AnimationBlendingTest {
     }
 
     @Test
+    void longIdlePlaysOnceAfterAQuietSpellThenIdleReturns() {
+        DefaultConfig.idleWalkBlendTicks = 0;
+        DefaultConfig.longIdleMinSeconds = 1;
+        DefaultConfig.longIdleMaxSeconds = 1;
+        tick(20);
+        assertEquals(idleBody(19), y(body), 1e-5, "Idle for a second: 20 frames");
+        tick(1);
+        assertEquals(LONG_IDLE_BODY, y(body), 1e-5, "then long_idle");
+        tick(9);
+        assertEquals(LONG_IDLE_BODY, y(body), 1e-5, "to its last frame");
+        tick(1);
+        assertEquals(idleBody(0), y(body), 1e-5, "then idle again from its start, not a second long_idle");
+        tick(19);
+        assertEquals(idleBody(19), y(body), 1e-5);
+        tick(1);
+        assertEquals(LONG_IDLE_BODY, y(body), 1e-5, "and another quiet second brings it back");
+    }
+
+    @Test
+    void longIdleFadesInAndOutLikeIdleAndWalk() {
+        DefaultConfig.longIdleMinSeconds = 1;
+        DefaultConfig.longIdleMaxSeconds = 1;
+        tick(21);
+        // Idle keeps playing underneath, at its frame 20 % 20.
+        assertEquals(idleBody(0) + (LONG_IDLE_BODY - idleBody(0)) * smoothstep(0.2), y(body), 1e-5);
+    }
+
+    @Test
+    void anAttackRestartsTheQuietSpell() {
+        DefaultConfig.idleWalkBlendTicks = 0;
+        DefaultConfig.longIdleMinSeconds = 1;
+        DefaultConfig.longIdleMaxSeconds = 1;
+        tick(15);
+        animation.playAnimation("attack", false, false);
+        tick(15);
+        assertNotEquals(LONG_IDLE_BODY, y(body), 1e-5, "no long_idle 30 ticks in: the attack restarted the wait");
+        tick(20);
+        assertEquals(LONG_IDLE_BODY, y(body), 1e-5, "a full quiet second after the attack brings it");
+    }
+
+    @Test
+    void aTakeoverDuringLongIdleReturnsToIdle() {
+        DefaultConfig.idleWalkBlendTicks = 0;
+        DefaultConfig.longIdleMinSeconds = 1;
+        DefaultConfig.longIdleMaxSeconds = 1;
+        tick(21);
+        assertEquals(LONG_IDLE_BODY, y(body), 1e-5);
+        animation.playAnimation("jump", false, false);
+        tick(1);
+        assertEquals(0.25, y(body), 1e-5, "The jump takes over");
+        tick(4);
+        assertEquals(idleBody(0), y(body), 1e-5, "and idle follows it, not the cut-off long_idle");
+    }
+
+    @Test
+    void noLongIdleWhenItIsTurnedOff() {
+        DefaultConfig.idleWalkBlendTicks = 0;
+        for (int i = 0; i < 200; i++) {
+            tick(1);
+            assertNotEquals(LONG_IDLE_BODY, y(body), 1e-5, "tick " + i);
+        }
+    }
+
+    @Test
     void blockbenchFieldsAreRead() {
         Map<String, AnimationBlueprint> blueprints = converter.getAnimationsBlueprint().getAnimations();
         assertTrue(blueprints.get("attack").isOverride());
@@ -240,6 +314,8 @@ class AnimationBlendingTest {
     private static double y(Bone bone) {
         return bone.getAnimationTranslation().y;
     }
+
+    private static final double LONG_IDLE_BODY = 4;
 
     private static double idleBody(int frame) {
         return frame / 16.0;

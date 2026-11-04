@@ -70,6 +70,11 @@ public class AnimationComponent {
         return animationManager.hasAnimation(animationName);
     }
 
+    /** The animation the model plays in place of walk while a player steers its mob and it moves; null walks. */
+    public void setRiddenAnimation(String animationName) {
+        if (animationManager != null) animationManager.setRiddenAnimation(animationName);
+    }
+
     /** Whether the model plays only its idle or walk loop, or has no animations at all. Clock thread only. */
     public boolean isOnlyLocomotionPlaying() {
         return animationManager == null || animationManager.isOnlyLocomotionPlaying();
