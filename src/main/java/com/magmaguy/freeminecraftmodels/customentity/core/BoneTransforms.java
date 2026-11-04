@@ -125,6 +125,11 @@ public class BoneTransforms {
     }
 
     private void scaleAnimation() {
+        if (bone.isHidden()) {
+            // A hidden bone shrinks to nothing about its pivot, and every bone under it inherits the size.
+            localMatrix.scale(0F, 0F, 0F);
+            return;
+        }
         Vector3f currentScale = getDisplayEntityScale();
         localMatrix.scale(currentScale.x / 2.5f, currentScale.y / 2.5f, currentScale.z / 2.5f);
     }
@@ -664,6 +669,11 @@ public class BoneTransforms {
             deSz = scale[2];
             displayStateValid = true;
         }
+    }
+
+    /** The size the bone is drawn at after the last transform, per axis, its parents' sizes included. */
+    void readDrawnScale(double[] scale) {
+        globalMatrix.getScale(scale);
     }
 
     protected Vector3f getDisplayEntityScale() {

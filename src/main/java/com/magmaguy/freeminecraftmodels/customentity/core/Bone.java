@@ -38,6 +38,8 @@ public class Bone {
     private final Vector3f animationScale = new Vector3f(-1, -1, -1);
     // IK rotation override - when set, this takes priority over animation rotation
     private Vector3f ikRotation = null;
+    // Set on the main thread, read by the model clock's transforms.
+    private volatile boolean hidden = false;
 
     public Bone(BoneBlueprint boneBlueprint, Bone parent, Skeleton skeleton) {
         this.boneBlueprint = boneBlueprint;
@@ -107,6 +109,26 @@ public class Bone {
     public Vector3f getEffectiveRotation() {
         skeleton.freshenPose();
         return poseRotation();
+    }
+
+    /** Whether this bone is hidden: drawn at no size, and every bone under it with it. */
+    public boolean isHidden() {
+        return hidden;
+    }
+
+    /**
+     * Hides or shows this bone and the bones under it. A hidden bone shrinks to nothing on Java display entities;
+     * bones drawn as armor stands cannot shrink and stay as they are. See {@code ModeledEntity.setBoneHidden}.
+     */
+    public void setHidden(boolean hidden) {
+        if (this.hidden == hidden) return;
+        this.hidden = hidden;
+        markDirtyBelow();
+    }
+
+    private void markDirtyBelow() {
+        boneTransforms.markDirty();
+        for (Bone child : boneChildren) child.markDirtyBelow();
     }
 
     /** The pose as last sampled, for the transforms. */

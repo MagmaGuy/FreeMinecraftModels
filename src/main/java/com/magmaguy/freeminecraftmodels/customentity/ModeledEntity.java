@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.customentity;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.easyminecraftgoals.internal.PacketEquipmentVeil;
 import com.magmaguy.easyminecraftgoals.internal.StackedText;
+import com.magmaguy.freeminecraftmodels.bedrock.BedrockEntityBundleExporter;
 import com.magmaguy.freeminecraftmodels.bedrock.BedrockModeledEntity;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
@@ -822,6 +823,30 @@ public class ModeledEntity {
      */
     public void stopCurrentAnimations() {
         animationComponent.stopCurrentAnimations();
+    }
+
+    /**
+     * Hides or shows every bone with this Blockbench name (any case), with the bones under it, for every viewer: a
+     * pet's saddle, say, only while it wears one. Java viewers see any bone go. Bedrock viewers only see the bones
+     * the Bedrock export can hide go ({@link BedrockEntityBundleExporter#HIDEABLE_BONES}). Returns whether the model
+     * has such a bone.
+     */
+    public boolean setBoneHidden(String boneName, boolean hidden) {
+        boolean found = false;
+        for (Bone bone : skeleton.getBones()) {
+            if (!boneName.equalsIgnoreCase(bone.getBoneBlueprint().getOriginalBoneName())) continue;
+            bone.setHidden(hidden);
+            found = true;
+        }
+        if (found && bedrockModeledEntity != null) bedrockModeledEntity.refreshHiddenBones();
+        return found;
+    }
+
+    /** Whether a bone with this Blockbench name (any case) is hidden by {@link #setBoneHidden}. */
+    public boolean isBoneHidden(String boneName) {
+        for (Bone bone : skeleton.getBones())
+            if (bone.isHidden() && boneName.equalsIgnoreCase(bone.getBoneBlueprint().getOriginalBoneName())) return true;
+        return false;
     }
 
     /** Shows Bedrock clients the base animation and the action layered over it; either may be null. */
