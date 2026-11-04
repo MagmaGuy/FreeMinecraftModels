@@ -149,8 +149,10 @@ public class Skeleton {
     }
 
     private int currentRiddenPoseInterval() {
-        int interval = DefaultConfig.riddenBoneUpdateIntervalTicks;
-        if (interval <= 1 || !watchedBySlowPlayer
+        // /fmm poserate can force one interval on every model, slow viewer or not.
+        int forced = SlowViewers.forcedInterval();
+        int interval = forced > 0 ? forced : DefaultConfig.riddenBoneUpdateIntervalTicks;
+        if (interval <= 1 || (forced == 0 && !watchedBySlowPlayer)
                 || !modeledEntity.getAnimationComponent().isOnlyLocomotionPlaying()) return 1;
         return interval;
     }

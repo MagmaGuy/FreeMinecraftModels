@@ -281,6 +281,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         manager.registerCommand(new com.magmaguy.freeminecraftmodels.commands.LocationDebugCommand());
         manager.registerCommand(new FilmicModeCommand());
         manager.registerCommand(new com.magmaguy.freeminecraftmodels.commands.BoneGlideCommand());
+        manager.registerCommand(new com.magmaguy.freeminecraftmodels.commands.PoseRateCommand());
         manager.registerCommand(new DeleteAllCommand());
         manager.registerCommand(new ReloadCommand());
         manager.registerCommand(new SpawnCommand());
