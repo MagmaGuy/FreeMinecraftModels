@@ -32,6 +32,8 @@ import java.util.UUID;
  * rider gets off the Mind takes the body back.
  */
 final class PetRides {
+    /** The bone a rideable pet's model draws its saddle with, shown only while it wears one. */
+    static final String SADDLE_BONE = "saddle";
     private static final double SPEED_STEP = 1.0E-4D;
     private final PetManager manager;
     /** Each ridden pet with the movement speed and jump strength its body had before. */
@@ -51,14 +53,16 @@ final class PetRides {
 
     /**
      * Gets a new body ready: a rideable adult's saddle sits at the species' seat height, its model plays the ridden
-     * animation while ridden and moving, and one whose record has a saddle wears it.
+     * animation while ridden and moving, and one whose record has a saddle wears it, its model's saddle bone with it.
      */
     static void prepare(PetControl control, LivingEntity body, DynamicEntity modeled) {
         PetRiding riding = control.species().riding();
         if (riding == null || control.isBaby()) return;
         modeled.liftSaddleToHeight(riding.seatHeight());
         modeled.getAnimationComponent().setRiddenAnimation(riding.animation());
-        if (control.record() != null && control.record().saddled) putSaddleOn(body, control.ownerId());
+        boolean saddled = control.record() != null && control.record().saddled;
+        modeled.setBoneHidden(SADDLE_BONE, !saddled);
+        if (saddled) putSaddleOn(body, control.ownerId());
     }
 
     /**
@@ -98,6 +102,7 @@ final class PetRides {
         control.record().saddled = true;
         manager.collection(player).save();
         putSaddleOn(body, control.ownerId());
+        showSaddle(control, true);
         body.getWorld().playSound(body.getLocation(), Sound.ENTITY_HORSE_SADDLE, 1F, 1F);
         player.sendMessage(ChatColorConverter.convert(PetsConfig.saddledMessage
                 .replace("$pet", manager.displayName(control.record()))));
@@ -109,6 +114,7 @@ final class PetRides {
         LivingEntity body = control.body();
         Location at = body != null && body.isValid() ? body.getLocation() : player.getLocation();
         if (body instanceof AbstractHorse horse) horse.getInventory().setSaddle(null);
+        showSaddle(control, false);
         at.getWorld().dropItemNaturally(at, new ItemStack(Material.SADDLE));
         at.getWorld().playSound(at, Sound.ENTITY_SHEEP_SHEAR, 1F, 1F);
         player.sendMessage(ChatColorConverter.convert(PetsConfig.unsaddledMessage
@@ -199,6 +205,11 @@ final class PetRides {
             if (player != null) horse.setOwner(player);
         }
         horse.getInventory().setSaddle(MountCommand.unseenSaddle());
+    }
+
+    private static void showSaddle(PetControl control, boolean shown) {
+        DynamicEntity modeled = control.modeled();
+        if (modeled != null) modeled.setBoneHidden(SADDLE_BONE, !shown);
     }
 
     private static Player rider(LivingEntity body) {

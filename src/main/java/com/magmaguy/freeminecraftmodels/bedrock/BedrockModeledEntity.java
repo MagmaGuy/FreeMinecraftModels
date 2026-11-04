@@ -39,6 +39,11 @@ public final class BedrockModeledEntity {
     private float lastScale = Float.NaN;
     private String activeAnimation;
     private String activeAction;
+    // The base and action whose flags were last sent, for a hidden bone's change to send with them.
+    private String shownAnimation;
+    private String shownAction;
+    // Each hide animation's name, by the Blockbench name of the bone it hides.
+    private final Map<String, String> hideAnimations = new LinkedHashMap<>();
     private Map<String, Object> lastProperties = new LinkedHashMap<>();
     // Null when the carrier has no room for the lean bone's properties.
     private final BedrockBodyLean bodyLean;
@@ -49,6 +54,9 @@ public final class BedrockModeledEntity {
         this.modeledEntity = modeledEntity;
         this.animations = BedrockEntityBundleExporter.exportedAnimationNames(converter);
         this.identifier = BedrockEntityBundleExporter.identifier(modeledEntity.getEntityID());
+        for (var bone : BedrockEntityBundleExporter.hideableBones(converter))
+            hideAnimations.put(bone.getOriginalBoneName(),
+                    BedrockEntityBundleExporter.hideAnimationName(bone.getOriginalBoneName()));
 
         CustomEntityPropertySchema.Builder schema = CustomEntityPropertySchema.builder()
                 .addPackedBooleans(BedrockEntityBundleExporter.PROPERTY_NAMESPACE + ":anim", animations.size());
@@ -268,7 +276,7 @@ public final class BedrockModeledEntity {
      * Plays the base animation with the action layered over it, matching the Java pose mixer; either may be null.
      * Called every tick, so an unchanged pair sends nothing.
      */
-    public void playAnimations(String baseAnimation, String actionAnimation) {
+    public synchronized void playAnimations(String baseAnimation, String actionAnimation) {
         if (animations.isEmpty()) return;
         if (Objects.equals(baseAnimation, activeAnimation) && Objects.equals(actionAnimation, activeAction)) return;
         activeAnimation = baseAnimation;
@@ -276,10 +284,16 @@ public final class BedrockModeledEntity {
         applyProperties(animationProperties(baseAnimation, actionAnimation));
     }
 
-    public void stopAnimations() {
+    public synchronized void stopAnimations() {
         activeAnimation = null;
         activeAction = null;
         applyProperties(animationProperties(null, null));
+    }
+
+    /** Sends which of the model's hideable bones are hidden now, with the animations it shows. */
+    public synchronized void refreshHiddenBones() {
+        if (hideAnimations.isEmpty()) return;
+        applyProperties(animationProperties(shownAnimation, shownAction));
     }
 
     private void displayUnderlyingTo(Player player) {
@@ -320,7 +334,7 @@ public final class BedrockModeledEntity {
      * Sets these properties and keeps the others as they were: the animation flags and the lean change apart. The
      * merged copy replaces the last one whole, so a rebinding carrier reads a complete set.
      */
-    private void applyProperties(Map<String, Object> properties) {
+    private synchronized void applyProperties(Map<String, Object> properties) {
         Map<String, Object> merged = new LinkedHashMap<>(lastProperties);
         merged.putAll(properties);
         lastProperties = merged;
@@ -335,11 +349,17 @@ public final class BedrockModeledEntity {
     }
 
     private Map<String, Object> animationProperties(String baseAnimation, String actionAnimation) {
+        shownAnimation = baseAnimation;
+        shownAction = actionAnimation;
         Map<String, Object> properties = new LinkedHashMap<>();
         List<Boolean> enabled = new ArrayList<>();
+        List<String> hiding = new ArrayList<>();
+        for (Map.Entry<String, String> hide : hideAnimations.entrySet())
+            if (modeledEntity.isBoneHidden(hide.getKey())) hiding.add(hide.getValue());
         for (String animation : animations) {
             enabled.add(baseAnimation != null && animation.equalsIgnoreCase(baseAnimation)
-                    || actionAnimation != null && animation.equalsIgnoreCase(actionAnimation));
+                    || actionAnimation != null && animation.equalsIgnoreCase(actionAnimation)
+                    || hiding.contains(animation));
         }
         List<Integer> packedAnimations = PackedBooleanPropertySet.packBooleans(enabled);
         for (int i = 0; i < packedAnimations.size(); i++) {

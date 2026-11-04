@@ -58,6 +58,13 @@ public final class BedrockEntityBundleExporter {
     public static final List<String> LEAN_BONE_PROPERTIES = List.of(
             LEAN_PROPERTIES.get(0), LEAN_PROPERTIES.get(1), LEAN_PROPERTIES.get(2), BODY_OFFSET_PROPERTY);
     private static final String LEAN_KEY = "lean";
+    /**
+     * Bones the server can hide on Bedrock ({@code ModeledEntity.setBoneHidden}), by Blockbench name: a saddle a pet
+     * shows only while it wears one. Each one a model has gets an animation that shrinks it to nothing, played while
+     * it is hidden through the same flags as the model's own animations, after them.
+     */
+    public static final List<String> HIDEABLE_BONES = List.of("saddle");
+    private static final String HIDE_ANIMATION_PREFIX = PROPERTY_NAMESPACE + "_hide_";
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
@@ -109,12 +116,30 @@ public final class BedrockEntityBundleExporter {
                 .toList();
     }
 
+    /**
+     * The animations a Bedrock carrier has flags for, in flag order: the model's own sorted (idle alone when it has
+     * none), then one hiding each of its {@link #hideableBones hideable bones}.
+     */
     public static List<String> exportedAnimationNames(FileModelConverter converter) {
         List<String> sortedAnimations = sortedAnimationNames(converter);
-        if (sortedAnimations.isEmpty()) {
-            return List.of("idle");
-        }
-        return sortedAnimations;
+        List<String> names = new ArrayList<>(sortedAnimations.isEmpty() ? List.of("idle") : sortedAnimations);
+        for (BoneBlueprint bone : hideableBones(converter)) names.add(hideAnimationName(bone.getOriginalBoneName()));
+        return List.copyOf(names);
+    }
+
+    /** The model's visual bones the server can hide on Bedrock, one per name in {@link #HIDEABLE_BONES}, in its order. */
+    public static List<BoneBlueprint> hideableBones(FileModelConverter converter) {
+        List<BoneBlueprint> bones = new ArrayList<>();
+        List<BoneBlueprint> visual = visualBones(converter);
+        for (String name : HIDEABLE_BONES)
+            visual.stream().filter(bone -> name.equalsIgnoreCase(bone.getOriginalBoneName())).findFirst()
+                    .ifPresent(bones::add);
+        return bones;
+    }
+
+    /** The Bedrock animation that hides a bone with this Blockbench name. */
+    public static String hideAnimationName(String boneName) {
+        return HIDE_ANIMATION_PREFIX + boneName.toLowerCase(Locale.ROOT);
     }
 
     public static List<BoneBlueprint> visualBones(FileModelConverter converter) {
@@ -522,6 +547,9 @@ public final class BedrockEntityBundleExporter {
         if (animations.entrySet().isEmpty()) {
             animations.add("animation.fmm." + modelId + "." + animationKey("idle"), noopAnimation(visualBones));
         }
+        for (BoneBlueprint bone : hideableBones(converter))
+            animations.add("animation.fmm." + modelId + "." + animationKey(hideAnimationName(bone.getOriginalBoneName())),
+                    hideAnimation(bone));
         if (leans(converter)) animations.add("animation.fmm." + modelId + "." + LEAN_KEY, leanAnimation());
 
         JsonObject rootJson = new JsonObject();
@@ -702,6 +730,18 @@ public final class BedrockEntityBundleExporter {
             return "idle";
         }
         return null;
+    }
+
+    /** Shrinks the bone, and the bones under it, to nothing for as long as it plays. */
+    private static JsonObject hideAnimation(BoneBlueprint bone) {
+        JsonObject scale = new JsonObject();
+        scale.addProperty("scale", 0);
+        JsonObject bones = new JsonObject();
+        bones.add(safeBoneName(bone), scale);
+        JsonObject animation = new JsonObject();
+        animation.addProperty("loop", true);
+        animation.add("bones", bones);
+        return animation;
     }
 
     /**
