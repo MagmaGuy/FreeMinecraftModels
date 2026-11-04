@@ -239,7 +239,13 @@ public final class PetManager {
             Logger.warn("Could not look for pet files in " + root + ": " + failure.getMessage());
             return;
         }
+        List<PetSpecies.Colours> colours = new ArrayList<>();
         for (Path path : files) {
+            PetSpecies.Colours added = PetSpecies.loadColours(path.toFile());
+            if (added != null) {
+                colours.add(added);
+                continue;
+            }
             PetSpecies pet = PetSpecies.load(path.toFile());
             if (pet == null) continue;
             if (FileModelConverter.getModel(pet.model()) == null)
@@ -248,6 +254,18 @@ public final class PetManager {
             if (previous != null)
                 Logger.warn("Pet species " + pet.id() + " is defined by both " + previous.file().getName() + " and "
                         + path.getFileName() + "; keeping the first.");
+        }
+        // Colours join their species before any program is built, so they get a program and checks like its own.
+        for (PetSpecies.Colours added : colours) {
+            PetSpecies pet = species.get(added.species());
+            if (pet == null) {
+                Logger.warn(added.file().getName() + " adds colours to pet species " + added.species()
+                        + ", which no pet file defines; install the content pack with that species' own pet file.");
+                continue;
+            }
+            pet.addColours(added);
+            Logger.info("Pet species " + pet.id() + " has " + pet.variants().size() + " colours with those from "
+                    + added.file().getName() + ".");
         }
         if (!species.isEmpty()) Logger.info("Loaded " + species.size() + " pet species; pet mode is " + PetsConfig.mode + ".");
     }

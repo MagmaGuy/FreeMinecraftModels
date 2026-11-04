@@ -43,6 +43,9 @@ import java.util.function.Predicate;
  */
 public final class PetSpecies {
     public static final String FILE_SUFFIX = ".pet.yml";
+    private static final String ADD_VARIANTS = "addVariants";
+    /** The settings a file that adds colours to another file's species may hold. */
+    private static final Set<String> COLOURS_KEYS = Set.of("isEnabled", "species", ADD_VARIANTS, "variants");
     /** The keys a variant written as a map may hold. */
     private static final List<String> VARIANT_KEYS = List.of("model", "weight", "behaviors", "name", "babyModel", "biomes",
             "inheritChance");
@@ -145,9 +148,9 @@ public final class PetSpecies {
     private final int loveTicks;
     /** The chance a baby ignores its parents and gets any colour by rarity. */
     private final double mutationChance;
-    private final List<Variant> variants;
+    private List<Variant> variants;
     /** Whether any variant names its own biomes, so wild spawns need to look up the biome. */
-    private final boolean variantBiomes;
+    private boolean variantBiomes;
     private final double followDistance;
     private final double idleDistance;
     private final double leashDistance;
@@ -253,16 +256,73 @@ public final class PetSpecies {
                 locomotion == MindBodyLocomotion.FLYING || locomotion == MindBodyLocomotion.AQUATIC);
     }
 
-    /** The species a pet file defines, or null when the file is disabled or unreadable. */
+    /**
+     * The species a pet file defines, or null when the file is disabled, unreadable, or adds colours to another file's
+     * species ({@link #loadColours}).
+     */
     public static PetSpecies load(File file) {
         try {
             YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
-            if (!config.getBoolean("isEnabled", true)) return null;
+            if (!config.getBoolean("isEnabled", true) || config.getBoolean(ADD_VARIANTS, false)) return null;
             return new PetSpecies(file, config);
         } catch (RuntimeException failure) {
             Logger.warn("Could not read pet file " + file.getName() + ": " + failure.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Colours a pet file with {@code addVariants: true} adds to the species another file defines, as a premium pack adds
+     * colours to a free pack's species. Such a file holds only {@code species}, {@code addVariants} and {@code variants};
+     * its variants read and widen to custom biomes as a species file's do.
+     */
+    public record Colours(String species, File file, List<Variant> variants) {
+    }
+
+    /** The colours a pet file adds, or null when it is not such a file, is disabled or is unreadable. */
+    public static Colours loadColours(File file) {
+        try {
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+            if (!config.getBoolean("isEnabled", true) || !config.getBoolean(ADD_VARIANTS, false)) return null;
+            String filename = file.getName();
+            String defaultId = filename.substring(0, filename.length() - FILE_SUFFIX.length());
+            for (String key : config.getKeys(false))
+                if (!COLOURS_KEYS.contains(key))
+                    Logger.warn(filename + " adds colours to another pet file's species, so its " + key
+                            + " setting is ignored; set it in the species' own file.");
+            List<Variant> listed = variants(config.get("variants"), filename, Logger::warn);
+            warnUnknownBiomes(listed, filename, key -> Registry.BIOME.get(key) != null, Logger::warn);
+            return new Colours(config.getString("species", defaultId).toLowerCase(Locale.ROOT), file,
+                    withCustomBiomes(listed, CustomBiomeCompatibility::getCustomBiomes));
+        } catch (RuntimeException failure) {
+            Logger.warn("Could not read pet file " + file.getName() + ": " + failure.getMessage());
+            return null;
+        }
+    }
+
+    /** Adds another file's colours to this species, after its own. */
+    public void addColours(Colours colours) {
+        variants = mergeVariants(variants, model, colours.variants(), colours.file().getName(), Logger::warn);
+        variantBiomes = variants.stream().anyMatch(variant -> !variant.biomes().isEmpty());
+    }
+
+    /**
+     * The species' variants followed by the ones {@code file} adds. A species without a variants list wears its own
+     * model, so that model becomes the first variant, at weight 1. An added colour the species already lists, by its
+     * model name, is reported and skipped: the species' own file decides its settings.
+     */
+    static List<Variant> mergeVariants(List<Variant> base, String speciesModel, List<Variant> added, String file,
+                                       Consumer<String> warn) {
+        List<Variant> merged = new ArrayList<>(base);
+        if (merged.isEmpty() && !added.isEmpty()) merged.add(new Variant(speciesModel, 1D, List.of()));
+        Set<String> listed = new HashSet<>();
+        for (Variant variant : merged) listed.add(StringToResourcePackFilename.convert(variant.model()));
+        for (Variant variant : added) {
+            if (listed.add(StringToResourcePackFilename.convert(variant.model()))) merged.add(variant);
+            else warn.accept(file + " adds " + variant.model() + ", which the species already lists; keeping the "
+                    + "species' own entry.");
+        }
+        return List.copyOf(merged);
     }
 
     private static ConfigurationSection section(ConfigurationSection parent, String key) {
