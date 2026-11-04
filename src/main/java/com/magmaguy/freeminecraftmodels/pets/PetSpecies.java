@@ -167,6 +167,7 @@ public final class PetSpecies {
     private final boolean centerOnBody;
     private final PetInteractions interactions;
     private final PetRiding riding; // null: cannot be ridden
+    private final PetSwimming swimming; // null: swims as it walks
 
     private PetSpecies(File file, YamlConfiguration config) {
         this.file = file;
@@ -234,18 +235,24 @@ public final class PetSpecies {
         PetRiding readRiding = PetRiding.read(config.getConfigurationSection("riding"), filename, Logger::warn);
         this.riding = readRiding != null && PetRiding.supports(bodyType, movement, filename, Logger::warn)
                 ? readRiding : null;
+        this.swimming = PetSwimming.read(config.getConfigurationSection("swimming"), filename, Logger::warn);
     }
 
     /** How the model leans with its travel; upright unless the file asks for a top-first or front-first lean. */
     static TravelOrientation orientation(ConfigurationSection section, String filename) {
-        TravelOrientation.Style style = TravelOrientation.Style.UPRIGHT;
-        String styleName = section.getString("style", "UPRIGHT");
+        return orientation(section, filename, "orientation", TravelOrientation.UPRIGHT, Logger::warn);
+    }
+
+    /** An orientation section at {@code path} in the file, {@code defaults} for what it leaves out. */
+    static TravelOrientation orientation(ConfigurationSection section, String filename, String path,
+                                         TravelOrientation defaults, java.util.function.Consumer<String> warn) {
+        TravelOrientation.Style style = defaults.style();
+        String styleName = section.getString("style", style.name());
         try {
             style = TravelOrientation.Style.valueOf(styleName.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException ignored) {
-            Logger.warn("Unknown orientation.style " + styleName + " in " + filename + "; using UPRIGHT");
+            warn.accept("Unknown " + path + ".style " + styleName + " in " + filename + "; using " + defaults.style());
         }
-        TravelOrientation defaults = TravelOrientation.UPRIGHT;
         return new TravelOrientation(style, section.getDouble("startSpeed", defaults.startSpeed()),
                 section.getDouble("fullSpeed", defaults.fullSpeed()), section.getDouble("maxTilt", defaults.maxTilt()),
                 section.getDouble("turnSpeed", defaults.turnSpeed()));
@@ -822,6 +829,11 @@ public final class PetSpecies {
 
     public List<Variant> variants() {
         return variants;
+    }
+
+    /** How the species swims, or null when it swims as it walks. */
+    public PetSwimming swimming() {
+        return swimming;
     }
 
     /** How a saddled adult rides, or null when the species cannot be ridden. */
