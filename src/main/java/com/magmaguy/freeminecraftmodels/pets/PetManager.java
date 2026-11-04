@@ -507,7 +507,8 @@ public final class PetManager {
         // Collidable, as vanilla mobs are: bodies push each other apart instead of stacking, and players brush them
         // aside. The model sizes its body to its hitbox bone when it attaches.
         PetSwimming swimming = pet.swimming();
-        MindBodyProfile profile = new MindBodyProfile(pet.locomotion(), scale, true, pet.body().getKey().toString());
+        MindBodyProfile profile = new MindBodyProfile(pet.locomotion(), scale, true, pet.body().getKey().toString())
+                .withBreathesUnderwater(pet.breathesUnderwater());
         if (swimming != null) profile = profile.withSwimWave(swimming.wave());
         MobBody body;
         try {

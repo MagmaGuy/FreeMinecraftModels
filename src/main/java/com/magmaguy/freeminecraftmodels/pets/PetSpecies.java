@@ -165,6 +165,7 @@ public final class PetSpecies {
     private final List<PetBehaviorEntry> behaviors; // null: the locomotion's defaults
     private final TravelOrientation orientation;
     private final boolean centerOnBody;
+    private final boolean breathesUnderwater;
     private final PetInteractions interactions;
     private final PetRiding riding; // null: cannot be ridden
     private final PetSwimming swimming; // null: swims as it walks
@@ -231,6 +232,7 @@ public final class PetSpecies {
         this.wildSpawn = readWildSpawn(section(config, "wildSpawn"), movement, filename);
         this.orientation = orientation(section(config, "orientation"), filename);
         this.centerOnBody = centerOnBody(config, movement);
+        this.breathesUnderwater = breathesUnderwater(config);
         this.interactions = PetInteractions.read(config, filename, model);
         PetRiding readRiding = PetRiding.read(config.getConfigurationSection("riding"), filename, Logger::warn);
         this.riding = readRiding != null && PetRiding.supports(bodyType, movement, filename, Logger::warn)
@@ -265,6 +267,15 @@ public final class PetSpecies {
     static boolean centerOnBody(ConfigurationSection config, MindBodyLocomotion locomotion) {
         return config.getBoolean("centerOnBody",
                 locomotion == MindBodyLocomotion.FLYING || locomotion == MindBodyLocomotion.AQUATIC);
+    }
+
+    /**
+     * Whether the pet keeps its air under water: off unless the file says so, for a creature that lives in water but
+     * moves as a flyer or walker, such as a jellyfish on a flying body. AQUATIC and AMPHIBIOUS species breathe under
+     * water whatever it says.
+     */
+    static boolean breathesUnderwater(ConfigurationSection config) {
+        return config.getBoolean("breathesUnderwater", false);
     }
 
     /**
@@ -1113,5 +1124,10 @@ public final class PetSpecies {
     /** Whether the model is drawn centred on its hidden body rather than standing on its feet. */
     public boolean centerOnBody() {
         return centerOnBody;
+    }
+
+    /** Whether the pet keeps its air under water: see {@link #breathesUnderwater(ConfigurationSection)}. */
+    public boolean breathesUnderwater() {
+        return breathesUnderwater;
     }
 }
