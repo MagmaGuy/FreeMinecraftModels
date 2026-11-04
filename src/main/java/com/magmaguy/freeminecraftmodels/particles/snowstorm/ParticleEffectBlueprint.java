@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.particles.snowstorm;
 
 import com.magmaguy.freeminecraftmodels.particles.molang.MolangContext;
 import com.magmaguy.freeminecraftmodels.particles.molang.MolangExpression;
+import com.magmaguy.freeminecraftmodels.utils.Splines;
 import org.joml.Vector3d;
 
 import java.util.List;
@@ -163,7 +164,7 @@ public record ParticleEffectBlueprint(
             return switch (type) {
                 case LINEAR -> linear(position);
                 case CATMULL_ROM -> catmullRom(position);
-                case BEZIER -> bezier(nodes.length > 0 ? nodes[0] : 0, at(1), at(2), at(3), position);
+                case BEZIER -> Splines.cubicBezier(nodes.length > 0 ? nodes[0] : 0, at(1), at(2), at(3), position);
                 case BEZIER_CHAIN -> bezierChain(position);
             };
         }
@@ -191,14 +192,7 @@ public record ParticleEffectBlueprint(
             double p1 = nodes[index];
             double p2 = nodes[Math.min(nodes.length - 1, index + 1)];
             double p3 = nodes[Math.min(nodes.length - 1, index + 2)];
-            double v0 = (p2 - p0) * 0.5, v1 = (p3 - p1) * 0.5;
-            double t2 = weight * weight, t3 = t2 * weight;
-            return (2 * p1 - 2 * p2 + v0 + v1) * t3 + (-3 * p1 + 3 * p2 - 2 * v0 - v1) * t2 + v0 * weight + p1;
-        }
-
-        private static double bezier(double p0, double p1, double p2, double p3, double t) {
-            double k = 1 - t;
-            return k * k * k * p0 + 3 * k * k * t * p1 + 3 * k * t * t * p2 + t * t * t * p3;
+            return Splines.catmullRom(weight, p0, p1, p2, p3);
         }
 
         private double bezierChain(double position) {
@@ -214,7 +208,7 @@ public record ParticleEffectBlueprint(
             if (after == null) after = new ChainNode(1, 0, 0, 0, 0);
             double span = after.time() - before.time();
             if (span <= 0) return before.rightValue();
-            return bezier(before.rightValue(), before.rightValue() + before.rightSlope() / 3,
+            return Splines.cubicBezier(before.rightValue(), before.rightValue() + before.rightSlope() / 3,
                     after.leftValue() - after.leftSlope() / 3, after.leftValue(), (position - before.time()) / span);
         }
     }

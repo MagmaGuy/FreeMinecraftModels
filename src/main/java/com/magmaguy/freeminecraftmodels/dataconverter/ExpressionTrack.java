@@ -11,8 +11,10 @@ import java.util.List;
  * baked channels get at load. One track is shared by every entity of the model and never changes.
  *
  * @param keyframes the channel's keyframes, normalized: sorted by time without duplicates
+ * @param looping   whether Blockbench loops the animation, which carries smooth keyframe curves across the loop
  */
-public record ExpressionTrack(TransformationType channel, List<Keyframe> keyframes, int blockBenchVersion) {
+public record ExpressionTrack(TransformationType channel, List<Keyframe> keyframes, int blockBenchVersion,
+                              boolean looping) {
     public ExpressionTrack {
         keyframes = List.copyOf(keyframes);
     }
@@ -26,6 +28,6 @@ public record ExpressionTrack(TransformationType channel, List<Keyframe> keyfram
     /** The channel's value on an axis (0 = x, 1 = y, 2 = z) at a tick, in the pose mixer's units. */
     public float sample(int axis, int tick, MolangContext context) {
         return AnimationTimeline.toPoseUnits(channel, axis,
-                AnimationTimeline.sample(keyframes, tick, axis, context), blockBenchVersion);
+                AnimationTimeline.sample(keyframes, tick, axis, context, looping), blockBenchVersion);
     }
 }
