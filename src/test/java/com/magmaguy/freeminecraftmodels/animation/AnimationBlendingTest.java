@@ -75,7 +75,9 @@ class AnimationBlendingTest {
                 animation("sneak", "loop", 0.5, false, "", Map.of("body", List.of(key(0, 8)))),
                 animation("jump", "once", 0.2, false, "", Map.of("body", List.of(key(0, 4)))),
                 // Marked as a loop in Blockbench, as Dali's are; it still plays once.
-                animation("long_idle", "loop", 0.5, false, "", Map.of("body", List.of(key(0, 64)))));
+                animation("long_idle", "loop", 0.5, false, "", Map.of("body", List.of(key(0, 64)))),
+                // What the swim tests set as a swimming mob's animation.
+                animation("slide", "loop", 0.5, false, "", Map.of("body", List.of(key(0, 24)))));
         Path source = directory.resolve("blend_probe.bbmodel");
         Files.writeString(source, new Gson().toJson(Map.of(
                 "meta", Map.of("format_version", "5.0", "model_format", "free"),
@@ -299,6 +301,52 @@ class AnimationBlendingTest {
     }
 
     @Test
+    void aSwimmingMobPlaysItsSwimAnimationInPlaceOfIdleAndIdlesAgainAshore() {
+        DefaultConfig.idleWalkBlendTicks = 0;
+        animation.setSwimAnimation("slide");
+        tick(3);
+        assertEquals(idleBody(2), y(body), 1e-5, "On land it idles");
+        animation.setSwimming(true);
+        tick(1);
+        assertEquals(SLIDE_BODY, y(body), 1e-5, "In water it slides");
+        tick(10);
+        assertEquals(SLIDE_BODY, y(body), 1e-5, "and keeps sliding while it swims");
+        animation.setSwimming(false);
+        tick(1);
+        assertEquals(idleBody(0), y(body), 1e-5, "Out of the water it idles again");
+    }
+
+    @Test
+    void swimmingCrossFadesLikeIdleAndWalk() {
+        animation.setSwimAnimation("slide");
+        tick(1);
+        animation.setSwimming(true);
+        tick(1);
+        assertEquals(idleBody(1) + (SLIDE_BODY - idleBody(1)) * smoothstep(0.2), y(body), 1e-5);
+    }
+
+    @Test
+    void aSwimmingMobWithoutTheSwimAnimationKeepsIdling() {
+        DefaultConfig.idleWalkBlendTicks = 0;
+        animation.setSwimAnimation("paddle");
+        animation.setSwimming(true);
+        tick(3);
+        assertEquals(idleBody(2), y(body), 1e-5, "The model has no paddle, so it idles in water too");
+    }
+
+    @Test
+    void clearingTheSwimAnimationMidSwimIdlesAgain() {
+        DefaultConfig.idleWalkBlendTicks = 0;
+        animation.setSwimAnimation("slide");
+        animation.setSwimming(true);
+        tick(2);
+        assertEquals(SLIDE_BODY, y(body), 1e-5);
+        animation.setSwimAnimation(null);
+        tick(1);
+        assertEquals(idleBody(0), y(body), 1e-5);
+    }
+
+    @Test
     void blockbenchFieldsAreRead() {
         Map<String, AnimationBlueprint> blueprints = converter.getAnimationsBlueprint().getAnimations();
         assertTrue(blueprints.get("attack").isOverride());
@@ -316,6 +364,7 @@ class AnimationBlendingTest {
     }
 
     private static final double LONG_IDLE_BODY = 4;
+    private static final double SLIDE_BODY = 1.5;
 
     private static double idleBody(int frame) {
         return frame / 16.0;

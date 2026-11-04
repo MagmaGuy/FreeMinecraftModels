@@ -83,6 +83,8 @@ public class DynamicEntity extends ModeledEntity {
      */
     @Getter
     private volatile TravelOrientation travelOrientation = TravelOrientation.UPRIGHT;
+    // How the model leans while its mob swims; null leans as it does on land.
+    private volatile TravelOrientation swimOrientation;
     // Stepped only by the model tick, under the skeleton's lock.
     private final TravelTilt travelTilt = new TravelTilt();
     // Whether the body tilt is the travel lean's, still easing out; a tilt set through setBodyTilt is left alone.
@@ -208,7 +210,9 @@ public class DynamicEntity extends ModeledEntity {
         //todo: investigate if this is still necessary since everything now updates anyway, at least for animations
         syncSkeletonWithEntity();
         updateModelYaw();
-        updateTravelTilt();
+        boolean swimming = isSwimming();
+        updateTravelTilt(swimming);
+        getAnimationComponent().setSwimming(swimming);
         super.tick(abstractPacketBundle);
     }
 
@@ -218,12 +222,30 @@ public class DynamicEntity extends ModeledEntity {
     }
 
     /**
+     * Sets how the model leans while its mob swims: a penguin that walks upright leads with its front in water.
+     * Null leans as it does on land.
+     */
+    public void setSwimOrientation(@Nullable TravelOrientation orientation) {
+        swimOrientation = orientation;
+    }
+
+    /**
+     * Whether the mob swims: it is in water and off the ground. A mob that wades along a shallow bottom walks. Read on
+     * the model clock, so it is the mob's state as of its last tick.
+     */
+    public boolean isSwimming() {
+        Entity entity = underlyingEntity;
+        return entity != null && entity.isValid() && entity.isInWater() && !entity.isOnGround();
+    }
+
+    /**
      * Leans the model with its travel, after its facing and before the bones transform. An upright model skips
      * the work, and leaves alone any tilt set through {@link #setBodyTilt}; one that just turned upright again
      * eases out of its last lean like any other stop.
      */
-    private void updateTravelTilt() {
-        TravelOrientation orientation = travelOrientation;
+    private void updateTravelTilt(boolean swimming) {
+        TravelOrientation swim = swimOrientation;
+        TravelOrientation orientation = swimming && swim != null ? swim : travelOrientation;
         if (orientation.style() == TravelOrientation.Style.UPRIGHT && !travelLeaning) {
             travelTilt.reset();
             return;

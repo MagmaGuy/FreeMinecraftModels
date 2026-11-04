@@ -506,7 +506,9 @@ public final class PetManager {
         double maxHealth = Math.max(1D, pet.health() * stats.health * control.babyShare());
         // Collidable, as vanilla mobs are: bodies push each other apart instead of stacking, and players brush them
         // aside. The model sizes its body to its hitbox bone when it attaches.
+        PetSwimming swimming = pet.swimming();
         MindBodyProfile profile = new MindBodyProfile(pet.locomotion(), scale, true, pet.body().getKey().toString());
+        if (swimming != null) profile = profile.withSwimWave(swimming.wave());
         MobBody body;
         try {
             body = host.spawnBody(at, profile, prepared -> {
@@ -529,6 +531,10 @@ public final class PetManager {
         // Clicks land on the model players see, not on the small body hidden inside it.
         modeled.setClickSurface(true);
         modeled.setTravelOrientation(pet.orientation());
+        if (swimming != null) {
+            modeled.setSwimOrientation(swimming.orientation());
+            modeled.getAnimationComponent().setSwimAnimation(swimming.animation());
+        }
         modeled.setCenteredOnBody(pet.centerOnBody());
         modeled.setDisplayName(nameplate(control));
         PetRides.prepare(control, entity, modeled);

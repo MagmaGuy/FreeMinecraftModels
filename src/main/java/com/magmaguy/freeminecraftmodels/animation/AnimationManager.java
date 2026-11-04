@@ -24,15 +24,16 @@ import java.util.function.Predicate;
 /**
  * Plays a model's animations in two layers and mixes them into one pose per tick.
  * <ul>
- * <li>Base layer: a locomotion machine (spawn, idle, long_idle, walk, ride, death) driven by {@link #TRANSITIONS},
- * or a custom animation played with {@code blend=false}, which takes the whole pose over while the machine keeps
- * tracking idle and walk underneath. A model with a {@code long_idle} animation plays it once after standing idle
- * for a random {@code longIdleMinSeconds} to {@code longIdleMaxSeconds}; a steered mount with a ridden animation
- * plays that in place of walk.</li>
+ * <li>Base layer: a locomotion machine (spawn, idle, long_idle, walk, ride, swim, death) driven by
+ * {@link #TRANSITIONS}, or a custom animation played with {@code blend=false}, which takes the whole pose over while
+ * the machine keeps tracking idle and walk underneath. A model with a {@code long_idle} animation plays it once after
+ * standing idle for a random {@code longIdleMinSeconds} to {@code longIdleMaxSeconds}; a steered mount with a ridden
+ * animation plays that in place of walk, and a swimming mob with a swim animation plays that in place of idle and
+ * walk.</li>
  * <li>Action layer: attacks, {@code damaged}, and custom animations played with {@code blend=true}. An action
  * replaces the bones it keys when its Blockbench Override is set and adds to them otherwise.</li>
  * </ul>
- * Idle, long_idle, walk and ride cross-fade into each other and death fades in from whatever pose the model holds;
+ * Idle, long_idle, walk, ride and swim cross-fade into each other and death fades in from whatever pose the model holds;
  * every other switch snaps. Custom animations outrank built-in ones, and only death interrupts them.
  * <p>
  * Requests can come from any thread; they are queued and applied on the model clock, which owns all state here.
@@ -41,32 +42,41 @@ public class AnimationManager {
     private static final Set<String> ATTACKS = Set.of("attack", "attack_melee", "attack_ranged");
     private static final String DAMAGED = "damaged";
 
-    private enum Base {SPAWN, IDLE, LONG_IDLE, WALK, RIDE, DEATH}
+    private enum Base {SPAWN, IDLE, LONG_IDLE, WALK, RIDE, SWIM, DEATH}
 
     /** One row of the locomotion machine: a state change, whether it reads the mob's movement, when, and its fade. */
     private record Transition(Base from, Base to, boolean needsEntity,
                               Predicate<AnimationManager> when, IntSupplier fadeTicks) {
     }
 
-    // The first row that applies wins, so each ridden row comes before the walking one it replaces.
+    // The first row that applies wins, so each ridden row comes before the swimming one, and each swimming row before
+    // the walking or resting one it replaces. Swimming reads no entity: the model reports it (see setSwimming).
     private static final List<Transition> TRANSITIONS = List.of(
             new Transition(Base.SPAWN, Base.WALK, false, m -> m.base.finished() && m.moving, () -> 0),
             new Transition(Base.SPAWN, Base.IDLE, false, m -> m.base.finished(), () -> 0),
             new Transition(Base.IDLE, Base.RIDE, true, m -> m.moving && m.steered, AnimationManager::locomotionFade),
+            new Transition(Base.IDLE, Base.SWIM, false, AnimationManager::swims, AnimationManager::locomotionFade),
             new Transition(Base.IDLE, Base.WALK, true, m -> m.moving && !m.rides(), AnimationManager::locomotionFade),
             new Transition(Base.IDLE, Base.LONG_IDLE, false, AnimationManager::longIdleDue,
                     AnimationManager::locomotionFade),
             new Transition(Base.LONG_IDLE, Base.RIDE, true, m -> m.moving && m.steered,
                     AnimationManager::locomotionFade),
+            new Transition(Base.LONG_IDLE, Base.SWIM, false, AnimationManager::swims, AnimationManager::locomotionFade),
             new Transition(Base.LONG_IDLE, Base.WALK, true, m -> m.moving && !m.rides(),
                     AnimationManager::locomotionFade),
             // Anything else that starts cuts it short: an attack, a rider.
             new Transition(Base.LONG_IDLE, Base.IDLE, false, m -> m.base.finished() || m.action != null || m.steered,
                     AnimationManager::locomotionFade),
             new Transition(Base.WALK, Base.RIDE, true, m -> m.moving && m.steered, AnimationManager::locomotionFade),
+            new Transition(Base.WALK, Base.SWIM, false, AnimationManager::swims, AnimationManager::locomotionFade),
             new Transition(Base.WALK, Base.IDLE, true, m -> !m.moving, AnimationManager::locomotionFade),
             new Transition(Base.RIDE, Base.IDLE, true, m -> !m.moving, AnimationManager::locomotionFade),
-            new Transition(Base.RIDE, Base.WALK, true, m -> !m.rides(), AnimationManager::locomotionFade));
+            new Transition(Base.RIDE, Base.WALK, true, m -> !m.rides(), AnimationManager::locomotionFade),
+            new Transition(Base.SWIM, Base.RIDE, true, m -> m.moving && m.steered, AnimationManager::locomotionFade),
+            // Out of the water it walks on, or stands.
+            new Transition(Base.SWIM, Base.WALK, true, m -> !m.swims() && m.moving && !m.rides(),
+                    AnimationManager::locomotionFade),
+            new Transition(Base.SWIM, Base.IDLE, false, m -> !m.swims(), AnimationManager::locomotionFade));
 
     private final ModeledEntity modeledEntity;
     private final Animations animations;
@@ -74,6 +84,10 @@ public class AnimationManager {
     private final Animation idle, walk, spawn, death, longIdle;
     // What a steered mount plays while it moves, in place of walk; null walks. Set on the clock thread.
     private Animation ride;
+    // What a swimming mob plays, in place of idle and walk; null keeps them. Set on the clock thread.
+    private Animation swim;
+    // Whether the model's mob swims, as the model last reported it.
+    private boolean swimming = false;
     private final SplittableRandom random = new SplittableRandom();
     private final ConcurrentLinkedQueue<Runnable> requests = new ConcurrentLinkedQueue<>();
     // Set by the request itself so later requests are refused at once: death is terminal.
@@ -222,6 +236,24 @@ public class AnimationManager {
         });
     }
 
+    /**
+     * The animation a swimming mob plays, in place of idle and walk: a penguin's belly slide, say. Null, or a name the
+     * model lacks, keeps idle and walk in water too.
+     */
+    public void setSwimAnimation(String name) {
+        requests.add(() -> {
+            Animation next = name == null ? null : animations.getAnimations().get(name);
+            if (next == null && name != null) next = animations.getAnimations().get(name.toLowerCase(Locale.ROOT));
+            swim = next;
+            if (locomotion == Base.SWIM && !swims()) setLocomotion(moving ? Base.WALK : Base.IDLE, locomotionFade());
+        });
+    }
+
+    /** Whether the model's mob swims now. The model reports this every tick before the animations tick. */
+    public void setSwimming(boolean swimming) {
+        this.swimming = swimming;
+    }
+
     /** Whether only the base's own loops play: no attack, custom animation, spawn or death. Clock thread only. */
     public boolean isOnlyLocomotionPlaying() {
         return action == null && !takeover && isLocomotion(locomotion);
@@ -317,6 +349,11 @@ public class AnimationManager {
 
     private boolean longIdleDue() {
         return longIdleWait > 0 && idleTicks >= longIdleWait;
+    }
+
+    /** Whether the mob swims, nobody steers it, and the model has a swim animation for it. */
+    private boolean swims() {
+        return swimming && swim != null && !steered;
     }
 
     /** Whether a player steers the mob and the model has a ridden animation for it. */
@@ -563,6 +600,7 @@ public class AnimationManager {
             case LONG_IDLE -> longIdle;
             case WALK -> walk;
             case RIDE -> ride;
+            case SWIM -> swim;
             case DEATH -> death;
         };
     }
@@ -576,6 +614,7 @@ public class AnimationManager {
 
     /** The states the base cycles through on its own, which cross-fade into each other. */
     private static boolean isLocomotion(Base state) {
-        return state == Base.IDLE || state == Base.LONG_IDLE || state == Base.WALK || state == Base.RIDE;
+        return state == Base.IDLE || state == Base.LONG_IDLE || state == Base.WALK || state == Base.RIDE
+                || state == Base.SWIM;
     }
 }

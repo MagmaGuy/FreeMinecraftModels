@@ -75,6 +75,16 @@ public class AnimationComponent {
         if (animationManager != null) animationManager.setRiddenAnimation(animationName);
     }
 
+    /** The animation the model plays in place of idle and walk while its mob swims; null keeps them. */
+    public void setSwimAnimation(String animationName) {
+        if (animationManager != null) animationManager.setSwimAnimation(animationName);
+    }
+
+    /** Whether the model's mob swims now; the model reports it each tick before the animations tick. */
+    public void setSwimming(boolean swimming) {
+        if (animationManager != null) animationManager.setSwimming(swimming);
+    }
+
     /** Whether the model plays only its idle or walk loop, or has no animations at all. Clock thread only. */
     public boolean isOnlyLocomotionPlaying() {
         return animationManager == null || animationManager.isOnlyLocomotionPlaying();
