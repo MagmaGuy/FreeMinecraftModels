@@ -252,7 +252,7 @@ public class AnimationBlueprint {
         if (keyframes.isEmpty()) return;
         if (keyframes.stream().anyMatch(Keyframe::isDynamic)) {
             expressionTracks.computeIfAbsent(bone, keyed -> new ArrayList<>())
-                    .add(new ExpressionTrack(channel, keyframes, blockBenchVersion));
+                    .add(new ExpressionTrack(channel, keyframes, blockBenchVersion, looping()));
             return;
         }
         for (int tick = 0; tick < frames.length; tick++) {
@@ -282,7 +282,12 @@ public class AnimationBlueprint {
 
     private float poseValue(List<Keyframe> keyframes, TransformationType channel, int axis, int tick) {
         return AnimationTimeline.toPoseUnits(channel, axis,
-                AnimationTimeline.sample(keyframes, tick, axis, null), blockBenchVersion);
+                AnimationTimeline.sample(keyframes, tick, axis, null, looping()), blockBenchVersion);
+    }
+
+    /** Whether Blockbench loops this animation, which carries smooth keyframe curves across the loop. */
+    private boolean looping() {
+        return loopType == LoopType.LOOP;
     }
 
     private void warnMalformedTimeline(String detail) {
@@ -314,7 +319,7 @@ public class AnimationBlueprint {
         if (keyframes.isEmpty()) return;
         if (keyframes.stream().anyMatch(Keyframe::isDynamic)) {
             ikExpressionTracks.put(controllerName,
-                    new ExpressionTrack(TransformationType.POSITION, keyframes, blockBenchVersion));
+                    new ExpressionTrack(TransformationType.POSITION, keyframes, blockBenchVersion, looping()));
             return;
         }
 
