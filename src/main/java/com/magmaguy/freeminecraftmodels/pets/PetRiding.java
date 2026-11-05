@@ -16,13 +16,15 @@ import java.util.function.Consumer;
  * How a saddled adult of the species rides, from the pet file's {@code riding:} section. A species without one cannot
  * be ridden. {@code speed} is the body's movement speed while ridden (a horse's ranges 0.11 to 0.34), which the pet's
  * speed stat scales; {@code jump} its jump strength; {@code seatHeight} the rider's seat above the model's feet in
- * Blockbench pixels at scale 1; {@code animation} what the model plays while ridden and moving, in place of walk; and
- * {@code surfaces} multiplies the speed on the listed blocks, the block at the pet's feet first (a snow layer), then
- * the one under them.
+ * Blockbench pixels at scale 1; {@code animation} what the model plays while ridden and moving, in place of walk;
+ * {@code idleAnimation} what it plays while ridden and standing still, in place of idle (a model without that
+ * animation idles as it does unridden); and {@code surfaces} multiplies the speed on the listed blocks, the block at
+ * the pet's feet first (a snow layer), then the one under them.
  */
-public record PetRiding(double speed, double jump, double seatHeight, String animation, Map<Material, Double> surfaces) {
+public record PetRiding(double speed, double jump, double seatHeight, String animation, String idleAnimation,
+                        Map<Material, Double> surfaces) {
     private static final double SPEED = 0.2D, JUMP = 0.4D, SEAT_HEIGHT = 10D;
-    private static final String ANIMATION = "slide";
+    private static final String ANIMATION = "slide", IDLE_ANIMATION = "idle_ride";
     /** Snow is quick and ice already slides with vanilla friction, so it needs less help. */
     private static final Map<Material, Double> SURFACES = new LinkedHashMap<>();
 
@@ -40,7 +42,6 @@ public record PetRiding(double speed, double jump, double seatHeight, String ani
     /** The riding section's settings, defaults for those it leaves out, or null without a section. */
     static PetRiding read(ConfigurationSection section, String filename, Consumer<String> warn) {
         if (section == null) return null;
-        String animation = section.getString("animation", ANIMATION);
         Map<Material, Double> surfaces = SURFACES;
         ConfigurationSection written = section.getConfigurationSection("surfaces");
         if (written != null) {
@@ -56,8 +57,14 @@ public record PetRiding(double speed, double jump, double seatHeight, String ani
             }
         }
         return new PetRiding(Math.max(0D, section.getDouble("speed", SPEED)), Math.max(0D, section.getDouble("jump", JUMP)),
-                Math.max(0D, section.getDouble("seatHeight", SEAT_HEIGHT)),
-                animation == null || animation.isBlank() ? ANIMATION : animation, surfaces);
+                Math.max(0D, section.getDouble("seatHeight", SEAT_HEIGHT)), name(section, "animation", ANIMATION),
+                name(section, "idleAnimation", IDLE_ANIMATION), surfaces);
+    }
+
+    /** An animation name the section sets, or the default for a missing or blank one. */
+    private static String name(ConfigurationSection section, String key, String fallback) {
+        String name = section.getString(key, fallback);
+        return name == null || name.isBlank() ? fallback : name;
     }
 
     /**
