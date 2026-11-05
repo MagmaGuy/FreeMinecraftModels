@@ -16,15 +16,15 @@ import java.util.function.Consumer;
  * How a saddled adult of the species rides, from the pet file's {@code riding:} section. A species without one cannot
  * be ridden. {@code speed} is the body's movement speed while ridden (a horse's ranges 0.11 to 0.34), which the pet's
  * speed stat scales; {@code jump} its jump strength; {@code seatHeight} the rider's seat above the model's feet in
- * Blockbench pixels at scale 1; {@code animation} what the model plays while ridden and moving, in place of walk;
- * {@code idleAnimation} what it plays while ridden and standing still, in place of idle (a model without that
- * animation idles as it does unridden); and {@code surfaces} multiplies the speed on the listed blocks, the block at
+ * Blockbench pixels at scale 1; {@code animation} what the model plays while ridden and moving, in place of walk
+ * ({@code ride} by default); {@code idleAnimation} what it plays while ridden and standing still, in place of idle
+ * ({@code idle.ride} by default; a model without that animation idles as it does unridden); and {@code surfaces} multiplies the speed on the listed blocks, the block at
  * the pet's feet first (a snow layer), then the one under them.
  */
 public record PetRiding(double speed, double jump, double seatHeight, String animation, String idleAnimation,
                         Map<Material, Double> surfaces) {
     private static final double SPEED = 0.2D, JUMP = 0.4D, SEAT_HEIGHT = 10D;
-    private static final String ANIMATION = "slide", IDLE_ANIMATION = "idle_ride";
+    private static final String ANIMATION = "ride", IDLE_ANIMATION = "idle.ride";
     /** Snow is quick and ice already slides with vanilla friction, so it needs less help. */
     private static final Map<Material, Double> SURFACES = new LinkedHashMap<>();
 

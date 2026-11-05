@@ -15,33 +15,44 @@ import org.bukkit.util.Vector;
 
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
+import java.util.Map;
 import java.util.SplittableRandom;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.IntSupplier;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
  * Plays a model's animations in two layers and mixes them into one pose per tick.
  * <ul>
- * <li>Base layer: a locomotion machine (spawn, idle, long_idle, walk, ride, ridden idle, swim, idle swim, death)
+ * <li>Base layer: a locomotion machine (spawn, idle, idle.long, walk, ride, ridden idle, swim, idle swim, death)
  * driven by {@link #TRANSITIONS}, or a custom animation played with {@code blend=false}, which takes the whole pose
- * over while the machine keeps tracking idle and walk underneath. A model with a {@code long_idle} animation plays it
+ * over while the machine keeps tracking idle and walk underneath. A model with an {@code idle.long} animation plays it
  * once after standing idle for a random {@code longIdleMinSeconds} to {@code longIdleMaxSeconds}. A steered mount
  * with a ridden animation plays that in place of walk, and its ridden idle animation, when it has one, in place of
  * idle. A swimming mob with a swim animation plays that in place of walk, and in place of idle too unless it also has
  * an idle swim animation to play while it holds still in water.</li>
- * <li>Action layer: attacks, {@code damaged}, and custom animations played with {@code blend=true}. An action
- * replaces the bones it keys when its Blockbench Override is set and adds to them otherwise.</li>
+ * <li>Action layer: attacks ({@code attack} and any {@code attack.} name), {@code damaged}, and custom animations
+ * played with {@code blend=true}. An action replaces the bones it keys when its Blockbench Override is set and adds to
+ * them otherwise.</li>
  * </ul>
- * Idle, long_idle, walk, ride, ridden idle, swim and idle swim cross-fade into each other and death fades in from
+ * Idle, idle.long, walk, ride, ridden idle, swim and idle swim cross-fade into each other and death fades in from
  * whatever pose the model holds; every other switch snaps. Custom animations outrank built-in ones, and only death
  * interrupts them.
+ * <p>
+ * Names are dotted from the general to the specific: idle.long is a kind of idle, attack.melee a kind of attack. The
+ * underscore names models were made with before ({@code long_idle}, {@code attack_melee}, {@code attack_ranged}) still
+ * stand for them, both ways round.
  * <p>
  * Requests can come from any thread; they are queued and applied on the model clock, which owns all state here.
  */
 public class AnimationManager {
-    private static final Set<String> ATTACKS = Set.of("attack", "attack_melee", "attack_ranged");
+    // The names models and plugins used before the dotted ones, by the name each now stands for, and back.
+    private static final Map<String, String> OLD_NAMES = Map.of(
+            "long_idle", "idle.long", "attack_melee", "attack.melee", "attack_ranged", "attack.ranged");
+    private static final Map<String, String> NEW_NAMES = OLD_NAMES.entrySet().stream()
+            .collect(Collectors.toUnmodifiableMap(Map.Entry::getValue, Map.Entry::getKey));
+    private static final String ATTACK = "attack";
     private static final String DAMAGED = "damaged";
 
     private enum Base {SPAWN, IDLE, LONG_IDLE, WALK, RIDE, RIDE_IDLE, SWIM, SWIM_IDLE, DEATH}
@@ -146,7 +157,7 @@ public class AnimationManager {
     private boolean moving = false;
     // Whether a player steers the mob this tick.
     private boolean steered = false;
-    // Ticks the base has shown idle with nothing else playing, and how many the current wait for long_idle lasts.
+    // Ticks the base has shown idle with nothing else playing, and how many the current wait for idle.long lasts.
     private int idleTicks = 0;
     private int longIdleWait = -1;
     // Where a steered mount was last seen; its client moves it with absolute positions, so it has no velocity here.
@@ -189,11 +200,11 @@ public class AnimationManager {
         this.modeledEntity = modeledEntity;
         this.bones = modeledEntity.getSkeleton().getBones().toArray(new Bone[0]);
         this.animations = new Animations(bp, bones, modeledEntity.getSkeleton());
-        idle = animations.getAnimations().get("idle");
-        walk = animations.getAnimations().get("walk");
-        spawn = animations.getAnimations().get("spawn");
-        death = animations.getAnimations().get("death");
-        longIdle = animations.getAnimations().get("long_idle");
+        idle = named("idle");
+        walk = named("walk");
+        spawn = named("spawn");
+        death = named("death");
+        longIdle = named("idle.long");
         basePose = new Pose(bones.length);
         fromPose = new Pose(bones.length);
         frozenPose = new Pose(bones.length);
@@ -241,11 +252,10 @@ public class AnimationManager {
             default -> {
             }
         }
-        Animation animation = animations.getAnimations().get(name);
-        if (animation == null) animation = animations.getAnimations().get(key);
+        Animation animation = named(name);
         if (animation == null) return false;
         Animation requested = animation;
-        if (ATTACKS.contains(key)) requests.add(() -> requestAttack(requested));
+        if (isAttack(key)) requests.add(() -> requestAttack(requested));
         else if (key.equals(DAMAGED)) requests.add(() -> requestCustom(requested, true, loop));
         else requests.add(() -> requestCustom(requested, blend, loop));
         return true;
@@ -263,8 +273,9 @@ public class AnimationManager {
         });
     }
 
+    /** Whether {@link #play} finds an animation by this name: in any case, or by the other spelling of a renamed one. */
     public boolean hasAnimation(String animationName) {
-        return animations.getAnimations().containsKey(animationName);
+        return named(animationName) != null;
     }
 
     /**
@@ -313,11 +324,26 @@ public class AnimationManager {
         });
     }
 
-    /** The model's animation by this name, or by its lower case; null for a null name or one the model lacks. */
+    /**
+     * The model's animation by this name, by its lower case, or by the other spelling of a renamed one (a model's
+     * long_idle for idle.long, and the other way round); null for a null name or one the model lacks.
+     */
     private Animation named(String name) {
         if (name == null) return null;
-        Animation animation = animations.getAnimations().get(name);
-        return animation != null ? animation : animations.getAnimations().get(name.toLowerCase(Locale.ROOT));
+        Map<String, Animation> all = animations.getAnimations();
+        Animation animation = all.get(name);
+        if (animation != null) return animation;
+        String key = name.toLowerCase(Locale.ROOT);
+        animation = all.get(key);
+        if (animation != null) return animation;
+        String other = OLD_NAMES.getOrDefault(key, NEW_NAMES.get(key));
+        return other == null ? null : all.get(other);
+    }
+
+    /** Whether this lower-case name is an attack: attack, any attack. name, or an older spelling of one. */
+    private static boolean isAttack(String key) {
+        String name = OLD_NAMES.getOrDefault(key, key);
+        return name.equals(ATTACK) || name.startsWith(ATTACK + ".");
     }
 
     /** Whether the model's mob swims now. The model reports this every tick before the animations tick. */
@@ -410,7 +436,7 @@ public class AnimationManager {
         if (idleTicks++ == 0) longIdleWait = rollLongIdleWait();
     }
 
-    /** A wait for long_idle in ticks, between the configured seconds; -1 when long_idle is turned off. */
+    /** A wait for idle.long in ticks, between the configured seconds; -1 when idle.long is turned off. */
     private int rollLongIdleWait() {
         int max = DefaultConfig.longIdleMaxSeconds;
         if (max <= 0) return -1;
