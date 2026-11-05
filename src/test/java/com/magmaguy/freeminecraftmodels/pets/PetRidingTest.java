@@ -91,6 +91,26 @@ class PetRidingTest {
     }
 
     @Test
+    void aSpeciesDivesOnlyWhenItsRidingSectionSetsASwimSpeed() throws InvalidConfigurationException {
+        List<String> warnings = new ArrayList<>();
+        assertFalse(read("riding: {}\n", warnings).dives());
+        PetRiding diver = read("riding:\n  swimSpeed: 14\n", warnings);
+        assertTrue(diver.dives());
+        assertEquals(14D, diver.swimSpeed());
+        assertFalse(read("riding:\n  swimSpeed: -3\n", warnings).dives());
+        assertEquals(List.of(), warnings);
+    }
+
+    @Test
+    void aDiverSwimsItsSwimSpeedTimesItsSpeedStatAsARiddenNautilus() throws InvalidConfigurationException {
+        PetRiding diver = read("riding:\n  swimSpeed: 14\n", new ArrayList<>());
+        // A ridden nautilus settles at 9 x 0.0325 blocks per tick per point of movement speed: 5.85 blocks a second.
+        assertEquals(5.85D, PetRiding.NAUTILUS_BLOCKS_PER_SECOND, 1.0E-9);
+        assertEquals(14D / 5.85D, diver.swimMovementSpeed(1D), 1.0E-9);
+        assertEquals(2D * 14D / 5.85D, diver.swimMovementSpeed(2D), 1.0E-9);
+    }
+
+    @Test
     void onlyAWalkingHorseBodyCanBeRidden() {
         List<String> warnings = new ArrayList<>();
         assertTrue(PetRiding.supports(EntityType.HORSE, MindBodyLocomotion.AMPHIBIOUS, FILE, warnings::add));
