@@ -72,22 +72,34 @@ public class AnimationComponent {
         return animationManager.hasAnimation(animationName);
     }
 
-    /** The animation the model plays in place of walk while a player steers its mob and it moves; null walks. */
+    /**
+     * The animation the model plays in place of walk while a player steers its mob and it moves; the model's ride
+     * until set, and null walks.
+     */
     public void setRiddenAnimation(String animationName) {
         if (animationManager != null) animationManager.setRiddenAnimation(animationName);
     }
 
-    /** The animation the model plays in place of idle while a player steers its mob and it stands; null idles. */
+    /**
+     * The animation the model plays in place of idle while a player steers its mob and it stands; the model's
+     * idle.ride until set, and null idles.
+     */
     public void setRiddenIdleAnimation(String animationName) {
         if (animationManager != null) animationManager.setRiddenIdleAnimation(animationName);
     }
 
-    /** The animation the model plays in place of walk while its mob swims along; null walks. */
+    /**
+     * The animation the model plays in place of walk while its mob swims along; the model's swim until set, and null
+     * walks.
+     */
     public void setSwimAnimation(String animationName) {
         if (animationManager != null) animationManager.setSwimAnimation(animationName);
     }
 
-    /** The animation the model plays in place of idle while its swimming mob holds still in water; null idles. */
+    /**
+     * The animation the model plays in place of idle while its swimming mob holds still in water; the model's
+     * idle.swim until set, and null idles.
+     */
     public void setIdleSwimAnimation(String animationName) {
         if (animationManager != null) animationManager.setIdleSwimAnimation(animationName);
     }

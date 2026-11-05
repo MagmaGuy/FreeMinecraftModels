@@ -63,8 +63,12 @@ class AnimationBlendingTest {
         DefaultConfig.deathBlendTicks = 4;
         DefaultConfig.longIdleMinSeconds = 0;
         DefaultConfig.longIdleMaxSeconds = 0;
+        loadProbe("blend_probe", List.of());
+    }
 
-        List<Object> animations = List.of(
+    /** Builds the probe model from the shared animations plus these, and points the test's fields at it. */
+    private void loadProbe(String name, List<Object> extra) throws Exception {
+        List<Object> animations = new ArrayList<>(List.of(
                 // Idle moves the body one pixel per tick, so a fade shows whether idle keeps playing.
                 animation("idle", "loop", 1.0, false, "", Map.of(
                         "body", List.of(key(0, 0), key(1.0, 20)), "arm", List.of(key(0, 16)))),
@@ -82,8 +86,9 @@ class AnimationBlendingTest {
                 animation("long_idle", "loop", 0.5, false, "", Map.of("body", List.of(key(0, 64)))),
                 // What the swim tests set as a swimming mob's animation, and as its idle swim.
                 animation("slide", "loop", 0.5, false, "", Map.of("body", List.of(key(0, 24)))),
-                animation("tread", "loop", 0.5, false, "", Map.of("body", List.of(key(0, 40)))));
-        Path source = directory.resolve("blend_probe.bbmodel");
+                animation("tread", "loop", 0.5, false, "", Map.of("body", List.of(key(0, 40))))));
+        animations.addAll(extra);
+        Path source = directory.resolve(name + ".bbmodel");
         Files.writeString(source, new Gson().toJson(Map.of(
                 "meta", Map.of("format_version", "5.0", "model_format", "free"),
                 "elements", List.of(),
@@ -415,12 +420,46 @@ class AnimationBlendingTest {
     }
 
     @Test
-    void anIdleSwimNeedsASwimAnimation() {
+    void anIdleSwimPlaysWithoutASwimAnimation() throws ReflectiveOperationException {
         DefaultConfig.idleWalkBlendTicks = 0;
+        Vector velocity = new Vector();
+        attachEntity(velocity);
         animation.setIdleSwimAnimation("tread");
         animation.setSwimming(true);
-        tick(3);
-        assertEquals(idleBody(2), y(body), 1e-5, "Without a swim animation it idles in water as on land");
+        tick(1);
+        assertEquals(TREAD_BODY, y(body), 1e-5, "Holding still in water it treads water, though it has no swim");
+        velocity.setX(0.1);
+        tick(1);
+        assertEquals(2, y(body), 1e-5, "Moving without a swim animation, it walks in water");
+        velocity.setX(0);
+        tick(1);
+        assertEquals(TREAD_BODY, y(body), 1e-5, "and treads water again once it stops");
+    }
+
+    @Test
+    void aModelPlaysItsOwnSwimAndIdleSwimWithoutBeingTold() throws Exception {
+        FileModelConverter.shutdown();
+        loadProbe("default_probe", List.of(
+                animation("swim", "loop", 0.5, false, "", Map.of("body", List.of(key(0, 56)))),
+                animation("idle.swim", "loop", 0.5, false, "", Map.of("body", List.of(key(0, 72))))));
+        DefaultConfig.idleWalkBlendTicks = 0;
+        Vector velocity = new Vector();
+        attachEntity(velocity);
+        tick(1);
+        assertEquals(idleBody(0), y(body), 1e-5, "On land it idles");
+        animation.setSwimming(true);
+        tick(1);
+        assertEquals(IDLE_SWIM_BODY, y(body), 1e-5, "Holding still in water, it plays its idle.swim");
+        velocity.setX(0.1);
+        tick(1);
+        assertEquals(SWIM_BODY, y(body), 1e-5, "Moving in water, it plays its swim");
+        animation.setSwimming(false);
+        tick(1);
+        assertEquals(2, y(body), 1e-5, "Ashore and moving, it walks");
+        animation.setSwimAnimation(null);
+        animation.setSwimming(true);
+        tick(1);
+        assertEquals(2, y(body), 1e-5, "A swim turned off walks in water too");
     }
 
     @Test
@@ -459,6 +498,8 @@ class AnimationBlendingTest {
     private static final double LONG_IDLE_BODY = 4;
     private static final double SLIDE_BODY = 1.5;
     private static final double TREAD_BODY = 2.5;
+    private static final double SWIM_BODY = 3.5;
+    private static final double IDLE_SWIM_BODY = 4.5;
 
     private static double idleBody(int frame) {
         return frame / 16.0;
