@@ -37,7 +37,9 @@ import java.util.function.IntPredicate;
  * Saddles and riders for species with a {@code riding:} section. The owner saddles an adult, rides it with an empty
  * hand and takes the saddle back with shears. While ridden, the pet's Mind is released: its behaviors stop and the
  * rider's client steers the horse body through vanilla, at the species' ridden speed for the block it is on, and the
- * pet pushes the mobs it runs into out of its way. When the rider gets off the Mind takes the body back.
+ * pet pushes the mobs it runs into out of its way. A species with a swim speed dives in deep water: the pet moves onto
+ * a nautilus body its rider steers as a vanilla nautilus, and back onto a body of its own kind at the shore. When the
+ * rider gets off the Mind takes the body back.
  */
 final class PetRides {
     /** The bone a rideable pet's model draws its saddle with, shown only while it wears one. */
@@ -61,6 +63,8 @@ final class PetRides {
     private final PetManager manager;
     /** Each ridden pet with the movement speed and jump strength its body had before, and where it stood last tick. */
     private final Map<PetControl, Ride> ridden = new IdentityHashMap<>();
+    // While a dive or surfacing moves a rider between bodies, so the dismount it causes is not vanilla's.
+    private boolean swapping;
 
     private record Unridden(double speed, double jump) {
     }
@@ -69,6 +73,8 @@ final class PetRides {
         private final Unridden before;
         // The rider's client moves the body and the server only snaps it there, so it has no velocity to read.
         private double lastX = Double.NaN, lastZ = Double.NaN;
+        // Whether the pet swims as its diving body now, its rider steering it as a vanilla nautilus.
+        private boolean diving;
 
         private Ride(Unridden before) {
             this.before = before;
@@ -188,29 +194,93 @@ final class PetRides {
     }
 
     /**
-     * Every tick: speeds each ridden pet up on its species' surfaces, pushes the mobs it runs into aside, and hands a
-     * pet nobody rides back to its Mind.
+     * Every tick: dives a ridden pet that dives into deep water and surfaces it at the shore, sets its speed for the
+     * block it is on or its swim, pushes the mobs it runs into aside, and hands a pet nobody rides back to its Mind.
      */
     void tick() {
         if (ridden.isEmpty()) return;
         for (Map.Entry<PetControl, Ride> entry : new ArrayList<>(ridden.entrySet())) {
             PetControl control = entry.getKey();
+            Ride ride = entry.getValue();
             LivingEntity body = control.body();
-            if (body == null || !body.isValid() || rider(body) == null) {
+            if (body == null || !body.isValid()) {
                 getOff(control);
                 continue;
             }
+            Player rider = rider(body);
+            if (rider == null) {
+                dismount(control);
+                continue;
+            }
             PetRiding riding = control.species().riding();
+            if (riding.dives() && SwimMounts.available()) {
+                double eyes = rider.getEyeLocation().getY() - body.getLocation().getY();
+                Block feet = body.getLocation().getBlock();
+                int depth = waterDepth(dy -> isWater(feet.getRelative(0, dy, 0)), (int) Math.ceil(eyes) + 1);
+                boolean diving = diving(ride.diving, depth, eyes, isWater(rider.getEyeLocation().getBlock()));
+                if (diving != ride.diving) {
+                    LivingEntity next = swap(control, rider, diving);
+                    if (next == null) continue;
+                    body = next;
+                    ride.diving = diving;
+                    ride.lastX = Double.NaN;
+                    // A body that would not seat its rider is handed back to the Mind next tick, as after any dismount.
+                    if (rider(body) == null) continue;
+                }
+            }
             Location at = body.getLocation();
-            Block feet = at.getBlock();
-            double speed = riding.speed() * control.stats().speed
-                    * riding.multiplier(feet.getType(), feet.getRelative(BlockFace.DOWN).getType());
+            double speed;
+            if (ride.diving) speed = riding.swimMovementSpeed(control.stats().speed);
+            else {
+                Block feet = at.getBlock();
+                speed = riding.speed() * control.stats().speed
+                        * riding.multiplier(feet.getType(), feet.getRelative(BlockFace.DOWN).getType());
+            }
             setBase(body, Attribute.MOVEMENT_SPEED, speed);
-            Ride ride = entry.getValue();
             if (!Double.isNaN(ride.lastX)) pushAside(control, body, at, at.getX() - ride.lastX, at.getZ() - ride.lastZ);
             ride.lastX = at.getX();
             ride.lastZ = at.getZ();
         }
+    }
+
+    /**
+     * Moves the rider onto the pet's other body: its diving body when it dives, a body of its own kind when it
+     * surfaces. Returns the new body, or null when it could not spawn and the rider is seated back on the old one.
+     * Either seating can fail, leaving the pet without its rider.
+     */
+    private LivingEntity swap(PetControl control, Player rider, boolean dive) {
+        String carrier = dive ? SwimMounts.CARRIER : control.species().body().getKey().toString();
+        swapping = true;
+        try {
+            rider.leaveVehicle();
+            LivingEntity next = manager.rebody(control, carrier);
+            DynamicEntity modeled = control.modeled();
+            if (modeled != null) modeled.seatSteeringRider(rider);
+            if (next != null) setBase(next, Attribute.JUMP_STRENGTH, control.species().riding().jump());
+            return next;
+        } finally {
+            swapping = false;
+        }
+    }
+
+    /**
+     * The rider got off a body that is still there: a diving pet gets a body of its own kind back first, so it swims
+     * on its own as it always does.
+     */
+    private void dismount(PetControl control) {
+        Ride ride = ridden.get(control);
+        if (ride != null && ride.diving) manager.rebody(control, control.species().body().getKey().toString());
+        getOff(control);
+    }
+
+    /**
+     * Whether vanilla must keep this rider on: a horse throws off a rider whose eyes go under water, and a ridden pet
+     * that dives takes them under instead, in its diving body on the next tick.
+     */
+    boolean keepsUnderwaterRider(PetControl control, Player rider) {
+        PetRiding riding = control.species().riding();
+        return !swapping && ridden.containsKey(control) && riding != null && riding.dives() && SwimMounts.available()
+                && isWater(rider.getEyeLocation().getBlock());
     }
 
     /**
@@ -330,8 +400,8 @@ final class PetRides {
     }
 
     /**
-     * FreeMinecraftModels' invisible saddle, on a tamed body its owner owns, as a vanilla horse or nautilus needs to carry a
-     * steering rider. The record holds the real saddle; this one never leaves the body.
+     * FreeMinecraftModels' invisible saddle, on a tamed body its owner owns, as a vanilla horse or nautilus needs to
+     * carry a steering rider. The record holds the real saddle; this one never leaves the body.
      */
     private static void putSaddleOn(LivingEntity body, UUID owner) {
         Player player = owner == null ? null : org.bukkit.Bukkit.getPlayer(owner);
