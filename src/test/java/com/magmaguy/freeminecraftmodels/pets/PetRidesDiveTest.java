@@ -10,12 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** When a ridden pet that dives takes its diving body, and when it gets its own body back. */
 class PetRidesDiveTest {
-    private static final double EYES = 2.2D; // the rider's eyes above the pet's feet
+    // The rider's eyes above the pet's feet: the seat 0.6 up, less the 0.6 a seated player sinks, plus 1.62.
+    private static final double EYES = 1.6D;
 
     @Test
     void itDivesWhereTheWaterWouldReachItsRidersEyes() {
-        assertTrue(PetRides.diving(false, 3, EYES, false));
-        assertFalse(PetRides.diving(false, 2, EYES, false));
+        assertTrue(PetRides.diving(false, 2, EYES, false));
+        assertFalse(PetRides.diving(false, 1, EYES, false));
         assertFalse(PetRides.diving(false, 0, EYES, false));
     }
 
@@ -30,10 +31,19 @@ class PetRidesDiveTest {
     }
 
     @Test
-    void itSurfacesWithItsRidersHeadOutOnceTheWaterIsABlockShallower() {
+    void itSurfacesWithItsRidersHeadOutInTheShallowsOfABeach() {
         assertTrue(PetRides.diving(true, 2, EYES, false));
         assertFalse(PetRides.diving(true, 1, EYES, false));
         assertFalse(PetRides.diving(true, 0, EYES, false));
+    }
+
+    @Test
+    void noDepthFlipsItBetweenBodiesWhenItsTwoBodiesSeatTheRiderABitApart() {
+        for (double eyes = 1.2D; eyes <= 3D; eyes += 0.05D)
+            for (int depth = 0; depth <= 4; depth++)
+                if (PetRides.diving(false, depth, eyes, false))
+                    for (double other = eyes - 0.4D; other <= eyes + 0.4D; other += 0.05D)
+                        assertTrue(PetRides.diving(true, depth, other, false), depth + " " + eyes + " " + other);
     }
 
     @Test

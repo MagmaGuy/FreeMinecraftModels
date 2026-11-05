@@ -57,9 +57,10 @@ final class PetRides {
     private static final double GROUND_SLIDE = 0.6D * 0.91D;
     /**
      * A diving pet surfaces once the water under it is this many blocks shallower than it dives at, so it never flips
-     * between its bodies at the depth it dives at.
+     * between its bodies at the depth it dives at. A seated rider's eyes are only about 1.6 blocks above the pet's
+     * feet, so a whole block would keep it diving in the shallowest water, until it climbed out at the bank.
      */
-    private static final double SURFACE_MARGIN = 1D;
+    private static final double SURFACE_MARGIN = 0.5D;
     private final PetManager manager;
     /** Each ridden pet with the movement speed and jump strength its body had before, and where it stood last tick. */
     private final Map<PetControl, Ride> ridden = new IdentityHashMap<>();
@@ -340,8 +341,8 @@ final class PetRides {
      * Whether a ridden pet that dives swims as its diving body next tick. It dives where the water through its feet is
      * as deep as its rider's eyes are above them, where a pet standing on the bottom would hold them under; its rider's
      * eyes alone cannot tell, since its small land body floats and keeps them above the surface. It surfaces with its
-     * rider's head out of the water once the water is SURFACE_MARGIN shallower, so an underwater tunnel never
-     * surfaces it.
+     * rider's head out of the water once the water is SURFACE_MARGIN shallower, in the shallows of a beach, so an
+     * underwater tunnel never surfaces it.
      */
     static boolean diving(boolean diving, int depth, double eyeHeight, boolean eyesInWater) {
         if (!diving) return depth >= eyeHeight;
