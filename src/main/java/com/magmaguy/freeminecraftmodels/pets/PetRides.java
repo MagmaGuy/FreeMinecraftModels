@@ -256,6 +256,10 @@ final class PetRides {
             rider.leaveVehicle();
             LivingEntity next = manager.rebody(control, carrier);
             DynamicEntity modeled = control.modeled();
+            // Vanilla turns a horse's new rider to the horse's view, on the server and their client, so the new body
+            // faces where the rider looks first and their view stays put.
+            Location view = rider.getLocation();
+            if (next != null) next.setRotation(view.getYaw(), view.getPitch());
             if (modeled != null) modeled.seatSteeringRider(rider);
             if (next != null) setBase(next, Attribute.JUMP_STRENGTH, control.species().riding().jump());
             return next;
