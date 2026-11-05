@@ -60,6 +60,7 @@ final class PetRides {
         if (riding == null || control.isBaby()) return;
         modeled.liftSaddleToHeight(riding.seatHeight());
         modeled.getAnimationComponent().setRiddenAnimation(riding.animation());
+        modeled.getAnimationComponent().setRiddenIdleAnimation(riding.idleAnimation());
         boolean saddled = control.record() != null && control.record().saddled;
         modeled.setBoneHidden(SADDLE_BONE, !saddled);
         if (saddled) putSaddleOn(body, control.ownerId());

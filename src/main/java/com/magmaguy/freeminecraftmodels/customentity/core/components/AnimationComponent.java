@@ -75,6 +75,11 @@ public class AnimationComponent {
         if (animationManager != null) animationManager.setRiddenAnimation(animationName);
     }
 
+    /** The animation the model plays in place of idle while a player steers its mob and it stands; null idles. */
+    public void setRiddenIdleAnimation(String animationName) {
+        if (animationManager != null) animationManager.setRiddenIdleAnimation(animationName);
+    }
+
     /** The animation the model plays in place of idle and walk while its mob swims; null keeps them. */
     public void setSwimAnimation(String animationName) {
         if (animationManager != null) animationManager.setSwimAnimation(animationName);
