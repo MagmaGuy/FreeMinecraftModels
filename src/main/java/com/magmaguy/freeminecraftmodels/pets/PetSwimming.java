@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.pets;
 
 import com.magmaguy.freeminecraftmodels.customentity.core.TravelOrientation;
+import com.magmaguy.magmacore.ai.MindBodyProfile;
 import com.magmaguy.magmacore.ai.MindSwimWave;
 import org.bukkit.configuration.ConfigurationSection;
 
@@ -14,10 +15,12 @@ import java.util.function.Consumer;
  * {@code orientation} how it leans with its travel in water, front first by default, as the species' own
  * {@code orientation} section does on land; and {@code wave} a gentle rise and fall an amphibious pet swims while it
  * travels: {@code height} blocks from crest to trough every {@code seconds}, fading out as it slows down. A wave of
- * height 0 swims level.
+ * height 0 swims level. {@code speed} is how fast an amphibious pet swims, as a multiple of its walking speed on grass
+ * (1.5 by default).
  */
-public record PetSwimming(String animation, String idleAnimation, TravelOrientation orientation, MindSwimWave wave) {
-    private static final String ANIMATION = "swim", IDLE_ANIMATION = "idle.swim";
+public record PetSwimming(String animation, String idleAnimation, TravelOrientation orientation, MindSwimWave wave,
+                          double speed) {
+    static final String ANIMATION = "swim", IDLE_ANIMATION = "idle.swim";
     /** Leads with its front: pitches into the wave's climbs and dives and banks into turns, no more than 45 degrees. */
     static final TravelOrientation ORIENTATION =
             new TravelOrientation(TravelOrientation.Style.FRONT_FIRST, 0.3D, 2.5D, 45D, 120D);
@@ -30,10 +33,16 @@ public record PetSwimming(String animation, String idleAnimation, TravelOrientat
         ConfigurationSection wave = section.getConfigurationSection("wave");
         double height = wave == null ? WAVE_HEIGHT : wave.getDouble("height", WAVE_HEIGHT);
         double seconds = wave == null ? WAVE_SECONDS : wave.getDouble("seconds", WAVE_SECONDS);
+        double speed = section.getDouble("speed", MindBodyProfile.DEFAULT_SWIM_SPEED);
+        if (!(speed > 0D)) {
+            warn.accept(filename + ": swimming.speed must be above 0, not " + speed + "; it swims at "
+                    + MindBodyProfile.DEFAULT_SWIM_SPEED + " times its walking speed.");
+            speed = MindBodyProfile.DEFAULT_SWIM_SPEED;
+        }
         return new PetSwimming(name(section, "animation", ANIMATION), name(section, "idleAnimation", IDLE_ANIMATION),
                 orientation == null ? ORIENTATION
                         : PetSpecies.orientation(orientation, filename, "swimming.orientation", ORIENTATION, warn),
-                new MindSwimWave(height, (int) Math.round(seconds * 20D)));
+                new MindSwimWave(height, (int) Math.round(seconds * 20D)), speed);
     }
 
     /** An animation name the section sets, or the default for a missing or blank one. */
