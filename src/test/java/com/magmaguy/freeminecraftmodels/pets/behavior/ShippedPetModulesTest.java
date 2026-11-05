@@ -104,6 +104,8 @@ class ShippedPetModulesTest {
      * radius (an owned pet's within 0.8 of the follow distance), the swim 0.5 to 3 blocks under the surface, and a look
      * at the nearest player within 8 blocks. stay bobs as before, now in the body's own medium. A drift, walk or swim
      * round the owner ends within the pet's roam range: 0.8 of its follow range, 4 here, where the owner is on the move.
+     * strike_back is new too: a wild pet's headbutt within 1 block, 2 damage and no effect, with a goat's ram impact and
+     * crit particles.
      */
     private static final Set<String> DEFAULT_CALLS = Set.of(
             "fmm:pet/migrate route_target()", "fmm:pet/migrate steer_to(L, 0.3)", "fmm:pet/migrate stop()",
@@ -128,6 +130,7 @@ class ShippedPetModulesTest {
             "fmm:pet/sting sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)",
             "fmm:pet/retaliate distance_to(L)", "fmm:pet/retaliate steer_to(L, 0.45)", "fmm:pet/retaliate rest_point(L, 3)",
             "fmm:pet/retaliate stop()",
+            "fmm:pet/strike_back strike_attacker(1, NONE, 60, 0, 2, 1, entity.goat.ram_impact, 1, 1, crit)",
             "fmm:pet/crop_drizzle drizzle(4, 0.1)",
             "fmm:pet/owner_effect owner_effect(NIGHT_VISION, 300, 0, 16)",
             "fmm:pet/wander ground_point(L, 5)", "fmm:pet/wander ground_point(L, 4)", "fmm:pet/wander distance_to(L)",
@@ -166,6 +169,11 @@ class ShippedPetModulesTest {
             Owner.PAST_LEASH, Set.of("sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)"),
             Owner.PAST_TELEPORT, Set.of("sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)"),
             Owner.AWAY, Set.of("sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)"));
+    /** strike_back's calls by where the owner is: only a wild pet strikes back. */
+    private static final Map<Owner, Set<String>> STRIKE_CALLS = Map.of(
+            Owner.WILD, Set.of("strike_attacker(1, NONE, 60, 0, 2, 1, entity.goat.ram_impact, 1, 1, crit)"),
+            Owner.WITHIN_FOLLOW, Set.of(), Owner.PAST_FOLLOW, Set.of(), Owner.PAST_LEASH, Set.of(),
+            Owner.PAST_TELEPORT, Set.of(), Owner.AWAY, Set.of());
     /**
      * The controls each leased c.pet method needs, as PetLuaTable documents them. A behavior holds its declared
      * controls from just before its start until its stop returns, so start, can_continue, tick and stop hold them, and
@@ -325,6 +333,7 @@ class ShippedPetModulesTest {
                             owner + ", " + stuck + ": a pet that gets nowhere catches up");
             }
             assertCallsByOwner(STING_CALLS, coverage, "fmm:pet/sting", "sting's victims by whether the pet is wild");
+            assertCallsByOwner(STRIKE_CALLS, coverage, "fmm:pet/strike_back", "only a wild pet strikes back");
             assertCallsByOwner(WANDER_CALLS, coverage, "fmm:pet/wander", "wander's spots by whether the pet is wild");
             assertCallsByOwner(SWIM_CALLS, coverage, "fmm:pet/swim", "swim's spots by whether the pet is wild");
             // idle_look finds the player again every 5 ticks while it looks, and with nobody near searches every 20.
@@ -917,6 +926,7 @@ class ShippedPetModulesTest {
             methods.put("scale_toward", new Method("NNNN", args -> LuaValue.NIL, LuaValue.NIL));
             methods.put("sting_contacts", new Method("BsNNNN", args -> LuaValue.valueOf(1), LuaValue.valueOf(0)));
             methods.put("sting_enemies", new Method("NsNNNN", args -> LuaValue.valueOf(1), LuaValue.valueOf(0)));
+            methods.put("strike_attacker", new Method("NsNNNNsNNs", args -> LuaValue.TRUE, LuaValue.FALSE));
             methods.put("drizzle", new Method("NN", args -> LuaValue.TRUE, LuaValue.FALSE));
             methods.put("owner_effect", new Method("SNNN", args -> LuaValue.valueOf(owner.present()), LuaValue.FALSE));
             methods.put("play_animation", new Method("S", args -> LuaValue.TRUE, LuaValue.FALSE));
