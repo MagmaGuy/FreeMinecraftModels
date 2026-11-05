@@ -21,8 +21,9 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.ToIntFunction;
 
 /**
- * Wild pets spawn the way vanilla's farm animals do. Most come with the world: as a chunk generates, it is stocked
- * with groups of pets, and they stay there, waiting in the {@link WildPetStore} while the chunk is unloaded. On top
+ * Wild pets spawn the way vanilla's farm animals do. Most come with the world: as a chunk generates, each species
+ * stocks it with groups as often as a vanilla animal of the same weight stocks a plains chunk, so a species of weight 8
+ * in groups of 4 is as common as cows. They stay there, waiting in the {@link WildPetStore} while the chunk is unloaded. On top
  * of that, a pass every {@code wildSpawnIntervalTicks} tops up the loaded chunks within 8 chunks of each player.
  * A top-up try picks a random column and height in a chunk, then sends out three packs from it. Each pack walks a
  * few blocks at a time and picks its species by weight at the first spot 24 to 128 blocks from the nearest player,
@@ -45,6 +46,12 @@ final class WildSpawner {
     static final int GENERATION_TRIES = 4, GENERATION_STEP = 5;
     /** The roll repeats after every group, so a chance of 1 would never stop; vanilla caps it just under 1 too. */
     static final double MAX_GENERATION_CHANCE = 0.9D;
+    /**
+     * A vanilla plains chunk's stocking: animals get a group while a roll comes under 0.1, rolled again after each
+     * group, from a creature list weighing 46 in all (sheep 12, pig 10, chicken 10, cow 8, horse 5, donkey 1).
+     */
+    static final double VANILLA_CREATURE_CHANCE = 0.1D;
+    static final int VANILLA_CREATURE_WEIGHT = 46;
 
     private WildSpawner() {
     }
@@ -52,9 +59,9 @@ final class WildSpawner {
     // ---- stocking new chunks ---------------------------------------------------------------------------------
 
     /**
-     * Stocks a newly generated chunk, as vanilla's spawnMobsForChunkGeneration does for animals: while a roll comes
-     * under {@code wildGenerationChance}, one group of a species picked by weight, placed on the surface around a
-     * random column. Neither the caps, the players, the time nor the mob spawning rule hold it back.
+     * Stocks a newly generated chunk, as vanilla's spawnMobsForChunkGeneration does for animals. Each species rolls on
+     * its own: while a roll comes under its {@link #generationChance}, one group around a random column, where it may
+     * stand. Neither the caps, the players, the time nor the mob spawning rule hold it back.
      */
     static void stockChunk(PetManager manager, World world, int cx, int cz, Collection<PetSpecies> species) {
         if (PetsConfig.mode != PetsConfig.Mode.CREATURES || species.isEmpty()) return;
@@ -62,31 +69,49 @@ final class WildSpawner {
         List<PetSpecies> candidates = new ArrayList<>();
         for (PetSpecies pet : species)
             if (pet.wildSpawn().enabled() && pet.wildSpawn().weight() > 0 && pet.wildSpawn().allowsWorld(world)) candidates.add(pet);
-        if (candidates.isEmpty()) return;
+        // Species that fit the same spots take turns going first.
+        Collections.shuffle(candidates, random);
         int minX = cx << 4, minZ = cz << 4;
-        double chance = Math.min(PetsConfig.wildGenerationChance, MAX_GENERATION_CHANCE);
-        while (random.nextDouble() < chance) {
-            int x = minX + random.nextInt(16), z = minZ + random.nextInt(16);
-            List<PetSpecies> fitting = new ArrayList<>();
-            for (PetSpecies pet : candidates) if (surfaceSpot(pet, world, x, z) != null) fitting.add(pet);
-            PetSpecies pet = pickWeighted(fitting, candidate -> candidate.wildSpawn().weight(), random);
-            if (pet == null) continue;
-            // A biome whose colours are all rare gets their groups as rarely.
-            Location first = surfaceSpot(pet, world, x, z);
-            if (first == null || random.nextDouble() >= pet.wildOdds(first)) continue;
-            int group = pet.wildSpawn().minGroup() + random.nextInt(pet.wildSpawn().maxGroup() - pet.wildSpawn().minGroup() + 1);
-            int startX = x, startZ = z;
-            for (int member = 0; member < group; member++) {
-                boolean placed = false;
-                for (int attempt = 0; !placed && attempt < GENERATION_TRIES; attempt++) {
-                    Location at = surfaceSpot(pet, world, x, z);
-                    placed = at != null && manager.spawnWild(pet, at) != null;
-                    int[] next = generationStep(startX, startZ, x, z, minX, minZ, random);
-                    x = next[0];
-                    z = next[1];
+        for (PetSpecies pet : candidates) {
+            double chance = generationChance(pet.wildSpawn().weight(), PetsConfig.wildAbundance);
+            while (random.nextDouble() < chance) {
+                int x = minX + random.nextInt(16), z = minZ + random.nextInt(16);
+                // A column outside the species' biomes, or a biome whose colours are all rare, gets no group this time.
+                Location first = surfaceSpot(pet, world, x, z);
+                if (first == null || random.nextDouble() >= pet.wildOdds(first)) continue;
+                int group = pet.wildSpawn().minGroup() + random.nextInt(pet.wildSpawn().maxGroup() - pet.wildSpawn().minGroup() + 1);
+                int startX = x, startZ = z;
+                for (int member = 0; member < group; member++) {
+                    boolean placed = false;
+                    for (int attempt = 0; !placed && attempt < GENERATION_TRIES; attempt++) {
+                        Location at = surfaceSpot(pet, world, x, z);
+                        placed = at != null && manager.spawnWild(pet, at) != null;
+                        int[] next = generationStep(startX, startZ, x, z, minX, minZ, random);
+                        x = next[0];
+                        z = next[1];
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * The groups a species of this weight gets per new chunk of its biomes, on average: as many as a vanilla animal of
+     * that weight gets in a plains chunk (0.1 / 0.9 groups per chunk, shared by weight out of 46), times the
+     * abundance. Weight 8 gives 0.019, a cow's share.
+     */
+    static double groupsPerChunk(int weight, double abundance) {
+        double vanillaGroups = VANILLA_CREATURE_CHANCE / (1D - VANILLA_CREATURE_CHANCE);
+        return Math.max(0D, abundance) * vanillaGroups * Math.max(0, weight) / VANILLA_CREATURE_WEIGHT;
+    }
+
+    /**
+     * The chance a species' stocking roll comes up, rolled again after each group, so it gets {@link #groupsPerChunk}
+     * groups on average: g / (1 + g), at most {@link #MAX_GENERATION_CHANCE}.
+     */
+    static double generationChance(int weight, double abundance) {
+        double groups = groupsPerChunk(weight, abundance);
+        return Math.min(groups / (1D + groups), MAX_GENERATION_CHANCE);
     }
 
     /**

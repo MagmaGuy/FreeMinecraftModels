@@ -31,7 +31,7 @@ public class PetsConfig extends ConfigurationFile {
     public static double feedingHeals;
     public static boolean petsInvulnerableToPlayers;
     public static boolean petsDiePermanently;
-    public static double wildGenerationChance;
+    public static double wildAbundance;
     public static int wildSpawnIntervalTicks;
     public static double wildSpawnChunkChance;
     public static int wildPetCapPerPlayer;
@@ -116,12 +116,16 @@ public class PetsConfig extends ConfigurationFile {
                 List.of("Whether a pet that dies leaves its owner's collection for good, as a tamed wolf does. When false it",
                         "goes home until re-equipped."),
                 fileConfiguration, "petsDiePermanently", true);
-        wildGenerationChance = ConfigurationEngine.setDouble(
+        // wildGenerationChance shared one roll between every species, at a tenth of vanilla's; wildAbundance replaced
+        // it, so the retired key is taken out of the file instead of advertising a setting that does nothing.
+        fileConfiguration.set("wildGenerationChance", null);
+        wildAbundance = ConfigurationEngine.setDouble(
                 List.of("CREATURES mode: wild pets live like vanilla's farm animals. They come with the world, stay where",
-                        "they are, wait while their chunk is unloaded and never despawn. This is the chance, 0 to 0.9, that",
-                        "a newly generated chunk gets a group of wild pets, rolled again after each group (vanilla's",
-                        "animals use 0.1, shared by every animal of the biome)."),
-                fileConfiguration, "wildGenerationChance", 0.01D);
+                        "they are, wait while their chunk is unloaded and never despawn. At 1, each species stocks new",
+                        "chunks of its biomes as often as a vanilla animal of the same wildSpawn weight stocks a plains",
+                        "chunk, so weight 8 in groups of 4 is as common as cows (about 8 per 100 chunks). 2 doubles every",
+                        "species, 0.5 halves it, 0 stops new chunks getting wild pets."),
+                fileConfiguration, "wildAbundance", 1D);
         wildSpawnIntervalTicks = ConfigurationEngine.setInt(
                 List.of("CREATURES mode: ticks between top-up passes, which add wild pets around players where there are",
                         "fewer than the cap, never closer than 24 blocks to a player. 400 is vanilla's pace for animals."),

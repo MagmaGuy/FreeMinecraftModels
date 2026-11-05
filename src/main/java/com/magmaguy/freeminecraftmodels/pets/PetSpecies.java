@@ -95,7 +95,8 @@ public final class PetSpecies {
 
     /**
      * How the species appears wild in CREATURES mode, shaped like a vanilla mob's entry in a biome's spawn list: a
-     * weight against the other species that may spawn at the same spot, a group size, where the group may stand, and
+     * weight on vanilla's scale (a cow's is 8), which sets how often it stocks new chunks and its odds against the other
+     * species that may top up at the same spot, a group size, where the group may stand, and
      * the light, world, environment, biome and height it needs. Empty lists allow everything; the biomes include the
      * custom ones MagmaCore maps to each vanilla biome listed (see {@link #wildBiomes}). {@code time} and {@code cap}
      * only hold back the top-up spawns around players: {@code cap} is how many of this species may be wild around one
