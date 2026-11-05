@@ -109,6 +109,11 @@ public final class PetLuaTable {
     // A sound carries 16 blocks per unit of volume, so 4 reaches 64, the farthest a pet model is drawn. Clients play
     // pitches from 0.5 to 2 only.
     private static final double MAX_VOLUME = 4D, MIN_PITCH = 0.5D, MAX_PITCH = 2D;
+    /**
+     * How far past an attacker's box a defending pet that stopped beside it may drift before it closes in again: the
+     * sting module's own reach, so a pet that holds still keeps stinging. See {@link #approach}.
+     */
+    static final double BESIDE_REACH = 0.5D;
     /** The sting effect name that freezes its victim, as powder snow does, instead of giving a potion effect. */
     static final String FREEZE = "FREEZE";
     private static final int MAX_DRIZZLE_DEPTH = 8;
@@ -141,6 +146,11 @@ public final class PetLuaTable {
     private DynamicEntity glowModel;
     private boolean glowAnimating;
     private final Map<UUID, Long> stingReadyAt = new HashMap<>();
+    // The attacker c.pet.threat last stood for, and the point it gave for it: a steer at that point is a steer at them.
+    private LivingEntity threatEntity;
+    private Location threatPoint;
+    // The attacker this pet stopped beside, holding still, or null while it closes in or does something else.
+    private UUID besideThreat;
 
     /** {@code warnings} belongs to the load that builds this pet, and is shared by every pet that load builds. */
     PetLuaTable(PetControl control, Warnings warnings) {
@@ -209,13 +219,14 @@ public final class PetLuaTable {
         // (positive infinity means 4 and negative infinity 0). A flying body flies at cruise blocks per tick. A walking
         // or swimming body paths there natively, at 4 x cruise times its body type's movement speed, never under a
         // quarter of it; a cruise of 0 stops it and reads false. The pet's speed stat multiplies the cruise, except on a
-        // migration. Needs a behavior holding MOVE and LOOK.
+        // migration. Steered at c.pet.threat, it stops beside the attacker instead of walking into them (see approach).
+        // Needs a behavior holding MOVE and LOOK.
         method("steer_to", args -> {
             Location target = at(args, 1);
             double cruise = cruise(args, 2);
             if (target == null) return LuaValue.FALSE;
             return LuaValue.valueOf(leased("c.pet:steer_to", "ai.controls.move and ai.controls.look",
-                    () -> steerTo(target, cruise)));
+                    () -> approach(target, cruise)));
         });
         // stop(): needs a behavior holding MOVE.
         method("stop", args -> {
@@ -573,6 +584,8 @@ public final class PetLuaTable {
 
     /** The middle of the nearest one its owner's pets defend against, within THREAT_RANGE of the owner, or null. */
     private Location threat() {
+        threatEntity = null;
+        threatPoint = null;
         PetManager manager = PetManager.get();
         Player owner = control.owner().orElse(null);
         LivingEntity body = body();
@@ -590,7 +603,10 @@ public final class PetLuaTable {
                 nearest = entity;
             }
         }
-        return nearest == null ? null : nearest.getLocation().add(0D, nearest.getHeight() * 0.5D, 0D);
+        if (nearest == null) return null;
+        threatEntity = (LivingEntity) nearest;
+        threatPoint = nearest.getLocation().add(0D, nearest.getHeight() * 0.5D, 0D);
+        return threatPoint.clone();
     }
 
     private Location anchor() {
@@ -607,6 +623,45 @@ public final class PetLuaTable {
             raining = PetSky.isRainingOn(body().getLocation());
         }
         return raining;
+    }
+
+    /**
+     * steer_to's tick. Toward c.pet.threat it closes in as a vanilla melee mob does: once the model touches the
+     * attacker's box it stops beside them, facing them, and sets off again only when they are more than
+     * {@link #BESIDE_REACH} clear of its touch. Mobs only nudge each other apart, so a pet that kept walking at the
+     * attacker's middle pushed its model inside them. Anywhere else it steers there.
+     */
+    private boolean approach(Location target, double cruise) {
+        LivingEntity threat = threatAt(target);
+        if (threat == null) {
+            besideThreat = null;
+            return steerTo(target, cruise);
+        }
+        boolean beside = threat.getUniqueId().equals(besideThreat);
+        if (!touches(threat, beside ? BESIDE_REACH : 0D)) {
+            besideThreat = null;
+            return steerTo(target, cruise);
+        }
+        if (!beside) {
+            path.forget();
+            context.actuator().stopMoving();
+            ticks.moved();
+            besideThreat = threat.getUniqueId();
+        }
+        context.actuator().lookAt(threat.getEyeLocation());
+        return true;
+    }
+
+    /**
+     * The attacker c.pet.threat gave this point for, while they are alive and in the pet's world; null for any other
+     * point. A threat's point is its middle at the tick it was read, so only a steer at that very point matches.
+     */
+    private LivingEntity threatAt(Location target) {
+        LivingEntity threat = threatEntity;
+        Location point = threatPoint;
+        if (threat == null || point == null || threat.isDead() || threat.getWorld() != body().getWorld()) return null;
+        return target.getWorld() == point.getWorld() && target.getX() == point.getX() && target.getY() == point.getY()
+                && target.getZ() == point.getZ() ? threat : null;
     }
 
     /**
