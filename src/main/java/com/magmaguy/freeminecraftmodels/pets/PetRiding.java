@@ -25,11 +25,11 @@ import java.util.function.Consumer;
 public record PetRiding(double speed, double jump, double seatHeight, String animation, String idleAnimation,
                         Map<Material, Double> surfaces, double swimSpeed) {
     /**
-     * Blocks per second a ridden vanilla nautilus swims per point of movement speed. Its rider's client pushes it
-     * 0.0325 x speed along the rider's input each tick and keeps 0.9 of its velocity, so it settles at
-     * 0.0325 x 0.9 / (1 - 0.9) blocks per tick.
+     * Blocks per second a ridden vanilla nautilus swims per point of movement speed. Its rider's client adds
+     * 0.0325 x speed along the rider's input to its velocity, moves it by that velocity and then keeps 0.9 of it, so
+     * each tick it moves 0.0325 / (1 - 0.9) blocks once it has sped up; measured on a real client at 6.5.
      */
-    static final double NAUTILUS_BLOCKS_PER_SECOND = 20D * 0.0325D * 0.9D / (1D - 0.9D);
+    static final double NAUTILUS_BLOCKS_PER_SECOND = 20D * 0.0325D / (1D - 0.9D);
     private static final double SPEED = 0.2D, JUMP = 0.4D, SEAT_HEIGHT = 10D;
     private static final String ANIMATION = "ride", IDLE_ANIMATION = "idle.ride";
     /** Snow is quick and ice already slides with vanilla friction, so it needs less help. */

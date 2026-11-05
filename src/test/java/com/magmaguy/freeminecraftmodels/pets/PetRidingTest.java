@@ -104,10 +104,10 @@ class PetRidingTest {
     @Test
     void aDiverSwimsItsSwimSpeedTimesItsSpeedStatAsARiddenNautilus() throws InvalidConfigurationException {
         PetRiding diver = read("riding:\n  swimSpeed: 14\n", new ArrayList<>());
-        // A ridden nautilus settles at 9 x 0.0325 blocks per tick per point of movement speed: 5.85 blocks a second.
-        assertEquals(5.85D, PetRiding.NAUTILUS_BLOCKS_PER_SECOND, 1.0E-9);
-        assertEquals(14D / 5.85D, diver.swimMovementSpeed(1D), 1.0E-9);
-        assertEquals(2D * 14D / 5.85D, diver.swimMovementSpeed(2D), 1.0E-9);
+        // A ridden nautilus moves 10 x 0.0325 blocks per tick per point of movement speed once sped up: 6.5 a second.
+        assertEquals(6.5D, PetRiding.NAUTILUS_BLOCKS_PER_SECOND, 1.0E-9);
+        assertEquals(14D / 6.5D, diver.swimMovementSpeed(1D), 1.0E-9);
+        assertEquals(2D * 14D / 6.5D, diver.swimMovementSpeed(2D), 1.0E-9);
     }
 
     @Test
