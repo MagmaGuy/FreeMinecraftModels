@@ -28,23 +28,8 @@ public final class SlowViewers {
     private static final double RELEASE = 1.25;
 
     private static Set<UUID> slowPlayers = Set.of();
-    // Set by /fmm poserate: every model sends its idle and walk poses this often, whoever watches; 0 follows config.yml.
-    private static volatile int forcedInterval = 0;
 
     private SlowViewers() {
-    }
-
-    /**
-     * Makes every model send its idle and walk poses every {@code ticks} ticks, whatever its viewers' games draw, or
-     * hands the choice back to config.yml with 0. Lasts until FMM reloads.
-     */
-    public static void forceInterval(int ticks) {
-        forcedInterval = Math.max(0, ticks);
-    }
-
-    /** The interval /fmm poserate forces on every model, or 0 when config.yml decides. */
-    public static int forcedInterval() {
-        return forcedInterval;
     }
 
     /** Pings every Java player receiving bone updates and flags the models slow players watch. Primary thread only. */
@@ -100,6 +85,5 @@ public final class SlowViewers {
 
     public static void clear() {
         slowPlayers = Set.of();
-        forcedInterval = 0;
     }
 }
