@@ -80,6 +80,11 @@ public class AnimationComponent {
         if (animationManager != null) animationManager.setSwimAnimation(animationName);
     }
 
+    /** The animation the model plays in place of its swim animation while its mob holds still in water; null swims. */
+    public void setIdleSwimAnimation(String animationName) {
+        if (animationManager != null) animationManager.setIdleSwimAnimation(animationName);
+    }
+
     /** Whether the model's mob swims now; the model reports it each tick before the animations tick. */
     public void setSwimming(boolean swimming) {
         if (animationManager != null) animationManager.setSwimming(swimming);
