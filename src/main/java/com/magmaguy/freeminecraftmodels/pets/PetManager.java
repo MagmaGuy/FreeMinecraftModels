@@ -509,7 +509,7 @@ public final class PetManager {
         PetSwimming swimming = pet.swimming();
         MindBodyProfile profile = new MindBodyProfile(pet.locomotion(), scale, true, pet.body().getKey().toString())
                 .withBreathesUnderwater(pet.breathesUnderwater());
-        if (swimming != null) profile = profile.withSwimWave(swimming.wave());
+        if (swimming != null) profile = profile.withSwimWave(swimming.wave()).withSwimSpeed(swimming.speed());
         MobBody body;
         try {
             body = host.spawnBody(at, profile, prepared -> {

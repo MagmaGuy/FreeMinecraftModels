@@ -100,4 +100,26 @@ class PetSwimmingTest {
         assertEquals(MindSwimWave.MIN_PERIOD_TICKS, wild.periodTicks());
         assertFalse(read("swimming:\n  wave:\n    height: -1\n", new ArrayList<>()).wave().waves());
     }
+
+    @Test
+    void anEmptySectionSwimsHalfAgainItsWalk() throws InvalidConfigurationException {
+        List<String> warnings = new ArrayList<>();
+        assertEquals(1.5D, read("swimming: {}\n", warnings).speed());
+        assertEquals(List.of(), warnings);
+    }
+
+    @Test
+    void theSectionSetsTheSwimSpeed() throws InvalidConfigurationException {
+        List<String> warnings = new ArrayList<>();
+        assertEquals(3D, read("swimming:\n  speed: 3\n", warnings).speed());
+        assertEquals(List.of(), warnings);
+    }
+
+    @Test
+    void aSwimSpeedOfZeroOrLessWarnsAndSwimsAtTheDefault() throws InvalidConfigurationException {
+        List<String> warnings = new ArrayList<>();
+        assertEquals(1.5D, read("swimming:\n  speed: 0\n", warnings).speed());
+        assertEquals(1, warnings.size(), warnings.toString());
+        assertTrue(warnings.getFirst().contains("swimming.speed") && warnings.getFirst().contains(FILE), warnings.getFirst());
+    }
 }
