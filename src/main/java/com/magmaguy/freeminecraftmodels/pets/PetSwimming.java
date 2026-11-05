@@ -8,9 +8,9 @@ import java.util.function.Consumer;
 
 /**
  * How the species swims, from the pet file's {@code swimming:} section; a species without one swims as it walks.
- * {@code animation} is what the model plays while swimming, in place of idle and walk ({@code swim} by default), and
- * {@code idleAnimation} what it plays instead while it holds still in water ({@code idle.swim} by default; a model
- * without that animation keeps swimming in place);
+ * {@code animation} is what the model plays while it swims along, in place of walk ({@code swim} by default), and
+ * {@code idleAnimation} what it plays while it holds still in water, in place of idle ({@code idle.swim} by default; a
+ * model without that animation idles);
  * {@code orientation} how it leans with its travel in water, front first by default, as the species' own
  * {@code orientation} section does on land; and {@code wave} a gentle rise and fall an amphibious pet swims while it
  * travels: {@code height} blocks from crest to trough every {@code seconds}, fading out as it slows down. A wave of
