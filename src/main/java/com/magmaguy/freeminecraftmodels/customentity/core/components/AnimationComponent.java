@@ -62,8 +62,10 @@ public class AnimationComponent {
     /**
      * Checks if the animation with the specified name exists for the current animation manager.
      *
-     * @param animationName The name of the animation to check for. Case-sensitive.
-     * @return true if the animation exists in the animation manager, false otherwise.
+     * @param animationName The name of the animation to check for: any case, the older spelling of a renamed name
+     *                      (long_idle for idle.long), or a dotted name whose general part the model has (attack for
+     *                      attack.melee).
+     * @return true if playing the name would find an animation, false otherwise.
      */
     public boolean hasAnimation(String animationName) {
         if (animationManager == null) return false;
@@ -80,12 +82,12 @@ public class AnimationComponent {
         if (animationManager != null) animationManager.setRiddenIdleAnimation(animationName);
     }
 
-    /** The animation the model plays in place of idle and walk while its mob swims; null keeps them. */
+    /** The animation the model plays in place of walk while its mob swims along; null walks. */
     public void setSwimAnimation(String animationName) {
         if (animationManager != null) animationManager.setSwimAnimation(animationName);
     }
 
-    /** The animation the model plays in place of its swim animation while its mob holds still in water; null swims. */
+    /** The animation the model plays in place of idle while its swimming mob holds still in water; null idles. */
     public void setIdleSwimAnimation(String animationName) {
         if (animationManager != null) animationManager.setIdleSwimAnimation(animationName);
     }

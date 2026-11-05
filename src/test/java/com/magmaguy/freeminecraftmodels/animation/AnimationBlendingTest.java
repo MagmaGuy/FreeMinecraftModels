@@ -306,25 +306,32 @@ class AnimationBlendingTest {
     }
 
     @Test
-    void aSwimmingMobPlaysItsSwimAnimationInPlaceOfIdleAndIdlesAgainAshore() {
+    void aSwimmingMobPlaysItsSwimAnimationInPlaceOfWalkAndIdlesAgainAshore() throws ReflectiveOperationException {
         DefaultConfig.idleWalkBlendTicks = 0;
+        Vector velocity = new Vector();
+        attachEntity(velocity);
         animation.setSwimAnimation("slide");
         tick(3);
         assertEquals(idleBody(2), y(body), 1e-5, "On land it idles");
+        velocity.setX(0.1);
         animation.setSwimming(true);
         tick(1);
-        assertEquals(SLIDE_BODY, y(body), 1e-5, "In water it slides");
+        assertEquals(SLIDE_BODY, y(body), 1e-5, "Moving in water it slides");
         tick(10);
-        assertEquals(SLIDE_BODY, y(body), 1e-5, "and keeps sliding while it swims");
+        assertEquals(SLIDE_BODY, y(body), 1e-5, "and keeps sliding while it swims along");
+        velocity.setX(0);
         animation.setSwimming(false);
         tick(1);
         assertEquals(idleBody(0), y(body), 1e-5, "Out of the water it idles again");
     }
 
     @Test
-    void swimmingCrossFadesLikeIdleAndWalk() {
+    void swimmingCrossFadesLikeIdleAndWalk() throws ReflectiveOperationException {
+        Vector velocity = new Vector();
+        attachEntity(velocity);
         animation.setSwimAnimation("slide");
         tick(1);
+        velocity.setX(0.1);
         animation.setSwimming(true);
         tick(1);
         assertEquals(idleBody(1) + (SLIDE_BODY - idleBody(1)) * smoothstep(0.2), y(body), 1e-5);
@@ -340,15 +347,16 @@ class AnimationBlendingTest {
     }
 
     @Test
-    void clearingTheSwimAnimationMidSwimIdlesAgain() {
+    void clearingTheSwimAnimationMidSwimWalksAgain() throws ReflectiveOperationException {
         DefaultConfig.idleWalkBlendTicks = 0;
+        attachEntity(new Vector(0.1, 0, 0));
         animation.setSwimAnimation("slide");
         animation.setSwimming(true);
         tick(2);
         assertEquals(SLIDE_BODY, y(body), 1e-5);
         animation.setSwimAnimation(null);
         tick(1);
-        assertEquals(idleBody(0), y(body), 1e-5);
+        assertEquals(2, y(body), 1e-5, "Without a swim animation it walks in water");
     }
 
     @Test
@@ -397,13 +405,13 @@ class AnimationBlendingTest {
     }
 
     @Test
-    void aSwimmerWithoutTheIdleSwimSwimsInPlace() {
+    void aSwimmerWithoutTheIdleSwimIdlesWhileItHoldsStill() {
         DefaultConfig.idleWalkBlendTicks = 0;
         animation.setSwimAnimation("slide");
         animation.setIdleSwimAnimation("float");
         animation.setSwimming(true);
         tick(2);
-        assertEquals(SLIDE_BODY, y(body), 1e-5, "The model has no float, so it slides while it holds still too");
+        assertEquals(idleBody(1), y(body), 1e-5, "The model has no float, so it idles while it holds still");
     }
 
     @Test
@@ -416,7 +424,7 @@ class AnimationBlendingTest {
     }
 
     @Test
-    void clearingTheIdleSwimMidSwimSwimsInPlace() {
+    void clearingTheIdleSwimMidSwimIdles() {
         DefaultConfig.idleWalkBlendTicks = 0;
         animation.setSwimAnimation("slide");
         animation.setIdleSwimAnimation("tread");
@@ -425,10 +433,10 @@ class AnimationBlendingTest {
         assertEquals(TREAD_BODY, y(body), 1e-5);
         animation.setIdleSwimAnimation(null);
         tick(1);
-        assertEquals(SLIDE_BODY, y(body), 1e-5);
+        assertEquals(idleBody(0), y(body), 1e-5, "Without the idle swim it idles");
         animation.setSwimAnimation(null);
         tick(1);
-        assertEquals(idleBody(0), y(body), 1e-5, "and clearing the swim too idles again");
+        assertEquals(idleBody(1), y(body), 1e-5, "and clearing the swim too keeps idling");
     }
 
     @Test
