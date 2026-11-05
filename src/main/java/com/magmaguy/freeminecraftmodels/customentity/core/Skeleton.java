@@ -127,47 +127,16 @@ public class Skeleton {
     // half-written offset.
     private volatile int riddenVehicleId = -1;
     private volatile double[] seatOffset = new double[3];
-    // While only idle or walk plays and a slow player watches the model, ridden poses go out once every
-    // riddenBoneUpdateIntervalTicks; attacks, other animations and models no slow player watches keep every tick.
-    // Each model starts at a random phase, so a crowd's poses spread over the interval instead of all landing in one
-    // client frame.
+    // While only locomotion plays (idle, long idle, walk, ride or swim), ridden poses go out once every
+    // riddenBoneUpdateIntervalTicks; attacks and other animations keep every tick. Each model starts at a random phase,
+    // so a crowd's poses spread over the interval instead of all landing in one client frame.
     private int riddenPoseCounter = java.util.concurrent.ThreadLocalRandom.current().nextInt(1 << 16);
-    // Set by SlowViewers on the primary thread every few ticks, read by the model clock.
-    private volatile boolean watchedBySlowPlayer = false;
-    // The interval of the clock pass running now, read once so a slow flag flipping halfway through cannot split one
-    // model's bones between two intervals; 0 outside a pass.
-    private int passPoseInterval = 0;
-    // Bone updates the running pass sent, and those of the last pass that sent poses. SlowViewers pings the Java
-    // viewers of every model that still sends poses.
-    private int passBoneUpdates = 0;
-    private volatile int poseBoneUpdates = 0;
 
     /** Ticks between this model's ridden poses right now; see DefaultConfig.riddenBoneUpdateIntervalTicks. */
     int riddenPoseInterval() {
-        int interval = passPoseInterval;
-        return interval > 0 ? interval : currentRiddenPoseInterval();
-    }
-
-    private int currentRiddenPoseInterval() {
         int interval = DefaultConfig.riddenBoneUpdateIntervalTicks;
-        if (interval <= 1 || !watchedBySlowPlayer
-                || !modeledEntity.getAnimationComponent().isOnlyLocomotionPlaying()) return 1;
+        if (interval <= 1 || !modeledEntity.getAnimationComponent().isOnlyLocomotionPlaying()) return 1;
         return interval;
-    }
-
-    /** Counts one bone pose sent to this model's Java viewers in the running clock pass. */
-    void countBoneUpdate() {
-        passBoneUpdates++;
-    }
-
-    /** Bone updates per tick this model sends its Java viewers, from its last pass that sent poses. */
-    public int getPoseBoneUpdates() {
-        return poseBoneUpdates;
-    }
-
-    /** Whether a slow player watches this model, so its idle and walk poses may slow down; see SlowViewers. */
-    public void setWatchedBySlowPlayer(boolean watchedBySlowPlayer) {
-        this.watchedBySlowPlayer = watchedBySlowPlayer;
     }
 
     /** Whether ridden bones send their pose this tick. */
@@ -350,19 +319,11 @@ public class Skeleton {
         riddenPoseCounter++;
         if (getSkeletonWatchers().hasObservers()) {
             passLocation = getCurrentLocation();
-            int interval = currentRiddenPoseInterval();
-            passPoseInterval = interval;
-            passBoneUpdates = 0;
             try {
                 rootBone.transform(abstractPacketBundle);
             } finally {
                 passLocation = null;
-                passPoseInterval = 0;
             }
-            // Between pose ticks a ridden model sends nothing, so it keeps the count of its last pose pass.
-            if (!isRidden() || isRiddenPoseTick(interval)) poseBoneUpdates = passBoneUpdates;
-        } else {
-            poseBoneUpdates = 0;
         }
     }
 

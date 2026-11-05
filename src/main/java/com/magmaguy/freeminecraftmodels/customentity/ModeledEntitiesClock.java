@@ -5,7 +5,6 @@ import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.core.ModelDensity;
-import com.magmaguy.freeminecraftmodels.customentity.core.SlowViewers;
 import com.magmaguy.freeminecraftmodels.debug.PacketDiagnostics;
 import com.magmaguy.freeminecraftmodels.particles.held.HeldItemParticles;
 import org.bukkit.Location;
@@ -111,7 +110,6 @@ public class ModeledEntitiesClock {
             lifecycleLock.writeLock().unlock();
         }
         ModelDensity.clear();
-        SlowViewers.clear();
     }
 
     /**
@@ -232,7 +230,5 @@ public class ModeledEntitiesClock {
                         .tickPrimaryThread();
             }
         });
-        // After the viewer lists settle, so each model is flagged by the players who watch it now.
-        SlowViewers.refresh(ModeledEntity.getLoadedModeledEntities());
     }
 }
