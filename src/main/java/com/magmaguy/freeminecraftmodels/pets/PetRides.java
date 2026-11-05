@@ -15,6 +15,7 @@ import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.Waterlogged;
 import org.bukkit.entity.AbstractHorse;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
@@ -29,6 +30,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.IntPredicate;
 
 /**
  * Saddles and riders for species with a {@code riding:} section. The owner saddles an adult, rides it with an empty
@@ -50,6 +52,11 @@ final class PetRides {
      * drag (0.91), as vanilla moves it. A mob sent off at speed v so comes to rest v / (1 - this) blocks away.
      */
     private static final double GROUND_SLIDE = 0.6D * 0.91D;
+    /**
+     * A diving pet surfaces once the water under it is this many blocks shallower than it dives at, so it never flips
+     * between its bodies at the depth it dives at.
+     */
+    private static final double SURFACE_MARGIN = 1D;
     private final PetManager manager;
     /** Each ridden pet with the movement speed and jump strength its body had before, and where it stood last tick. */
     private final Map<PetControl, Ride> ridden = new IdentityHashMap<>();
@@ -247,6 +254,38 @@ final class PetRides {
     private static double knockbackResistance(LivingEntity entity) {
         AttributeInstance instance = entity.getAttribute(Attribute.KNOCKBACK_RESISTANCE);
         return instance == null ? 0D : Math.max(0D, Math.min(1D, instance.getValue()));
+    }
+
+    /**
+     * Whether a ridden pet that dives swims as its diving body next tick. It dives where the water through its feet is
+     * as deep as its rider's eyes are above them, where a pet standing on the bottom would hold them under; its rider's
+     * eyes alone cannot tell, since its small land body floats and keeps them above the surface. It surfaces with its
+     * rider's head out of the water once the water is SURFACE_MARGIN shallower, so an underwater tunnel never
+     * surfaces it.
+     */
+    static boolean diving(boolean diving, int depth, double eyeHeight, boolean eyesInWater) {
+        if (!diving) return depth >= eyeHeight;
+        return eyesInWater || depth >= eyeHeight - SURFACE_MARGIN;
+    }
+
+    /**
+     * The water blocks in the column through the feet block (offset 0), counted up and down from it, at most limit
+     * each way: diving only needs to know whether it reaches the rider's eyes. 0 when the feet are out of water.
+     */
+    static int waterDepth(IntPredicate waterAt, int limit) {
+        if (!waterAt.test(0)) return 0;
+        int depth = 1;
+        for (int dy = 1; dy <= limit && waterAt.test(dy); dy++) depth++;
+        for (int dy = -1; dy >= -limit && waterAt.test(dy); dy--) depth++;
+        return depth;
+    }
+
+    /** Whether this block holds water: water itself, a bubble column, water plants, or a waterlogged block. */
+    static boolean isWater(Block block) {
+        Material type = block.getType();
+        if (type == Material.WATER || type == Material.BUBBLE_COLUMN || type == Material.KELP
+                || type == Material.KELP_PLANT || type == Material.SEAGRASS || type == Material.TALL_SEAGRASS) return true;
+        return block.getBlockData() instanceof Waterlogged waterlogged && waterlogged.isWaterlogged();
     }
 
     /** The rider got off, or the body is gone: its old speed and jump come back and its behaviors take over again. */
