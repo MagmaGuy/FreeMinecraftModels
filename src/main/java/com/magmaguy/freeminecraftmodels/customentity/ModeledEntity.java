@@ -418,8 +418,16 @@ public class ModeledEntity {
         hitboxComponent.tick(abstractPacketBundle);
         animationComponent.tick();
         particleComponent.tick(abstractPacketBundle, skeleton.getSkeletonWatchers().getJavaViewers());
+        if (scaleAttribute != null && underlyingEntity != null && underlyingEntity.isValid()) scaleModifier = currentScale();
+    }
+
+    /**
+     * The model's scale now: its mob's scale attribute without the part that only lifts a rider's seat, or 1 without
+     * one. {@link #getScaleModifier} keeps the value the model clock last read.
+     */
+    public double currentScale() {
         org.bukkit.attribute.AttributeInstance scale = scaleAttribute;
-        if (scale != null && underlyingEntity != null && underlyingEntity.isValid()) scaleModifier = scale.getValue() / seatScale();
+        return scale == null || underlyingEntity == null ? 1 : scale.getValue() / seatScale();
     }
 
     /** The part of the underlying entity's scale that only moves its rider's seat, which the model leaves out. */
