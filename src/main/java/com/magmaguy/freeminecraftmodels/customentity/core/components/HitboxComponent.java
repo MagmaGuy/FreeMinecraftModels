@@ -15,6 +15,7 @@ import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import com.magmaguy.freeminecraftmodels.packets.PacketEntityDisplayHelper;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
 
@@ -40,6 +41,10 @@ public class HitboxComponent {
     // Whether the last primary-thread sync found this model asking for a click surface (see
     // DynamicEntity#setClickSurface), so withdrawing the request can take that surface away again.
     private boolean clickSurfaceApplied;
+    // Whether the mob carries the hitbox bone's box (see syncBodyBox), as last set on the primary thread.
+    private boolean bodyBoxApplied;
+    // The box sizes travel as floats, so a box within this many blocks of the wanted one is it.
+    private static final double BOX_TOLERANCE = 1.0E-4;
     private final InteractionAliasRegistry interactionAliases = new InteractionAliasRegistry(
             PacketEntityInteractionManager.getInstance());
 
@@ -94,6 +99,7 @@ public class HitboxComponent {
                     "Model hitbox contacts must run on the primary thread");
         }
         syncClickSurface();
+        syncBodyBox();
         if (modeledEntity.getInteractionComponent()
                 .getHitboxContactCallback() == null) return;
         Location location = modeledEntity.getLocation();
@@ -158,9 +164,34 @@ public class HitboxComponent {
         return obb.intersectsAABBCoherently(aabb);
     }
 
+    /** Gives a newly bound mob the hitbox bone's box; see {@link #syncBodyBox}. Primary thread. */
     public void setCustomHitboxOnUnderlyingEntity() {
-        if (modeledEntity.getSkeletonBlueprint().getHitbox() == null) return;
-        NMSManager.getAdapter().setCustomHitbox(modeledEntity.getUnderlyingEntity(), modeledEntity.getSkeletonBlueprint().getHitbox().getWidthX() < modeledEntity.getSkeletonBlueprint().getHitbox().getWidthZ() ? (float) modeledEntity.getSkeletonBlueprint().getHitbox().getWidthX() : (float) modeledEntity.getSkeletonBlueprint().getHitbox().getWidthZ(), (float) modeledEntity.getSkeletonBlueprint().getHitbox().getHeight(), true);
+        bodyBoxApplied = false;
+        syncBodyBox();
+    }
+
+    /**
+     * Keeps the mob's own box the size of the model's hitbox bone at the model's scale, so other mobs bump into the
+     * model where players see it: the narrower of its widths, since Minecraft boxes are square. Minecraft rebuilds the
+     * box from the mob's type whenever its scale or pose changes, a rideable pet's saddle lift included, so this puts
+     * it back. While a player steers the mob it has the box Minecraft gives it: the rider's client moves the mob with
+     * that box, and the server turns back any move its own box disagrees with. Primary thread.
+     */
+    private void syncBodyBox() {
+        HitboxBlueprint hitbox = modeledEntity.getSkeletonBlueprint().getHitbox();
+        Entity body = modeledEntity.getUnderlyingEntity();
+        if (hitbox == null || body == null || body.isDead()) return;
+        if (modeledEntity instanceof DynamicEntity dynamicEntity && dynamicEntity.hasSteeringRider()) {
+            if (bodyBoxApplied) NMSManager.getAdapter().resetHitbox(body);
+            bodyBoxApplied = false;
+            return;
+        }
+        double scale = modeledEntity.currentScale();
+        float width = (float) (Math.min(hitbox.getWidthX(), hitbox.getWidthZ()) * scale);
+        float height = (float) (hitbox.getHeight() * scale);
+        if (bodyBoxApplied && Math.abs(body.getWidth() - width) < BOX_TOLERANCE
+                && Math.abs(body.getHeight() - height) < BOX_TOLERANCE) return;
+        bodyBoxApplied = NMSManager.getAdapter().setCustomHitbox(body, width, height, true);
     }
 
     /**
