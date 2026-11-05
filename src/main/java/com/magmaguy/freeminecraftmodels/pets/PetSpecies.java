@@ -14,6 +14,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.EntityType;
@@ -123,9 +124,18 @@ public final class PetSpecies {
             if (!allowsWorld(world)) return false;
             if (location.getBlockY() < minY || location.getBlockY() > maxY) return false;
             if (!biomes.isEmpty() && !biomes.contains(biome(location))) return false;
-            int light = location.getBlock().getLightLevel();
+            int light = spawnLight(location.getBlock());
             return light >= minLight && light <= maxLight;
         }
+    }
+
+    /**
+     * The light a wild spawn checks, as vanilla's animals do (Animal.isBrightEnoughToSpawn reads getRawBrightness
+     * with no darkening): the brighter of the sky and block light at the spot, whatever the time of day or weather.
+     * Bukkit's getLightLevel takes off the night's darkening, which would refuse every open-sky spot at night.
+     */
+    static int spawnLight(Block block) {
+        return Math.max(block.getLightFromSky(), block.getLightFromBlocks());
     }
 
     private final String id;

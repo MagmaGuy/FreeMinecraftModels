@@ -1,16 +1,21 @@
 package com.magmaguy.freeminecraftmodels.pets;
 
 import com.magmaguy.magmacore.ai.MindBodyLocomotion;
+import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * A species file's {@code wildSpawn} section, shaped like a vanilla biome spawn entry. Loading a whole species needs a
@@ -95,5 +100,36 @@ class PetSpeciesWildSpawnTest {
         assertEquals(15, wild.maxLight());
         assertEquals(0, wild.cap());
         assertEquals(9, read("wildSpawn:\n  minLight: 9\n  maxLight: 4\n", MindBodyLocomotion.FLYING).maxLight());
+    }
+
+    @Test
+    void lightIsReadAsVanillaAnimalsReadItWhateverTheTimeOfDay() throws InvalidConfigurationException {
+        PetSpecies.WildSpawn penguin = read("wildSpawn:\n  minLight: 9\n", MindBodyLocomotion.AMPHIBIOUS);
+        // Midnight on open snow: Bukkit's getLightLevel reads 4 there, while the sky light itself stays 15.
+        assertTrue(penguin.allows(spot(15, 0, 4)));
+        // A torch-lit cave counts its torch; a dark cave stays closed, as for vanilla's animals.
+        assertTrue(penguin.allows(spot(0, 14, 14)));
+        assertFalse(penguin.allows(spot(0, 7, 7)));
+    }
+
+    /** A spot at y 64 whose block reports this sky light, block light and Bukkit light level. */
+    private static Location spot(int sky, int blocks, int level) {
+        Block block = (Block) Proxy.newProxyInstance(Block.class.getClassLoader(), new Class<?>[]{Block.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "getLightFromSky" -> (byte) sky;
+                    case "getLightFromBlocks" -> (byte) blocks;
+                    case "getLightLevel" -> (byte) level;
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        World world = (World) Proxy.newProxyInstance(World.class.getClassLoader(), new Class<?>[]{World.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "getBlockAt" -> block;
+                    case "getName" -> "world";
+                    case "getEnvironment" -> World.Environment.NORMAL;
+                    case "hashCode" -> System.identityHashCode(proxy);
+                    case "equals" -> proxy == args[0];
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        return new Location(world, 0.5D, 64D, 0.5D);
     }
 }
