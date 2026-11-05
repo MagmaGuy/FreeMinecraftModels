@@ -504,12 +504,7 @@ public final class PetManager {
         }
         double scale = pet.scale() * (baby ? pet.babyScale() : 1D) * sizeMultiplier * PetStats.size(stats, pet.statCap());
         double maxHealth = Math.max(1D, pet.health() * stats.health * control.babyShare());
-        // Collidable, as vanilla mobs are: bodies push each other apart instead of stacking, and players brush them
-        // aside. The model sizes its body to its hitbox bone when it attaches.
-        PetSwimming swimming = pet.swimming();
-        MindBodyProfile profile = new MindBodyProfile(pet.locomotion(), scale, true, pet.body().getKey().toString())
-                .withBreathesUnderwater(pet.breathesUnderwater());
-        if (swimming != null) profile = profile.withSwimWave(swimming.wave()).withSwimSpeed(swimming.speed());
+        MindBodyProfile profile = profile(pet, scale, pet.body().getKey().toString());
         MobBody body;
         try {
             body = host.spawnBody(at, profile, prepared -> {
@@ -529,17 +524,7 @@ public final class PetManager {
             return refuse(pet, "model " + modelId + " could not be put on its body");
         }
         control.attach(entity, modeled, mind);
-        // Clicks land on the model players see, not on the small body hidden inside it.
-        modeled.setClickSurface(true);
-        modeled.setTravelOrientation(pet.orientation());
-        if (swimming != null) {
-            modeled.setSwimOrientation(swimming.orientation());
-            modeled.getAnimationComponent().setSwimAnimation(swimming.animation());
-            modeled.getAnimationComponent().setIdleSwimAnimation(swimming.idleAnimation());
-        }
-        modeled.setCenteredOnBody(pet.centerOnBody());
-        modeled.setDisplayName(nameplate(control));
-        PetRides.prepare(control, entity, modeled);
+        dress(control, entity, modeled);
         byBody.put(entity.getUniqueId(), control);
         if (owner != null && record != null) {
             Map<String, PetControl> owned = ownedBodies.computeIfAbsent(owner, ignored -> new HashMap<>());
@@ -549,6 +534,86 @@ public final class PetManager {
             owned.put(record.id, control);
         }
         return control;
+    }
+
+    /**
+     * The body a pet of the species gets on this vanilla carrier: its locomotion, size, breathing and swim. Collidable,
+     * as vanilla mobs are: bodies push each other apart instead of stacking, and players brush them aside. The model
+     * sizes its body to its hitbox bone when it attaches.
+     */
+    private static MindBodyProfile profile(PetSpecies pet, double scale, String carrier) {
+        MindBodyProfile profile = new MindBodyProfile(pet.locomotion(), scale, true, carrier)
+                .withBreathesUnderwater(pet.breathesUnderwater());
+        PetSwimming swimming = pet.swimming();
+        return swimming == null ? profile : profile.withSwimWave(swimming.wave()).withSwimSpeed(swimming.speed());
+    }
+
+    /** Sets a pet's model up on its body: clicks, leaning, swim animations, centring, nameplate and riding. */
+    private void dress(PetControl control, LivingEntity entity, DynamicEntity modeled) {
+        PetSpecies pet = control.species();
+        // Clicks land on the model players see, not on the small body hidden inside it.
+        modeled.setClickSurface(true);
+        modeled.setTravelOrientation(pet.orientation());
+        PetSwimming swimming = pet.swimming();
+        if (swimming != null) {
+            modeled.setSwimOrientation(swimming.orientation());
+            modeled.getAnimationComponent().setSwimAnimation(swimming.animation());
+            modeled.getAnimationComponent().setIdleSwimAnimation(swimming.idleAnimation());
+        }
+        modeled.setCenteredOnBody(pet.centerOnBody());
+        modeled.setDisplayName(nameplate(control));
+        PetRides.prepare(control, entity, modeled);
+    }
+
+    /**
+     * Moves a pet onto a new body of another vanilla carrier where its body stands: a ridden penguin that dives swims
+     * as a nautilus its rider's client steers. Its Mind (still released if it was), health and look come along; the
+     * old body and its model go. Returns the new body, or null with the pet left as it was when the new one cannot
+     * spawn.
+     */
+    LivingEntity rebody(PetControl control, String carrier) {
+        LivingEntity old = control.body();
+        DynamicEntity oldModel = control.modeled();
+        MindHandle mind = control.mind();
+        if (host == null || old == null || !old.isValid() || oldModel == null || mind == null) return null;
+        PetSpecies pet = control.species();
+        AttributeInstance oldMax = old.getAttribute(Attribute.MAX_HEALTH);
+        double maxHealth = oldMax != null ? oldMax.getBaseValue()
+                : Math.max(1D, pet.health() * control.stats().health * control.babyShare());
+        double health = old.getHealth();
+        double scale = pet.scale() * (control.isBaby() ? pet.babyScale() : 1D) * PetStats.size(control.stats(), pet.statCap());
+        MobBody next;
+        try {
+            next = host.spawnBody(old.getLocation(), profile(pet, scale, carrier), prepared -> prepare(prepared.entity(), maxHealth));
+        } catch (RuntimeException failure) {
+            refuse(pet, "its " + carrier + " body could not spawn (" + reason(failure) + ")");
+            return null;
+        }
+        LivingEntity entity = next.entity();
+        DynamicEntity modeled = DynamicEntity.create(oldModel.getEntityID(), entity);
+        if (modeled == null) {
+            entity.remove();
+            return null;
+        }
+        try {
+            mind.detachBody();
+            mind.attachBody(next);
+        } catch (RuntimeException failure) {
+            // The Mind may have no body now; the pet goes, and an owned one comes back beside its owner within a second.
+            modeled.remove();
+            refuse(pet, "its Mind could not move to its " + carrier + " body (" + reason(failure) + ")");
+            despawn(control);
+            return null;
+        }
+        restoreHealth(entity, health);
+        byBody.remove(old.getUniqueId(), control);
+        byBody.put(entity.getUniqueId(), control);
+        control.attach(entity, modeled, mind);
+        dress(control, entity, modeled);
+        // The old body leaves no pet behind: no map holds it now, so its removal events find nothing.
+        oldModel.remove();
+        if (old.isValid()) old.remove();
+        return entity;
     }
 
     /**

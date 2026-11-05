@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.pets;
 import com.magmaguy.freeminecraftmodels.commands.MountCommand;
 import com.magmaguy.freeminecraftmodels.config.PetsConfig;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
+import com.magmaguy.freeminecraftmodels.customentity.SwimMounts;
 import com.magmaguy.freeminecraftmodels.dataconverter.HitboxBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import com.magmaguy.magmacore.ai.MindHandle;
@@ -86,13 +87,22 @@ final class PetRides {
     /**
      * Gets a new body ready: a rideable adult's saddle sits at the species' seat height, its model plays the ridden
      * animation while ridden and moving, and one whose record has a saddle wears it, its model's saddle bone with it.
+     * On its diving body it swims under its rider instead, as it swims on its own, and leans with the dive.
      */
     static void prepare(PetControl control, LivingEntity body, DynamicEntity modeled) {
         PetRiding riding = control.species().riding();
         if (riding == null || control.isBaby()) return;
         modeled.liftSaddleToHeight(riding.seatHeight());
-        modeled.getAnimationComponent().setRiddenAnimation(riding.animation());
-        modeled.getAnimationComponent().setRiddenIdleAnimation(riding.idleAnimation());
+        if (SwimMounts.isSwimMount(body)) {
+            PetSwimming swimming = control.species().swimming();
+            modeled.getAnimationComponent().setRiddenAnimation(swimming != null ? swimming.animation() : PetSwimming.ANIMATION);
+            modeled.getAnimationComponent().setRiddenIdleAnimation(
+                    swimming != null ? swimming.idleAnimation() : PetSwimming.IDLE_ANIMATION);
+            modeled.setLeansWhileRidden(true);
+        } else {
+            modeled.getAnimationComponent().setRiddenAnimation(riding.animation());
+            modeled.getAnimationComponent().setRiddenIdleAnimation(riding.idleAnimation());
+        }
         boolean saddled = control.record() != null && control.record().saddled;
         modeled.setBoneHidden(SADDLE_BONE, !saddled);
         if (saddled) putSaddleOn(body, control.ownerId());
@@ -320,16 +330,18 @@ final class PetRides {
     }
 
     /**
-     * FreeMinecraftModels' invisible saddle, on a tamed body its owner owns, as a vanilla horse needs to carry a
+     * FreeMinecraftModels' invisible saddle, on a tamed body its owner owns, as a vanilla horse or nautilus needs to carry a
      * steering rider. The record holds the real saddle; this one never leaves the body.
      */
     private static void putSaddleOn(LivingEntity body, UUID owner) {
+        Player player = owner == null ? null : org.bukkit.Bukkit.getPlayer(owner);
+        if (SwimMounts.isSwimMount(body)) {
+            SwimMounts.saddle(body, player, MountCommand.unseenSaddle());
+            return;
+        }
         if (!(body instanceof AbstractHorse horse)) return;
         horse.setTamed(true);
-        if (owner != null) {
-            Player player = org.bukkit.Bukkit.getPlayer(owner);
-            if (player != null) horse.setOwner(player);
-        }
+        if (player != null) horse.setOwner(player);
         horse.getInventory().setSaddle(MountCommand.unseenSaddle());
     }
 
