@@ -3,6 +3,8 @@ package com.magmaguy.freeminecraftmodels.pets;
 import com.magmaguy.freeminecraftmodels.commands.MountCommand;
 import com.magmaguy.freeminecraftmodels.config.PetsConfig;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
+import com.magmaguy.freeminecraftmodels.dataconverter.HitboxBlueprint;
+import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import com.magmaguy.magmacore.ai.MindHandle;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import org.bukkit.GameMode;
@@ -16,8 +18,11 @@ import org.bukkit.block.BlockFace;
 import org.bukkit.entity.AbstractHorse;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Mob;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.util.BoundingBox;
+import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -28,18 +33,38 @@ import java.util.UUID;
 /**
  * Saddles and riders for species with a {@code riding:} section. The owner saddles an adult, rides it with an empty
  * hand and takes the saddle back with shears. While ridden, the pet's Mind is released: its behaviors stop and the
- * rider's client steers the horse body through vanilla, at the species' ridden speed for the block it is on. When the
- * rider gets off the Mind takes the body back.
+ * rider's client steers the horse body through vanilla, at the species' ridden speed for the block it is on, and the
+ * pet pushes the mobs it runs into out of its way. When the rider gets off the Mind takes the body back.
  */
 final class PetRides {
     /** The bone a rideable pet's model draws its saddle with, shown only while it wears one. */
     static final String SADDLE_BONE = "saddle";
     private static final double SPEED_STEP = 1.0E-4D;
+    /**
+     * The least a ridden pet moves in a tick, in blocks, to push the mobs it overlaps aside: the step its model counts
+     * as moving, so it pushes exactly while it plays its ridden animation.
+     */
+    private static final double PUSHING_STEP = 1.0E-3D;
+    /**
+     * The share of its speed a mob keeps each tick it slides on ordinary ground: a block's slipperiness (0.6) times air
+     * drag (0.91), as vanilla moves it. A mob sent off at speed v so comes to rest v / (1 - this) blocks away.
+     */
+    private static final double GROUND_SLIDE = 0.6D * 0.91D;
     private final PetManager manager;
-    /** Each ridden pet with the movement speed and jump strength its body had before. */
-    private final Map<PetControl, Unridden> ridden = new IdentityHashMap<>();
+    /** Each ridden pet with the movement speed and jump strength its body had before, and where it stood last tick. */
+    private final Map<PetControl, Ride> ridden = new IdentityHashMap<>();
 
     private record Unridden(double speed, double jump) {
+    }
+
+    private static final class Ride {
+        private final Unridden before;
+        // The rider's client moves the body and the server only snaps it there, so it has no velocity to read.
+        private double lastX = Double.NaN, lastZ = Double.NaN;
+
+        private Ride(Unridden before) {
+            this.before = before;
+        }
     }
 
     PetRides(PetManager manager) {
@@ -139,16 +164,19 @@ final class PetRides {
             mind.setReleased(false);
             return false;
         }
-        ridden.put(control, before);
+        ridden.put(control, new Ride(before));
         // A staying pet the owner rides away follows again afterwards rather than walking back to its spot.
         if (control.isStaying()) manager.follow(player, control);
         return true;
     }
 
-    /** Every tick: speeds each ridden pet up on its species' surfaces, and hands a pet nobody rides back to its Mind. */
+    /**
+     * Every tick: speeds each ridden pet up on its species' surfaces, pushes the mobs it runs into aside, and hands a
+     * pet nobody rides back to its Mind.
+     */
     void tick() {
         if (ridden.isEmpty()) return;
-        for (Map.Entry<PetControl, Unridden> entry : new ArrayList<>(ridden.entrySet())) {
+        for (Map.Entry<PetControl, Ride> entry : new ArrayList<>(ridden.entrySet())) {
             PetControl control = entry.getKey();
             LivingEntity body = control.body();
             if (body == null || !body.isValid() || rider(body) == null) {
@@ -156,19 +184,77 @@ final class PetRides {
                 continue;
             }
             PetRiding riding = control.species().riding();
-            Block feet = body.getLocation().getBlock();
+            Location at = body.getLocation();
+            Block feet = at.getBlock();
             double speed = riding.speed() * control.stats().speed
                     * riding.multiplier(feet.getType(), feet.getRelative(BlockFace.DOWN).getType());
             setBase(body, Attribute.MOVEMENT_SPEED, speed);
+            Ride ride = entry.getValue();
+            if (!Double.isNaN(ride.lastX)) pushAside(control, body, at, at.getX() - ride.lastX, at.getZ() - ride.lastZ);
+            ride.lastX = at.getX();
+            ride.lastZ = at.getZ();
         }
+    }
+
+    /**
+     * Pushes the mobs a moving ridden pet overlaps off its path. Vanilla never stops a ridden horse at a mob and nudges
+     * the mob only 0.05 blocks a tick, so a pet sliding at speed went straight through animals, monsters and other
+     * pets. Each mob inside the model's bounds is sent sideways, away from the line the pet travels, just fast enough
+     * that ground friction stops it clear of the pet; its knockback resistance takes its share off, as it does a hit's
+     * knockback. Players, mounts, riders and mobs that do not collide are left to vanilla.
+     */
+    private static void pushAside(PetControl control, LivingEntity body, Location at, double stepX, double stepZ) {
+        double step = Math.sqrt(stepX * stepX + stepZ * stepZ);
+        if (step < PUSHING_STEP) return;
+        // The left of the direction the pet travels.
+        double leftX = -stepZ / step, leftZ = stepX / step;
+        // The body's box, or the model's when that is bigger: its hitbox bone, else its cubes. A ridden horse body is
+        // scaled down to put its saddle on the seat, so it is usually the smaller.
+        BoundingBox own = body.getBoundingBox();
+        double half = own.getWidthX() / 2D, height = own.getHeight();
+        DynamicEntity modeled = control.modeled();
+        SkeletonBlueprint blueprint = modeled == null ? null : modeled.getSkeletonBlueprint();
+        if (blueprint != null) {
+            double scale = modeled.getScaleModifier();
+            HitboxBlueprint hitbox = blueprint.getHitbox();
+            double width = hitbox != null ? Math.max(hitbox.getWidthX(), hitbox.getWidthZ()) : blueprint.getModelWidth();
+            half = Math.max(half, width * scale / 2D);
+            height = Math.max(height, (hitbox != null ? hitbox.getHeight() : blueprint.getModelTop()) * scale);
+        }
+        BoundingBox bounds = new BoundingBox(at.getX() - half, at.getY(), at.getZ() - half,
+                at.getX() + half, at.getY() + height, at.getZ() + half);
+        for (Entity entity : body.getWorld().getNearbyEntities(bounds, candidate -> candidate instanceof Mob)) {
+            Mob mob = (Mob) entity;
+            if (mob == body || mob.isDead() || !mob.isCollidable() || mob.isInsideVehicle()
+                    || !mob.getPassengers().isEmpty()) continue;
+            double share = 1D - knockbackResistance(mob);
+            if (share <= 0D) continue;
+            Location spot = mob.getLocation();
+            double side = (spot.getX() - at.getX()) * leftX + (spot.getZ() - at.getZ()) * leftZ;
+            double clear = half + mob.getBoundingBox().getWidthX() / 2D - Math.abs(side);
+            if (clear <= 0D) continue;
+            // Dead ahead, each mob takes the side its id gives it, so a crowd splits instead of all going one way.
+            double away = Math.abs(side) > 1.0E-3D ? Math.signum(side) : (mob.getEntityId() & 1) == 0 ? 1D : -1D;
+            double wanted = clear * (1D - GROUND_SLIDE) * share;
+            Vector velocity = mob.getVelocity();
+            double sideways = (velocity.getX() * leftX + velocity.getZ() * leftZ) * away;
+            if (sideways >= wanted) continue;
+            double added = (wanted - sideways) * away;
+            mob.setVelocity(velocity.add(new Vector(leftX * added, 0D, leftZ * added)));
+        }
+    }
+
+    private static double knockbackResistance(LivingEntity entity) {
+        AttributeInstance instance = entity.getAttribute(Attribute.KNOCKBACK_RESISTANCE);
+        return instance == null ? 0D : Math.max(0D, Math.min(1D, instance.getValue()));
     }
 
     /** The rider got off, or the body is gone: its old speed and jump come back and its behaviors take over again. */
     void getOff(PetControl control) {
-        Unridden before = ridden.remove(control);
-        if (before == null) return;
+        Ride ride = ridden.remove(control);
+        if (ride == null) return;
         LivingEntity body = control.body();
-        if (body != null && body.isValid()) restore(body, before);
+        if (body != null && body.isValid()) restore(body, ride.before);
         MindHandle mind = control.mind();
         if (mind == null) return;
         try {
