@@ -16,6 +16,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityDismountEvent;
 import org.bukkit.event.entity.EntityRegainHealthEvent;
 import org.bukkit.event.entity.EntityRemoveEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
@@ -34,7 +35,10 @@ import org.bukkit.inventory.EquipmentSlot;
 import java.util.ArrayList;
 import java.util.UUID;
 
-/** Routes clicks, damage, deaths, removals, new chunks, world saves and player sessions to {@link PetManager}. */
+/**
+ * Routes clicks, damage, deaths, dismounts, removals, new chunks, world saves and player sessions to
+ * {@link PetManager}.
+ */
 public final class PetListeners implements Listener {
     /**
      * Who an attack counts against: the creature that made it, or that shot the projectile, but the owner for an owned
@@ -212,6 +216,16 @@ public final class PetListeners implements Listener {
         event.getDrops().clear();
         event.setDroppedExp(0);
         manager.bodyDied(pet);
+    }
+
+    /** Vanilla throws a rider off a horse once their eyes go under water; a ridden pet that dives takes them under. */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onDismount(EntityDismountEvent event) {
+        if (!(event.getEntity() instanceof Player player) || player.isSneaking()) return;
+        PetManager manager = PetManager.get();
+        if (manager == null) return;
+        PetControl pet = manager.pet(event.getDismounted());
+        if (pet != null && manager.rides().keepsUnderwaterRider(pet, player)) event.setCancelled(true);
     }
 
     /** A pet's model touched a player: a wild pet remembers it for its sting module; no pet deals FMM's contact attack. */

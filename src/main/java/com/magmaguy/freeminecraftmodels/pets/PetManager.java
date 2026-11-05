@@ -407,6 +407,11 @@ public final class PetManager {
         return Collections.unmodifiableCollection(byBody.values());
     }
 
+    /** The owners riding their pets. */
+    PetRides rides() {
+        return rides;
+    }
+
     public PetCollection collection(Player player) {
         return collections.computeIfAbsent(player.getUniqueId(), ignored -> PetCollection.load(player));
     }
