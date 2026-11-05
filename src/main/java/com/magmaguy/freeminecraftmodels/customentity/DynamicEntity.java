@@ -85,6 +85,8 @@ public class DynamicEntity extends ModeledEntity {
     private volatile TravelOrientation travelOrientation = TravelOrientation.UPRIGHT;
     // How the model leans while its mob swims; null leans as it does on land.
     private volatile TravelOrientation swimOrientation;
+    // A diving pet's model leans with its swim while ridden; any other ridden model stands upright.
+    private volatile boolean leansWhileRidden;
     // Stepped only by the model tick, under the skeleton's lock.
     private final TravelTilt travelTilt = new TravelTilt();
     // Whether the body tilt is the travel lean's, still easing out; a tilt set through setBodyTilt is left alone.
@@ -229,6 +231,11 @@ public class DynamicEntity extends ModeledEntity {
         swimOrientation = orientation;
     }
 
+    /** Lets the model lean with its travel while a player rides it, as a diving pet does. */
+    public void setLeansWhileRidden(boolean leans) {
+        leansWhileRidden = leans;
+    }
+
     /**
      * Whether the mob swims: it is in water and off the ground. A mob that wades along a shallow bottom walks. Read on
      * the model clock, so it is the mob's state as of its last tick.
@@ -252,11 +259,14 @@ public class DynamicEntity extends ModeledEntity {
         }
         if (underlyingEntity == null || !underlyingEntity.isValid()) return;
         Location at = underlyingEntity.getLocation();
-        boolean free = !isDying() && syncMovement && !isRiddenByPlayer();
+        boolean ridden = isRiddenByPlayer();
+        boolean free = !isDying() && syncMovement && (leansWhileRidden || !ridden);
         // A swim moves the body by its velocity every tick, so the lean follows that velocity as it is, in step with
-        // the swim's wave, instead of smoothing it out of positions a quarter of a wave late.
+        // the swim's wave, instead of smoothing it out of positions a quarter of a wave late. A rider's client moves
+        // the body it steers and the server only snaps it there, so its velocity reads zero; a ridden lean comes from
+        // its positions.
         org.joml.Vector3d motion = null;
-        if (swimming && swim != null) {
+        if (swimming && swim != null && !ridden) {
             org.bukkit.util.Vector velocity = underlyingEntity.getVelocity();
             motion = new org.joml.Vector3d(velocity.getX(), velocity.getY(), velocity.getZ());
         }
@@ -321,29 +331,40 @@ public class DynamicEntity extends ModeledEntity {
     }
 
     /**
-     * Seats the player on the mob itself when it is a saddled horse nobody rides, as a vanilla rider who steers it.
-     * Returns whether they now ride it.
+     * Whether the mob carries a saddle its first passenger steers it by: a horse's, or a nautilus's on a server that
+     * has the nautilus.
      */
-    public boolean seatSteeringRider(Player player) {
-        if (!(underlyingEntity instanceof AbstractHorse horse) || horse.getInventory().getSaddle() == null
-                || !horse.getPassengers().isEmpty()) return false;
-        return horse.addPassenger(player);
+    private boolean saddled() {
+        if (underlyingEntity instanceof AbstractHorse horse) return horse.getInventory().getSaddle() != null;
+        return SwimMounts.isSaddled(underlyingEntity);
     }
 
-    /** Whether a player could steer this mob: vanilla lets the first passenger of a saddled horse ride it. */
+    /**
+     * Seats the player on the mob itself when it is a saddled horse or nautilus nobody rides, as a vanilla rider who
+     * steers it. Returns whether they now ride it.
+     */
+    public boolean seatSteeringRider(Player player) {
+        if (underlyingEntity == null || !saddled() || !underlyingEntity.getPassengers().isEmpty()) return false;
+        return underlyingEntity.addPassenger(player);
+    }
+
+    /** Whether a player could steer this mob: vanilla lets the first passenger of a saddled horse or nautilus ride it. */
     public boolean isSteerableMount() {
-        return underlyingEntity instanceof AbstractHorse horse && horse.getInventory().getSaddle() != null;
+        return underlyingEntity != null && saddled();
     }
 
     public boolean hasSteeringRider() {
         return steeringRider() != null;
     }
 
-    /** The player steering this mob, as vanilla lets the first passenger of a saddled horse do; null otherwise. */
+    /**
+     * The player steering this mob, as vanilla lets the first passenger of a saddled horse or nautilus do; null
+     * otherwise.
+     */
     @Nullable
     private Player steeringRider() {
-        if (!(underlyingEntity instanceof AbstractHorse horse) || horse.getInventory().getSaddle() == null) return null;
-        List<Entity> passengers = horse.getPassengers();
+        if (underlyingEntity == null || !saddled()) return null;
+        List<Entity> passengers = underlyingEntity.getPassengers();
         return !passengers.isEmpty() && passengers.get(0) instanceof Player player ? player : null;
     }
 
