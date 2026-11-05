@@ -89,7 +89,7 @@ public final class PetLuaTable {
     public static final Set<String> METHODS = Set.of("steer_to", "stop", "hover_point", "rest_point", "ground_below",
             "ground_point", "water_point", "trail_point", "teleport_near_owner", "distance_to", "route_target",
             "find_perch", "nearest_campfire", "campfire_usable", "set_glow", "clear_glow", "scale_toward",
-            "sting_contacts", "sting_enemies", "drizzle", "owner_effect", "play_animation");
+            "sting_contacts", "sting_enemies", "strike_attacker", "drizzle", "owner_effect", "play_animation");
     /** The fields of c.pet.species. */
     public static final Set<String> SPECIES_FIELDS = Set.of("id", "speed", "hover_height", "hover_variance",
             "roam_radius", "follow_distance", "leash_distance", "teleport_distance", "scale", "baby_scale");
@@ -106,6 +106,11 @@ public final class PetLuaTable {
     private static final int MAX_PERCH_RADIUS = 4;
     private static final double MAX_PERCH_HEIGHT = 8D;
     private static final double MAX_STING_REACH = 4D;
+    // A sound carries 16 blocks per unit of volume, so 4 reaches 64, the farthest a pet model is drawn. Clients play
+    // pitches from 0.5 to 2 only.
+    private static final double MAX_VOLUME = 4D, MIN_PITCH = 0.5D, MAX_PITCH = 2D;
+    /** The sting effect name that freezes its victim, as powder snow does, instead of giving a potion effect. */
+    static final String FREEZE = "FREEZE";
     private static final int MAX_DRIZZLE_DEPTH = 8;
     // The scale attribute's own top, so the eased size stays finite.
     private static final double MIN_SCALE_MULTIPLIER = 0.1D, MAX_SCALE_MULTIPLIER = 16D;
@@ -335,7 +340,7 @@ public final class PetLuaTable {
                 GameMode mode = player.getGameMode();
                 if (mode == GameMode.CREATIVE || mode == GameMode.SPECTATOR || player.isDead()
                         || player.getWorld() != world) continue;
-                if (sting(player, sting, "c.pet:sting_contacts")) stung++;
+                if (sting(player, sting, null, "c.pet:sting_contacts")) stung++;
             }
             return LuaValue.valueOf(stung);
         });
@@ -355,9 +360,25 @@ public final class PetLuaTable {
                 LivingEntity victim = (LivingEntity) entity;
                 if (victim.isDead()) continue;
                 if (manager.pet(victim) != null && !defendsAgainst(manager, aggressors, victim)) continue;
-                if (touches(victim, reach) && sting(victim, sting, "c.pet:sting_enemies")) stung++;
+                if (touches(victim, reach) && sting(victim, sting, null, "c.pet:sting_enemies")) stung++;
             }
             return LuaValue.valueOf(stung);
+        });
+        // strike_attacker(reach, effect, duration, amplifier, damage, cooldown, sound, volume, pitch, particle): stings
+        // the player who last hurt this wild pet (see attacker) once the model's touch reaches them, as sting_enemies
+        // reaches a mob, playing sound (a sound key, a resource pack's own included) at volume 0 to 4 and pitch 0.5 to
+        // 2 and showing particle instead of the sting's buzz and sparks; '' or NONE plays or shows none. false for an
+        // owned pet, without an attacker, out of reach or within the cooldown.
+        method("strike_attacker", args -> {
+            double reach = number(args, 1, 0D, MAX_STING_REACH);
+            Sting sting = sting(args, 2);
+            String sound = args.optjstring(7, "");
+            float volume = (float) number(args, 8, 0D, MAX_VOLUME), pitch = (float) number(args, 9, MIN_PITCH, MAX_PITCH);
+            Look look = new Look(named(sound) ? sound : null, volume, pitch,
+                    particle(args.optjstring(10, ""), "c.pet:strike_attacker"));
+            Player player = attackerPlayer();
+            return LuaValue.valueOf(player != null && touches(player, reach)
+                    && sting(player, sting, look, "c.pet:strike_attacker"));
         });
         // drizzle(depth, chance): depth 1 to 8, chance 0 to 1.
         method("drizzle", args -> LuaValue.valueOf(drizzle(whole(args, 1, 1, MAX_DRIZZLE_DEPTH), number(args, 2, 0D, 1D))));
@@ -536,13 +557,18 @@ public final class PetLuaTable {
 
     /** The middle of the player who last hurt this wild pet, within ATTACKER_TICKS of the hit, or null. */
     private Location attacker() {
+        Player player = attackerPlayer();
+        return player == null ? null : player.getLocation().add(0D, player.getHeight() * 0.5D, 0D);
+    }
+
+    /** The player who last hurt this wild pet, within ATTACKER_TICKS of the hit, alive, here and hurtable, or null. */
+    private Player attackerPlayer() {
         if (!control.isWild()) return null;
         UUID id = control.attacker(PetManager.ticks(), ATTACKER_TICKS);
         Player player = id == null ? null : Bukkit.getPlayer(id);
         if (player == null || player.isDead() || player.getWorld() != body().getWorld()) return null;
         GameMode mode = player.getGameMode();
-        if (mode == GameMode.CREATIVE || mode == GameMode.SPECTATOR) return null;
-        return player.getLocation().add(0D, player.getHeight() * 0.5D, 0D);
+        return mode == GameMode.CREATIVE || mode == GameMode.SPECTATOR ? null : player;
     }
 
     /** The middle of the nearest one its owner's pets defend against, within THREAT_RANGE of the owner, or null. */
@@ -808,6 +834,32 @@ public final class PetLuaTable {
     private record Sting(String effect, int duration, int amplifier, double damage, int cooldown) {
     }
 
+    /** How a strike sounds and looks: a sound key at a volume and pitch, and a particle; null plays or shows none. */
+    private record Look(String sound, float volume, float pitch, Particle particle) {
+    }
+
+    /** Whether a text names something: not blank, and not NONE. */
+    private static boolean named(String text) {
+        return text != null && !text.isBlank() && !text.equalsIgnoreCase("NONE");
+    }
+
+    /**
+     * The particle a module names, or null for none. One that names no particle, or one that needs more than a name
+     * (dust needs a colour), is warned about once per species and name per load.
+     */
+    private Particle particle(String name, String call) {
+        if (!named(name)) return null;
+        Particle particle = null;
+        try {
+            particle = Particle.valueOf(name.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException unknown) {
+            // Warned below.
+        }
+        if (particle != null && particle.getDataType() == Void.class) return particle;
+        warnings.unknownParticle(control.species().id(), module, call, name);
+        return null;
+    }
+
     /**
      * The sting arguments from {@code first}: effect, duration 1 to 6000 ticks, amplifier 0 to 255, damage at least 0
      * and cooldown at least 1 tick.
@@ -818,7 +870,8 @@ public final class PetLuaTable {
                 whole(args, first + 4, 1, Integer.MAX_VALUE));
     }
 
-    private boolean sting(LivingEntity victim, Sting sting, String call) {
+    /** Stings the victim; a null look buzzes and sparks as a sting does. FREEZE freezes it for the duration's ticks. */
+    private boolean sting(LivingEntity victim, Sting sting, Look look, String call) {
         long now = PetManager.ticks();
         Long readyAt = stingReadyAt.get(victim.getUniqueId());
         if (readyAt != null && now < readyAt) return false;
@@ -827,14 +880,27 @@ public final class PetLuaTable {
         // The pet's sting and poison stats scale what the module asks for; a baby's are halved until it grows up.
         PetStats stats = control.stats();
         double share = control.babyShare();
-        PotionEffectType effect = knownEffect(sting.effect(), call);
         int duration = (int) Math.max(1L, Math.round(sting.duration() * stats.poison * share));
-        if (effect != null) victim.addPotionEffect(new PotionEffect(effect, duration, sting.amplifier(), false, true, true));
+        if (FREEZE.equalsIgnoreCase(sting.effect())) {
+            // Frost creeps in over 140 frozen ticks and thaws 2 a tick, so past 140 the victim is fully frozen (shaking,
+            // slowed, hurt every 2 seconds unless it wears leather) for half the excess, then thaws.
+            victim.setFreezeTicks(Math.max(victim.getFreezeTicks(), duration));
+        } else {
+            PotionEffectType effect = knownEffect(sting.effect(), call);
+            if (effect != null)
+                victim.addPotionEffect(new PotionEffect(effect, duration, sting.amplifier(), false, true, true));
+        }
         double damage = sting.damage() * stats.sting * share;
         if (damage > 0D) victim.damage(damage, body());
         Location at = victim.getLocation().add(0D, victim.getHeight() * 0.5D, 0D);
-        victim.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, at, 8, 0.25D, 0.3D, 0.25D, 0.05D);
-        victim.getWorld().playSound(at, Sound.ENTITY_BEE_STING, 0.6F, 1.6F);
+        if (look == null) {
+            victim.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, at, 8, 0.25D, 0.3D, 0.25D, 0.05D);
+            victim.getWorld().playSound(at, Sound.ENTITY_BEE_STING, 0.6F, 1.6F);
+        } else {
+            if (look.particle() != null) victim.getWorld().spawnParticle(look.particle(), at, 8, 0.25D, 0.3D, 0.25D, 0.05D);
+            if (look.sound() != null && look.volume() > 0F)
+                body().getWorld().playSound(body().getLocation(), look.sound(), look.volume(), look.pitch());
+        }
         DynamicEntity modeled = control.modeled();
         // Every model that has an attack animation plays it, babies' included.
         if (modeled != null && !modeled.isRemoved() && modeled.hasAnimation("attack"))
@@ -845,7 +911,7 @@ public final class PetLuaTable {
     /** The effect a module names; one that names none is warned about once per species and name per load. */
     private PotionEffectType knownEffect(String name, String call) {
         PotionEffectType effect = effect(name);
-        if (effect == null && name != null && !name.isBlank() && !name.equalsIgnoreCase("NONE"))
+        if (effect == null && named(name))
             warnings.unknownEffect(control.species().id(), module, call, name);
         return effect;
     }
@@ -941,6 +1007,13 @@ public final class PetLuaTable {
             say("effect\n" + species + "\n" + effect.toLowerCase(Locale.ROOT), "The " + species + " pet behavior "
                     + module + " gave " + call + " the potion effect " + effect + ", which does not exist; it applies none.",
                     null);
+        }
+
+        /** A c.pet call was given a particle name that names none, or one that needs more than its name. */
+        void unknownParticle(String species, String module, String call, String particle) {
+            say("particle\n" + species + "\n" + particle.toLowerCase(Locale.ROOT), "The " + species + " pet behavior "
+                    + module + " gave " + call + " the particle " + particle + ", which does not exist or needs more"
+                    + " than a name; it shows none.", null);
         }
 
         private void say(String key, String message, Throwable failure) {

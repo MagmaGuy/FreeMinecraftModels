@@ -270,6 +270,17 @@ class PetLuaTableTest {
         assertNull(causes.getFirst());
     }
 
+    @Test
+    void unknownParticlesAreSaidOncePerSpeciesAndParticleEachLoad() {
+        warnings.unknownParticle("penguin", "fmm:pet/strike_back", "c.pet:strike_attacker", "SNOWFLAKES");
+        warnings.unknownParticle("penguin", "fmm:pet/strike_back", "c.pet:strike_attacker", "snowflakes");
+        warnings.unknownEffect("penguin", "fmm:pet/strike_back", "c.pet:strike_attacker", "SNOWFLAKES");
+        assertEquals(List.of("The penguin pet behavior fmm:pet/strike_back gave c.pet:strike_attacker the particle "
+                        + "SNOWFLAKES, which does not exist or needs more than a name; it shows none.",
+                "The penguin pet behavior fmm:pet/strike_back gave c.pet:strike_attacker the potion effect SNOWFLAKES, "
+                        + "which does not exist; it applies none."), messages);
+    }
+
     private static Varargs args(LuaValue... values) {
         return LuaValue.varargsOf(values);
     }
