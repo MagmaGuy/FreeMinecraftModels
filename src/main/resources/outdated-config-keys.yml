@@ -36,7 +36,7 @@ scripts:
 
 # Earlier shipped pet behavior modules. FreeMinecraftModels writes a module only when its file is
 # missing, so an unedited copy of an old default would otherwise stay forever. Each hash is an earlier
-# version of that file with carriage returns removed (2.13.0 and tester builds); the current default
+# version of that file with carriage returns removed (released versions and tester builds); the current default
 # is never listed. A match is preserved in MagmaCore/outdated files and the current module is written
 # again on the same start. Edited copies never match and stay in place.
 pet_behaviors:
@@ -49,6 +49,7 @@ pet_behaviors:
       - day_perch.lua
     sha256:
       - e6d5a5864a5ea5ef3b5b335ddc8e4db6524c7c3559ac62ab24579b34968ebf82
+      - 8da1d1a31d912c957bb0b69a92be99ab181ce19baff73d2f621db9ee51f04cf5
   - files:
       - defend_owner.lua
     sha256:
