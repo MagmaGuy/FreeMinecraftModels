@@ -8,15 +8,16 @@ import java.util.function.Consumer;
 
 /**
  * How the species swims, from the pet file's {@code swimming:} section; a species without one swims as it walks.
- * {@code animation} is what the model plays while swimming, in place of idle and walk, and {@code idleAnimation} what
- * it plays instead while it holds still in water (a model without that animation keeps swimming in place);
+ * {@code animation} is what the model plays while swimming, in place of idle and walk ({@code swim} by default), and
+ * {@code idleAnimation} what it plays instead while it holds still in water ({@code idle.swim} by default; a model
+ * without that animation keeps swimming in place);
  * {@code orientation} how it leans with its travel in water, front first by default, as the species' own
  * {@code orientation} section does on land; and {@code wave} a gentle rise and fall an amphibious pet swims while it
  * travels: {@code height} blocks from crest to trough every {@code seconds}, fading out as it slows down. A wave of
  * height 0 swims level.
  */
 public record PetSwimming(String animation, String idleAnimation, TravelOrientation orientation, MindSwimWave wave) {
-    private static final String ANIMATION = "swim", IDLE_ANIMATION = "idle_swim";
+    private static final String ANIMATION = "swim", IDLE_ANIMATION = "idle.swim";
     /** Leads with its front: pitches into the wave's climbs and dives and banks into turns, no more than 45 degrees. */
     static final TravelOrientation ORIENTATION =
             new TravelOrientation(TravelOrientation.Style.FRONT_FIRST, 0.3D, 2.5D, 45D, 120D);

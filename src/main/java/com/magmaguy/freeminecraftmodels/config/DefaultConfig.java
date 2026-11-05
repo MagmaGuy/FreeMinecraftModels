@@ -146,12 +146,12 @@ public class DefaultConfig extends ConfigurationFile {
                         "death animation. 0 switches instantly, as older versions did. Bedrock clients get the same time."),
                 fileConfiguration, "deathBlendTicks", 4);
         longIdleMinSeconds = ConfigurationEngine.setInt(
-                List.of("How long a model with a long_idle animation stands idle before playing it once, at least.",
+                List.of("How long a model with an idle.long animation stands idle before playing it once, at least.",
                         "Each wait is a random number of seconds from longIdleMinSeconds to longIdleMaxSeconds."),
                 fileConfiguration, "longIdleMinSeconds", 15);
         longIdleMaxSeconds = ConfigurationEngine.setInt(
-                List.of("How long a model with a long_idle animation stands idle before playing it once, at most.",
-                        "Moving, attacking, other animations and riding start the wait over. 0 never plays long_idle."),
+                List.of("How long a model with an idle.long animation stands idle before playing it once, at most.",
+                        "Moving, attacking, other animations and riding start the wait over. 0 never plays idle.long."),
                 fileConfiguration, "longIdleMaxSeconds", 30);
         weightedTurning = ConfigurationEngine.setBoolean(
                 List.of("Experimental. When true (default), a model turns toward its mob's facing with inertia: it spins up,",

@@ -40,7 +40,7 @@ class PetRidingTest {
         assertEquals(0.2D, riding.speed());
         assertEquals(0.4D, riding.jump());
         assertEquals(10D, riding.seatHeight());
-        assertEquals("slide", riding.animation());
+        assertEquals("ride", riding.animation());
         assertEquals(1.5D, riding.multiplier(Material.AIR, Material.SNOW_BLOCK));
         assertEquals(1.2D, riding.multiplier(Material.AIR, Material.BLUE_ICE));
         assertEquals(List.of(), warnings);
