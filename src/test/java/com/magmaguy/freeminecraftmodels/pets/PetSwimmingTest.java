@@ -36,6 +36,7 @@ class PetSwimmingTest {
         List<String> warnings = new ArrayList<>();
         PetSwimming swimming = read("swimming: {}\n", warnings);
         assertEquals("swim", swimming.animation());
+        assertEquals("idle_swim", swimming.idleAnimation());
         assertEquals(PetSwimming.ORIENTATION, swimming.orientation());
         assertEquals(TravelOrientation.Style.FRONT_FIRST, swimming.orientation().style());
         assertEquals(new MindSwimWave(0.5D, 40), swimming.wave());
@@ -48,6 +49,7 @@ class PetSwimmingTest {
         PetSwimming swimming = read("""
                 swimming:
                   animation: slide
+                  idleAnimation: float
                   orientation:
                     style: top_first
                     startSpeed: 0.5
@@ -59,9 +61,17 @@ class PetSwimmingTest {
                     seconds: 1.5
                 """, warnings);
         assertEquals("slide", swimming.animation());
+        assertEquals("float", swimming.idleAnimation());
         assertEquals(new TravelOrientation(TravelOrientation.Style.TOP_FIRST, 0.5D, 3D, 30D, 90D), swimming.orientation());
         assertEquals(new MindSwimWave(0.8D, 30), swimming.wave());
         assertEquals(List.of(), warnings);
+    }
+
+    @Test
+    void blankAnimationNamesKeepTheDefaults() throws InvalidConfigurationException {
+        PetSwimming swimming = read("swimming:\n  animation: ''\n  idleAnimation: ' '\n", new ArrayList<>());
+        assertEquals("swim", swimming.animation());
+        assertEquals("idle_swim", swimming.idleAnimation());
     }
 
     @Test

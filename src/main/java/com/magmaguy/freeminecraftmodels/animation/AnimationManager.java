@@ -24,17 +24,17 @@ import java.util.function.Predicate;
 /**
  * Plays a model's animations in two layers and mixes them into one pose per tick.
  * <ul>
- * <li>Base layer: a locomotion machine (spawn, idle, long_idle, walk, ride, swim, death) driven by
+ * <li>Base layer: a locomotion machine (spawn, idle, long_idle, walk, ride, swim, idle swim, death) driven by
  * {@link #TRANSITIONS}, or a custom animation played with {@code blend=false}, which takes the whole pose over while
  * the machine keeps tracking idle and walk underneath. A model with a {@code long_idle} animation plays it once after
  * standing idle for a random {@code longIdleMinSeconds} to {@code longIdleMaxSeconds}; a steered mount with a ridden
- * animation plays that in place of walk, and a swimming mob with a swim animation plays that in place of idle and
- * walk.</li>
+ * animation plays that in place of walk, and a swimming mob with a swim animation plays that in place of walk, and in
+ * place of idle too unless it also has an idle swim animation to play while it holds still in water.</li>
  * <li>Action layer: attacks, {@code damaged}, and custom animations played with {@code blend=true}. An action
  * replaces the bones it keys when its Blockbench Override is set and adds to them otherwise.</li>
  * </ul>
- * Idle, long_idle, walk, ride and swim cross-fade into each other and death fades in from whatever pose the model holds;
- * every other switch snaps. Custom animations outrank built-in ones, and only death interrupts them.
+ * Idle, long_idle, walk, ride, swim and idle swim cross-fade into each other and death fades in from whatever pose the
+ * model holds; every other switch snaps. Custom animations outrank built-in ones, and only death interrupts them.
  * <p>
  * Requests can come from any thread; they are queued and applied on the model clock, which owns all state here.
  */
@@ -42,24 +42,30 @@ public class AnimationManager {
     private static final Set<String> ATTACKS = Set.of("attack", "attack_melee", "attack_ranged");
     private static final String DAMAGED = "damaged";
 
-    private enum Base {SPAWN, IDLE, LONG_IDLE, WALK, RIDE, SWIM, DEATH}
+    private enum Base {SPAWN, IDLE, LONG_IDLE, WALK, RIDE, SWIM, SWIM_IDLE, DEATH}
 
     /** One row of the locomotion machine: a state change, whether it reads the mob's movement, when, and its fade. */
     private record Transition(Base from, Base to, boolean needsEntity,
                               Predicate<AnimationManager> when, IntSupplier fadeTicks) {
     }
 
-    // The first row that applies wins, so each ridden row comes before the swimming one, and each swimming row before
-    // the walking or resting one it replaces. Swimming reads no entity: the model reports it (see setSwimming).
+    // The first row that applies wins, so each ridden row comes before the swimming ones, each idle swim row before the
+    // swim row that stands in for it when the model has no idle swim, and each swimming row before the walking or
+    // resting one it replaces. Swimming reads no entity: the model reports it (see setSwimming). Neither does holding
+    // still in water: a model without an entity never moves.
     private static final List<Transition> TRANSITIONS = List.of(
             new Transition(Base.SPAWN, Base.WALK, false, m -> m.base.finished() && m.moving, () -> 0),
             new Transition(Base.SPAWN, Base.IDLE, false, m -> m.base.finished(), () -> 0),
             new Transition(Base.IDLE, Base.RIDE, true, m -> m.moving && m.steered, AnimationManager::locomotionFade),
+            new Transition(Base.IDLE, Base.SWIM_IDLE, false, AnimationManager::swimsInPlace,
+                    AnimationManager::locomotionFade),
             new Transition(Base.IDLE, Base.SWIM, false, AnimationManager::swims, AnimationManager::locomotionFade),
             new Transition(Base.IDLE, Base.WALK, true, m -> m.moving && !m.rides(), AnimationManager::locomotionFade),
             new Transition(Base.IDLE, Base.LONG_IDLE, false, AnimationManager::longIdleDue,
                     AnimationManager::locomotionFade),
             new Transition(Base.LONG_IDLE, Base.RIDE, true, m -> m.moving && m.steered,
+                    AnimationManager::locomotionFade),
+            new Transition(Base.LONG_IDLE, Base.SWIM_IDLE, false, AnimationManager::swimsInPlace,
                     AnimationManager::locomotionFade),
             new Transition(Base.LONG_IDLE, Base.SWIM, false, AnimationManager::swims, AnimationManager::locomotionFade),
             new Transition(Base.LONG_IDLE, Base.WALK, true, m -> m.moving && !m.rides(),
@@ -68,15 +74,26 @@ public class AnimationManager {
             new Transition(Base.LONG_IDLE, Base.IDLE, false, m -> m.base.finished() || m.action != null || m.steered,
                     AnimationManager::locomotionFade),
             new Transition(Base.WALK, Base.RIDE, true, m -> m.moving && m.steered, AnimationManager::locomotionFade),
+            new Transition(Base.WALK, Base.SWIM_IDLE, false, AnimationManager::swimsInPlace,
+                    AnimationManager::locomotionFade),
             new Transition(Base.WALK, Base.SWIM, false, AnimationManager::swims, AnimationManager::locomotionFade),
             new Transition(Base.WALK, Base.IDLE, true, m -> !m.moving, AnimationManager::locomotionFade),
             new Transition(Base.RIDE, Base.IDLE, true, m -> !m.moving, AnimationManager::locomotionFade),
             new Transition(Base.RIDE, Base.WALK, true, m -> !m.rides(), AnimationManager::locomotionFade),
             new Transition(Base.SWIM, Base.RIDE, true, m -> m.moving && m.steered, AnimationManager::locomotionFade),
+            new Transition(Base.SWIM, Base.SWIM_IDLE, false, AnimationManager::swimsInPlace,
+                    AnimationManager::locomotionFade),
             // Out of the water it walks on, or stands.
             new Transition(Base.SWIM, Base.WALK, true, m -> !m.swims() && m.moving && !m.rides(),
                     AnimationManager::locomotionFade),
-            new Transition(Base.SWIM, Base.IDLE, false, m -> !m.swims(), AnimationManager::locomotionFade));
+            new Transition(Base.SWIM, Base.IDLE, false, m -> !m.swims(), AnimationManager::locomotionFade),
+            new Transition(Base.SWIM_IDLE, Base.RIDE, true, m -> m.moving && m.steered,
+                    AnimationManager::locomotionFade),
+            new Transition(Base.SWIM_IDLE, Base.SWIM, false, m -> m.swims() && m.moving,
+                    AnimationManager::locomotionFade),
+            new Transition(Base.SWIM_IDLE, Base.WALK, true, m -> !m.swims() && m.moving && !m.rides(),
+                    AnimationManager::locomotionFade),
+            new Transition(Base.SWIM_IDLE, Base.IDLE, false, m -> !m.swims(), AnimationManager::locomotionFade));
 
     private final ModeledEntity modeledEntity;
     private final Animations animations;
@@ -86,6 +103,8 @@ public class AnimationManager {
     private Animation ride;
     // What a swimming mob plays, in place of idle and walk; null keeps them. Set on the clock thread.
     private Animation swim;
+    // What a swimming mob plays while it holds still, in place of swim; null swims in place. Set on the clock thread.
+    private Animation idleSwim;
     // Whether the model's mob swims, as the model last reported it.
     private boolean swimming = false;
     private final SplittableRandom random = new SplittableRandom();
@@ -229,24 +248,39 @@ public class AnimationManager {
      */
     public void setRiddenAnimation(String name) {
         requests.add(() -> {
-            Animation next = name == null ? null : animations.getAnimations().get(name);
-            if (next == null && name != null) next = animations.getAnimations().get(name.toLowerCase(Locale.ROOT));
-            ride = next;
+            ride = named(name);
             if (locomotion == Base.RIDE && !rides()) setLocomotion(moving ? Base.WALK : Base.IDLE, locomotionFade());
         });
     }
 
     /**
-     * The animation a swimming mob plays, in place of idle and walk: a penguin's belly slide, say. Null, or a name the
-     * model lacks, keeps idle and walk in water too.
+     * The animation a swimming mob plays, in place of walk, and of idle unless {@link #setIdleSwimAnimation} gives it
+     * one for holding still: a penguin's swim, say. Null, or a name the model lacks, keeps idle and walk in water too.
      */
     public void setSwimAnimation(String name) {
         requests.add(() -> {
-            Animation next = name == null ? null : animations.getAnimations().get(name);
-            if (next == null && name != null) next = animations.getAnimations().get(name.toLowerCase(Locale.ROOT));
-            swim = next;
-            if (locomotion == Base.SWIM && !swims()) setLocomotion(moving ? Base.WALK : Base.IDLE, locomotionFade());
+            swim = named(name);
+            if ((locomotion == Base.SWIM || locomotion == Base.SWIM_IDLE) && !swims())
+                setLocomotion(moving ? Base.WALK : Base.IDLE, locomotionFade());
         });
+    }
+
+    /**
+     * The animation a swimming mob plays while it holds still in water, in place of its swim animation: a penguin
+     * treading water, say. It plays only beside a swim animation. Null, or a name the model lacks, swims in place.
+     */
+    public void setIdleSwimAnimation(String name) {
+        requests.add(() -> {
+            idleSwim = named(name);
+            if (locomotion == Base.SWIM_IDLE && idleSwim == null) setLocomotion(Base.SWIM, locomotionFade());
+        });
+    }
+
+    /** The model's animation by this name, or by its lower case; null for a null name or one the model lacks. */
+    private Animation named(String name) {
+        if (name == null) return null;
+        Animation animation = animations.getAnimations().get(name);
+        return animation != null ? animation : animations.getAnimations().get(name.toLowerCase(Locale.ROOT));
     }
 
     /** Whether the model's mob swims now. The model reports this every tick before the animations tick. */
@@ -354,6 +388,11 @@ public class AnimationManager {
     /** Whether the mob swims, nobody steers it, and the model has a swim animation for it. */
     private boolean swims() {
         return swimming && swim != null && !steered;
+    }
+
+    /** Whether the mob swims and holds still, as the walk-or-idle choice on land reads it: no horizontal motion. */
+    private boolean swimsInPlace() {
+        return swims() && !moving;
     }
 
     /** Whether a player steers the mob and the model has a ridden animation for it. */
@@ -601,6 +640,7 @@ public class AnimationManager {
             case WALK -> walk;
             case RIDE -> ride;
             case SWIM -> swim;
+            case SWIM_IDLE -> idleSwim;
             case DEATH -> death;
         };
     }
@@ -615,6 +655,6 @@ public class AnimationManager {
     /** The states the base cycles through on its own, which cross-fade into each other. */
     private static boolean isLocomotion(Base state) {
         return state == Base.IDLE || state == Base.LONG_IDLE || state == Base.WALK || state == Base.RIDE
-                || state == Base.SWIM;
+                || state == Base.SWIM || state == Base.SWIM_IDLE;
     }
 }

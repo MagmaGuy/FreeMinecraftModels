@@ -9,12 +9,15 @@ import com.magmaguy.freeminecraftmodels.customentity.core.components.AnimationCo
 import com.magmaguy.freeminecraftmodels.dataconverter.AnimationBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import org.bukkit.Location;
+import org.bukkit.entity.Entity;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.util.Vector;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -39,6 +42,7 @@ class AnimationBlendingTest {
     private int previousLongIdleMin;
     private int previousLongIdleMax;
     private FileModelConverter converter;
+    private ModeledEntity model;
     private AnimationComponent animation;
     private Bone body;
     private Bone arm;
@@ -76,8 +80,9 @@ class AnimationBlendingTest {
                 animation("jump", "once", 0.2, false, "", Map.of("body", List.of(key(0, 4)))),
                 // Marked as a loop in Blockbench, as Dali's are; it still plays once.
                 animation("long_idle", "loop", 0.5, false, "", Map.of("body", List.of(key(0, 64)))),
-                // What the swim tests set as a swimming mob's animation.
-                animation("slide", "loop", 0.5, false, "", Map.of("body", List.of(key(0, 24)))));
+                // What the swim tests set as a swimming mob's animation, and as its idle swim.
+                animation("slide", "loop", 0.5, false, "", Map.of("body", List.of(key(0, 24)))),
+                animation("tread", "loop", 0.5, false, "", Map.of("body", List.of(key(0, 40)))));
         Path source = directory.resolve("blend_probe.bbmodel");
         Files.writeString(source, new Gson().toJson(Map.of(
                 "meta", Map.of("format_version", "5.0", "model_format", "free"),
@@ -87,7 +92,7 @@ class AnimationBlendingTest {
                                 "children", List.of())))),
                 "animations", animations)));
         converter = new FileModelConverter(source.toFile());
-        ModeledEntity model = new ModeledEntity(converter.getID(), new Location(null, 0, 0, 0));
+        model = new ModeledEntity(converter.getID(), new Location(null, 0, 0, 0));
         animation = model.getAnimationComponent();
         body = bone(model, "body");
         arm = bone(model, "arm");
@@ -347,6 +352,86 @@ class AnimationBlendingTest {
     }
 
     @Test
+    void aSwimmerHoldingStillPlaysItsIdleSwim() {
+        DefaultConfig.idleWalkBlendTicks = 0;
+        animation.setSwimAnimation("slide");
+        animation.setIdleSwimAnimation("tread");
+        animation.setSwimming(true);
+        tick(1);
+        assertEquals(TREAD_BODY, y(body), 1e-5, "It holds still in water, so it treads water");
+        animation.setSwimming(false);
+        tick(1);
+        assertEquals(idleBody(0), y(body), 1e-5, "Out of the water it idles again");
+    }
+
+    @Test
+    void aSwimmerSwimsWhileItMovesAndTreadsWaterWhenItStops() throws ReflectiveOperationException {
+        DefaultConfig.idleWalkBlendTicks = 0;
+        Vector velocity = new Vector();
+        attachEntity(velocity);
+        animation.setSwimAnimation("slide");
+        animation.setIdleSwimAnimation("tread");
+        animation.setSwimming(true);
+        tick(1);
+        assertEquals(TREAD_BODY, y(body), 1e-5);
+        velocity.setX(0.1);
+        tick(1);
+        assertEquals(SLIDE_BODY, y(body), 1e-5, "Moving, it swims");
+        velocity.setX(0).setY(-0.2);
+        tick(1);
+        assertEquals(TREAD_BODY, y(body), 1e-5, "Sinking alone is no travel, so it treads water");
+        velocity.setY(0).setZ(-0.1);
+        animation.setSwimming(false);
+        tick(1);
+        assertEquals(2, y(body), 1e-5, "Ashore and moving, it walks");
+    }
+
+    @Test
+    void anIdleSwimCrossFadesLikeIdleAndWalk() {
+        animation.setSwimAnimation("slide");
+        animation.setIdleSwimAnimation("tread");
+        tick(1);
+        animation.setSwimming(true);
+        tick(1);
+        assertEquals(idleBody(1) + (TREAD_BODY - idleBody(1)) * smoothstep(0.2), y(body), 1e-5);
+    }
+
+    @Test
+    void aSwimmerWithoutTheIdleSwimSwimsInPlace() {
+        DefaultConfig.idleWalkBlendTicks = 0;
+        animation.setSwimAnimation("slide");
+        animation.setIdleSwimAnimation("float");
+        animation.setSwimming(true);
+        tick(2);
+        assertEquals(SLIDE_BODY, y(body), 1e-5, "The model has no float, so it slides while it holds still too");
+    }
+
+    @Test
+    void anIdleSwimNeedsASwimAnimation() {
+        DefaultConfig.idleWalkBlendTicks = 0;
+        animation.setIdleSwimAnimation("tread");
+        animation.setSwimming(true);
+        tick(3);
+        assertEquals(idleBody(2), y(body), 1e-5, "Without a swim animation it idles in water as on land");
+    }
+
+    @Test
+    void clearingTheIdleSwimMidSwimSwimsInPlace() {
+        DefaultConfig.idleWalkBlendTicks = 0;
+        animation.setSwimAnimation("slide");
+        animation.setIdleSwimAnimation("tread");
+        animation.setSwimming(true);
+        tick(2);
+        assertEquals(TREAD_BODY, y(body), 1e-5);
+        animation.setIdleSwimAnimation(null);
+        tick(1);
+        assertEquals(SLIDE_BODY, y(body), 1e-5);
+        animation.setSwimAnimation(null);
+        tick(1);
+        assertEquals(idleBody(0), y(body), 1e-5, "and clearing the swim too idles again");
+    }
+
+    @Test
     void blockbenchFieldsAreRead() {
         Map<String, AnimationBlueprint> blueprints = converter.getAnimationsBlueprint().getAnimations();
         assertTrue(blueprints.get("attack").isOverride());
@@ -365,6 +450,7 @@ class AnimationBlendingTest {
 
     private static final double LONG_IDLE_BODY = 4;
     private static final double SLIDE_BODY = 1.5;
+    private static final double TREAD_BODY = 2.5;
 
     private static double idleBody(int frame) {
         return frame / 16.0;
@@ -372,6 +458,20 @@ class AnimationBlendingTest {
 
     private static double smoothstep(double t) {
         return t * t * (3 - 2 * t);
+    }
+
+    /** Gives the model a stand-in mob whose velocity is this vector, so the tests can move it. */
+    private void attachEntity(Vector velocity) throws ReflectiveOperationException {
+        Entity entity = (Entity) Proxy.newProxyInstance(Entity.class.getClassLoader(), new Class<?>[]{Entity.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "getVelocity" -> velocity.clone();
+                    case "hashCode" -> System.identityHashCode(proxy);
+                    case "equals" -> proxy == args[0];
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        Field field = ModeledEntity.class.getDeclaredField("underlyingEntity");
+        field.setAccessible(true);
+        field.set(model, entity);
     }
 
     private static Bone bone(ModeledEntity model, String name) {

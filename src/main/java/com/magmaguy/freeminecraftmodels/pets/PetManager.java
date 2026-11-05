@@ -535,6 +535,7 @@ public final class PetManager {
         if (swimming != null) {
             modeled.setSwimOrientation(swimming.orientation());
             modeled.getAnimationComponent().setSwimAnimation(swimming.animation());
+            modeled.getAnimationComponent().setIdleSwimAnimation(swimming.idleAnimation());
         }
         modeled.setCenteredOnBody(pet.centerOnBody());
         modeled.setDisplayName(nameplate(control));
