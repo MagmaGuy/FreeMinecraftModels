@@ -82,4 +82,37 @@ class WildSpawnerTest {
             z = next[1];
         }
     }
+
+    @Test
+    void aSpeciesOfWeightEightInGroupsOfFourIsAsCommonAsCows() {
+        // Vanilla 26.3 plains: 0.1 creature chance rolled again, cow weight 8 of 46, groups of 4 = 7.73 cows per 100 chunks.
+        double cowsPerChunk = 0.1D / 0.9D * 8D / 46D * 4D;
+        assertEquals(cowsPerChunk, WildSpawner.groupsPerChunk(8, 1D) * 4D, 1E-12);
+        assertEquals(7.73D, WildSpawner.groupsPerChunk(8, 1D) * 4D * 100D, 0.01D);
+        // A penguin, weight 10 in groups of 2 to 4, comes to about 7.2 per 100 chunks of its biomes.
+        assertEquals(7.25D, WildSpawner.groupsPerChunk(10, 1D) * 3D * 100D, 0.01D);
+    }
+
+    @Test
+    void theRollAgainChanceGivesThoseGroupsOnAverage() {
+        for (int weight : new int[]{1, 8, 10, 40}) {
+            double chance = WildSpawner.generationChance(weight, 1D);
+            assertEquals(WildSpawner.groupsPerChunk(weight, 1D), chance / (1D - chance), 1E-12);
+        }
+        Random random = new Random(7L);
+        double chance = WildSpawner.generationChance(8, 1D);
+        long groups = 0;
+        int chunks = 2_000_000;
+        for (int chunk = 0; chunk < chunks; chunk++) while (random.nextDouble() < chance) groups++;
+        assertEquals(WildSpawner.groupsPerChunk(8, 1D), (double) groups / chunks, 0.0005D);
+    }
+
+    @Test
+    void abundanceScalesEverySpeciesAndZeroStopsStocking() {
+        assertEquals(2D * WildSpawner.groupsPerChunk(10, 1D), WildSpawner.groupsPerChunk(10, 2D), 1E-12);
+        assertEquals(0D, WildSpawner.generationChance(10, 0D));
+        assertEquals(0D, WildSpawner.generationChance(10, -1D));
+        assertEquals(0D, WildSpawner.generationChance(0, 1D));
+        assertEquals(WildSpawner.MAX_GENERATION_CHANCE, WildSpawner.generationChance(10, 1000D));
+    }
 }
