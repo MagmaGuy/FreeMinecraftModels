@@ -21,7 +21,6 @@ public class DefaultConfig extends ConfigurationFile {
     public static boolean displayBonesRideTheirEntity;
     public static int riddenBoneInterpolationTicks;
     public static int riddenBoneUpdateIntervalTicks = 1;
-    public static int riddenBoneUpdateIntervalSlowClientFps = 45;
     public static boolean cullOffscreenBones = false;
     public static boolean modelViewersTrackHiddenBodies;
     public static int idleWalkBlendTicks;
@@ -118,21 +117,11 @@ public class DefaultConfig extends ConfigurationFile {
                         "0 snaps every tick; 1 (default) glides over one tick, which also smooths rotations."),
                 fileConfiguration, "riddenBoneInterpolationTicks", 1);
         riddenBoneUpdateIntervalTicks = Math.max(1, ConfigurationEngine.setInt(
-                List.of("How often, in ticks, a ridden bone sends Java clients its idle or walk pose while a player whose",
-                        "game is slow watches its model (see riddenBoneUpdateIntervalSlowClientFps). Other models send",
-                        "every tick.",
+                List.of("How often, in ticks, a ridden bone sends Java clients its idle or walk pose. 1 sends every tick.",
                         "2 (default) sends every other tick and glides over both, which halves the packets an animated",
                         "model sends while slow motion looks the same. Models take turns, so a crowd's updates spread out.",
-                        "Attacks and other animations always send every tick. 1 sends every tick, whatever the game."),
+                        "Attacks and other animations always send every tick."),
                 fileConfiguration, "riddenBoneUpdateIntervalTicks", 2));
-        riddenBoneUpdateIntervalSlowClientFps = Math.max(0, ConfigurationEngine.setInt(
-                List.of("A Java player whose game draws fewer frames a second than this counts as slow until it climbs",
-                        "a quarter above it, and every model a slow player watches sends its idle and walk poses every",
-                        "riddenBoneUpdateIntervalTicks. The server times how long each watching player's game takes to",
-                        "answer a ping, which it does once a frame. That estimate wobbles, and a game held at 60 frames a",
-                        "second (vsync on a 60 Hz screen) reads as low as 45, so 45 (default) is the highest value that",
-                        "leaves such games at every tick. 0 sends every tick to everyone."),
-                fileConfiguration, "riddenBoneUpdateIntervalSlowClientFps", 45));
         cullOffscreenBones = ConfigurationEngine.setBoolean(
                 List.of("When true (default), Java clients skip drawing each bone of a model while it is off screen, which",
                         "saves them most of the work for models out of view. A bone that reaches far both above and below",
