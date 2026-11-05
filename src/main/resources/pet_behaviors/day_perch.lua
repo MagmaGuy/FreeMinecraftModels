@@ -1,6 +1,7 @@
--- By day it settles on the nearest leaves under it (up to search_radius blocks to the side), or the ground right
--- below, and rests height blocks above them with the barest breathing bob. It lifts off at dusk, in the rain, or
--- when its owner walks off.
+-- By day, between drifts, it settles on the nearest leaves under it (up to search_radius blocks to the side), or the
+-- ground right below, and rests height blocks above them with the barest breathing bob. It lifts off for its next
+-- drift, at dusk, in the rain, or when its owner walks off. It ranks below drift and above hover, so it fills the
+-- rests where hover would bob, and never keeps a pet from roaming.
 return ai.module {
     id = 'fmm:pet/day_perch', revision = 1,
     -- height is in blocks (0 to 8) and search_radius in whole blocks (0 to 4). speed is in blocks per tick at
@@ -12,7 +13,7 @@ return ai.module {
     behaviors = {
         ai.behavior {
             -- Asked to start every 10 ticks: settling takes seconds, and a failed search waits 5 seconds.
-            id = 'fmm:pet/day_perch', priority = 18, probe_interval = 10,
+            id = 'fmm:pet/day_perch', priority = 25, probe_interval = 10,
             controls = { ai.controls.move, ai.controls.look },
             can_start = function(c)
                 local s = c.settings

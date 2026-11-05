@@ -45,10 +45,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -534,6 +536,97 @@ class ShippedPetModulesTest {
         String why = String.valueOf(runaway.getMessage());
         // Raised inside LuaJ's instruction hook, the message gains a source:line prefix and a traceback.
         return why.contains("Lua CPU-time budget exceeded") || why.contains("Lua elapsed-time");
+    }
+
+    /**
+     * An owned driftjelly by day, beside an owner who stands about, roams round them as a penguin walks round its
+     * owner: it drifts off again and again, and perches only in the rests between drifts. day_perch, drift and hover
+     * are the driftjelly file's own entries; a minute of daylight is lived as MagmaCore's Brain arbitrates it.
+     */
+    @Test
+    void anOwnedDriftjellyByDayDriftsAndPerchesOnlyBetweenDrifts() {
+        try (PetBehaviorCatalog catalog = catalog()) {
+            PetPrograms.Program program = new PetPrograms(catalog, warnings::add).program("test", "driftjelly",
+                    List.of(new PetBehaviorEntry("day_perch", Map.of("height", 0.3, "search_radius", 2,
+                                    "wild", true, "pets", true)),
+                            new PetBehaviorEntry("drift", Map.of()), new PetBehaviorEntry("hover", Map.of())),
+                    "driftjelly");
+            Map<String, Integer> starts = new TreeMap<>(), ticks = new TreeMap<>();
+            runArbitrated(program, new StubPet(Owner.WITHIN_FOLLOW, false, false, Answers.SOMETHING, new Coverage()),
+                    1200, starts, ticks);
+            assertTrue(starts.getOrDefault("fmm:pet/drift", 0) >= 3,
+                    "drift sets off again and again in a minute; starts " + starts + ", ticks " + ticks);
+            assertTrue(starts.getOrDefault("fmm:pet/day_perch", 0) >= 2,
+                    "day_perch still settles it between drifts; starts " + starts + ", ticks " + ticks);
+        }
+        assertEquals(List.of(), warnings);
+    }
+
+    /**
+     * One pet's life as MagmaCore's Brain leads it, priorities and pre-emption included. Each tick, first every stopped
+     * behavior whose probe is due and whose can_start passes takes its controls, unless a running behavior that comes
+     * first (a lower priority number, then its identifier, as MagmaCore's lease book orders them) holds one; it stops
+     * the running ones it displaces. Then every running behavior continues or stops. Counts each behavior's starts and
+     * ticks.
+     */
+    private static void runArbitrated(PetPrograms.Program program, StubPet pet, long lifeTicks,
+                                      Map<String, Integer> starts, Map<String, Integer> ticks) {
+        Map<String, LuaTable> settings = new HashMap<>();
+        program.settings().forEach((module, values) -> settings.put(module, strictSettings(values)));
+        LuaTable none = strictSettings(Map.of());
+        MindProgram instance = program.definition().instantiate((table, context, contribution) -> {
+            pet.module = contribution;
+            table.set("pet", pet.table);
+            table.set("settings", settings.getOrDefault(contribution, none));
+        });
+        Comparator<MindBehavior> order = Comparator.comparingInt(MindBehavior::priority)
+                .thenComparing(MindBehavior::identifier);
+        List<MindBehavior> behaviors = new ArrayList<>(instance.behaviors());
+        behaviors.sort(order);
+        Map<Object, Object> memory = new HashMap<>();
+        Map<MindControl, MindBehavior> owners = new EnumMap<>(MindControl.class);
+        Set<MindBehavior> running = new LinkedHashSet<>();
+        Coverage ignored = new Coverage();
+        for (long tick = 0; tick < lifeTicks; tick++) {
+            pet.tick = tick;
+            MindContext context = context(memory, tick, pet);
+            for (MindBehavior behavior : behaviors) {
+                if (running.contains(behavior) || tick % behavior.probeInterval() != 0) continue;
+                pet.leases = null;
+                if (!behavior.canStart(context)) continue;
+                Set<MindBehavior> displaced = new LinkedHashSet<>();
+                boolean refused = false;
+                for (MindControl control : behavior.controls()) {
+                    MindBehavior current = owners.get(control);
+                    if (current == null) continue;
+                    if (order.compare(current, behavior) <= 0) refused = true;
+                    else displaced.add(current);
+                }
+                if (refused) continue;
+                for (MindBehavior current : displaced) {
+                    stop(current, pet, context, MindStopReason.PREEMPTED, ignored);
+                    running.remove(current);
+                    owners.values().removeIf(owner -> owner == current);
+                }
+                for (MindControl control : behavior.controls()) owners.put(control, behavior);
+                pet.leases = behavior.controls();
+                behavior.start(context);
+                running.add(behavior);
+                starts.merge(behavior.identifier(), 1, Integer::sum);
+            }
+            for (MindBehavior behavior : behaviors) {
+                if (!running.contains(behavior)) continue;
+                pet.leases = behavior.controls();
+                if (behavior.canContinue(context)) {
+                    behavior.tick(context);
+                    ticks.merge(behavior.identifier(), 1, Integer::sum);
+                } else {
+                    stop(behavior, pet, context, MindStopReason.COMPLETED, ignored);
+                    running.remove(behavior);
+                    owners.values().removeIf(owner -> owner == behavior);
+                }
+            }
+        }
     }
 
     /**
