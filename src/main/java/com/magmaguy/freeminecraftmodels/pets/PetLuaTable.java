@@ -864,8 +864,9 @@ public final class PetLuaTable {
             Location here = body.getLocation();
             double dx = to.getX() - here.getX(), dz = to.getZ() - here.getZ();
             double across = Math.sqrt(dx * dx + dz * dz);
+            // Standing on the point needs no look at the ground between.
             if (to.getWorld() != here.getWorld() || body.isInWater() || across > ONTO_REACH
-                    || Math.abs(to.getY() - here.getY()) > ONTO_RISE || !level(here, to)) {
+                    || Math.abs(to.getY() - here.getY()) > ONTO_RISE || (across > ONTO_DONE && !level(here, to))) {
                 stoppedOn = null;
                 return steer(context, to, cruise);
             }
