@@ -1,7 +1,8 @@
 -- At night or in falling snow, pets of one kind gather into a tight huddle against the cold, as emperor penguins do.
 -- Once at least min_group of them, itself included, are within radius blocks, each takes a spot on a small ring round
 -- the group's middle, ring blocks out, and shuffles a little further round it every few seconds, so the huddle slowly
--- turns. Wild pets huddle with wild ones, owned pets with their owner's other pets of the kind.
+-- turns. On a slope or beside a drop it keeps to spots on the group's own level. Wild pets huddle with wild ones, owned
+-- pets with their owner's other pets of the kind.
 
 -- seconds in ticks: at least a second, and finite however large the setting.
 local function seconds_ticks(seconds)
@@ -19,6 +20,23 @@ local function ring_point(c, center, angle)
     local ring = math.max(0, c.settings.ring)
     return { world = center.world, x = center.x + math.cos(angle) * ring, y = center.y,
              z = center.z + math.sin(angle) * ring }
+end
+
+-- Whether the ground at its spot on the ring is within a block of the middle's height.
+local function level_spot(c, center, angle)
+    local point = ring_point(c, center, angle)
+    point.y = center.y + 1.5
+    local top = c.pet:ground_below(point, 4)
+    return top ~= nil and math.abs(top - center.y) <= 1
+end
+
+-- The first angle from this one, half a radian round at a time, whose spot is on the group's level; nil when none is.
+local function level_angle(c, center, angle)
+    for _ = 1, 13 do
+        if level_spot(c, center, angle) then return angle end
+        angle = angle + 0.5
+    end
+    return nil
 end
 
 return ai.module {
@@ -63,7 +81,8 @@ return ai.module {
                 return true
             end,
             start = function(c)
-                c.memory:set('huddle_angle', math.random() * math.pi * 2)
+                local angle = math.random() * math.pi * 2
+                c.memory:set('huddle_angle', level_angle(c, c.memory:get('huddle_center'), angle) or angle)
                 c.memory:set('huddle_next_check', c.tick + 40)
                 c.memory:set('huddle_next_step', c.tick + 60 + math.random(0, 59))
             end,
@@ -72,8 +91,9 @@ return ai.module {
                 if center == nil then return end
                 local angle = c.memory:get('huddle_angle') or 0
                 if c.tick >= (c.memory:get('huddle_next_step') or 0) then
-                    -- A shuffle a little further round, every 3 to 6 seconds.
-                    angle = angle + 0.2 + math.random() * 0.3
+                    -- A shuffle a little further round, every 3 to 6 seconds, past spots off the group's level; with
+                    -- none on it, it stays put.
+                    angle = level_angle(c, center, angle + 0.2 + math.random() * 0.3) or angle
                     c.memory:set('huddle_angle', angle)
                     c.memory:set('huddle_next_step', c.tick + 60 + math.random(0, 59))
                 end

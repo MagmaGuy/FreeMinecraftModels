@@ -116,7 +116,7 @@ class ShippedPetModulesTest {
      * round the owner ends within the pet's roam range: 0.8 of its follow range, 4 here, where the owner is on the move.
      * strike_back is new too: a wild pet's headbutt within 1 block, 2 damage and no effect, with a goat's ram impact and
      * crit particles. The penguin's creature behaviors came after: a huddle of 3 within 8 blocks shuffling round at
-     * 0.05; a fishing trip to water 1 to 3 blocks deep within 8 blocks (an owned pet's within its roam range of its
+     * 0.05 to spots on its level, ground looked for 4 blocks down; a fishing trip to water 1 to 3 blocks deep within 8 blocks (an owned pet's within its roam range of its
      * owner), on to spots within 4 of each other at 0.15, and a cod for the owner within 3 blocks; a slide of 4 to 12
      * blocks over snow and ice at 0.35 playing slide; single file behind a wandering pet within 8 blocks at 0.2; flint
      * for the owner from 2 blocks off (SURE); and fish within 8 blocks, eaten within 0.5 for 2 half hearts at 0.2.
@@ -152,7 +152,8 @@ class ShippedPetModulesTest {
             "fmm:pet/idle_look c.perception:nearest_player(8)", "fmm:pet/idle_look c.actuator:look_at(L)",
             "fmm:pet/swim water_point(L, 5, 0.5, 3)", "fmm:pet/swim water_point(L, 4, 0.5, 3)",
             "fmm:pet/swim distance_to(L)", "fmm:pet/swim steer_to(L, 0.225)", "fmm:pet/swim stop()",
-            "fmm:pet/huddle kin_center(8, 3)", "fmm:pet/huddle steer_onto(L, 0.225)", "fmm:pet/huddle stop()",
+            "fmm:pet/huddle kin_center(8, 3)", "fmm:pet/huddle ground_below(L, 4)", "fmm:pet/huddle steer_onto(L, 0.225)",
+            "fmm:pet/huddle stop()",
             "fmm:pet/fishing_trip water_point(L, 8, 1, 3)", "fmm:pet/fishing_trip water_point(L, 4, 1, 3)",
             "fmm:pet/fishing_trip distance_to(L)", "fmm:pet/fishing_trip steer_to(L, 0.225)",
             "fmm:pet/fishing_trip gift(COD, 1, 3, entity.cod.flop, 1, 1)", "fmm:pet/fishing_trip stop()",
