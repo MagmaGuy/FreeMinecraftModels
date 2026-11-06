@@ -567,4 +567,96 @@ class PetLuaTableTest {
         assertTrue(path.steer(walker.context(), target, 0.15D));
         assertEquals(6, walker.requests.size(), "moving again asks for a fresh path");
     }
+
+    /** Stone up to y 63 with air above it, and when walled a stone block at x 1, y 64, z 0. */
+    private static World ground(boolean walled) {
+        World world = world("ground");
+        return stub(World.class, (proxy, method, args) -> switch (method.getName()) {
+            case "getMinHeight" -> -64;
+            case "getMaxHeight" -> 320;
+            case "getBlockAt" -> {
+                int x = (Integer) args[0], y = (Integer) args[1], z = (Integer) args[2];
+                Material type = y <= 63 || walled && x == 1 && y == 64 && z == 0 ? Material.STONE : Material.AIR;
+                yield stub(org.bukkit.block.Block.class, (block, call, ignored) -> switch (call.getName()) {
+                    case "getType" -> type;
+                    case "isPassable" -> type == Material.AIR;
+                    default -> plain(block, call, ignored);
+                });
+            }
+            default -> method.invoke(world, args);
+        });
+    }
+
+    /** The calls steer_onto's walk makes for a body standing at x 0.5, y 64, z 0.5, as "name x speed". */
+    private static List<String> steerOnto(World world, boolean inWater, Location target, double cruise) {
+        List<String> calls = new ArrayList<>();
+        MindActuator actuator = stub(MindActuator.class, (proxy, method, args) -> switch (method.getName()) {
+            case "moveTo", "moveDirect" -> {
+                calls.add(String.format("%s %.2f %.2f", method.getName(), ((Location) args[0]).getX(), (Double) args[1]));
+                yield true;
+            }
+            case "stopMoving" -> {
+                calls.add("stopMoving");
+                yield null;
+            }
+            default -> plain(proxy, method, args);
+        });
+        MindPerception perception = stub(MindPerception.class, (proxy, method, args) ->
+                method.getName().equals("navigation") ? MindNavigationStatus.idle() : plain(proxy, method, args));
+        LivingEntity body = stub(LivingEntity.class, (proxy, method, args) -> switch (method.getName()) {
+            case "getLocation" -> new Location(world, 0.5, 64, 0.5);
+            case "isInWater" -> inWater;
+            default -> plain(proxy, method, args);
+        });
+        new PetLuaTable.WalkPath().steerOnto(new MindContext(body, 0L, 1L, stub(MindMemoryView.class, PetLuaTableTest::plain),
+                perception, actuator), target, cruise);
+        return calls;
+    }
+
+    @Test
+    void steerOntoWalksTheLastStretchStraightOntoItsPoint() {
+        World ground = ground(false);
+        assertEquals(List.of("moveTo 5.50 0.60"), steerOnto(ground, false, new Location(ground, 5.5, 64, 0.5), 0.15D),
+                "far off it paths, as steer_to does");
+        assertEquals(List.of("moveDirect 2.00 0.60"), steerOnto(ground, false, new Location(ground, 2, 64, 0.5), 0.15D),
+                "where a path would end about a block short, it walks straight at the point");
+        assertEquals(List.of("moveDirect 0.90 0.24"), steerOnto(ground, false, new Location(ground, 0.9, 64, 0.5), 0.15D),
+                "easing off over the last block");
+        assertEquals(List.of("moveDirect 0.60 0.18"), steerOnto(ground, false, new Location(ground, 0.6, 64, 0.62), 0.15D),
+                "never under 0.3 of its speed");
+        assertEquals(List.of("stopMoving"), steerOnto(ground, false, new Location(ground, 0.55, 64, 0.5), 0.15D),
+                "on the point it stands still");
+        assertEquals(List.of("moveTo 1.70 0.60"), steerOnto(ground, false, new Location(ground, 1.7, 65, 0.5), 0.15D),
+                "a point a block up is a climb for the path");
+        assertEquals(List.of("moveTo 1.70 0.60"), steerOnto(ground, true, new Location(ground, 1.7, 64, 0.5), 0.15D),
+                "a body in water keeps to its path");
+        World walled = ground(true);
+        assertEquals(List.of("moveTo 1.70 0.60"), steerOnto(walled, false, new Location(walled, 1.7, 64, 0.5), 0.15D),
+                "a block in the way is for the path to go round");
+        assertEquals(List.of("stopMoving"), steerOnto(ground, false, new Location(ground, 1.7, 64, 0.5), 0D),
+                "a cruise of 0 stops it");
+    }
+
+    @Test
+    void steerOntoStopsOnItsPointOnce() {
+        World ground = ground(false);
+        List<String> calls = new ArrayList<>();
+        MindActuator actuator = stub(MindActuator.class, (proxy, method, args) -> {
+            calls.add(method.getName());
+            return plain(proxy, method, args);
+        });
+        LivingEntity body = stub(LivingEntity.class, (proxy, method, args) -> method.getName().equals("getLocation")
+                ? new Location(ground, 0.5, 64, 0.5) : plain(proxy, method, args));
+        MindContext context = new MindContext(body, 0L, 1L, stub(MindMemoryView.class, PetLuaTableTest::plain),
+                stub(MindPerception.class, PetLuaTableTest::plain), actuator);
+        PetLuaTable.WalkPath path = new PetLuaTable.WalkPath();
+        Location spot = new Location(ground, 0.6, 64, 0.5);
+        assertTrue(path.steerOnto(context, spot, 0.15D));
+        assertTrue(path.stoppedNow());
+        assertTrue(path.steerOnto(context, spot, 0.15D));
+        assertFalse(path.stoppedNow(), "standing on the same point it does not stop again");
+        assertEquals(List.of("stopMoving"), calls);
+        assertTrue(path.steerOnto(context, new Location(ground, 0.45, 64, 0.5), 0.15D));
+        assertEquals(List.of("stopMoving", "stopMoving"), calls, "a new point under it stops it again");
+    }
 }

@@ -76,7 +76,8 @@ return ai.module {
                     c.memory:set('huddle_angle', angle)
                     c.memory:set('huddle_next_step', c.tick + 60 + math.random(0, 59))
                 end
-                c.pet:steer_to(ring_point(c, center, angle), c.settings.speed * c.pet.species.speed)
+                -- Onto its spot: the shuffles are a fraction of a block, and a path stops about a block short.
+                c.pet:steer_onto(ring_point(c, center, angle), c.settings.speed * c.pet.species.speed)
             end,
             stop = function(c)
                 c.memory:forget('huddle_center')
