@@ -573,10 +573,11 @@ public final class PetManager {
     /**
      * Moves a pet onto a new body of another vanilla carrier where its body stands: a ridden penguin that dives swims
      * as a nautilus its rider's client steers. Its Mind (still released if it was), health and look come along; the
-     * old body and its model go. Returns the new body, or null with the pet left as it was when the new one cannot
+     * old body and its model go. The new body faces {@code facing}'s yaw and pitch, or the old body's way when it is
+     * null, before anyone sees it. Returns the new body, or null with the pet left as it was when the new one cannot
      * spawn.
      */
-    LivingEntity rebody(PetControl control, String carrier) {
+    LivingEntity rebody(PetControl control, String carrier, Location facing) {
         LivingEntity old = control.body();
         DynamicEntity oldModel = control.modeled();
         MindHandle mind = control.mind();
@@ -617,6 +618,8 @@ public final class PetManager {
         dress(control, entity, modeled);
         // Its first frame carries on from the old model's, so the switch of bodies does not show in its animation.
         modeled.getAnimationComponent().continueFrom(oldModel.getAnimationComponent());
+        // Before anyone sees it: a client turns a horse's new rider to the horse's view.
+        if (facing != null) entity.setRotation(facing.getYaw(), facing.getPitch());
         // Shown now, in the tick the old model goes, rather than at the next viewer refresh up to 4 ticks later: the pet
         // never vanishes, and its rider's client gets the new body to steer at once.
         modeled.getSkeleton().getSkeletonWatchers().tickPrimaryThread();
