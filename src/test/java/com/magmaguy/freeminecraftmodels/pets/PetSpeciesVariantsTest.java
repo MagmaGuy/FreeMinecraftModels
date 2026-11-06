@@ -296,20 +296,32 @@ class PetSpeciesVariantsTest {
     }
 
     @Test
-    void aRareFlockPicksTheRarerColoursMoreOften() {
+    void aOneColourClusterPicksTheRarerColoursMoreOften() {
         List<PetSpecies.Variant> variants = List.of(new PetSpecies.Variant(BLUE, 9D, List.of()),
                 new PetSpecies.Variant(WAR, 1D, List.of()), new PetSpecies.Variant("em_pet_jellyfish_lost", 0D, List.of()));
         Random random = new Random(11);
         int war = 0, blue = 0;
         for (int pick = 0; pick < 2000; pick++) {
-            String model = PetSpecies.pickRare(variants, random);
+            String model = PetSpecies.pickRare(variants, random, variant -> true);
             if (WAR.equals(model)) war++;
             else if (BLUE.equals(model)) blue++;
-            else throw new AssertionError("a colour without a share joined a flock: " + model);
+            else throw new AssertionError("a colour without a share made a cluster: " + model);
         }
         // Inverse weights 1/9 and 1: the man o' war leads nine to one.
         assertTrue(war > blue * 6, war + " man o' war against " + blue + " blue");
-        assertNull(PetSpecies.pickRare(List.of(), random), "no colours: the flock keeps the usual picks");
+        assertNull(PetSpecies.pickRare(List.of(), random, variant -> true), "no colours: the cluster keeps the usual picks");
+    }
+
+    @Test
+    void aOneColourClusterWearsAColourThatLivesWhereItIsStocked() {
+        // The man o' war is the rarer colour but lives only in warm oceans, so a cluster on the plains is all blue.
+        List<PetSpecies.Variant> variants = List.of(
+                new PetSpecies.Variant(BLUE, 9D, List.of(), null, null, Set.of(PLAINS), 1D),
+                new PetSpecies.Variant(WAR, 1D, List.of(), null, null, Set.of(WARM_OCEAN), 1D));
+        Random random = new Random(5);
+        for (int pick = 0; pick < 200; pick++)
+            assertEquals(BLUE, PetSpecies.pickRare(variants, random, variant -> variant.allowsBiome(PLAINS)));
+        assertNull(PetSpecies.pickRare(variants, random, variant -> false), "no colour lives there");
     }
 
     @Test

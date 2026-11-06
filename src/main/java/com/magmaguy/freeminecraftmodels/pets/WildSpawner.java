@@ -18,12 +18,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 
 /**
  * Wild pets spawn the way vanilla's farm animals do. Most come with the world: as a chunk generates, each species
  * stocks it with groups as often as a vanilla animal of the same weight stocks a plains chunk, so a species of weight 8
- * in groups of 4 is as common as cows. They stay there, waiting in the {@link WildPetStore} while the chunk is unloaded. On top
+ * in groups of 4 is as common as cows. Now and then a group is a cluster instead, a much bigger gathering (see
+ * {@link PetSpecies.Cluster}). They stay there, waiting in the {@link WildPetStore} while the chunk is unloaded. On top
  * of that, a pass every {@code wildSpawnIntervalTicks} tops up the loaded chunks within 8 chunks of each player.
  * A top-up try picks a random column and height in a chunk, then sends out three packs from it. Each pack walks a
  * few blocks at a time and picks its species by weight at the first spot 24 to 128 blocks from the nearest player,
@@ -79,20 +81,69 @@ final class WildSpawner {
                 // A column outside the species' biomes, or a biome whose colours are all rare, gets no group this time.
                 Location first = surfaceSpot(pet, world, x, z);
                 if (first == null || random.nextDouble() >= pet.wildOdds(first)) continue;
-                int group = pet.wildSpawn().minGroup() + random.nextInt(pet.wildSpawn().maxGroup() - pet.wildSpawn().minGroup() + 1);
-                int startX = x, startZ = z;
-                for (int member = 0; member < group; member++) {
-                    boolean placed = false;
-                    for (int attempt = 0; !placed && attempt < GENERATION_TRIES; attempt++) {
-                        Location at = surfaceSpot(pet, world, x, z);
-                        placed = at != null && manager.spawnWild(pet, at) != null;
-                        int[] next = generationStep(startX, startZ, x, z, minX, minZ, random);
-                        x = next[0];
-                        z = next[1];
-                    }
-                }
+                place(manager, pet, world, x, z, gathering(pet.wildSpawn(), () -> pet.pickRareWildVariant(random, first),
+                        random), false, random);
             }
         }
+    }
+
+    /** How many a stocked group has, and the colour every one of them wears, or null for each member's own pick. */
+    record Gathering(int size, String colour) {
+    }
+
+    /**
+     * A group as a new chunk gets it: at the cluster's chance, a cluster, which at its rareColourChance wears the one
+     * colour {@code rareColour} gives; otherwise one of the species' usual groups.
+     */
+    static Gathering gathering(PetSpecies.WildSpawn wild, Supplier<String> rareColour, Random random) {
+        PetSpecies.Cluster cluster = wild.cluster();
+        if (cluster.chance() > 0D && random.nextDouble() < cluster.chance())
+            return new Gathering(between(cluster.minSize(), cluster.maxSize(), random),
+                    random.nextDouble() < cluster.rareColourChance() ? rareColour.get() : null);
+        return new Gathering(between(wild.minGroup(), wild.maxGroup(), random), null);
+    }
+
+    /**
+     * An admin's test cluster at this spot: the species' cluster size, all in {@code colour}, or without one in a rare
+     * colour as often as its clusters wear one, placed on any open surface in the spot's chunk. Returns how many stand.
+     */
+    static int testCluster(PetManager manager, PetSpecies pet, Location at, String colour, Random random) {
+        PetSpecies.Cluster cluster = pet.wildSpawn().cluster();
+        if (colour == null && random.nextDouble() < cluster.rareColourChance()) colour = pet.pickRareVariant(random);
+        Gathering gathering = new Gathering(between(cluster.minSize(), cluster.maxSize(), random), colour);
+        return place(manager, pet, at.getWorld(), at.getBlockX(), at.getBlockZ(), gathering, true, random);
+    }
+
+    /**
+     * Places a group's members around a column, as vanilla stocks a chunk: each member gets 4 spots, stepping up to 4
+     * blocks at a time and staying in the column's chunk. Stocking places them only where the species may stand wild;
+     * a test cluster ({@code anywhere}) takes any open surface, and a member there without the group's colour picks
+     * one by weight. Returns how many stand.
+     */
+    private static int place(PetManager manager, PetSpecies pet, World world, int x, int z, Gathering gathering,
+                             boolean anywhere, Random random) {
+        int minX = (x >> 4) << 4, minZ = (z >> 4) << 4, startX = x, startZ = z, standing = 0;
+        for (int member = 0; member < gathering.size(); member++) {
+            boolean placed = false;
+            for (int attempt = 0; !placed && attempt < GENERATION_TRIES; attempt++) {
+                Location at = anywhere ? openSpot(pet, world, x, z) : surfaceSpot(pet, world, x, z);
+                if (at != null) {
+                    String colour = gathering.colour() != null ? gathering.colour()
+                            : anywhere ? pet.pickVariant(random) : null;
+                    placed = (colour == null ? manager.spawnWild(pet, at) : manager.spawnWild(pet, at, colour)) != null;
+                }
+                int[] next = generationStep(startX, startZ, x, z, minX, minZ, random);
+                x = next[0];
+                z = next[1];
+            }
+            if (placed) standing++;
+        }
+        return standing;
+    }
+
+    /** A number from min to max, both included. */
+    static int between(int min, int max, Random random) {
+        return min + random.nextInt(max - min + 1);
     }
 
     /**
@@ -130,10 +181,15 @@ final class WildSpawner {
 
     /** Where a member stands when its column is stocked: on the surface, or for swimmers in the top water block. */
     private static Location surfaceSpot(PetSpecies pet, World world, int x, int z) {
+        Location at = openSpot(pet, world, x, z);
+        return at != null && pet.mayStandWild(at) ? at : null;
+    }
+
+    /** That spot whatever the species' biomes, light and heights, as a test spawn takes it. */
+    private static Location openSpot(PetSpecies pet, World world, int x, int z) {
         int surface = world.getHighestBlockYAt(x, z);
         int y = pet.wildSpawn().placement() == PetSpecies.Placement.WATER ? surface : surface + 1;
-        Location at = standingSpot(world, x, y, z, pet.wildSpawn().placement());
-        return at != null && pet.mayStandWild(at) ? at : null;
+        return standingSpot(world, x, y, z, pet.wildSpawn().placement());
     }
 
     // ---- topping up around players -----------------------------------------------------------------------------
@@ -203,7 +259,7 @@ final class WildSpawner {
                     // A biome whose colours are all rare gets their packs as rarely; this pack is skipped.
                     Location first = spot(pet, world, players, x, startY, z);
                     if (first == null || random.nextDouble() >= pet.wildOdds(first)) break;
-                    steps = pet.wildSpawn().minGroup() + random.nextInt(pet.wildSpawn().maxGroup() - pet.wildSpawn().minGroup() + 1);
+                    steps = between(pet.wildSpawn().minGroup(), pet.wildSpawn().maxGroup(), random);
                 }
                 Location at = spot(pet, world, players, x, startY, z);
                 if (at == null) continue;
