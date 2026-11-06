@@ -615,6 +615,8 @@ public final class PetManager {
         byBody.put(entity.getUniqueId(), control);
         control.attach(entity, modeled, mind);
         dress(control, entity, modeled);
+        // Its first frame carries on from the old model's, so the switch of bodies does not show in its animation.
+        modeled.getAnimationComponent().continueFrom(oldModel.getAnimationComponent());
         // The old body leaves no pet behind: no map holds it now, so its removal events find nothing.
         oldModel.remove();
         if (old.isValid()) old.remove();

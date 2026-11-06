@@ -104,6 +104,14 @@ public class AnimationComponent {
         if (animationManager != null) animationManager.setIdleSwimAnimation(animationName);
     }
 
+    /**
+     * Picks up where another model's animations left off, for a model that takes its place on another mob; see
+     * {@link AnimationManager#continueFrom}. Call before removing the other model, after this one's animation setters.
+     */
+    public void continueFrom(AnimationComponent previous) {
+        if (animationManager != null && previous != null) animationManager.continueFrom(previous.animationManager);
+    }
+
     /** Whether the model's mob swims now; the model reports it each tick before the animations tick. */
     public void setSwimming(boolean swimming) {
         if (animationManager != null) animationManager.setSwimming(swimming);

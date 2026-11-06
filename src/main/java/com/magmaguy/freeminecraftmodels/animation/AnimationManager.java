@@ -63,6 +63,21 @@ public class AnimationManager {
                               Predicate<AnimationManager> when, IntSupplier fadeTicks) {
     }
 
+    /**
+     * What a model showed when another took over from it: its state, its base and action by name and ticks played, the
+     * ticks left of its fade, the base pose its viewers saw last (null when its bones differ), and what it had observed.
+     */
+    private record Handover(Base locomotion, boolean takeover, String baseName, boolean baseLoop, int baseTicks,
+                            String actionName, boolean actionLoop, int actionTicks, boolean actionCustom, int fadeLeft,
+                            Pose pose, boolean moving, boolean steered, double lastX, double lastZ, boolean swimming,
+                            int lifeTicks, double distanceMoved, int idleTicks, int longIdleWait) {
+    }
+
+    // Ticks a model that took over from another holds the state it picked up before the machine reads its new mob's
+    // movement. A rider's client starts moving the new mob a tick or two after it is seated, and until then it stands
+    // still. A rider getting on or off ends the hold at once.
+    private static final int HANDOVER_HOLD_TICKS = 5;
+
     // The first row that applies wins, so each ridden row comes before the swimming ones and each swimming row before
     // the walking or resting one it replaces. A swimmer swims while it moves, or walks when the model has no swim;
     // holding still it plays its idle swim, or idles when the model has none. Swimming reads no entity: the model
@@ -166,6 +181,10 @@ public class AnimationManager {
     private int longIdleWait = -1;
     // Where a steered mount was last seen; its client moves it with absolute positions, so it has no velocity here.
     private double lastX = Double.NaN, lastZ = Double.NaN;
+    // Ticks left in which the machine keeps the state this model picked up from another (see continueFrom), as long as
+    // a player steers its mob exactly when one steered the other's.
+    private int holdTicks = 0;
+    private boolean heldSteered = false;
 
     // Cross-fade into the base: from an outgoing animation that keeps playing, or from a frozen pose.
     private Playback fadeFrom;
@@ -348,6 +367,79 @@ public class AnimationManager {
     }
 
     /**
+     * Picks up where another model left off, for a model that takes its place on another mob: a pet moving onto its
+     * diving body. Its first frame shows the state the other was in (riding, swimming, walking, a custom animation or
+     * an attack), at the same tick when it is the same animation; when the new mob plays another animation for that
+     * state, such as a nautilus body's swim in place of a land body's ride, it starts that one cross-faded from the pose
+     * the other model last showed. The other model must not be removed yet. Call after this model's own setters (ridden
+     * and swim animations), which apply first.
+     */
+    public void continueFrom(AnimationManager previous) {
+        if (previous == null || previous == this) return;
+        Handover handover;
+        // The model clock ticks the other model under its skeleton's lock.
+        synchronized (previous.modeledEntity.getSkeleton()) {
+            handover = previous.handover(bones.length);
+        }
+        if (handover != null) requests.add(() -> adopt(handover));
+    }
+
+    /** What this model shows now, for a model of {@code bones} bones taking over; null once it is dying. */
+    private Handover handover(int bones) {
+        if (dead || locomotion == Base.DEATH) return null;
+        Pose pose = null;
+        if (bones == this.bones.length) {
+            refreshPose();
+            pose = new Pose(bones);
+            pose.copyFrom(basePose);
+        }
+        return new Handover(locomotion, takeover, base != null ? base.name() : null, base != null && base.loop,
+                base != null ? base.ticks() : 0, action != null ? action.name() : null, action != null && action.loop,
+                action != null ? action.ticks() : 0, actionCustom, fadeActive() ? fadeTicks - fadeElapsed : 0, pose,
+                moving, steered, lastX, lastZ, swimming, lifeTicks, distanceMoved, idleTicks, longIdleWait);
+    }
+
+    /** Takes the other model's place: its state, playbacks and observations, held while the new mob settles. */
+    private void adopt(Handover handover) {
+        if (dead || locomotion == Base.DEATH) return;
+        moving = handover.moving();
+        steered = handover.steered();
+        lastX = handover.lastX();
+        lastZ = handover.lastZ();
+        swimming = handover.swimming();
+        lifeTicks = handover.lifeTicks();
+        distanceMoved = handover.distanceMoved();
+        idleTicks = handover.idleTicks();
+        longIdleWait = handover.longIdleWait();
+        endAction();
+        Animation custom = handover.takeover() ? named(handover.baseName()) : null;
+        boolean known = animationFor(handover.locomotion()) != null;
+        locomotion = known ? handover.locomotion() : Base.IDLE;
+        takeover = custom != null;
+        Playback next = takeover ? new Playback(custom, handover.baseLoop(), handover.baseTicks())
+                : locomotionPlayback(locomotion);
+        boolean same = next != null && next.name().equals(handover.baseName());
+        if (same && !takeover) next = new Playback(next.animation, next.loop, handover.baseTicks());
+        if (base != null) modeledEntity.getParticleComponent().onAnimationStopped(base.animation);
+        base = next;
+        clearFade();
+        int fade = same ? handover.fadeLeft() : locomotionFade();
+        if (fade > 0 && handover.pose() != null) {
+            frozenPose.copyFrom(handover.pose());
+            fadeFromFrozen = true;
+            fadeTicks = fade;
+        }
+        Animation acting = handover.actionName() != null ? named(handover.actionName()) : null;
+        if (acting != null) {
+            action = new Playback(acting, handover.actionLoop(), handover.actionTicks());
+            actionCustom = handover.actionCustom();
+        }
+        // A state this model has no animation for is left to the machine at once.
+        holdTicks = known || takeover ? HANDOVER_HOLD_TICKS : 0;
+        heldSteered = steered;
+    }
+
+    /**
      * The model's animation by this name, by its lower case, or by the other spelling of a renamed one (a model's
      * long_idle for idle.long, and the other way round); null for a null name or one the model lacks.
      */
@@ -435,6 +527,11 @@ public class AnimationManager {
     private void runTransitions() {
         if (locomotion == Base.DEATH) return;
         try {
+            if (holdTicks > 0 && steered == heldSteered) {
+                holdTicks--;
+                return;
+            }
+            holdTicks = 0;
             boolean hasEntity = modeledEntity.getUnderlyingEntity() != null;
             for (Transition transition : TRANSITIONS) {
                 if (transition.from() != locomotion) continue;
