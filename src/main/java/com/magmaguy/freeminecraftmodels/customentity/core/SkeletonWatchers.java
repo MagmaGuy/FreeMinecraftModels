@@ -294,7 +294,7 @@ public class SkeletonWatchers {
         // Bones that ride the body need every viewer's client to track it: one viewer past the body's tracking range
         // puts all viewers back on per-bone teleports, which doubles their packets and snaps the animation. The server
         // is told to track the body as far as the model is kept, so the check below only turns away viewers whose own
-        // view distance is shorter. A model given its own view distance (migration flocks) is meant to be seen from
+        // view distance is shorter. A model given its own view distance (setViewDistanceOverride) is meant to be seen from
         // farther, so it keeps its full range.
         var modeledEntity = skeleton.getModeledEntity();
         Entity body = modeledEntity == null ? null : modeledEntity.getRiddenBody();

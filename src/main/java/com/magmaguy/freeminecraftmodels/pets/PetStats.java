@@ -5,8 +5,8 @@ import java.util.random.RandomGenerator;
 
 /**
  * A pet's stats, each a factor of its species' base value: 1 is the base. health scales its max health, speed every
- * cruise its modules steer at, sting each sting's damage and poison how long each sting's effect lasts. Wild, given and
- * migrating pets roll each in {@link #WILD_MIN} to {@link #WILD_MAX}; a baby gets its parents' average, give or take
+ * cruise its modules steer at, sting each sting's damage and poison how long each sting's effect lasts. Wild and given
+ * pets roll each in {@link #WILD_MIN} to {@link #WILD_MAX}; a baby gets its parents' average, give or take
  * {@link #WOBBLE}, kept between {@link #FLOOR} and its species' cap, so careful breeding climbs. Plain fields for Gson,
  * as the player's pet records keep them.
  */

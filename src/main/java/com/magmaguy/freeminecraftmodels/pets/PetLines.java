@@ -45,15 +45,14 @@ final class PetLines {
     }
 
     /**
-     * Kin: pets of one species, both wild or both of one owner, the other neither migrating nor carrying a rider.
-     * A pet is not its own kin.
+     * Kin: pets of one species, both wild or both of one owner, the other carrying no rider. A pet is not its own kin.
      */
     static boolean kin(PetControl pet, PetControl other) {
         if (other == null || other == pet || !other.species().id().equals(pet.species().id())) return false;
         if (other.isWild() != pet.isWild()) return false;
         if (!pet.isWild() && !pet.ownerId().equals(other.ownerId())) return false;
         LivingEntity body = other.body();
-        return other.route() == null && body != null && body.isValid() && body.isEmpty();
+        return body != null && body.isValid() && body.isEmpty();
     }
 
     /**

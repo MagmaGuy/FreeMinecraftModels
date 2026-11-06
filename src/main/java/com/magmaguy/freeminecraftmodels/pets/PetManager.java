@@ -13,7 +13,6 @@ import com.magmaguy.freeminecraftmodels.pets.behavior.PetBehaviorEntry;
 import com.magmaguy.freeminecraftmodels.pets.behavior.PetFailureLog;
 import com.magmaguy.freeminecraftmodels.pets.behavior.PetPrograms;
 import com.magmaguy.freeminecraftmodels.pets.interactions.PetInteractionRuntime;
-import com.magmaguy.freeminecraftmodels.pets.interactions.PetInteractions;
 import com.magmaguy.magmacore.ai.MindBodyLocomotion;
 import com.magmaguy.magmacore.ai.MindBodyProfile;
 import com.magmaguy.magmacore.ai.MindHandle;
@@ -55,7 +54,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -100,8 +98,6 @@ public final class PetManager {
     private PetLuaTable.Warnings warnings;
     // Each species and cause a spawn was refused for this load, so the retries stay quiet.
     private final Set<String> refusals = new HashSet<>();
-    // The species whose migrants all run migrate, so their night flocks fly.
-    private final Set<String> migrating = new HashSet<>();
     private final Map<UUID, PetControl> byBody = new HashMap<>();
     private final Map<UUID, PetCollection> collections = new HashMap<>();
     private final Map<UUID, Map<String, PetControl>> ownedBodies = new HashMap<>();
@@ -201,7 +197,7 @@ public final class PetManager {
         instance = null;
         if (manager == null) return;
         for (PetControl control : new ArrayList<>(manager.byBody.values())) {
-            if (control.isWild() && control.route() == null) manager.stash(control);
+            if (control.isWild()) manager.stash(control);
             else manager.despawn(control);
         }
         manager.flushWild();
@@ -275,8 +271,7 @@ public final class PetManager {
 
     /**
      * Loads the behavior modules from plugins/FreeMinecraftModels/pet_behaviors/, writing each missing shipped default
-     * there first, then builds the program of every species for its own model, each variant and its migration look.
-     * Building them all now puts every warning about a pet file's list in the load's log, and keeps the building out
+     * there first, then builds the program of every species for its own model and each variant. Building them all now puts every warning about a pet file's list in the load's log, and keeps the building out
      * of Lua callbacks, as PetPrograms requires.
      */
     private void loadBehaviors() {
@@ -289,42 +284,10 @@ public final class PetManager {
         for (PetSpecies pet : species.values()) {
             program(pet, pet.model());
             for (PetSpecies.Variant variant : pet.variants()) program(pet, variant.model());
-            checkMigrants(pet);
             PetSpecies.babyModelProblems(pet.file().getName(), pet.variants(), pet.babyModel(), PetManager::loaded)
                     .forEach(Logger::warn);
         }
         if (!species.isEmpty()) Logger.info("Loaded " + behaviors.names().size() + " pet behaviors.");
-    }
-
-    /**
-     * Builds the program of every model a migrant of the species may wear, and notes the species as one whose flocks
-     * fly when it flies and each of those programs runs migrate. Any other flock would hover, or fall, where it
-     * spawned, so it is never picked; a species whose migration section has a weight is warned about.
-     */
-    private void checkMigrants(PetSpecies pet) {
-        PetInteractions.Migration look = pet.interactions().migration();
-        Set<String> models = migrantModels(pet.model(), pet.variants(), look == null ? null : look.model(),
-                PetManager::loaded);
-        List<String> grounded = new ArrayList<>();
-        for (String model : models) if (!program(pet, model).runs("migrate")) grounded.add(model);
-        String problem = migrationProblem(pet.file().getName(), pet.locomotion(), pet.variants(), models, grounded);
-        if (problem == null) migrating.add(pet.id());
-        else if (look != null && look.weight() > 0D) Logger.warn(problem);
-    }
-
-    /**
-     * The models a migrant of the species may wear, as spawning settles them: the migration look's own model, or else
-     * each variant with a share of the picks, or the species' model when none has one. A model {@code loaded} says is
-     * not loaded settles to the species' model.
-     */
-    static Set<String> migrantModels(String speciesModel, List<PetSpecies.Variant> variants, String lookModel,
-                                     Predicate<String> loaded) {
-        Set<String> models = new LinkedHashSet<>();
-        if (lookModel != null) models.add(wornVariant(speciesModel, lookModel, loaded));
-        else for (PetSpecies.Variant variant : variants)
-            if (variant.weight() > 0D) models.add(wornVariant(speciesModel, variant.model(), loaded));
-        if (models.isEmpty()) models.add(speciesModel);
-        return models;
     }
 
     /** The variant a pet asked to wear this model runs as: the model when it is loaded, else the species' model. */
@@ -334,41 +297,6 @@ public final class PetManager {
 
     private static boolean loaded(String model) {
         return FileModelConverter.getModel(model) != null;
-    }
-
-    /**
-     * Why a night flock of the species would not fly its route, worded as the warning about its pet file, or null
-     * when it flies. Only a flying species can, and only when the program of every model its migrants may wear runs
-     * migrate; {@code grounded} holds those whose program does not. A model that is one of the variants is named as
-     * one; the species' model a missing variant settled to is named as a model.
-     */
-    static String migrationProblem(String fileName, MindBodyLocomotion locomotion, List<PetSpecies.Variant> variants,
-                                   Set<String> models, List<String> grounded) {
-        String start = fileName + ": has a migration section, but ";
-        String end = ", so its night flocks are not launched; ";
-        if (locomotion != MindBodyLocomotion.FLYING)
-            return start + "a " + locomotion.name() + " species cannot fly a migration route" + end
-                    + "remove the migration section.";
-        if (grounded.isEmpty()) return null;
-        String whose;
-        if (grounded.size() == models.size()) whose = "its behaviors don't";
-        else {
-            List<String> named = new ArrayList<>();
-            for (String model : grounded) {
-                boolean variant = variants.stream().anyMatch(listed -> listed.model().equals(model));
-                named.add((variant ? "variant " : "model ") + model);
-            }
-            whose = "the behaviors of " + String.join(", ", named) + " don't";
-        }
-        return start + whose + " run migrate" + end + "list migrate under behaviors: to launch them.";
-    }
-
-    /**
-     * Whether a night flock of the species flies its route: the species flies, and every model its migrants may wear
-     * runs the migrate module. Known for this load's species only.
-     */
-    public boolean canMigrate(PetSpecies pet) {
-        return migrating.contains(pet.id());
     }
 
     /** The program a pet of the species wearing this variant runs; the first call for a variant builds it. */
@@ -466,33 +394,17 @@ public final class PetManager {
         return spawn(pet, owner.getUniqueId(), record, record.model, record.baby, at, null);
     }
 
-    /**
-     * Puts a wild pet on a migration route: an ordinary wild pet of the species, wearing its full model, flying the
-     * route at the top of its Mind program. It is sizeMultiplier times the species' size, seen from viewDistance blocks
-     * and lit fully bright. A player who reaches it can tame it like any wild pet.
-     */
-    public PetControl spawnMigrant(PetSpecies pet, Location at, String model, double sizeMultiplier, int viewDistance,
-                                   MigrationRoute route) {
-        PetControl control = spawn(pet, null, null, model != null ? model : pet.pickVariant(ThreadLocalRandom.current()), false,
-                at, at, sizeMultiplier, null);
-        if (control == null) return null;
-        control.setRoute(route);
-        control.modeled().setViewDistanceOverride(viewDistance);
-        control.modeled().setBrightnessOverride(15, 15);
-        return control;
-    }
-
     private PetControl spawn(PetSpecies pet, UUID owner, PetRecord record, String model, boolean baby, Location at, Location home) {
-        return spawn(pet, owner, record, model, baby, at, home, 1D, null);
+        return spawn(pet, owner, record, model, baby, at, home, null);
     }
 
     /**
      * Puts a pet's body and model in the world. An owned pet's stats are on its record (rolled now for a record from
-     * before stats); a wild one brings wildStats, or rolls a wild pet's when null. Its stats set its max health and,
-     * with sizeMultiplier, its size.
+     * before stats); a wild one brings wildStats, or rolls a wild pet's when null. Its stats set its max health and
+     * its size.
      */
     private PetControl spawn(PetSpecies pet, UUID owner, PetRecord record, String model, boolean baby, Location at, Location home,
-                             double sizeMultiplier, PetStats wildStats) {
+                             PetStats wildStats) {
         if (host == null || at.getWorld() == null) return null;
         String variant = wornVariant(pet.model(), model, PetManager::loaded);
         // A baby's look comes from the variant it was born as, even when that adult model is missing here.
@@ -517,7 +429,7 @@ public final class PetManager {
         } catch (RuntimeException failure) {
             return refuse(pet, "its behaviors could not start (" + reason(failure) + ")");
         }
-        double scale = pet.scale() * (baby ? pet.babyScale() : 1D) * sizeMultiplier * PetStats.size(stats, pet.statCap());
+        double scale = pet.scale() * (baby ? pet.babyScale() : 1D) * PetStats.size(stats, pet.statCap());
         double maxHealth = Math.max(1D, pet.health() * stats.health * control.babyShare());
         MindBodyProfile profile = profile(pet, scale, pet.body().getKey().toString());
         MobBody body;
@@ -979,7 +891,7 @@ public final class PetManager {
         PetRides.dropSaddle(record, at != null ? at : player.getLocation());
         collection(player).remove(record);
         if (pet != null && at != null && PetsConfig.mode == PetsConfig.Mode.CREATURES) {
-            PetControl wild = spawn(pet, null, null, record.model, record.baby, at, at, 1D, record.stats);
+            PetControl wild = spawn(pet, null, null, record.model, record.baby, at, at, record.stats);
             if (wild != null) {
                 restoreHealth(wild.body(), health);
                 if (record.baby) wild.setWildBornAt(record.bornAt);
@@ -1283,19 +1195,14 @@ public final class PetManager {
             if (!control.isWild()) continue;
             LivingEntity body = control.body();
             // A wild baby (one set free) grows up as an owned one does, where it is, keeping its health.
-            if (control.isBaby() && control.route() == null && body != null && body.isValid() && PetsConfig.babiesGrowUp
+            if (control.isBaby() && body != null && body.isValid() && PetsConfig.babiesGrowUp
                     && now >= control.bornAt() + control.species().babyGrowthMillis()) {
                 Location at = body.getLocation();
                 double health = body.getHealth();
                 despawn(control);
-                PetControl grown = spawn(control.species(), null, null, control.model(), false, at, control.home(), 1D,
+                PetControl grown = spawn(control.species(), null, null, control.model(), false, at, control.home(),
                         control.stats());
                 if (grown != null) restoreHealth(grown.body(), health);
-                continue;
-            }
-            // A migrant's flock decides when it leaves, whatever the mode; a lost migrant just goes.
-            if (control.route() != null) {
-                if (body == null || !body.isValid()) despawn(control);
                 continue;
             }
             // Its chunk unloaded or stopped ticking (the model has let go of it by then), or the server turned
@@ -1319,7 +1226,7 @@ public final class PetManager {
      */
     public void bodyRemovedByPlugin(Entity entity) {
         PetControl control = pet(entity);
-        if (control == null || !control.isWild() || control.route() != null) return;
+        if (control == null || !control.isWild()) return;
         if (!entity.isValid()) store(control);
         bodyDied(control);
     }
@@ -1394,7 +1301,7 @@ public final class PetManager {
         World world = chunk.getWorld();
         for (PetControl control : new ArrayList<>(byBody.values())) {
             LivingEntity body = control.body();
-            if (!control.isWild() || control.route() != null || body == null || body.getWorld() != world) continue;
+            if (!control.isWild() || body == null || body.getWorld() != world) continue;
             Location at = body.getLocation();
             if (at.getBlockX() >> 4 == chunk.getX() && at.getBlockZ() >> 4 == chunk.getZ()) {
                 store(control);
@@ -1460,7 +1367,7 @@ public final class PetManager {
         for (WildPetStore.Entry entry : wildStore.take(world.getUID(), cx, cz)) {
             PetSpecies pet = species(entry.species());
             PetControl back = pet == null ? null
-                    : spawn(pet, null, null, entry.model(), entry.baby(), entry.at(world), entry.home(world), 1D, entry.stats());
+                    : spawn(pet, null, null, entry.model(), entry.baby(), entry.at(world), entry.home(world), entry.stats());
             if (back == null) {
                 wildStore.put(world.getUID(), entry);
                 continue;
@@ -1474,14 +1381,11 @@ public final class PetManager {
 
     // ---- wild spawning ----------------------------------------------------------------------------------------
 
-    /**
-     * Wild pets of all species, or of one, in the player's spawn area: the chunks within 8 of theirs. Migrants pass
-     * through and do not fill the caps.
-     */
+    /** Wild pets of all species, or of one, in the player's spawn area: the chunks within 8 of theirs. */
     int wildInSpawnArea(Player player, PetSpecies only) {
         int count = 0;
         for (PetControl control : byBody.values()) {
-            if (!control.isWild() || control.route() != null || (only != null && control.species() != only)) continue;
+            if (!control.isWild() || (only != null && control.species() != only)) continue;
             LivingEntity body = control.body();
             if (body != null && body.isValid() && WildSpawner.inSpawnArea(player, body.getLocation())) count++;
         }

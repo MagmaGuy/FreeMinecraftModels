@@ -11,7 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * The world interaction sections pet files had before behavior modules: each one still in a file is warned about once
- * as it loads, naming the module to list instead, or saying to remove it when it is off or its module is listed.
+ * as it loads, naming the module to list instead, or saying to remove it when it is off or its module is listed. The
+ * migration section, from before wild clusters replaced night migrations, is warned about the same way.
  */
 class PetSpeciesLegacySectionsTest {
     private static final String FILE = "jellyfish.pet.yml";
@@ -23,6 +24,7 @@ class PetSpeciesLegacySectionsTest {
         PetSpecies.warnLegacySections(config, FILE, PetSpecies.listedModules(
                 PetSpecies.listedBehaviors(config, FILE, warnings::add),
                 PetSpecies.variants(config.get("variants"), FILE, warnings::add)), warnings::add);
+        PetSpecies.warnMigration(config, FILE, warnings::add);
         return warnings;
     }
 
@@ -50,8 +52,6 @@ class PetSpeciesLegacySectionsTest {
                   height: 0.3
                 drizzle:
                   chance: 0.1
-                migration:
-                  scale: 2
                 """);
         assertEquals("jellyfish.pet.yml: the campfire section is ignored now that world interactions are behavior"
                 + " modules; list the campfire module under behaviors: instead (see"
@@ -111,8 +111,20 @@ class PetSpeciesLegacySectionsTest {
                 behaviors:
                 - stay
                 - night_glow: { light: 12 }
-                migration:
-                  scale: 2
+                wildSpawn:
+                  cluster:
+                    chance: 0.1
                 """));
+    }
+
+    @Test
+    void aMigrationSectionPointsAtWildClusters() throws InvalidConfigurationException {
+        assertEquals(List.of(FILE + ": the migration section is ignored now that night migrations are gone; remove it."
+                        + " To show this species in big groups, add a cluster section under wildSpawn: instead."),
+                warnings("""
+                        model: em_pet_jellyfish
+                        migration:
+                          scale: 2
+                        """));
     }
 }

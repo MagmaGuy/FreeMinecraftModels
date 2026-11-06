@@ -1,6 +1,5 @@
 package com.magmaguy.freeminecraftmodels.config;
 
-import com.magmaguy.freeminecraftmodels.pets.migration.PetMigrations;
 import com.magmaguy.magmacore.config.ConfigurationEngine;
 import com.magmaguy.magmacore.config.ConfigurationFile;
 
@@ -173,6 +172,8 @@ public class PetsConfig extends ConfigurationFile {
                 "&7You took the saddle off your $pet&7.");
         saddleTooYoungMessage = ConfigurationEngine.setString(fileConfiguration, "saddleTooYoungMessage",
                 "&7Your $pet &7is too young for a saddle.");
-        PetMigrations.loadSettings(fileConfiguration);
+        // Night migrations are gone, replaced by the wild clusters a species' wildSpawn section sets, so the retired
+        // section is taken out of the file instead of advertising settings that do nothing.
+        fileConfiguration.set("migrations", null);
     }
 }
