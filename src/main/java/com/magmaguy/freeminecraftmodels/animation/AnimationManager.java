@@ -371,17 +371,27 @@ public class AnimationManager {
      * diving body. Its first frame shows the state the other was in (riding, swimming, walking, a custom animation or
      * an attack), at the same tick when it is the same animation; when the new mob plays another animation for that
      * state, such as a nautilus body's swim in place of a land body's ride, it starts that one cross-faded from the pose
-     * the other model last showed. The other model must not be removed yet. Call after this model's own setters (ridden
-     * and swim animations), which apply first.
+     * the other model last showed. It takes all this at once, and its bones take the pose of the other model's last
+     * frame, so it can be shown in the tick the other one goes. The other model must not be removed yet. Call after this
+     * model's own setters (ridden and swim animations), which apply first.
      */
     public void continueFrom(AnimationManager previous) {
         if (previous == null || previous == this) return;
         Handover handover;
-        // The model clock ticks the other model under its skeleton's lock.
+        // The model clock ticks each model under its skeleton's lock.
         synchronized (previous.modeledEntity.getSkeleton()) {
             handover = previous.handover(bones.length);
         }
-        if (handover != null) requests.add(() -> adopt(handover));
+        if (handover == null) return;
+        synchronized (modeledEntity.getSkeleton()) {
+            Runnable request;
+            while ((request = requests.poll()) != null) request.run();
+            adopt(handover);
+            // The first frame: the other model's last where the base fades from it, else the base at its tick.
+            capture(fadeActive() ? 0f : Float.NaN);
+            poseStale = false;
+            samplePose();
+        }
     }
 
     /** What this model shows now, for a model of {@code bones} bones taking over; null once it is dying. */
@@ -720,17 +730,7 @@ public class AnimationManager {
             float t = Math.min(1f, fadeElapsed / (float) fadeTicks);
             fadeWeight = t * t * (3 - 2 * t);
         }
-        shownBase = base;
-        shownBaseFrame = base != null ? base.frame() : -1;
-        shownAction = action;
-        shownActionFrame = action != null ? action.frame() : -1;
-        shownFade = fadeFrom;
-        shownFadeFrame = fadeFrom != null ? fadeFrom.frame() : -1;
-        shownFadeFrozen = fadeFromFrozen;
-        shownFadeWeight = fadeWeight;
-        shownLifeTicks = lifeTicks;
-        shownDistance = distanceMoved;
-        shownMoving = moving;
+        capture(fadeWeight);
         // A variable an expression writes is read by later evaluations, so such an animation samples every tick.
         if (isWatched() || writesVariables(shownBase) || writesVariables(shownAction) || writesVariables(shownFade)) {
             poseStale = false;
@@ -749,6 +749,21 @@ public class AnimationManager {
         if (action != null) action.advance();
         if (fadeFrom != null) fadeFrom.advance();
         if (fadeActive() && fadeElapsed >= fadeTicks) clearFade();
+    }
+
+    /** Records what this render shows, at the given weight of a fade into the base (NaN when none plays). */
+    private void capture(float fadeWeight) {
+        shownBase = base;
+        shownBaseFrame = base != null ? base.frame() : -1;
+        shownAction = action;
+        shownActionFrame = action != null ? action.frame() : -1;
+        shownFade = fadeFrom;
+        shownFadeFrame = fadeFrom != null ? fadeFrom.frame() : -1;
+        shownFadeFrozen = fadeFromFrozen;
+        shownFadeWeight = fadeWeight;
+        shownLifeTicks = lifeTicks;
+        shownDistance = distanceMoved;
+        shownMoving = moving;
     }
 
     /** Whether anyone sees the model, whose bones only then take the pose. */
