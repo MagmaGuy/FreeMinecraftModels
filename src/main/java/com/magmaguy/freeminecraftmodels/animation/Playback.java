@@ -9,8 +9,19 @@ final class Playback {
     private int tick = 0;
 
     Playback(Animation animation, boolean loop) {
+        this(animation, loop, 0);
+    }
+
+    /** Starts {@code ticks} into the animation, as one picked up from another model's playback. */
+    Playback(Animation animation, boolean loop, int ticks) {
         this.animation = animation;
         this.loop = loop;
+        this.tick = Math.max(0, ticks);
+    }
+
+    /** The ticks played so far, which a model taking over from this one continues from. */
+    int ticks() {
+        return tick;
     }
 
     private int duration() {
