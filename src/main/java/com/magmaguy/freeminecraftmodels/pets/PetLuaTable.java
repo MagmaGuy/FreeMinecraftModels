@@ -68,7 +68,7 @@ import java.util.function.Supplier;
  * The c.pet table a behavior module reads: the pet's state, and the Java helpers that keep per-tick work fast. One
  * table per pet; {@link #bind} points it at the current callback's Mind context first.
  * <p>
- * Its properties, and route_target, are a snapshot per pet tick: each is read on its first use in a tick and kept
+ * Its properties are a snapshot per pet tick: each is read on its first use in a tick and kept
  * through every callback of that tick. A new pet tick, game tick or body reads them afresh, and so does every read after
  * {@code c.pet:teleport_near_owner} or {@code c.pet:stop}. Nothing else does: after {@code c.entity:teleport},
  * {@code set_velocity} or {@code push}, or the stop MagmaCore makes when a behavior gives up its controls, the
@@ -85,18 +85,16 @@ import java.util.function.Supplier;
  */
 public final class PetLuaTable {
     /** Every name a module can read on c.pet. */
-    public static final Set<String> PROPERTIES = Set.of("wild", "staying", "settled", "baby", "migrating", "model",
+    public static final Set<String> PROPERTIES = Set.of("wild", "staying", "settled", "baby", "model",
             "species", "position", "home", "anchor", "stay_anchor", "owner_location", "owner_distance", "follow_range",
-            "roam_range", "night", "day", "raining", "snowing", "speed", "route_cruise", "threat", "attacker",
-            "hurt_count");
+            "roam_range", "night", "day", "raining", "snowing", "speed", "threat", "attacker", "hurt_count");
     /** How far from its owner an owned pet looks for someone to defend them against. */
     static final double THREAT_RANGE = 16D;
     /** How long a wild pet keeps the player who hurt it in mind: 30 seconds. */
     static final long ATTACKER_TICKS = 20L * 30L;
     /** Every method a module can call on c.pet. */
     public static final Set<String> METHODS = Set.of("steer_to", "stop", "hover_point", "rest_point", "ground_below",
-            "ground_point", "water_point", "trail_point", "teleport_near_owner", "distance_to", "route_target",
-            "find_perch", "nearest_campfire", "campfire_usable", "set_glow", "clear_glow", "scale_toward",
+            "ground_point", "water_point", "trail_point", "teleport_near_owner", "distance_to", "find_perch", "nearest_campfire", "campfire_usable", "set_glow", "clear_glow", "scale_toward",
             "sting_contacts", "sting_enemies", "strike_attacker", "drizzle", "owner_effect", "play_animation",
             "kin_center", "line_ahead", "gift", "nearest_item", "eat_item", "slide_point", "set_walk_animation",
             "steer_onto");
@@ -195,7 +193,6 @@ public final class PetLuaTable {
         property("staying", ticks.perTick(() -> LuaValue.valueOf(control.isStaying())));
         property("settled", ticks.perTick(() -> LuaValue.valueOf(PetMotion.settled(control, body()))));
         property("baby", ticks.perTick(() -> LuaValue.valueOf(control.isBaby())));
-        property("migrating", ticks.perTick(() -> LuaValue.valueOf(control.route() != null)));
         property("model", ticks.perTick(() ->
                 control.model() == null ? LuaValue.NIL : LuaValue.valueOf(control.model())));
         // Locations are kept as Java locations, and each read makes its own table from one.
@@ -220,8 +217,6 @@ public final class PetLuaTable {
         property("snowing", ticks.perTick(() -> LuaValue.valueOf(snowing())));
         // Not kept: the stop MagmaCore makes when a behavior gives up its controls changes it within the tick.
         property("speed", () -> LuaValue.valueOf(body().getVelocity().length()));
-        property("route_cruise", ticks.perTick(() ->
-                LuaValue.valueOf(control.route() == null ? 0D : control.route().cruise())));
         // The middle of the nearest attacker its owner's pets defend against within THREAT_RANGE of the owner: a
         // player or one of their pets, a mob or a wild pet that hurt the owner or their pets lately. nil for a wild
         // pet, or when nobody did.
@@ -237,8 +232,8 @@ public final class PetLuaTable {
         // steer_to(point, cruise): one tick toward the point; false when the body cannot go there. cruise is 0 to 4
         // (positive infinity means 4 and negative infinity 0). A flying body flies at cruise blocks per tick. A walking
         // or swimming body paths there natively, at 4 x cruise times its body type's movement speed, never under a
-        // quarter of it; a cruise of 0 stops it and reads false. The pet's speed stat multiplies the cruise, except on a
-        // migration. Steered at c.pet.threat, it stops beside the attacker instead of walking into them (see approach).
+        // quarter of it; a cruise of 0 stops it and reads false. The pet's speed stat multiplies the cruise. Steered at
+        // c.pet.threat, it stops beside the attacker instead of walking into them (see approach).
         // Needs a behavior holding MOVE and LOOK.
         method("steer_to", args -> {
             Location target = at(args, 1);
@@ -329,11 +324,6 @@ public final class PetLuaTable {
             Location point = at(args, 1);
             return LuaValue.valueOf(point == null ? Double.POSITIVE_INFINITY : position.get().distance(point));
         });
-        // route_target(): kept for the pet tick like a property, since it weighs every flock member's place to keep
-        // them apart, and can_start and tick both ask for it.
-        Supplier<Location> routeTarget = ticks.perTick(() ->
-                control.route() == null ? null : control.route().target(control));
-        method("route_target", args -> location(routeTarget.get()));
         // find_perch(height, radius): height 0 to 8, radius 0 to 4.
         method("find_perch", args -> {
             double height = number(args, 1, 0D, MAX_PERCH_HEIGHT);
@@ -449,7 +439,7 @@ public final class PetLuaTable {
                     && modeled.playAnimation(name, true, false));
         });
         // kin_center(radius, min): the middle of this pet and its kin within radius (up to 32), by their feet: pets of
-        // its species, wild like it or of its owner, neither migrating nor ridden. nil when there are fewer than min of
+        // its species, wild like it or of its owner, and not ridden. nil when there are fewer than min of
         // them (1 to 64), this pet included.
         method("kin_center", args -> {
             double radius = number(args, 1, 0D, MAX_KIN_RADIUS);
@@ -779,19 +769,16 @@ public final class PetLuaTable {
                 && target.getZ() == point.getZ() ? threat : null;
     }
 
-    /**
-     * One tick toward the target at the cruise a module asks for, times the pet's speed stat; a migrant keeps its
-     * flock's pace.
-     */
+    /** One tick toward the target at the cruise a module asks for, times the pet's speed stat. */
     private boolean steerTo(Location target, double cruise) {
-        if (control.route() == null) cruise *= control.stats().speed;
+        cruise *= control.stats().speed;
         if (control.species().locomotion() == MindBodyLocomotion.FLYING) return PetMotion.steerFlight(context, target, cruise);
         return path.steer(context, target, cruise);
     }
 
     /** steer_onto's tick: as {@link #steerTo}, ending on the target (see {@link WalkPath#steerOnto}). */
     private boolean steerOnto(Location target, double cruise) {
-        if (control.route() == null) cruise *= control.stats().speed;
+        cruise *= control.stats().speed;
         if (control.species().locomotion() == MindBodyLocomotion.FLYING) return PetMotion.steerFlight(context, target, cruise);
         boolean steered = path.steerOnto(context, target, cruise);
         if (path.stoppedNow()) ticks.moved();

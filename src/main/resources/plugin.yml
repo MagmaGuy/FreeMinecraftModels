@@ -58,7 +58,7 @@ permissions:
     description: Allows opening your pets menu with /fmm pets
     default: true
   freeminecraftmodels.pets.admin:
-    description: Allows /fmm petadmin and /fmm petmigrate
+    description: Allows /fmm petadmin
     default: op
   freeminecraftmodels.pets.give:
     description: Allows /fmm givepet, which gives a player a pet (for shops and rewards; works from the console)
