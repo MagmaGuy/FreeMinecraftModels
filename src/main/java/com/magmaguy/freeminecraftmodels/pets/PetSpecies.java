@@ -100,11 +100,11 @@ public final class PetSpecies {
      * the light, world, environment, biome and height it needs. Empty lists allow everything; the biomes include the
      * custom ones MagmaCore maps to each vanilla biome listed (see {@link #wildBiomes}). {@code time} and {@code cap}
      * only hold back the top-up spawns around players: {@code cap} is how many of this species may be wild around one
-     * player, and new chunks are stocked whatever the time.
+     * player, and new chunks are stocked whatever the time. {@code cluster} sometimes stocks a much bigger group.
      */
     public record WildSpawn(boolean enabled, int weight, int minGroup, int maxGroup, Placement placement, int minLight,
                             int maxLight, int cap, List<String> worlds, List<World.Environment> environments,
-                            Set<NamespacedKey> biomes, TimeOfDay time, int minY, int maxY) {
+                            Set<NamespacedKey> biomes, TimeOfDay time, int minY, int maxY, Cluster cluster) {
         /** Whether this world could ever hold the species, before looking at any spot in it. */
         public boolean allowsWorld(World world) {
             if (world == null) return false;
@@ -128,6 +128,17 @@ public final class PetSpecies {
             int light = spawnLight(location.getBlock());
             return light >= minLight && light <= maxLight;
         }
+    }
+
+    /**
+     * Now and then a new chunk gets a cluster of the species in place of one of its groups: minSize to maxSize together,
+     * so behaviors that need a crowd, such as a huddle or a single file, show in the wild. {@code chance} is per group,
+     * 0 to 1, and {@code rareColourChance} is the chance a cluster wears one rare colour all through. Top-ups around
+     * players never make one, since the caps would cut it short.
+     */
+    public record Cluster(double chance, int minSize, int maxSize, double rareColourChance) {
+        /** A species whose file has no cluster section: no clusters, and an admin's test cluster of 8 to 14. */
+        public static final Cluster NONE = new Cluster(0D, 8, 14, 0D);
     }
 
     /**
@@ -408,7 +419,19 @@ public final class PetSpecies {
                 environments(wild.getStringList("environments"), filename),
                 wildBiomes(wild.getStringList("biomes"), filename, key -> Registry.BIOME.get(key) != null,
                         CustomBiomeCompatibility::getCustomBiomes, Logger::warn),
-                time, wild.getInt("minY", -64), wild.getInt("maxY", 320));
+                time, wild.getInt("minY", -64), wild.getInt("maxY", 320), readCluster(wild.getConfigurationSection("cluster")));
+    }
+
+    /**
+     * Reads wildSpawn's cluster section: none without one. In the section, a cluster comes once in 10 groups, has 8 to
+     * 14 members (the size of the old night migration flocks), and 1 in 10 wears one rare colour.
+     */
+    static Cluster readCluster(ConfigurationSection cluster) {
+        if (cluster == null) return Cluster.NONE;
+        int minSize = Math.max(1, cluster.getInt("minSize", 8));
+        return new Cluster(Math.max(0D, Math.min(1D, cluster.getDouble("chance", 0.1D))), minSize,
+                Math.max(minSize, cluster.getInt("maxSize", 14)),
+                Math.max(0D, Math.min(1D, cluster.getDouble("rareColourChance", 0.1D))));
     }
 
     private static List<World.Environment> environments(List<String> names, String filename) {
@@ -935,9 +958,16 @@ public final class PetSpecies {
         return wildShare(variants, this.model, model);
     }
 
-    /** A colour for a rare migration flock; see {@link #pickRare(List, Random)}. */
+    /** A colour for a one-colour cluster, among every colour; see {@link #pickRare(List, Random, Predicate)}. */
     public String pickRareVariant(Random random) {
-        return pickRare(variants, random);
+        return pickRare(variants, random, variant -> true);
+    }
+
+    /** A colour for a one-colour cluster stocked at this spot, among the colours that live in its biome. */
+    public String pickRareWildVariant(Random random, Location at) {
+        if (!variantBiomes) return pickRareVariant(random);
+        NamespacedKey biome = biome(at);
+        return pickRare(variants, random, variant -> variant.allowsBiome(biome));
     }
 
     static double wildShare(List<Variant> variants, String speciesModel, String model) {
@@ -949,17 +979,17 @@ public final class PetSpecies {
     }
 
     /**
-     * A colour picked by the inverse of its weight among those with a share of the wild picks, so the rarest colours
-     * lead the unusual flocks; null when no colour has a share.
+     * A colour picked by the inverse of its weight among those with a share of the wild picks that {@code allowed}
+     * takes, so the rarest colours lead the unusual clusters; null when none of them has a share.
      */
-    static String pickRare(List<Variant> variants, Random random) {
+    static String pickRare(List<Variant> variants, Random random, Predicate<Variant> allowed) {
         double total = 0D;
-        for (Variant variant : variants) if (variant.weight() > 0D) total += 1D / variant.weight();
+        for (Variant variant : variants) if (variant.weight() > 0D && allowed.test(variant)) total += 1D / variant.weight();
         if (total <= 0D) return null;
         double roll = random.nextDouble() * total;
         Variant last = null;
         for (Variant variant : variants) {
-            if (variant.weight() <= 0D) continue;
+            if (variant.weight() <= 0D || !allowed.test(variant)) continue;
             last = variant;
             roll -= 1D / variant.weight();
             if (roll < 0D) return variant.model();

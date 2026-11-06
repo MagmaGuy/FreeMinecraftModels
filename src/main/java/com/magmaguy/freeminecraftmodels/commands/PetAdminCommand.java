@@ -20,14 +20,14 @@ import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Admin and testing switches for pets: {@code mode creatures|cosmetic} picks whether species also live wild,
- * {@code spawn <species> [variant]} puts a wild one where you look, {@code give <species> [variant]} adds an owned one
- * to your collection (without a variant, a menu of the species' colours to pick from), {@code list} shows the loaded
- * species.
+ * {@code spawn <species> [variant]} puts a wild one where you look, {@code cluster <species> [variant]} puts a wild
+ * cluster there (see {@link PetSpecies.Cluster}), {@code give <species> [variant]} adds an owned one to your collection
+ * (without a variant, a menu of the species' colours to pick from), {@code list} shows the loaded species.
  */
 public class PetAdminCommand extends AdvancedCommand {
     public PetAdminCommand() {
         super(List.of("petadmin"));
-        addArgument("action", new ListStringCommandArgument(List.of("mode", "spawn", "give", "list"), "<action>"));
+        addArgument("action", new ListStringCommandArgument(List.of("mode", "spawn", "cluster", "give", "list"), "<action>"));
         addOptionalArgument("value", new DynamicListStringCommandArgument(() -> {
             List<String> values = new ArrayList<>(List.of("creatures", "cosmetic"));
             PetManager manager = PetManager.get();
@@ -42,7 +42,7 @@ public class PetAdminCommand extends AdvancedCommand {
                     for (PetSpecies.Variant variant : species.variants()) values.add(variant.model());
             return values;
         }, "[variant]"));
-        setUsage("/fmm petadmin <mode|spawn|give|list> [value] [variant]");
+        setUsage("/fmm petadmin <mode|spawn|cluster|give|list> [value] [variant]");
         setPermission("freeminecraftmodels.pets.admin");
         setSenderType(SenderType.PLAYER);
         setDescription("Pet mode switch and testing spawns.");
@@ -77,7 +77,7 @@ public class PetAdminCommand extends AdvancedCommand {
                             + ", body " + species.body() + ", tame with " + species.tamingFood() + ", breed with " + species.breedingFood() + ")");
                 if (manager.species().isEmpty()) Logger.sendMessage(player, "&7No pet species are installed.");
             }
-            case "spawn" -> {
+            case "spawn", "cluster" -> {
                 PetSpecies species = manager.species(value);
                 if (species == null) {
                     Logger.sendMessage(player, "&cUnknown pet species. /fmm petadmin list shows them.");
@@ -87,7 +87,17 @@ public class PetAdminCommand extends AdvancedCommand {
                     Logger.sendMessage(player, "&cWild pets only exist in creatures mode. &7/fmm petadmin mode creatures &cfirst.");
                     return;
                 }
-                String model = model(player, species, commandData.getStringArgument("variant"));
+                String asked = commandData.getStringArgument("variant");
+                if (action.equals("cluster")) {
+                    // Without a colour, each member picks its own, or now and then the whole cluster wears a rare one.
+                    String colour = asked == null ? null : model(player, species, asked);
+                    if (asked != null && colour == null) return;
+                    int standing = manager.spawnCluster(species, player.getTargetBlock(null, 12).getLocation(), colour);
+                    Logger.sendMessage(player, standing == 0 ? "&cNo cluster member could stand there; see the console."
+                            : "&aSpawned a wild cluster of " + standing + " " + species.id() + ".");
+                    return;
+                }
+                String model = model(player, species, asked);
                 if (model == null) return;
                 // A test spawn goes where you look, whatever biomes its variants live in.
                 PetControl spawned = manager.spawnWild(species, player.getTargetBlock(null, 12).getLocation().add(0.5D, 1D, 0.5D), model);
@@ -110,7 +120,7 @@ public class PetAdminCommand extends AdvancedCommand {
                 manager.give(player, species, model);
                 Logger.sendMessage(player, "&aAdded a " + species.id() + " (" + model + ") to your pets.");
             }
-            default -> Logger.sendMessage(player, "&cUse mode, spawn, give or list.");
+            default -> Logger.sendMessage(player, "&cUse mode, spawn, cluster, give or list.");
         }
     }
 

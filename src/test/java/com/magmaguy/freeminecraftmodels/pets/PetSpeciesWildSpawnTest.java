@@ -71,7 +71,40 @@ class PetSpeciesWildSpawnTest {
                   maxY: 90
                 """, MindBodyLocomotion.FLYING);
         assertEquals(new PetSpecies.WildSpawn(false, 25, 2, 4, PetSpecies.Placement.WATER_SURFACE, 3, 12, 6, List.of("world"),
-                List.of(World.Environment.NORMAL, World.Environment.THE_END), Set.of(), PetSpecies.TimeOfDay.NIGHT, 40, 90), wild);
+                List.of(World.Environment.NORMAL, World.Environment.THE_END), Set.of(), PetSpecies.TimeOfDay.NIGHT, 40, 90,
+                PetSpecies.Cluster.NONE), wild);
+    }
+
+    @Test
+    void aSpeciesWithoutAClusterSectionNeverClusters() throws InvalidConfigurationException {
+        assertEquals(PetSpecies.Cluster.NONE, read("wildSpawn:\n  weight: 8\n", MindBodyLocomotion.GROUNDED).cluster());
+        assertEquals(0D, PetSpecies.Cluster.NONE.chance());
+    }
+
+    @Test
+    void anEmptyClusterSectionClustersOnceInTenGroups() throws InvalidConfigurationException {
+        assertEquals(new PetSpecies.Cluster(0.1D, 8, 14, 0.1D),
+                read("wildSpawn:\n  cluster: {}\n", MindBodyLocomotion.GROUNDED).cluster());
+    }
+
+    @Test
+    void theClusterSectionSetsEveryValueInRange() throws InvalidConfigurationException {
+        assertEquals(new PetSpecies.Cluster(0.25D, 5, 9, 0.5D), read("""
+                wildSpawn:
+                  cluster:
+                    chance: 0.25
+                    minSize: 5
+                    maxSize: 9
+                    rareColourChance: 0.5
+                """, MindBodyLocomotion.GROUNDED).cluster());
+        assertEquals(new PetSpecies.Cluster(1D, 1, 1, 0D), read("""
+                wildSpawn:
+                  cluster:
+                    chance: 3
+                    minSize: -2
+                    maxSize: 0
+                    rareColourChance: -1
+                """, MindBodyLocomotion.GROUNDED).cluster(), "the largest cluster is never smaller than the smallest");
     }
 
     @Test

@@ -2,9 +2,11 @@ package com.magmaguy.freeminecraftmodels.pets;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -14,7 +16,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** The parts of wild spawning that follow vanilla's numbers: pack steps, stocking steps, weighted picks and spawn areas. */
+/**
+ * The parts of wild spawning that follow vanilla's numbers: pack steps, stocking steps, weighted picks and spawn areas;
+ * and the clusters a new chunk now and then gets in place of a group.
+ */
 class WildSpawnerTest {
     @Test
     void packStepsStayWithinFiveBlocksAndCentreOnZero() {
@@ -105,6 +110,56 @@ class WildSpawnerTest {
         int chunks = 2_000_000;
         for (int chunk = 0; chunk < chunks; chunk++) while (random.nextDouble() < chance) groups++;
         assertEquals(WildSpawner.groupsPerChunk(8, 1D), (double) groups / chunks, 0.0005D);
+    }
+
+    /** A penguin's wildSpawn: groups of 2 to 4, with this cluster. */
+    private static PetSpecies.WildSpawn penguin(PetSpecies.Cluster cluster) {
+        return new PetSpecies.WildSpawn(true, 10, 2, 4, PetSpecies.Placement.GROUND, 9, 15, 6, List.of(), List.of(),
+                Set.of(), PetSpecies.TimeOfDay.ANY, -64, 320, cluster);
+    }
+
+    @Test
+    void aSpeciesWithoutClustersGetsOnlyItsUsualGroups() {
+        Random random = new Random(19);
+        for (int group = 0; group < 10_000; group++) {
+            WildSpawner.Gathering gathering = WildSpawner.gathering(penguin(PetSpecies.Cluster.NONE),
+                    () -> { throw new AssertionError("no cluster, so no rare colour"); }, random);
+            assertTrue(gathering.size() >= 2 && gathering.size() <= 4, "size " + gathering.size());
+            assertNull(gathering.colour());
+        }
+    }
+
+    @Test
+    void clustersComeAtTheirChanceAndSizeAndSomeWearOneRareColour() {
+        Random random = new Random(23);
+        PetSpecies.WildSpawn wild = penguin(new PetSpecies.Cluster(0.1D, 8, 14, 0.1D));
+        int groups = 100_000, clusters = 0, rare = 0;
+        Set<Integer> clusterSizes = new HashSet<>();
+        for (int group = 0; group < groups; group++) {
+            WildSpawner.Gathering gathering = WildSpawner.gathering(wild, () -> "penguin_lutino", random);
+            if (gathering.size() <= 4) {
+                assertTrue(gathering.size() >= 2);
+                assertNull(gathering.colour(), "a usual group never wears one colour");
+                continue;
+            }
+            clusters++;
+            clusterSizes.add(gathering.size());
+            if (gathering.colour() != null) {
+                assertEquals("penguin_lutino", gathering.colour());
+                rare++;
+            }
+        }
+        assertEquals(0.1D, (double) clusters / groups, 0.005D);
+        assertEquals(Set.of(8, 9, 10, 11, 12, 13, 14), clusterSizes);
+        assertEquals(0.1D, (double) rare / clusters, 0.015D);
+    }
+
+    @Test
+    void aClusterWithNoRareColourToWearLetsEachMemberPick() {
+        Random random = new Random(29);
+        PetSpecies.WildSpawn wild = penguin(new PetSpecies.Cluster(1D, 8, 8, 1D));
+        WildSpawner.Gathering gathering = WildSpawner.gathering(wild, () -> null, random);
+        assertEquals(new WildSpawner.Gathering(8, null), gathering);
     }
 
     @Test

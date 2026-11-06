@@ -433,6 +433,15 @@ public final class PetManager {
     }
 
     /**
+     * A wild cluster of the species around this spot, its size and colours as a new chunk would get one, whatever
+     * biome or light is there: for trying a species' clusters. All wear {@code colour} when it is given. Returns how
+     * many stand.
+     */
+    public int spawnCluster(PetSpecies pet, Location at, String colour) {
+        return WildSpawner.testCluster(this, pet, at, colour, ThreadLocalRandom.current());
+    }
+
+    /**
      * Puts an equipped pet from the collection into the world: beside its owner, or where it was told to stay, as a
      * sitting wolf keeps its spot. A staying pet whose spot is not loaded waits for it (null); one whose world is gone
      * follows its owner again.
