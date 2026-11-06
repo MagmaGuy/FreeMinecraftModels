@@ -152,7 +152,7 @@ class ShippedPetModulesTest {
             "fmm:pet/idle_look c.perception:nearest_player(8)", "fmm:pet/idle_look c.actuator:look_at(L)",
             "fmm:pet/swim water_point(L, 5, 0.5, 3)", "fmm:pet/swim water_point(L, 4, 0.5, 3)",
             "fmm:pet/swim distance_to(L)", "fmm:pet/swim steer_to(L, 0.225)", "fmm:pet/swim stop()",
-            "fmm:pet/huddle kin_center(8, 3)", "fmm:pet/huddle steer_to(L, 0.075)", "fmm:pet/huddle stop()",
+            "fmm:pet/huddle kin_center(8, 3)", "fmm:pet/huddle steer_onto(L, 0.075)", "fmm:pet/huddle stop()",
             "fmm:pet/fishing_trip water_point(L, 8, 1, 3)", "fmm:pet/fishing_trip water_point(L, 4, 1, 3)",
             "fmm:pet/fishing_trip distance_to(L)", "fmm:pet/fishing_trip steer_to(L, 0.225)",
             "fmm:pet/fishing_trip gift(COD, 1, 3, entity.cod.flop, 1, 1)", "fmm:pet/fishing_trip stop()",
@@ -165,7 +165,7 @@ class ShippedPetModulesTest {
             "fmm:pet/pebble_gift stop()",
             "fmm:pet/fish_thief nearest_item(8, {COD, SALMON, TROPICAL_FISH, COOKED_COD, COOKED_SALMON})",
             "fmm:pet/fish_thief eat_item(0.5, {COD, SALMON, TROPICAL_FISH, COOKED_COD, COOKED_SALMON}, 2, entity.generic.eat, 1, 1)",
-            "fmm:pet/fish_thief steer_to(L, 0.3)", "fmm:pet/fish_thief stop()");
+            "fmm:pet/fish_thief steer_onto(L, 0.3)", "fmm:pet/fish_thief stop()");
     /**
      * wander's and swim's calls by where the owner is: a wild pet's trips end within the roam radius of home, an owned
      * one's within 0.8 of the follow distance of its owner (4 of 5 here), so follow_owner does not take over as soon as
@@ -218,7 +218,8 @@ class ShippedPetModulesTest {
      * can_start and sensors hold none.
      */
     private static final Map<String, Set<MindControl>> LEASED = Map.of(
-            "steer_to", EnumSet.of(MindControl.MOVE, MindControl.LOOK), "stop", EnumSet.of(MindControl.MOVE));
+            "steer_to", EnumSet.of(MindControl.MOVE, MindControl.LOOK),
+            "steer_onto", EnumSet.of(MindControl.MOVE, MindControl.LOOK), "stop", EnumSet.of(MindControl.MOVE));
     /**
      * The world of the pet's body and the stand-in player, named world. MagmaCore looks up the world a location table
      * names through Bukkit, so the class installs a stand-in server that answers it.
@@ -951,6 +952,7 @@ class ShippedPetModulesTest {
             // S text, s optional text, B true or false.
             Map<String, Method> methods = new HashMap<>();
             methods.put("steer_to", new Method("LC", args -> LuaValue.TRUE, LuaValue.FALSE));
+            methods.put("steer_onto", new Method("LC", args -> LuaValue.TRUE, LuaValue.FALSE));
             methods.put("stop", new Method("", args -> LuaValue.NIL, LuaValue.NIL));
             methods.put("hover_point", new Method("LN", args -> shifted(args.arg1(), 1, 0), LuaValue.NIL));
             methods.put("rest_point", new Method("LN", args -> shifted(args.arg1(), 1, 0), LuaValue.NIL));
@@ -1026,7 +1028,7 @@ class ShippedPetModulesTest {
             return switch (answers) {
                 case SOMETHING, STUCK -> false;
                 case NOTHING -> true;
-                case STEER_FAILS -> method.equals("steer_to");
+                case STEER_FAILS -> method.equals("steer_to") || method.equals("steer_onto");
                 case FLICKER -> Math.floorMod(tick / 10 + method.hashCode(), 3) == 0;
             };
         }
@@ -1041,7 +1043,7 @@ class ShippedPetModulesTest {
                     check(called, method.shape(), own);
                     requireLeases("c.pet:" + called, LEASED.get(called));
                     coverage.call(owner, answers, module + " " + called + "(" + arguments(method.shape(), own) + ")");
-                    if (called.equals("steer_to")) {
+                    if (called.equals("steer_to") || called.equals("steer_onto")) {
                         tripSteers.merge(module, 1, Integer::sum);
                     } else if (called.equals("stop")) {
                         Integer steers = tripSteers.remove(module);

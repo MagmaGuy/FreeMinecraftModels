@@ -98,7 +98,8 @@ public final class PetLuaTable {
             "ground_point", "water_point", "trail_point", "teleport_near_owner", "distance_to", "route_target",
             "find_perch", "nearest_campfire", "campfire_usable", "set_glow", "clear_glow", "scale_toward",
             "sting_contacts", "sting_enemies", "strike_attacker", "drizzle", "owner_effect", "play_animation",
-            "kin_center", "line_ahead", "gift", "nearest_item", "eat_item", "slide_point", "set_walk_animation");
+            "kin_center", "line_ahead", "gift", "nearest_item", "eat_item", "slide_point", "set_walk_animation",
+            "steer_onto");
     /** The fields of c.pet.species. */
     public static final Set<String> SPECIES_FIELDS = Set.of("id", "speed", "hover_height", "hover_variance",
             "roam_radius", "follow_distance", "leash_distance", "teleport_distance", "scale", "baby_scale");
@@ -245,6 +246,17 @@ public final class PetLuaTable {
             if (target == null) return LuaValue.FALSE;
             return LuaValue.valueOf(leased("c.pet:steer_to", "ai.controls.move and ai.controls.look",
                     () -> approach(target, cruise)));
+        });
+        // steer_onto(point, cruise): as steer_to, but it ends on the point rather than about a block short of it, for
+        // a pet that must reach something small, such as an item, or stand on an exact spot. Within 2 blocks of the
+        // point, on its level with firm ground all the way, a walking body walks straight at it, easing off over the
+        // last block, and stands still on it. Needs a behavior holding MOVE and LOOK.
+        method("steer_onto", args -> {
+            Location target = at(args, 1);
+            double cruise = cruise(args, 2);
+            if (target == null) return LuaValue.FALSE;
+            return LuaValue.valueOf(leased("c.pet:steer_onto", "ai.controls.move and ai.controls.look",
+                    () -> steerOnto(target, cruise)));
         });
         // stop(): needs a behavior holding MOVE.
         method("stop", args -> {
@@ -776,6 +788,15 @@ public final class PetLuaTable {
         return path.steer(context, target, cruise);
     }
 
+    /** steer_onto's tick: as {@link #steerTo}, ending on the target (see {@link WalkPath#steerOnto}). */
+    private boolean steerOnto(Location target, double cruise) {
+        if (control.route() == null) cruise *= control.stats().speed;
+        if (control.species().locomotion() == MindBodyLocomotion.FLYING) return PetMotion.steerFlight(context, target, cruise);
+        boolean steered = path.steerOnto(context, target, cruise);
+        if (path.stoppedNow()) ticks.moved();
+        return steered;
+    }
+
     /**
      * A walking or swimming body's path. A request is kept for a second while the target stays within a block, the
      * cruise is the same and the body's navigation still heads for that request: a released MOVE lease, an arrival or
@@ -787,7 +808,17 @@ public final class PetLuaTable {
     static final class WalkPath {
         /** The slowest walk or swim, a quarter of the body type's movement speed. */
         static final double MIN_SPEED = 0.25D;
-        private Location target;
+        /**
+         * steer_onto walks straight at a point this many blocks across, and this many up or down, or nearer: a path
+         * ends about a block short, a waypoint more on a diagonal, and a body steps up 0.6.
+         */
+        static final double ONTO_REACH = 2D, ONTO_RISE = 0.6D;
+        /** Within this many blocks across steer_onto stands still on its point; its share of speed at the very end. */
+        static final double ONTO_DONE = 0.15D, ONTO_SLOWEST = 0.3D;
+        /** How finely steer_onto checks the ground along its straight line, in blocks. */
+        static final double ONTO_SAMPLE = 0.25D;
+        private Location target, stoppedOn;
+        private boolean stoppedNow;
         private double cruise;
         private long until;
         private boolean accepted;
@@ -812,6 +843,65 @@ public final class PetLuaTable {
         /** The native speed modifier a positive cruise asks for. */
         static double speed(double cruise) {
             return Math.max(MIN_SPEED, cruise * 4D);
+        }
+
+        /**
+         * steer_onto's walk. It paths as {@link #steer} does until the point is within {@link #ONTO_REACH} blocks
+         * across and {@link #ONTO_RISE} up or down, with room and firm ground on the body's level all the way there
+         * (see {@link #level}); then it walks straight at it through MindActuator.moveDirect, easing off to
+         * {@link #ONTO_SLOWEST} of its speed over the last block, so a path that ends about a block short does not
+         * leave it there. Within {@link #ONTO_DONE} it stops once and stands still on the point. A body in water keeps
+         * to its path.
+         */
+        boolean steerOnto(MindContext context, Location to, double cruise) {
+            stoppedNow = false;
+            if (cruise <= 0D) {
+                stoppedOn = null;
+                return steer(context, to, cruise);
+            }
+            LivingEntity body = context.entity();
+            Location here = body.getLocation();
+            double dx = to.getX() - here.getX(), dz = to.getZ() - here.getZ();
+            double across = Math.sqrt(dx * dx + dz * dz);
+            if (to.getWorld() != here.getWorld() || body.isInWater() || across > ONTO_REACH
+                    || Math.abs(to.getY() - here.getY()) > ONTO_RISE || !level(here, to)) {
+                stoppedOn = null;
+                return steer(context, to, cruise);
+            }
+            forget();
+            if (across <= ONTO_DONE) {
+                if (stoppedOn == null || stoppedOn.distanceSquared(to) > 1.0E-4D) {
+                    context.actuator().stopMoving();
+                    stoppedOn = to.clone();
+                    stoppedNow = true;
+                }
+                return true;
+            }
+            stoppedOn = null;
+            return context.actuator().moveDirect(to, speed(cruise) * Math.max(ONTO_SLOWEST, Math.min(1D, across)));
+        }
+
+        /** Whether the last steerOnto stopped the body. */
+        boolean stoppedNow() {
+            return stoppedNow;
+        }
+
+        /**
+         * Whether a body standing at from can walk straight to to on its own level: every block the line crosses, in
+         * steps of {@link #ONTO_SAMPLE}, has room for its feet and head over firm ground at from's feet (see
+         * {@link #standing}).
+         */
+        static boolean level(Location from, Location to) {
+            World world = from.getWorld();
+            int feet = from.getBlockY();
+            double dx = to.getX() - from.getX(), dz = to.getZ() - from.getZ();
+            int steps = Math.max(1, (int) Math.ceil(Math.sqrt(dx * dx + dz * dz) / ONTO_SAMPLE));
+            for (int step = 1; step <= steps; step++) {
+                double share = (double) step / steps;
+                int x = (int) Math.floor(from.getX() + dx * share), z = (int) Math.floor(from.getZ() + dz * share);
+                if (standing(world, x, feet, z) != feet) return false;
+            }
+            return true;
         }
 
         void forget() {

@@ -60,7 +60,8 @@ return ai.module {
                     c.memory:set('fish_done', true)
                     return
                 end
-                c.pet:steer_to(fish, s.speed * c.pet.species.speed)
+                -- Onto the fish itself: a path ends about a block short, out of reach.
+                c.pet:steer_onto(fish, s.speed * c.pet.species.speed)
             end,
             stop = function(c)
                 c.memory:forget('fish_at')
