@@ -73,6 +73,13 @@ public class AnimationComponent {
     }
 
     /**
+     * The animation the model plays while its mob walks, in place of its walk; null puts the model's own walk back.
+     */
+    public void setWalkAnimation(String animationName) {
+        if (animationManager != null) animationManager.setWalkAnimation(animationName);
+    }
+
+    /**
      * The animation the model plays in place of walk while a player steers its mob and it moves; the model's ride
      * until set, and null walks.
      */

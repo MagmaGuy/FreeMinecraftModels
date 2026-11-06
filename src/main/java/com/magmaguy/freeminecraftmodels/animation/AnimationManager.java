@@ -151,7 +151,9 @@ public class AnimationManager {
     private final ModeledEntity modeledEntity;
     private final Animations animations;
     private final Bone[] bones;
-    private final Animation idle, walk, spawn, death, longIdle;
+    private final Animation idle, ownWalk, spawn, death, longIdle;
+    // What the mob plays while it walks: the model's walk, or another a plugin names. Set on the clock thread.
+    private Animation walk;
     // What a steered mount plays while it moves, in place of walk; null walks. Set on the clock thread.
     private Animation ride;
     // What a steered mount plays while it stands, in place of idle; null idles. Set on the clock thread.
@@ -224,7 +226,8 @@ public class AnimationManager {
         this.bones = modeledEntity.getSkeleton().getBones().toArray(new Bone[0]);
         this.animations = new Animations(bp, bones, modeledEntity.getSkeleton());
         idle = named("idle");
-        walk = named("walk");
+        ownWalk = named("walk");
+        walk = ownWalk;
         spawn = named("spawn");
         death = named("death");
         longIdle = named("idle.long");
@@ -318,6 +321,25 @@ public class AnimationManager {
     private static String general(String name) {
         int dot = name.lastIndexOf('.');
         return dot > 0 ? name.substring(0, dot) : null;
+    }
+
+    /**
+     * The animation the mob plays while it walks, in place of its walk: a penguin belly-sliding down a snowy slope, say.
+     * A model without the animation plays the general one its name belongs to. Null, or a name the model has nothing
+     * for, puts the model's own walk back. A walk in progress cross-fades into the new one.
+     */
+    public void setWalkAnimation(String name) {
+        requests.add(() -> {
+            Animation next = null;
+            for (String key = name; key != null && next == null; key = general(key)) next = named(key);
+            if (next == null) next = ownWalk;
+            if (next == walk) return;
+            walk = next;
+            if (locomotion == Base.WALK && !takeover) {
+                if (walk == null) setLocomotion(Base.IDLE, locomotionFade());
+                else switchBase(locomotionPlayback(Base.WALK), locomotionFade());
+            }
+        });
     }
 
     /**
