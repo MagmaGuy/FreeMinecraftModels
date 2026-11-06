@@ -617,6 +617,9 @@ public final class PetManager {
         dress(control, entity, modeled);
         // Its first frame carries on from the old model's, so the switch of bodies does not show in its animation.
         modeled.getAnimationComponent().continueFrom(oldModel.getAnimationComponent());
+        // Shown now, in the tick the old model goes, rather than at the next viewer refresh up to 4 ticks later: the pet
+        // never vanishes, and its rider's client gets the new body to steer at once.
+        modeled.getSkeleton().getSkeletonWatchers().tickPrimaryThread();
         // The old body leaves no pet behind: no map holds it now, so its removal events find nothing.
         oldModel.remove();
         if (old.isValid()) old.remove();
