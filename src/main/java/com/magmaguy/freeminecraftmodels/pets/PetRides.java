@@ -218,7 +218,9 @@ final class PetRides {
                 double eyes = rider.getEyeLocation().getY() - body.getLocation().getY();
                 Block feet = body.getLocation().getBlock();
                 int depth = waterDepth(dy -> isWater(feet.getRelative(0, dy, 0)), (int) Math.ceil(eyes) + 1);
-                boolean diving = diving(ride.diving, depth, eyes, isWater(rider.getEyeLocation().getBlock()));
+                // The rider's client reports whether the body it steers stands on something.
+                boolean airborne = depth == 0 && !body.isOnGround();
+                boolean diving = diving(ride.diving, depth, eyes, isWater(rider.getEyeLocation().getBlock()), airborne);
                 if (diving != ride.diving) {
                     LivingEntity next = swap(control, rider, diving);
                     if (next == null) continue;
@@ -346,11 +348,12 @@ final class PetRides {
      * as deep as its rider's eyes are above them, where a pet standing on the bottom would hold them under; its rider's
      * eyes alone cannot tell, since its small land body floats and keeps them above the surface. It surfaces with its
      * rider's head out of the water once the water is SURFACE_MARGIN shallower, in the shallows of a beach, so an
-     * underwater tunnel never surfaces it.
+     * underwater tunnel never surfaces it. A diving body that leaps out of the water stays one until it lands, so the
+     * leap keeps its speed and it either falls back in or surfaces where it comes down.
      */
-    static boolean diving(boolean diving, int depth, double eyeHeight, boolean eyesInWater) {
+    static boolean diving(boolean diving, int depth, double eyeHeight, boolean eyesInWater, boolean airborne) {
         if (!diving) return depth >= eyeHeight;
-        return eyesInWater || depth >= eyeHeight - SURFACE_MARGIN;
+        return airborne || eyesInWater || depth >= eyeHeight - SURFACE_MARGIN;
     }
 
     /**

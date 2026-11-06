@@ -15,35 +15,42 @@ class PetRidesDiveTest {
 
     @Test
     void itDivesWhereTheWaterWouldReachItsRidersEyes() {
-        assertTrue(PetRides.diving(false, 2, EYES, false));
-        assertFalse(PetRides.diving(false, 1, EYES, false));
-        assertFalse(PetRides.diving(false, 0, EYES, false));
+        assertTrue(PetRides.diving(false, 2, EYES, false, false));
+        assertFalse(PetRides.diving(false, 1, EYES, false, false));
+        assertFalse(PetRides.diving(false, 0, EYES, false, false));
     }
 
     @Test
     void itKeepsSwimmingAtTheSurfaceOfDeepWater() {
-        assertTrue(PetRides.diving(true, 6, EYES, false));
+        assertTrue(PetRides.diving(true, 6, EYES, false, false));
     }
 
     @Test
     void itNeverSurfacesWhileItsRidersEyesAreUnderWater() {
-        assertTrue(PetRides.diving(true, 1, EYES, true));
+        assertTrue(PetRides.diving(true, 1, EYES, true, false));
     }
 
     @Test
     void itSurfacesWithItsRidersHeadOutInTheShallowsOfABeach() {
-        assertTrue(PetRides.diving(true, 2, EYES, false));
-        assertFalse(PetRides.diving(true, 1, EYES, false));
-        assertFalse(PetRides.diving(true, 0, EYES, false));
+        assertTrue(PetRides.diving(true, 2, EYES, false, false));
+        assertFalse(PetRides.diving(true, 1, EYES, false, false));
+        assertFalse(PetRides.diving(true, 0, EYES, false, false));
+    }
+
+    @Test
+    void aLeapOutOfTheWaterStaysADiveUntilItLands() {
+        assertTrue(PetRides.diving(true, 0, EYES, false, true));
+        assertFalse(PetRides.diving(true, 0, EYES, false, false));
+        assertFalse(PetRides.diving(false, 0, EYES, false, true));
     }
 
     @Test
     void noDepthFlipsItBetweenBodiesWhenItsTwoBodiesSeatTheRiderABitApart() {
         for (double eyes = 1.2D; eyes <= 3D; eyes += 0.05D)
             for (int depth = 0; depth <= 4; depth++)
-                if (PetRides.diving(false, depth, eyes, false))
+                if (PetRides.diving(false, depth, eyes, false, false))
                     for (double other = eyes - 0.4D; other <= eyes + 0.4D; other += 0.05D)
-                        assertTrue(PetRides.diving(true, depth, other, false), depth + " " + eyes + " " + other);
+                        assertTrue(PetRides.diving(true, depth, other, false, false), depth + " " + eyes + " " + other);
     }
 
     @Test
