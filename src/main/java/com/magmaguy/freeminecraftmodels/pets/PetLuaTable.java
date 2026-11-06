@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.pets;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
 import com.magmaguy.freeminecraftmodels.customentity.core.OrientedBoundingBox;
+import com.magmaguy.freeminecraftmodels.pets.behavior.PetBehaviorCatalog;
 import com.magmaguy.freeminecraftmodels.pets.interactions.CampfireIndex;
 import com.magmaguy.freeminecraftmodels.pets.interactions.PetSky;
 import com.magmaguy.magmacore.ai.MindActuator;
@@ -37,12 +38,17 @@ import org.bukkit.block.data.Ageable;
 import org.bukkit.block.data.Lightable;
 import org.bukkit.entity.Enemy;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.block.BlockGrowEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.entity.EntityRegainHealthEvent;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.BoundingBox;
+import org.bukkit.util.Vector;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -55,6 +61,7 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -80,7 +87,8 @@ public final class PetLuaTable {
     /** Every name a module can read on c.pet. */
     public static final Set<String> PROPERTIES = Set.of("wild", "staying", "settled", "baby", "migrating", "model",
             "species", "position", "home", "anchor", "stay_anchor", "owner_location", "owner_distance", "follow_range",
-            "roam_range", "night", "day", "raining", "speed", "route_cruise", "threat", "attacker", "hurt_count");
+            "roam_range", "night", "day", "raining", "snowing", "speed", "route_cruise", "threat", "attacker",
+            "hurt_count");
     /** How far from its owner an owned pet looks for someone to defend them against. */
     static final double THREAT_RANGE = 16D;
     /** How long a wild pet keeps the player who hurt it in mind: 30 seconds. */
@@ -89,7 +97,8 @@ public final class PetLuaTable {
     public static final Set<String> METHODS = Set.of("steer_to", "stop", "hover_point", "rest_point", "ground_below",
             "ground_point", "water_point", "trail_point", "teleport_near_owner", "distance_to", "route_target",
             "find_perch", "nearest_campfire", "campfire_usable", "set_glow", "clear_glow", "scale_toward",
-            "sting_contacts", "sting_enemies", "strike_attacker", "drizzle", "owner_effect", "play_animation");
+            "sting_contacts", "sting_enemies", "strike_attacker", "drizzle", "owner_effect", "play_animation",
+            "kin_center", "line_ahead", "gift", "nearest_item", "eat_item", "slide_point", "set_walk_animation");
     /** The fields of c.pet.species. */
     public static final Set<String> SPECIES_FIELDS = Set.of("id", "speed", "hover_height", "hover_variance",
             "roam_radius", "follow_distance", "leash_distance", "teleport_distance", "scale", "baby_scale");
@@ -117,6 +126,14 @@ public final class PetLuaTable {
     /** The sting effect name that freezes its victim, as powder snow does, instead of giving a potion effect. */
     static final String FREEZE = "FREEZE";
     private static final int MAX_DRIZZLE_DEPTH = 8;
+    // A huddle or a line counts kin this far off at most; a gift, an eaten item and a slide stay within these.
+    private static final double MAX_KIN_RADIUS = 32D, MAX_GIFT_RANGE = 8D, MAX_ITEM_RADIUS = 16D, MAX_SLIDE_LENGTH = 24D;
+    // Half hearts one eaten item heals at most: a full health bar of 20 twice over.
+    private static final double MAX_HEAL = 40D;
+    /** A slide is traced in steps this long, so it never skips a block. */
+    private static final double SLIDE_STEP = 0.5D;
+    /** The pickup delay vanilla gives an item nobody may pick up; display items from plugins use it or more. */
+    private static final int NEVER_PICKED_UP = 32767;
     // The scale attribute's own top, so the eased size stays finite.
     private static final double MIN_SCALE_MULTIPLIER = 0.1D, MAX_SCALE_MULTIPLIER = 16D;
     private static final int MAX_AMPLIFIER = 255;
@@ -140,8 +157,8 @@ public final class PetLuaTable {
     private final WalkPath path = new WalkPath();
     // The body's location this tick, shared by c.pet.position and distance_to.
     private final Supplier<Location> position;
-    private boolean raining;
-    private long nextRainCheck = Long.MIN_VALUE;
+    private boolean raining, snowing;
+    private long nextRainCheck = Long.MIN_VALUE, nextSnowCheck = Long.MIN_VALUE;
     private double scale = Double.NaN;
     private DynamicEntity glowModel;
     private boolean glowAnimating;
@@ -199,6 +216,7 @@ public final class PetLuaTable {
         property("night", ticks.perTick(() -> LuaValue.valueOf(PetSky.isNight(body().getWorld()))));
         property("day", ticks.perTick(() -> LuaValue.valueOf(PetSky.isDay(body().getWorld()))));
         property("raining", ticks.perTick(() -> LuaValue.valueOf(raining())));
+        property("snowing", ticks.perTick(() -> LuaValue.valueOf(snowing())));
         // Not kept: the stop MagmaCore makes when a behavior gives up its controls changes it within the tick.
         property("speed", () -> LuaValue.valueOf(body().getVelocity().length()));
         property("route_cruise", ticks.perTick(() ->
@@ -418,6 +436,80 @@ public final class PetLuaTable {
             return LuaValue.valueOf(modeled != null && !modeled.isRemoved() && modeled.hasAnimation(name)
                     && modeled.playAnimation(name, true, false));
         });
+        // kin_center(radius, min): the middle of this pet and its kin within radius (up to 32), by their feet: pets of
+        // its species, wild like it or of its owner, neither migrating nor ridden. nil when there are fewer than min of
+        // them (1 to 64), this pet included.
+        method("kin_center", args -> {
+            double radius = number(args, 1, 0D, MAX_KIN_RADIUS);
+            return location(kinCenter(radius, whole(args, 2, 1, MAX_LIST_ENTRIES)));
+        });
+        // line_ahead(radius, leaders): single file. Where the pet ahead of this one in its line is, after keeping its
+        // place behind it for 10 more ticks; without a place, it joins the end of the line of the nearest kin within
+        // radius (up to 32) that runs one of the leaders behaviors (module names, such as wander). nil when it has no
+        // line: none to join, its head stopped leading, or the pet ahead is gone or more than radius off.
+        method("line_ahead", args -> {
+            double radius = number(args, 1, 0D, MAX_KIN_RADIUS);
+            Set<String> leaders = new HashSet<>();
+            for (String name : texts(args.arg(2))) leaders.add(PetBehaviorCatalog.ID_PREFIX + name);
+            return location(PetLines.ahead(control, body(), radius, leaders, PetManager.ticks()));
+        });
+        // gift(item, amount, range, sound, volume, pitch): an owned pet drops amount (1 to a stack) of item in front of
+        // it, toward its owner, for the owner alone to pick up, playing sound (a sound key, or NONE) at volume 0 to 4
+        // and pitch 0.5 to 2. false for a wild pet, an item that names nothing, or an owner away or past range (0 to 8).
+        method("gift", args -> {
+            String name = args.checkjstring(1);
+            int amount = whole(args, 2, 1, 64);
+            double range = number(args, 3, 0D, MAX_GIFT_RANGE);
+            String sound = args.optjstring(4, "");
+            float volume = (float) number(args, 5, 0D, MAX_VOLUME), pitch = (float) number(args, 6, MIN_PITCH, MAX_PITCH);
+            Player owner = control.owner().orElse(null);
+            LivingEntity body = body();
+            if (control.isWild() || owner == null || owner.getWorld() != body.getWorld()
+                    || owner.getLocation().distance(body.getLocation()) > range) return LuaValue.FALSE;
+            Material material = item(name, "c.pet:gift");
+            if (material == null) return LuaValue.FALSE;
+            gift(body, owner, new ItemStack(material, Math.min(amount, material.getMaxStackSize())), sound, volume, pitch);
+            return LuaValue.TRUE;
+        });
+        // nearest_item(radius, items): the nearest dropped stack of one of the items (names) within radius (up to 16)
+        // that anyone may pick up and that is plain, without a name, lore or other data; an owned pet's must lie within
+        // its follow range of its owner. nil when there is none.
+        method("nearest_item", args -> {
+            double radius = number(args, 1, 0D, MAX_ITEM_RADIUS);
+            Item item = nearestItem(radius, items(args.arg(2), "c.pet:nearest_item"));
+            return item == null ? LuaValue.NIL : location(item.getLocation());
+        });
+        // eat_item(reach, items, heal, sound, volume, pitch): eats one item off the nearest such stack its model touches
+        // within reach (0 to 4), healing heal half hearts (0 to 40) and playing sound at volume 0 to 4 and pitch 0.5 to
+        // 2. A plugin cancelling the pickup event keeps the item. false when nothing was eaten.
+        method("eat_item", args -> {
+            double reach = number(args, 1, 0D, MAX_STING_REACH);
+            Set<Material> kinds = items(args.arg(2), "c.pet:eat_item");
+            double heal = number(args, 3, 0D, MAX_HEAL);
+            String sound = args.optjstring(4, "");
+            float volume = (float) number(args, 5, 0D, MAX_VOLUME), pitch = (float) number(args, 6, MIN_PITCH, MAX_PITCH);
+            return LuaValue.valueOf(eatItem(reach, kinds, heal, sound, volume, pitch));
+        });
+        // slide_point(min_length, max_length, surfaces): the end of the best straight slide from where the pet stands
+        // over the surface blocks (names): of 16 headings, the run that goes farthest, each block of descent counting
+        // two, up to max_length (up to 24), never climbing a block or dropping more than one, and stopping at water, a
+        // wall or an unloaded chunk. nil when it does not stand on such a block, no run reaches min_length, or an owned
+        // pet's would end out of its follow range of its owner.
+        method("slide_point", args -> {
+            double maxLength = number(args, 2, 0D, MAX_SLIDE_LENGTH);
+            double minLength = number(args, 1, 0D, maxLength);
+            return location(slidePoint(minLength, maxLength, blocks(args.arg(3), "c.pet:slide_point")));
+        });
+        // set_walk_animation(name): the animation the model plays while the pet walks, in place of its walk; an empty
+        // name, or one the model has nothing for, puts its own walk back. false when the model lacks it or is gone.
+        method("set_walk_animation", args -> {
+            String name = args.optjstring(1, "");
+            DynamicEntity modeled = control.modeled();
+            if (modeled == null || modeled.isRemoved()) return LuaValue.FALSE;
+            boolean has = named(name) && modeled.hasAnimation(name);
+            modeled.getAnimationComponent().setWalkAnimation(has ? name : null);
+            return LuaValue.valueOf(has);
+        });
 
         Set<String> expected = new HashSet<>(PROPERTIES);
         expected.addAll(METHODS);
@@ -613,6 +705,16 @@ public final class PetLuaTable {
         if (!control.isWild()) return control.owner().map(Player::getLocation).orElse(null);
         Location home = control.home();
         return home != null ? home : body().getLocation();
+    }
+
+    /** Whether snow falls on the pet, looked up at most every 10 ticks. */
+    private boolean snowing() {
+        long now = PetManager.ticks();
+        if (now >= nextSnowCheck) {
+            nextSnowCheck = now + 10L;
+            snowing = PetSky.isSnowingOn(body().getLocation());
+        }
+        return snowing;
     }
 
     /** Whether rain falls on the pet, looked up at most every 10 ticks. */
@@ -876,13 +978,234 @@ public final class PetLuaTable {
 
     /** Whether the victim's box, grown by the reach, meets the model's oriented hitbox, or else the body's box. */
     private boolean touches(LivingEntity victim, double reach) {
-        BoundingBox victimBox = victim.getBoundingBox().expand(reach);
+        return touches(victim.getBoundingBox(), reach);
+    }
+
+    private boolean touches(BoundingBox box, double reach) {
+        BoundingBox victimBox = box.clone().expand(reach);
         DynamicEntity modeled = control.modeled();
         if (modeled != null && !modeled.isRemoved()) {
             OrientedBoundingBox hitbox = modeled.getHitboxComponent().getObbHitbox();
             if (hitbox != null) return hitbox.intersectsAABBCoherently(victimBox);
         }
         return body().getBoundingBox().overlaps(victimBox);
+    }
+
+    /** The middle of this pet and its kin within radius, by their feet; null when fewer than min of them are there. */
+    private Location kinCenter(double radius, int min) {
+        PetManager manager = PetManager.get();
+        LivingEntity body = body();
+        Location here = body.getLocation();
+        double x = here.getX(), y = here.getY(), z = here.getZ();
+        int count = 1;
+        if (manager != null) {
+            for (Entity entity : body.getWorld().getNearbyEntities(here, radius, radius, radius,
+                    candidate -> candidate instanceof LivingEntity && candidate != body)) {
+                Location at = entity.getLocation();
+                if (at.distanceSquared(here) > radius * radius || !PetLines.kin(control, manager.pet(entity))) continue;
+                x += at.getX();
+                y += at.getY();
+                z += at.getZ();
+                count++;
+            }
+        }
+        return count < min ? null : new Location(here.getWorld(), x / count, y / count, z / count);
+    }
+
+    /** The item kinds a list names, of its first MAX_LIST_ENTRIES; a name that is no item is warned about once. */
+    private Set<Material> items(LuaValue list, String call) {
+        Set<Material> kinds = new HashSet<>();
+        for (String name : texts(list)) {
+            Material material = item(name, call);
+            if (material != null) kinds.add(material);
+        }
+        return kinds;
+    }
+
+    /** The item a name gives. NONE and blanks give none quietly; any other name that is no item is warned about. */
+    private Material item(String name, String call) {
+        return material(name, call, "item", Material::isItem);
+    }
+
+    /** The block kinds a list names, as {@link #items} reads items. */
+    private Set<Material> blocks(LuaValue list, String call) {
+        Set<Material> kinds = new HashSet<>();
+        for (String name : texts(list)) {
+            Material material = material(name, call, "block", Material::isBlock);
+            if (material != null) kinds.add(material);
+        }
+        return kinds;
+    }
+
+    private Material material(String name, String call, String kind, Predicate<Material> fits) {
+        if (!named(name)) return null;
+        Material material = Material.matchMaterial(name.trim());
+        if (material != null && !material.isAir() && fits.test(material)) return material;
+        warnings.unknownMaterial(control.species().id(), module, call, kind, name);
+        return null;
+    }
+
+    /** Drops the stack just in front of the body, toward the owner, for the owner alone to pick up. */
+    private static void gift(LivingEntity body, Player owner, ItemStack stack, String sound, float volume, float pitch) {
+        Location from = body.getLocation();
+        Vector toward = owner.getLocation().toVector().subtract(from.toVector()).setY(0D);
+        double distance = toward.length();
+        Vector step = distance < 1.0E-4D ? new Vector() : toward.multiply(Math.min(0.6D, distance * 0.5D) / distance);
+        Item drop = body.getWorld().dropItem(from.clone().add(step).add(0D, 0.3D, 0D), stack);
+        drop.setVelocity(new Vector(0D, 0.15D, 0D));
+        drop.setOwner(owner.getUniqueId());
+        if (named(sound) && volume > 0F) body.getWorld().playSound(from, sound, volume, pitch);
+    }
+
+    /** The nearest loose stack of these kinds within radius, and within an owned pet's leash; null when none is. */
+    private Item nearestItem(double radius, Set<Material> kinds) {
+        if (kinds.isEmpty()) return null;
+        LivingEntity body = body();
+        Location here = body.getLocation();
+        Item nearest = null;
+        double best = radius * radius;
+        for (Entity entity : body.getWorld().getNearbyEntities(here, radius, radius, radius,
+                candidate -> candidate instanceof Item)) {
+            Item item = (Item) entity;
+            double distance = item.getLocation().distanceSquared(here);
+            if (distance > best || !loose(item, kinds) || !withinLeash(item.getLocation())) continue;
+            best = distance;
+            nearest = item;
+        }
+        return nearest;
+    }
+
+    /**
+     * A dropped stack of these kinds that anyone may pick up, as plain as it comes: an item kept for one player, such
+     * as a pet's gift, a display piece nobody may pick up, and one carrying a name, lore or any other data stay put.
+     */
+    private static boolean loose(Item item, Set<Material> kinds) {
+        if (item.isDead() || item.getOwner() != null || item.getPickupDelay() >= NEVER_PICKED_UP) return false;
+        ItemStack stack = item.getItemStack();
+        return kinds.contains(stack.getType()) && !stack.hasItemMeta();
+    }
+
+    /** Eats one item off the nearest loose stack of these kinds the model touches within reach; whether it did. */
+    private boolean eatItem(double reach, Set<Material> kinds, double heal, String sound, float volume, float pitch) {
+        if (kinds.isEmpty()) return false;
+        LivingEntity body = body();
+        Location here = body.getLocation();
+        Item nearest = null;
+        double best = Double.POSITIVE_INFINITY;
+        for (Entity entity : body.getWorld().getNearbyEntities(body.getBoundingBox().expand(reach + 1.5D),
+                candidate -> candidate instanceof Item)) {
+            Item item = (Item) entity;
+            double distance = item.getLocation().distanceSquared(here);
+            if (distance >= best || !loose(item, kinds) || !touches(item.getBoundingBox(), reach)) continue;
+            best = distance;
+            nearest = item;
+        }
+        if (nearest == null) return false;
+        ItemStack stack = nearest.getItemStack();
+        int left = stack.getAmount() - 1;
+        EntityPickupItemEvent event = new EntityPickupItemEvent(body, nearest, Math.max(0, left));
+        Bukkit.getPluginManager().callEvent(event);
+        if (event.isCancelled()) return false;
+        Location at = nearest.getLocation().add(0D, 0.25D, 0D);
+        Material type = stack.getType();
+        if (left <= 0) {
+            nearest.remove();
+        } else {
+            stack.setAmount(left);
+            nearest.setItemStack(stack);
+        }
+        World world = body.getWorld();
+        world.spawnParticle(Particle.ITEM, at, 8, 0.1D, 0.1D, 0.1D, 0.05D, new ItemStack(type));
+        if (named(sound) && volume > 0F) world.playSound(here, sound, volume, pitch);
+        if (heal > 0D) heal(body, heal);
+        return true;
+    }
+
+    /** Heals the body as eating does, unless a plugin cancels it; a pet showing its health shows the new one. */
+    private void heal(LivingEntity body, double amount) {
+        double max = PetManager.maxHealth(body);
+        if (body.isDead() || body.getHealth() >= max) return;
+        EntityRegainHealthEvent event = new EntityRegainHealthEvent(body, amount,
+                EntityRegainHealthEvent.RegainReason.EATING);
+        Bukkit.getPluginManager().callEvent(event);
+        if (event.isCancelled() || event.getAmount() <= 0D) return;
+        body.setHealth(Math.min(max, body.getHealth() + event.getAmount()));
+        PetManager manager = PetManager.get();
+        if (manager != null) manager.showHealth(control);
+    }
+
+    /** No block in the column a body can stand in. */
+    private static final int NO_FOOTING = Integer.MIN_VALUE;
+
+    /** See slide_point. */
+    private Location slidePoint(double minLength, double maxLength, Set<Material> surfaces) {
+        if (surfaces.isEmpty() || maxLength < SLIDE_STEP) return null;
+        LivingEntity body = body();
+        Location from = body.getLocation();
+        World world = from.getWorld();
+        int startX = from.getBlockX(), startZ = from.getBlockZ();
+        int start = standing(world, startX, from.getBlockY() + 1, startZ);
+        if (start == NO_FOOTING || !surfaces.contains(surface(world, startX, start, startZ))) return null;
+        // A random turn of the 16 headings, so slides do not all run along the block grid.
+        double turn = ThreadLocalRandom.current().nextDouble(Math.PI / 8D);
+        Location best = null;
+        double bestScore = Double.NEGATIVE_INFINITY;
+        for (int heading = 0; heading < 16; heading++) {
+            double angle = turn + heading * Math.PI / 8D, dx = Math.cos(angle), dz = Math.sin(angle);
+            int feet = start, descent = 0;
+            double run = 0D;
+            Location end = null;
+            for (double along = SLIDE_STEP; along <= maxLength + 1.0E-9D; along += SLIDE_STEP) {
+                double x = from.getX() + dx * along, z = from.getZ() + dz * along;
+                int blockX = (int) Math.floor(x), blockZ = (int) Math.floor(z);
+                if (!world.isChunkLoaded(blockX >> 4, blockZ >> 4)) break;
+                int next = standing(world, blockX, feet, blockZ);
+                if (next == NO_FOOTING || !surfaces.contains(surface(world, blockX, next, blockZ))) break;
+                descent += feet - next;
+                feet = next;
+                run = along;
+                end = new Location(world, x, next, z);
+            }
+            if (end == null || run < minLength) continue;
+            double score = run + 2D * descent;
+            if (score > bestScore && withinLeash(end)) {
+                bestScore = score;
+                best = end;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * The block a body stands in at this column, at feet or one below: room for its feet and head over firm ground.
+     * NO_FOOTING when neither fits: a wall, a drop of two or more, or liquid. A snow layer is room, the body standing in it.
+     */
+    private static int standing(World world, int x, int feet, int z) {
+        for (int y = feet; y >= feet - 1; y--) {
+            if (y - 1 < world.getMinHeight() || y + 1 >= world.getMaxHeight()) return NO_FOOTING;
+            if (!room(world.getBlockAt(x, y, z)) || !firm(world.getBlockAt(x, y - 1, z))) continue;
+            return room(world.getBlockAt(x, y + 1, z)) ? y : NO_FOOTING;
+        }
+        return NO_FOOTING;
+    }
+
+    /** A block a body's feet or head fit in: a snow layer, or anything passable but liquid and powder snow. */
+    private static boolean room(Block block) {
+        Material type = block.getType();
+        if (type == Material.SNOW) return true;
+        return block.isPassable() && !block.isLiquid() && type != Material.POWDER_SNOW;
+    }
+
+    /** A block a body stands on: solid, and neither a snow layer, which it stands in, nor powder snow, which it sinks in. */
+    private static boolean firm(Block block) {
+        Material type = block.getType();
+        return !block.isPassable() && type != Material.SNOW && type != Material.POWDER_SNOW;
+    }
+
+    /** What a body standing in this block slides on: the snow layer it stands in, or the block under it. */
+    private static Material surface(World world, int x, int feet, int z) {
+        Material at = world.getBlockAt(x, feet, z).getType();
+        return at == Material.SNOW ? at : world.getBlockAt(x, feet - 1, z).getType();
     }
 
     /** A sting's effect name, duration ticks, amplifier, damage and cooldown ticks. */
@@ -1061,6 +1384,13 @@ public final class PetLuaTable {
         void unknownEffect(String species, String module, String call, String effect) {
             say("effect\n" + species + "\n" + effect.toLowerCase(Locale.ROOT), "The " + species + " pet behavior "
                     + module + " gave " + call + " the potion effect " + effect + ", which does not exist; it applies none.",
+                    null);
+        }
+
+        /** A c.pet call was given an item or block name that names none of that kind. */
+        void unknownMaterial(String species, String module, String call, String kind, String name) {
+            say("material\n" + species + "\n" + name.toLowerCase(Locale.ROOT), "The " + species + " pet behavior "
+                    + module + " gave " + call + " the " + kind + " " + name + ", which does not exist; it is skipped.",
                     null);
         }
 
