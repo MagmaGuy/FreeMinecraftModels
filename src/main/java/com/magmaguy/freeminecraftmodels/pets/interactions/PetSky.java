@@ -5,7 +5,7 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 
-/** Day, night and rain as the interactions see them. */
+/** Day, night, rain and snow as the interactions see them. */
 public final class PetSky {
     // Day by these bounds, as wild spawning counts it; dusk and dawn fall on the night side.
     private static final long DAY_END = 12300L, DAY_START = 23850L;
@@ -36,6 +36,18 @@ public final class PetSky {
         if (!underOpenSky(location)) return false;
         Block block = location.getBlock();
         return block.getTemperature() >= 0.15D && block.getHumidity() > 0D;
+    }
+
+    /**
+     * Whether snow falls on this spot: a storm, open sky above, and a biome cold enough for snow where rain would fall,
+     * as vanilla decides between them.
+     */
+    public static boolean isSnowingOn(Location location) {
+        World world = location.getWorld();
+        if (world == null || !world.hasStorm()) return false;
+        if (!underOpenSky(location)) return false;
+        Block block = location.getBlock();
+        return block.getTemperature() < 0.15D && block.getHumidity() > 0D;
     }
 
     /** Nothing that stops rain or blocks the view between this spot and the sky. */

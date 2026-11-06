@@ -48,7 +48,8 @@ public final class PetBehaviorCatalog implements AutoCloseable {
     /** The shipped modules by file name, each a resource under pet_behaviors/ in the jar. */
     public static final List<String> DEFAULTS = List.of("migrate", "stay", "defend_owner", "follow_owner", "drift", "hover",
             "campfire", "day_perch", "rain_bloom", "night_glow", "sting", "retaliate", "strike_back", "crop_drizzle",
-            "owner_effect", "wander", "idle_look", "swim");
+            "owner_effect", "wander", "idle_look", "swim", "huddle", "fishing_trip", "toboggan", "single_file",
+            "pebble_gift", "fish_thief");
     private static final Pattern NAME = Pattern.compile("[a-z0-9._-]+");
     /** Ends a warning about a part of the folder that could not be read. */
     private static final String UNTIL_READ = ", and missing default pet behaviors are not written"

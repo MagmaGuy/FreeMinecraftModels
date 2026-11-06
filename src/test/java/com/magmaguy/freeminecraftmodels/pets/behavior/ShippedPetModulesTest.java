@@ -88,6 +88,16 @@ class ShippedPetModulesTest {
      */
     private static final long[] TICKS = LongStream.concat(LongStream.range(0, 120),
             LongStream.rangeClosed(4, 12).map(step -> step * 40)).toArray();
+    /**
+     * What the full run gives the modules that act on a roll of the dice or minutes apart, so each of their paths is
+     * reached within its 480 ticks whatever math.random draws: every roll succeeds, a present comes every second and
+     * is always flint. Every other setting keeps its default.
+     */
+    private static final Map<String, Map<String, Object>> SURE = Map.of(
+            "fishing_trip", Map.of("chance", 1.0, "gift_chance", 1.0),
+            "toboggan", Map.of("chance", 1.0),
+            "single_file", Map.of("join_chance", 1.0),
+            "pebble_gift", Map.of("chance", 1.0, "interval_seconds", 1, "items", List.of("FLINT")));
     /** When something else takes the body once, as a higher priority behavior would. */
     private static final long PREEMPT_AT = 80;
     // The pet file defaults (PetSpecies), but for speed and hover height: values other than 1 and trail_back's 1.5, so
@@ -105,7 +115,11 @@ class ShippedPetModulesTest {
      * at the nearest player within 8 blocks. stay bobs as before, now in the body's own medium. A drift, walk or swim
      * round the owner ends within the pet's roam range: 0.8 of its follow range, 4 here, where the owner is on the move.
      * strike_back is new too: a wild pet's headbutt within 1 block, 2 damage and no effect, with a goat's ram impact and
-     * crit particles.
+     * crit particles. The penguin's creature behaviors came after: a huddle of 3 within 8 blocks shuffling round at
+     * 0.05; a fishing trip to water 1 to 3 blocks deep within 8 blocks (an owned pet's within its roam range of its
+     * owner), on to spots within 4 of each other at 0.15, and a cod for the owner within 3 blocks; a slide of 4 to 12
+     * blocks over snow and ice at 0.35 playing slide; single file behind a wandering pet within 8 blocks at 0.2; flint
+     * for the owner from 2 blocks off (SURE); and fish within 8 blocks, eaten within 0.5 for 2 half hearts at 0.2.
      */
     private static final Set<String> DEFAULT_CALLS = Set.of(
             "fmm:pet/migrate route_target()", "fmm:pet/migrate steer_to(L, 0.3)", "fmm:pet/migrate stop()",
@@ -137,7 +151,21 @@ class ShippedPetModulesTest {
             "fmm:pet/wander steer_to(L, 0.225)", "fmm:pet/wander stop()",
             "fmm:pet/idle_look c.perception:nearest_player(8)", "fmm:pet/idle_look c.actuator:look_at(L)",
             "fmm:pet/swim water_point(L, 5, 0.5, 3)", "fmm:pet/swim water_point(L, 4, 0.5, 3)",
-            "fmm:pet/swim distance_to(L)", "fmm:pet/swim steer_to(L, 0.225)", "fmm:pet/swim stop()");
+            "fmm:pet/swim distance_to(L)", "fmm:pet/swim steer_to(L, 0.225)", "fmm:pet/swim stop()",
+            "fmm:pet/huddle kin_center(8, 3)", "fmm:pet/huddle steer_to(L, 0.075)", "fmm:pet/huddle stop()",
+            "fmm:pet/fishing_trip water_point(L, 8, 1, 3)", "fmm:pet/fishing_trip water_point(L, 4, 1, 3)",
+            "fmm:pet/fishing_trip distance_to(L)", "fmm:pet/fishing_trip steer_to(L, 0.225)",
+            "fmm:pet/fishing_trip gift(COD, 1, 3, entity.cod.flop, 1, 1)", "fmm:pet/fishing_trip stop()",
+            "fmm:pet/toboggan slide_point(4, 12, {SNOW, SNOW_BLOCK, ICE, PACKED_ICE, BLUE_ICE, FROSTED_ICE})",
+            "fmm:pet/toboggan set_walk_animation(slide)", "fmm:pet/toboggan set_walk_animation()",
+            "fmm:pet/toboggan distance_to(L)", "fmm:pet/toboggan steer_to(L, 0.525)", "fmm:pet/toboggan stop()",
+            "fmm:pet/single_file line_ahead(8, {wander})", "fmm:pet/single_file distance_to(L)",
+            "fmm:pet/single_file steer_to(L, 0.3)", "fmm:pet/single_file stop()",
+            "fmm:pet/pebble_gift gift(FLINT, 1, 2, block.gravel.hit, 1, 1.2)", "fmm:pet/pebble_gift steer_to(L, 0.225)",
+            "fmm:pet/pebble_gift stop()",
+            "fmm:pet/fish_thief nearest_item(8, {COD, SALMON, TROPICAL_FISH, COOKED_COD, COOKED_SALMON})",
+            "fmm:pet/fish_thief eat_item(0.5, {COD, SALMON, TROPICAL_FISH, COOKED_COD, COOKED_SALMON}, 2, entity.generic.eat, 1, 1)",
+            "fmm:pet/fish_thief steer_to(L, 0.3)", "fmm:pet/fish_thief stop()");
     /**
      * wander's and swim's calls by where the owner is: a wild pet's trips end within the roam radius of home, an owned
      * one's within 0.8 of the follow distance of its owner (4 of 5 here), so follow_owner does not take over as soon as
@@ -169,6 +197,16 @@ class ShippedPetModulesTest {
             Owner.PAST_LEASH, Set.of("sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)"),
             Owner.PAST_TELEPORT, Set.of("sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)"),
             Owner.AWAY, Set.of("sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)"));
+    /** pebble_gift's calls by where the owner is: only an owned pet near its owner brings a present. */
+    private static final Map<Owner, Set<String>> PEBBLE_CALLS = Map.of(
+            Owner.WILD, Set.of(), Owner.PAST_FOLLOW, Set.of(), Owner.PAST_LEASH, Set.of(), Owner.PAST_TELEPORT, Set.of(),
+            Owner.AWAY, Set.of(),
+            Owner.WITHIN_FOLLOW, Set.of("gift(FLINT, 1, 2, block.gravel.hit, 1, 1.2)", "steer_to(L, 0.225)", "stop()"));
+    /** single_file's calls by where the owner is: by default only wild pets line up. */
+    private static final Map<Owner, Set<String>> SINGLE_FILE_CALLS = Map.of(
+            Owner.WILD, Set.of("line_ahead(8, {wander})", "distance_to(L)", "steer_to(L, 0.3)", "stop()"),
+            Owner.WITHIN_FOLLOW, Set.of(), Owner.PAST_FOLLOW, Set.of(), Owner.PAST_LEASH, Set.of(),
+            Owner.PAST_TELEPORT, Set.of(), Owner.AWAY, Set.of());
     /** strike_back's calls by where the owner is: only a wild pet strikes back. */
     private static final Map<Owner, Set<String>> STRIKE_CALLS = Map.of(
             Owner.WILD, Set.of("strike_attacker(1, NONE, 60, 0, 2, 1, entity.goat.ram_impact, 1, 1, crit)"),
@@ -277,7 +315,10 @@ class ShippedPetModulesTest {
             Map.entry("fmm:pet/retaliate_charge", 2),
             Map.entry("fmm:pet/migrate", 10), Map.entry("fmm:pet/campfire", 10), Map.entry("fmm:pet/day_perch", 10),
             Map.entry("fmm:pet/rain_bloom", 10), Map.entry("fmm:pet/drift", 10), Map.entry("fmm:pet/wander", 10),
-            Map.entry("fmm:pet/swim", 10), Map.entry("fmm:pet/idle_look", 10));
+            Map.entry("fmm:pet/swim", 10), Map.entry("fmm:pet/idle_look", 10), Map.entry("fmm:pet/huddle", 10),
+            Map.entry("fmm:pet/fishing_trip", 10), Map.entry("fmm:pet/toboggan", 10),
+            Map.entry("fmm:pet/single_file", 10), Map.entry("fmm:pet/pebble_gift", 10),
+            Map.entry("fmm:pet/fish_thief", 10));
 
     @Test
     void everyShippedBehaviorIsAskedToStartAtItsPinnedInterval() {
@@ -308,7 +349,7 @@ class ShippedPetModulesTest {
             }
 
             PetPrograms.Program everything = programs.program("test", "everything", PetBehaviorCatalog.DEFAULTS.stream()
-                    .map(name -> new PetBehaviorEntry(name, Map.of())).toList(), "everything");
+                    .map(name -> new PetBehaviorEntry(name, SURE.getOrDefault(name, Map.of()))).toList(), "everything");
             Coverage coverage = exercise(everything, EnumSet.allOf(Answers.class));
             MindProgram instance = everything.definition().instantiate();
             Set<String> behaviors = instance.behaviors().stream().map(MindBehavior::identifier).collect(Collectors.toCollection(TreeSet::new));
@@ -334,6 +375,9 @@ class ShippedPetModulesTest {
             }
             assertCallsByOwner(STING_CALLS, coverage, "fmm:pet/sting", "sting's victims by whether the pet is wild");
             assertCallsByOwner(STRIKE_CALLS, coverage, "fmm:pet/strike_back", "only a wild pet strikes back");
+            assertCallsByOwner(PEBBLE_CALLS, coverage, "fmm:pet/pebble_gift",
+                    "only an owned pet near its owner brings a present");
+            assertCallsByOwner(SINGLE_FILE_CALLS, coverage, "fmm:pet/single_file", "only wild pets line up");
             assertCallsByOwner(WANDER_CALLS, coverage, "fmm:pet/wander", "wander's spots by whether the pet is wild");
             assertCallsByOwner(SWIM_CALLS, coverage, "fmm:pet/swim", "swim's spots by whether the pet is wild");
             // idle_look finds the player again every 5 ticks while it looks, and with nobody near searches every 20.
@@ -882,13 +926,17 @@ class ShippedPetModulesTest {
                     : owner.present() ? ownerLocation() : LuaValue.NIL);
             properties.put("stay_anchor", () -> staying ? place(0.5, 70, 0.5) : LuaValue.NIL);
             properties.put("owner_location", () -> owner.present() ? ownerLocation() : LuaValue.NIL);
-            properties.put("owner_distance", () -> LuaValue.valueOf(owner.distance));
+            // The near owner steps up to 2 blocks off and back to 3 every half second, so a pet both walks up to them
+            // and reaches them.
+            properties.put("owner_distance", () -> LuaValue.valueOf(owner == Owner.WITHIN_FOLLOW && tick % 20 < 10 ? 2
+                    : owner.distance));
             // The owner is on the move, so the follow range is the follow distance and an owned pet roams 0.8 of it.
             properties.put("follow_range", () -> LuaValue.valueOf(FOLLOW));
             properties.put("roam_range", () -> LuaValue.valueOf(owner == Owner.WILD ? 5 : FOLLOW * 0.8));
             properties.put("night", () -> LuaValue.valueOf(night));
             properties.put("day", () -> LuaValue.valueOf(!night));
             properties.put("raining", () -> LuaValue.valueOf(night));
+            properties.put("snowing", () -> LuaValue.valueOf(night));
             properties.put("speed", () -> LuaValue.valueOf(answers == Answers.SOMETHING ? 0.05 : 0));
             properties.put("route_cruise", () -> LuaValue.valueOf(owner == Owner.WILD ? 0.3 : 0));
             // Someone to defend the owner against, 2 blocks off, whenever the owner is there and the answers are not nothing.
@@ -930,6 +978,15 @@ class ShippedPetModulesTest {
             methods.put("drizzle", new Method("NN", args -> LuaValue.TRUE, LuaValue.FALSE));
             methods.put("owner_effect", new Method("SNNN", args -> LuaValue.valueOf(owner.present()), LuaValue.FALSE));
             methods.put("play_animation", new Method("S", args -> LuaValue.TRUE, LuaValue.FALSE));
+            methods.put("kin_center", new Method("NN", args -> place(x() + 1, 70, 0.5), LuaValue.NIL));
+            methods.put("line_ahead", new Method("NT", args -> place(x() + 2, 70, 0.5), LuaValue.NIL));
+            methods.put("gift", new Method("SNNsNN", args -> LuaValue.valueOf(owner.present()), LuaValue.FALSE));
+            methods.put("nearest_item", new Method("NT", args -> place(x() + 3, 70, 0.5), LuaValue.NIL));
+            // Something to eat only every third tick, as a pet must walk up to the fish first. Searches come 40 ticks
+            // apart, so some trips start between bites.
+            methods.put("eat_item", new Method("NTNsNN", args -> LuaValue.valueOf(tick % 3 == 0), LuaValue.FALSE));
+            methods.put("slide_point", new Method("NNT", args -> place(x() + 6, 69, 0.5), LuaValue.NIL));
+            methods.put("set_walk_animation", new Method("s", args -> LuaValue.TRUE, LuaValue.FALSE));
             assertEquals(PetLuaTable.METHODS, methods.keySet(), "the stand-in's methods match PetLuaTable's");
             Map<String, LuaValue> functions = new HashMap<>();
             methods.forEach((name, method) -> functions.put(name, function(name, method)));

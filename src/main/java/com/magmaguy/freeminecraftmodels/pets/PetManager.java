@@ -209,6 +209,7 @@ public final class PetManager {
         manager.ownedBodies.clear();
         manager.aggressors.clear();
         manager.paces.clear();
+        PetLines.clear();
         if (manager.behaviors != null) manager.behaviors.close();
     }
 
