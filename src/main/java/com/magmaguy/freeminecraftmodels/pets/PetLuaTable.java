@@ -505,8 +505,9 @@ public final class PetLuaTable {
         // slide_point(min_length, max_length, surfaces): the end of the best straight slide from where the pet stands
         // over the surface blocks (names): of 16 headings, the run that goes farthest, each block of descent counting
         // two, up to max_length (up to 24), never climbing a block or dropping more than one, and stopping at water, a
-        // wall or an unloaded chunk. nil when it does not stand on such a block, no run reaches min_length, or an owned
-        // pet's would end out of its follow range of its owner.
+        // wall or an unloaded chunk. nil when it does not stand on such a block or no run reaches min_length. An owned
+        // pet's run must end within its follow range of its owner, and a wild pet's within max_length blocks across of
+        // its home or nearer home than it starts, so slide after slide down a long slope does not carry it off.
         method("slide_point", args -> {
             double maxLength = number(args, 2, 0D, MAX_SLIDE_LENGTH);
             double minLength = number(args, 1, 0D, maxLength);
@@ -969,6 +970,17 @@ public final class PetLuaTable {
                 && owner.getLocation().distance(spot) <= control.followRange();
     }
 
+    /** See slide_point: where a slide from {@code from} may end. */
+    private boolean slideLeash(Location from, Location end, double maxLength) {
+        if (!control.isWild()) return withinLeash(end);
+        Location home = control.home();
+        if (home == null || home.getWorld() != end.getWorld()) return true;
+        double endX = end.getX() - home.getX(), endZ = end.getZ() - home.getZ();
+        double fromX = from.getX() - home.getX(), fromZ = from.getZ() - home.getZ();
+        double reach = endX * endX + endZ * endZ;
+        return reach <= maxLength * maxLength || reach < fromX * fromX + fromZ * fromZ;
+    }
+
     /** The fire kinds, soul variants and smoke height a campfire call gives, from argument {@code first}. */
     private Campfire campfire(Varargs args, int first) {
         return new Campfire(materials(args.arg(first)), texts(args.arg(first + 1)), number(args, first + 2));
@@ -1261,7 +1273,7 @@ public final class PetLuaTable {
             }
             if (end == null || run < minLength) continue;
             double score = run + 2D * descent;
-            if (score > bestScore && withinLeash(end)) {
+            if (score > bestScore && slideLeash(from, end, maxLength)) {
                 bestScore = score;
                 best = end;
             }
