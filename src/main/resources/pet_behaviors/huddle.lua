@@ -25,11 +25,12 @@ return ai.module {
     id = 'fmm:pet/huddle', revision = 1,
     -- radius is how far off the others may be, in blocks (up to 32), and min_group how many must gather, itself
     -- included. night and snow choose what sets it off. It looks for the others every search_seconds, and sees where
-    -- the group's middle has moved every 2 seconds. speed sets the shuffle as in wander: 4 x speed x the species speed
-    -- multiplies the body type's movement speed, never under a quarter of it. wild and pets switch it on for wild and
+    -- the group's middle has moved every 2 seconds. speed sets its walk to the huddle and each shuffle step as in
+    -- wander: 4 x speed x the species speed multiplies the body type's movement speed, never under a quarter of it. A
+    -- slower walk takes a minute to cross a few blocks. wild and pets switch it on for wild and
     -- for owned pets.
     settings = { radius = 8, min_group = 3, ring = 1.0, night = true, snow = true, wild = true, pets = true,
-                 search_seconds = 5, speed = 0.05 },
+                 search_seconds = 5, speed = 0.15 },
     memories = { huddle_center = 'position', huddle_angle = 'number', huddle_next_search = 'integer',
                  huddle_next_check = 'integer', huddle_next_step = 'integer' },
     behaviors = {

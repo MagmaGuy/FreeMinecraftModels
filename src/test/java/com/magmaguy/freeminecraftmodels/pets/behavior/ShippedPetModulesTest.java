@@ -152,7 +152,7 @@ class ShippedPetModulesTest {
             "fmm:pet/idle_look c.perception:nearest_player(8)", "fmm:pet/idle_look c.actuator:look_at(L)",
             "fmm:pet/swim water_point(L, 5, 0.5, 3)", "fmm:pet/swim water_point(L, 4, 0.5, 3)",
             "fmm:pet/swim distance_to(L)", "fmm:pet/swim steer_to(L, 0.225)", "fmm:pet/swim stop()",
-            "fmm:pet/huddle kin_center(8, 3)", "fmm:pet/huddle steer_onto(L, 0.075)", "fmm:pet/huddle stop()",
+            "fmm:pet/huddle kin_center(8, 3)", "fmm:pet/huddle steer_onto(L, 0.225)", "fmm:pet/huddle stop()",
             "fmm:pet/fishing_trip water_point(L, 8, 1, 3)", "fmm:pet/fishing_trip water_point(L, 4, 1, 3)",
             "fmm:pet/fishing_trip distance_to(L)", "fmm:pet/fishing_trip steer_to(L, 0.225)",
             "fmm:pet/fishing_trip gift(COD, 1, 3, entity.cod.flop, 1, 1)", "fmm:pet/fishing_trip stop()",

@@ -620,10 +620,12 @@ class PetLuaTableTest {
                 "far off it paths, as steer_to does");
         assertEquals(List.of("moveDirect 2.00 0.60"), steerOnto(ground, false, new Location(ground, 2, 64, 0.5), 0.15D),
                 "where a path would end about a block short, it walks straight at the point");
-        assertEquals(List.of("moveDirect 0.90 0.24"), steerOnto(ground, false, new Location(ground, 0.9, 64, 0.5), 0.15D),
+        assertEquals(List.of("moveDirect 0.90 0.48"), steerOnto(ground, false, new Location(ground, 0.9, 64, 0.5), 0.3D),
                 "easing off over the last block");
-        assertEquals(List.of("moveDirect 0.60 0.18"), steerOnto(ground, false, new Location(ground, 0.6, 64, 0.62), 0.15D),
+        assertEquals(List.of("moveDirect 0.60 0.36"), steerOnto(ground, false, new Location(ground, 0.6, 64, 0.62), 0.3D),
                 "never under 0.3 of its speed");
+        assertEquals(List.of("moveDirect 0.60 0.25"), steerOnto(ground, false, new Location(ground, 0.6, 64, 0.62), 0.15D),
+                "nor under the slowest walk");
         assertEquals(List.of("stopMoving"), steerOnto(ground, false, new Location(ground, 0.55, 64, 0.5), 0.15D),
                 "on the point it stands still");
         assertEquals(List.of("moveTo 1.70 0.60"), steerOnto(ground, false, new Location(ground, 1.7, 65, 0.5), 0.15D),
