@@ -5,7 +5,6 @@ import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -54,7 +53,7 @@ final class PetLines {
         if (other.isWild() != pet.isWild()) return false;
         if (!pet.isWild() && !pet.ownerId().equals(other.ownerId())) return false;
         LivingEntity body = other.body();
-        return other.route() == null && body != null && body.isValid() && body.getPassengers().isEmpty();
+        return other.route() == null && body != null && body.isValid() && body.isEmpty();
     }
 
     /**
@@ -153,9 +152,14 @@ final class PetLines {
         return kin(pet, control) && runs(control, leaders);
     }
 
-    /** Whether the pet's Mind runs one of these behaviors now. */
+    /**
+     * Whether the pet's Mind runs one of these behaviors now. Asked of every kin in reach when a pet looks for a line,
+     * so it asks the Mind directly rather than building a snapshot of it.
+     */
     private static boolean runs(PetControl control, Set<String> behaviors) {
         MindHandle mind = control.mind();
-        return mind != null && !Collections.disjoint(mind.inspect().activeBehaviors(), behaviors);
+        if (mind == null) return false;
+        for (String behavior : behaviors) if (mind.isRunning(behavior)) return true;
+        return false;
     }
 }
