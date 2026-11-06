@@ -849,7 +849,8 @@ public final class PetLuaTable {
          * steer_onto's walk. It paths as {@link #steer} does until the point is within {@link #ONTO_REACH} blocks
          * across and {@link #ONTO_RISE} up or down, with room and firm ground on the body's level all the way there
          * (see {@link #level}); then it walks straight at it through MindActuator.moveDirect, easing off to
-         * {@link #ONTO_SLOWEST} of its speed over the last block, so a path that ends about a block short does not
+         * {@link #ONTO_SLOWEST} of its speed over the last block but never under {@link #MIN_SPEED}, so a path that
+         * ends about a block short does not
          * leave it there. Within {@link #ONTO_DONE} it stops once and stands still on the point. A body in water keeps
          * to its path.
          */
@@ -878,7 +879,8 @@ public final class PetLuaTable {
                 return true;
             }
             stoppedOn = null;
-            return context.actuator().moveDirect(to, speed(cruise) * Math.max(ONTO_SLOWEST, Math.min(1D, across)));
+            double eased = speed(cruise) * Math.max(ONTO_SLOWEST, Math.min(1D, across));
+            return context.actuator().moveDirect(to, Math.max(MIN_SPEED, eased));
         }
 
         /** Whether the last steerOnto stopped the body. */
