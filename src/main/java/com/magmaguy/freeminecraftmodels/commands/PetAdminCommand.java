@@ -11,6 +11,7 @@ import com.magmaguy.magmacore.command.SenderType;
 import com.magmaguy.magmacore.command.arguments.DynamicListStringCommandArgument;
 import com.magmaguy.magmacore.command.arguments.ListStringCommandArgument;
 import com.magmaguy.magmacore.util.Logger;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
@@ -22,12 +23,13 @@ import java.util.concurrent.ThreadLocalRandom;
  * Admin and testing switches for pets: {@code mode creatures|cosmetic} picks whether species also live wild,
  * {@code spawn <species> [variant]} puts a wild one where you look, {@code cluster <species> [variant]} puts a wild
  * cluster there (see {@link PetSpecies.Cluster}), {@code give <species> [variant]} adds an owned one to your collection
- * (without a variant, a menu of the species' colours to pick from), {@code list} shows the loaded species.
+ * (without a variant, a menu of the species' colours to pick from), {@code march [species]} asks the nearest wild
+ * adult that marches to call a march as soon as it is free, for filming, and {@code list} shows the loaded species.
  */
 public class PetAdminCommand extends AdvancedCommand {
     public PetAdminCommand() {
         super(List.of("petadmin"));
-        addArgument("action", new ListStringCommandArgument(List.of("mode", "spawn", "cluster", "give", "list"), "<action>"));
+        addArgument("action", new ListStringCommandArgument(List.of("mode", "spawn", "cluster", "give", "march", "list"), "<action>"));
         addOptionalArgument("value", new DynamicListStringCommandArgument(() -> {
             List<String> values = new ArrayList<>(List.of("creatures", "cosmetic"));
             PetManager manager = PetManager.get();
@@ -42,7 +44,7 @@ public class PetAdminCommand extends AdvancedCommand {
                     for (PetSpecies.Variant variant : species.variants()) values.add(variant.model());
             return values;
         }, "[variant]"));
-        setUsage("/fmm petadmin <mode|spawn|cluster|give|list> [value] [variant]");
+        setUsage("/fmm petadmin <mode|spawn|cluster|give|march|list> [value] [variant]");
         setPermission("freeminecraftmodels.pets.admin");
         setSenderType(SenderType.PLAYER);
         setDescription("Pet mode switch and testing spawns.");
@@ -120,8 +122,47 @@ public class PetAdminCommand extends AdvancedCommand {
                 manager.give(player, species, model);
                 Logger.sendMessage(player, "&aAdded a " + species.id() + " (" + model + ") to your pets.");
             }
-            default -> Logger.sendMessage(player, "&cUse mode, spawn, cluster, give or list.");
+            case "march" -> march(player, manager, value);
+            default -> Logger.sendMessage(player, "&cUse mode, spawn, cluster, give, march or list.");
         }
+    }
+
+    /** How far from the admin /fmm petadmin march looks for a wild pet to ask. */
+    private static final double MARCH_SEARCH = 32D;
+
+    /**
+     * Asks the nearest wild adult within {@link #MARCH_SEARCH} blocks whose behaviors list the march module, of the
+     * named species when one is given, to call a march as soon as it is free.
+     */
+    private static void march(Player player, PetManager manager, String speciesId) {
+        PetSpecies only = null;
+        if (speciesId != null) {
+            only = manager.species(speciesId);
+            if (only == null) {
+                Logger.sendMessage(player, "&cUnknown pet species. /fmm petadmin list shows them.");
+                return;
+            }
+        }
+        PetControl nearest = null;
+        double best = Double.MAX_VALUE;
+        for (Entity entity : player.getNearbyEntities(MARCH_SEARCH, MARCH_SEARCH, MARCH_SEARCH)) {
+            PetControl pet = manager.pet(entity);
+            if (pet == null || !pet.isWild() || pet.isBaby() || only != null && pet.species() != only) continue;
+            if (pet.species().behaviors(pet.model()).stream().noneMatch(entry -> entry.module().equals("march")))
+                continue;
+            double distance = entity.getLocation().distanceSquared(player.getLocation());
+            if (distance < best) {
+                best = distance;
+                nearest = pet;
+            }
+        }
+        if (nearest == null || !manager.requestMarch(nearest)) {
+            Logger.sendMessage(player, "&cNo wild adult pet with the march behavior is within "
+                    + (int) MARCH_SEARCH + " blocks.");
+            return;
+        }
+        Logger.sendMessage(player, "&aAsked a wild " + nearest.species().id() + " to call a march. It goes once it is"
+                + " free, if at least one more of its kind is near it and it has room to set off.");
     }
 
     /**

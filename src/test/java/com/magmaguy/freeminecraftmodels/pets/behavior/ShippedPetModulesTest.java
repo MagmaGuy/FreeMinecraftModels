@@ -91,12 +91,12 @@ class ShippedPetModulesTest {
     /**
      * What the full run gives the modules that act on a roll of the dice or minutes apart, so each of their paths is
      * reached within its 480 ticks whatever math.random draws: every roll succeeds, a present comes every second and
-     * is always flint. Every other setting keeps its default.
+     * is always flint, and a march call plays the slide animation. Every other setting keeps its default.
      */
     private static final Map<String, Map<String, Object>> SURE = Map.of(
             "fishing_trip", Map.of("chance", 1.0, "gift_chance", 1.0),
             "toboggan", Map.of("chance", 1.0),
-            "single_file", Map.of("join_chance", 1.0),
+            "march", Map.of("every_minutes", 0.01, "animation", "slide"),
             "pebble_gift", Map.of("chance", 1.0, "interval_seconds", 1, "items", List.of("FLINT")));
     /** When something else takes the body once, as a higher priority behavior would. */
     private static final long PREEMPT_AT = 80;
@@ -117,7 +117,8 @@ class ShippedPetModulesTest {
      * crit particles. The penguin's creature behaviors came after: a huddle of 3 within 8 blocks shuffling round at
      * 0.05 to spots on its level, ground looked for 4 blocks down; a fishing trip to water 1 to 3 blocks deep within 8 blocks (an owned pet's within its roam range of its
      * owner), on to spots within 4 of each other at 0.15 with a splash at each, the fish bone shown on the way back (SURE), and a cod for the owner within 3 blocks; a slide of 4 to 12
-     * blocks over snow and ice at 0.35 playing slide; single file behind a wandering pet within 8 blocks at 0.2; flint
+     * blocks over snow and ice at 0.35 playing slide; a march of 4 within 12 blocks lasting 60 to 120 seconds, 1.5
+     * blocks apart, called with a didgeridoo at pitch 2, walked onto its spots at 0.15 and at 0.24 when behind; flint
      * for the owner from 2 blocks off (SURE); and fish within 8 blocks, eaten within 0.5 for 2 half hearts at 0.2.
      */
     private static final Set<String> DEFAULT_CALLS = Set.of(
@@ -160,8 +161,10 @@ class ShippedPetModulesTest {
             "fmm:pet/toboggan slide_point(4, 12, {SNOW, SNOW_BLOCK, ICE, PACKED_ICE, BLUE_ICE, FROSTED_ICE})",
             "fmm:pet/toboggan set_walk_animation(slide)", "fmm:pet/toboggan set_walk_animation()",
             "fmm:pet/toboggan distance_to(L)", "fmm:pet/toboggan steer_to(L, 0.525)", "fmm:pet/toboggan stop()",
-            "fmm:pet/single_file line_ahead(8, {wander})", "fmm:pet/single_file distance_to(L)",
-            "fmm:pet/single_file steer_to(L, 0.3)", "fmm:pet/single_file stop()",
+            "fmm:pet/march march_spot()",
+            "fmm:pet/march march_call(12, 4, 1, 60, 120, 1.5, block.note_block.didgeridoo, 1, 2)",
+            "fmm:pet/march play_animation(slide)", "fmm:pet/march distance_to(L)",
+            "fmm:pet/march steer_onto(L, 0.225)", "fmm:pet/march steer_onto(L, 0.36)", "fmm:pet/march stop()",
             "fmm:pet/pebble_gift gift(FLINT, 1, 2, block.gravel.hit, 1, 1.2)", "fmm:pet/pebble_gift steer_to(L, 0.225)",
             "fmm:pet/pebble_gift stop()",
             "fmm:pet/fish_thief nearest_item(8, {COD, SALMON, TROPICAL_FISH, COOKED_COD, COOKED_SALMON})",
@@ -203,9 +206,11 @@ class ShippedPetModulesTest {
             Owner.WILD, Set.of(), Owner.PAST_FOLLOW, Set.of(), Owner.PAST_LEASH, Set.of(), Owner.PAST_TELEPORT, Set.of(),
             Owner.AWAY, Set.of(),
             Owner.WITHIN_FOLLOW, Set.of("gift(FLINT, 1, 2, block.gravel.hit, 1, 1.2)", "steer_to(L, 0.225)", "stop()"));
-    /** single_file's calls by where the owner is: by default only wild pets line up. */
-    private static final Map<Owner, Set<String>> SINGLE_FILE_CALLS = Map.of(
-            Owner.WILD, Set.of("line_ahead(8, {wander})", "distance_to(L)", "steer_to(L, 0.3)", "stop()"),
+    /** march's calls by where the owner is: by default only wild pets march. */
+    private static final Map<Owner, Set<String>> MARCH_CALLS = Map.of(
+            Owner.WILD, Set.of("march_spot()",
+                    "march_call(12, 4, 1, 60, 120, 1.5, block.note_block.didgeridoo, 1, 2)", "play_animation(slide)",
+                    "distance_to(L)", "steer_onto(L, 0.225)", "steer_onto(L, 0.36)", "stop()"),
             Owner.WITHIN_FOLLOW, Set.of(), Owner.PAST_FOLLOW, Set.of(), Owner.PAST_LEASH, Set.of(),
             Owner.PAST_TELEPORT, Set.of(), Owner.AWAY, Set.of());
     /** strike_back's calls by where the owner is: only a wild pet strikes back. */
@@ -319,7 +324,7 @@ class ShippedPetModulesTest {
             Map.entry("fmm:pet/rain_bloom", 10), Map.entry("fmm:pet/drift", 10), Map.entry("fmm:pet/wander", 10),
             Map.entry("fmm:pet/swim", 10), Map.entry("fmm:pet/idle_look", 10), Map.entry("fmm:pet/huddle", 10),
             Map.entry("fmm:pet/fishing_trip", 10), Map.entry("fmm:pet/toboggan", 10),
-            Map.entry("fmm:pet/single_file", 10), Map.entry("fmm:pet/pebble_gift", 10),
+            Map.entry("fmm:pet/march", 10), Map.entry("fmm:pet/pebble_gift", 10),
             Map.entry("fmm:pet/fish_thief", 10));
 
     @Test
@@ -379,7 +384,7 @@ class ShippedPetModulesTest {
             assertCallsByOwner(STRIKE_CALLS, coverage, "fmm:pet/strike_back", "only a wild pet strikes back");
             assertCallsByOwner(PEBBLE_CALLS, coverage, "fmm:pet/pebble_gift",
                     "only an owned pet near its owner brings a present");
-            assertCallsByOwner(SINGLE_FILE_CALLS, coverage, "fmm:pet/single_file", "only wild pets line up");
+            assertCallsByOwner(MARCH_CALLS, coverage, "fmm:pet/march", "only wild pets march");
             assertCallsByOwner(WANDER_CALLS, coverage, "fmm:pet/wander", "wander's spots by whether the pet is wild");
             assertCallsByOwner(SWIM_CALLS, coverage, "fmm:pet/swim", "swim's spots by whether the pet is wild");
             // idle_look finds the player again every 5 ticks while it looks, and with nobody near searches every 20.
@@ -945,6 +950,8 @@ class ShippedPetModulesTest {
             properties.put("attacker", () -> owner == Owner.WILD && !answersNothing("attacker")
                     ? place(x() + (tick % 40 < 20 ? 1 : 4), 70, 0.5) : LuaValue.NIL);
             properties.put("hurt_count", () -> LuaValue.valueOf(owner == Owner.WILD ? 1 : 0));
+            // An admin asks a wild pet to call a march for half of every 10 seconds.
+            properties.put("march_requested", () -> LuaValue.valueOf(owner == Owner.WILD && tick % 200 >= 100));
             assertEquals(PetLuaTable.PROPERTIES, properties.keySet(), "the stand-in's properties match PetLuaTable's");
 
             // Shapes: L a location, N a finite number, C a cruise (a number that may be infinite), T a list of text,
@@ -978,7 +985,10 @@ class ShippedPetModulesTest {
             methods.put("owner_effect", new Method("SNNN", args -> LuaValue.valueOf(owner.present()), LuaValue.FALSE));
             methods.put("play_animation", new Method("S", args -> LuaValue.TRUE, LuaValue.FALSE));
             methods.put("kin_center", new Method("NN", args -> place(x() + 1, 70, 0.5), LuaValue.NIL));
-            methods.put("line_ahead", new Method("NT", args -> place(x() + 2, 70, 0.5), LuaValue.NIL));
+            methods.put("march_call", new Method("NNNNNNsNN", args -> LuaValue.TRUE, LuaValue.FALSE));
+            // In no march for the first second of every 6, so a pet calls one, and in one 2 blocks ahead after.
+            methods.put("march_spot", new Method("", args -> tick % 120 < 20 ? LuaValue.NIL : place(x() + 2, 70, 0.5),
+                    LuaValue.NIL));
             methods.put("gift", new Method("SNNsNN", args -> LuaValue.valueOf(owner.present()), LuaValue.FALSE));
             methods.put("nearest_item", new Method("NT", args -> place(x() + 3, 70, 0.5), LuaValue.NIL));
             // Something to eat only every third tick, as a pet must walk up to the fish first. Searches come 40 ticks
