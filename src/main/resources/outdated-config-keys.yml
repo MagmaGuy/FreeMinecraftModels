@@ -62,6 +62,10 @@ pet_behaviors:
       - 90356065d2ffbbe59cb5bcd711aa54c811765878fb72b46b6b54553b07f3168c
       - bb302e944e03a2640ae83b51d7aa60624624ede848fe5bfc30a2c0f8f01f9a19
   - files:
+      - fishing_trip.lua
+    sha256:
+      - 1f537d42afcc7ebe8fbd7466dcf0bd36a9cb4b5b6f989a2f91b8c22cdcebe583
+  - files:
       - follow_owner.lua
     sha256:
       - 01fd2bb6b6280f2ba68d13e09a1a3a055ff43a928444bf4ca051ac30985a5b1f
