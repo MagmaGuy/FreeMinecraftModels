@@ -9,8 +9,8 @@ public class DriftjellyPetPack extends ContentPackageConfigFields {
         super("driftjelly_pet_pack",
                 true,
                 "&bDriftjelly Pet Pack",
-                List.of("&fFloating jellyfish pets in 11 colours, each with its own baby: tame them with glow berries,",
-                        "&fbreed them and keep them."),
+                List.of("&fFloating jellyfish pets that drift, perch and glow at night: tame them with glow berries,",
+                        "&fbreed them and keep them. The Driftjelly Colours Pack adds 10 more colours."),
                 "https://nightbreak.io/plugin/freeminecraftmodels/",
                 "fmm_driftjelly");
         setNightbreakSlug("driftjelly-pet-pack");
