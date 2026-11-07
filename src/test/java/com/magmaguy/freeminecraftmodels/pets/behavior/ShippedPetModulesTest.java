@@ -116,7 +116,7 @@ class ShippedPetModulesTest {
      * strike_back is new too: a wild pet's headbutt within 1 block, 2 damage and no effect, with a goat's ram impact and
      * crit particles. The penguin's creature behaviors came after: a huddle of 3 within 8 blocks shuffling round at
      * 0.05 to spots on its level, ground looked for 4 blocks down; a fishing trip to water 1 to 3 blocks deep within 8 blocks (an owned pet's within its roam range of its
-     * owner), on to spots within 4 of each other at 0.15 with a splash at each, and a cod for the owner within 3 blocks; a slide of 4 to 12
+     * owner), on to spots within 4 of each other at 0.15 with a splash at each, the fish bone shown on the way back (SURE), and a cod for the owner within 3 blocks; a slide of 4 to 12
      * blocks over snow and ice at 0.35 playing slide; single file behind a wandering pet within 8 blocks at 0.2; flint
      * for the owner from 2 blocks off (SURE); and fish within 8 blocks, eaten within 0.5 for 2 half hearts at 0.2.
      */
@@ -156,6 +156,7 @@ class ShippedPetModulesTest {
             "fmm:pet/fishing_trip distance_to(L)", "fmm:pet/fishing_trip steer_to(L, 0.225)",
             "fmm:pet/fishing_trip gift(COD, 1, 3, entity.cod.flop, 1, 1)", "fmm:pet/fishing_trip stop()",
             "fmm:pet/fishing_trip splash(entity.fishing_bobber.splash, 1, 1)",
+            "fmm:pet/fishing_trip set_bone_hidden(fish, false)", "fmm:pet/fishing_trip set_bone_hidden(fish, true)",
             "fmm:pet/toboggan slide_point(4, 12, {SNOW, SNOW_BLOCK, ICE, PACKED_ICE, BLUE_ICE, FROSTED_ICE})",
             "fmm:pet/toboggan set_walk_animation(slide)", "fmm:pet/toboggan set_walk_animation()",
             "fmm:pet/toboggan distance_to(L)", "fmm:pet/toboggan steer_to(L, 0.525)", "fmm:pet/toboggan stop()",
@@ -986,6 +987,7 @@ class ShippedPetModulesTest {
             methods.put("slide_point", new Method("NNT", args -> place(x() + 6, 69, 0.5), LuaValue.NIL));
             methods.put("set_walk_animation", new Method("s", args -> LuaValue.TRUE, LuaValue.FALSE));
             methods.put("splash", new Method("sNN", args -> LuaValue.NIL, LuaValue.NIL));
+            methods.put("set_bone_hidden", new Method("SB", args -> LuaValue.TRUE, LuaValue.FALSE));
             assertEquals(PetLuaTable.METHODS, methods.keySet(), "the stand-in's methods match PetLuaTable's");
             Map<String, LuaValue> functions = new HashMap<>();
             methods.forEach((name, method) -> functions.put(name, function(name, method)));

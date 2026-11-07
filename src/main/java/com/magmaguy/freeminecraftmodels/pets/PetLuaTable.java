@@ -97,7 +97,7 @@ public final class PetLuaTable {
             "ground_point", "water_point", "trail_point", "teleport_near_owner", "distance_to", "find_perch", "nearest_campfire", "campfire_usable", "set_glow", "clear_glow", "scale_toward",
             "sting_contacts", "sting_enemies", "strike_attacker", "drizzle", "owner_effect", "play_animation",
             "kin_center", "line_ahead", "gift", "nearest_item", "eat_item", "slide_point", "set_walk_animation",
-            "steer_onto", "splash");
+            "steer_onto", "splash", "set_bone_hidden");
     /** The fields of c.pet.species. */
     public static final Set<String> SPECIES_FIELDS = Set.of("id", "speed", "hover_height", "hover_variance",
             "roam_radius", "follow_distance", "leash_distance", "teleport_distance", "scale", "baby_scale");
@@ -521,6 +521,17 @@ public final class PetLuaTable {
             float volume = (float) number(args, 2, 0D, MAX_VOLUME), pitch = (float) number(args, 3, MIN_PITCH, MAX_PITCH);
             splash(body(), sound, volume, pitch);
             return LuaValue.NIL;
+        });
+        // set_bone_hidden(name, hidden): hides or shows the model's bones with this Blockbench name, with the bones
+        // under them, as a fish carried home in the beak: list the bone under the pet file's hiddenBones so the model
+        // starts without it. The saddle belongs to riding. false for the saddle, a model without the bone, or none.
+        method("set_bone_hidden", args -> {
+            String name = args.checkjstring(1);
+            boolean hidden = args.checkboolean(2);
+            DynamicEntity modeled = control.modeled();
+            if (!named(name) || name.trim().equalsIgnoreCase(PetRides.SADDLE_BONE) || modeled == null
+                    || modeled.isRemoved()) return LuaValue.FALSE;
+            return LuaValue.valueOf(modeled.setBoneHidden(name.trim(), hidden));
         });
 
         Set<String> expected = new HashSet<>(PROPERTIES);

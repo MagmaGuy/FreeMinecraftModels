@@ -187,6 +187,7 @@ public final class PetSpecies {
     private final TravelOrientation orientation;
     private final boolean centerOnBody;
     private final boolean breathesUnderwater;
+    private final List<String> hiddenBones;
     private final PetRiding riding; // null: cannot be ridden
     private final PetSwimming swimming; // null: swims as it walks
 
@@ -253,6 +254,7 @@ public final class PetSpecies {
         this.orientation = orientation(section(config, "orientation"), filename);
         this.centerOnBody = centerOnBody(config, movement);
         this.breathesUnderwater = breathesUnderwater(config);
+        this.hiddenBones = hiddenBones(config);
         warnMigration(config, filename, Logger::warn);
         PetRiding readRiding = PetRiding.read(config.getConfigurationSection("riding"), filename, Logger::warn);
         this.riding = readRiding != null && PetRiding.supports(bodyType, movement, filename, Logger::warn)
@@ -296,6 +298,15 @@ public final class PetSpecies {
      */
     static boolean breathesUnderwater(ConfigurationSection config) {
         return config.getBoolean("breathesUnderwater", false);
+    }
+
+    /**
+     * The bones, by Blockbench name, the model starts with hidden: a fish a penguin carries only on its way back from
+     * fishing, which a behavior shows when it needs it. Blank names are dropped.
+     */
+    static List<String> hiddenBones(ConfigurationSection config) {
+        return config.getStringList("hiddenBones").stream().map(String::trim).filter(name -> !name.isEmpty())
+                .distinct().toList();
     }
 
     /**
@@ -1173,5 +1184,10 @@ public final class PetSpecies {
     /** Whether the pet keeps its air under water: see {@link #breathesUnderwater(ConfigurationSection)}. */
     public boolean breathesUnderwater() {
         return breathesUnderwater;
+    }
+
+    /** The bones the model starts with hidden: see {@link #hiddenBones(ConfigurationSection)}. */
+    public List<String> hiddenBones() {
+        return hiddenBones;
     }
 }

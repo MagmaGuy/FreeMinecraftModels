@@ -60,10 +60,11 @@ public final class BedrockEntityBundleExporter {
     private static final String LEAN_KEY = "lean";
     /**
      * Bones the server can hide on Bedrock ({@code ModeledEntity.setBoneHidden}), by Blockbench name: a saddle a pet
-     * shows only while it wears one. Each one a model has gets an animation that shrinks it to nothing, played while
-     * it is hidden through the same flags as the model's own animations, after them.
+     * shows only while it wears one, and a fish a penguin carries home from fishing. Each one a model has gets an
+     * animation that shrinks it to nothing, played while it is hidden through the same flags as the model's own
+     * animations, after them.
      */
-    public static final List<String> HIDEABLE_BONES = List.of("saddle");
+    public static final List<String> HIDEABLE_BONES = List.of("saddle", "fish");
     private static final String HIDE_ANIMATION_PREFIX = PROPERTY_NAMESPACE + "_hide_";
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
