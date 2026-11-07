@@ -489,6 +489,8 @@ public final class PetManager {
         }
         modeled.setCenteredOnBody(pet.centerOnBody());
         modeled.setDisplayName(nameplate(control));
+        // Before riding, which shows or hides the saddle itself.
+        for (String bone : pet.hiddenBones()) modeled.setBoneHidden(bone, true);
         PetRides.prepare(control, entity, modeled);
     }
 

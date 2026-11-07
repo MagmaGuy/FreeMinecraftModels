@@ -1,7 +1,7 @@
 -- Now and then, near water, it goes fishing. It walks in and dives to a spot between min_depth and max_depth under
 -- the surface, swims on to a few more spots near it, snapping at a fish at each one, and comes back: a wild pet to
--- where it set off, an owned one to its owner. Back beside its owner, gift_chance of the time it brings them a fish,
--- dropping catch at their feet for them alone to pick up.
+-- where it set off, an owned one to its owner. gift_chance of the trips catch a fish, which it carries home in its
+-- beak; back beside its owner, an owned pet drops catch at their feet for them alone to pick up.
 
 -- Within this many blocks of a spot it has reached it: native navigation stops about a block short of its goal.
 local ARRIVED = 1.5
@@ -18,23 +18,34 @@ local function done(c)
     c.memory:set('fishing_done', true)
 end
 
+-- Shows or hides the catch in its beak: the model's carry_bone, when the setting names one and the model has it.
+local function carry(c, shown)
+    local bone = c.settings.carry_bone
+    if bone ~= '' and string.upper(bone) ~= 'NONE' then c.pet:set_bone_hidden(bone, not shown) end
+    if shown then c.memory:set('fishing_carrying', true) else c.memory:forget('fishing_carrying') end
+end
+
 return ai.module {
     id = 'fmm:pet/fishing_trip', revision = 1,
     -- Every interval_seconds, chance of the time (0 to 1), it looks for water within radius blocks of itself, or, owned,
     -- within its roam range of its owner, so follow_owner does not call it back. It swims to spots (at most 16), the
     -- first within radius and each next one within 4 blocks of the last, the depths in blocks (0 to 16). speed sets
     -- the walk and swim as in wander. The whole trip gives up after trip_seconds; a leg that gets nowhere for
-    -- stuck_ticks heads back, or ends the trip on the way back. catch is any item, NONE for no gift, dropped within
-    -- gift_range blocks of the owner (up to 8) with sound at volume and pitch. With splash on, each snap at a fish
-    -- bursts bubbles from its head and splashes the surface above it, playing splash_sound at splash_volume and
-    -- splash_pitch (NONE for silence). wild and pets switch it on for wild and for owned pets.
+    -- stuck_ticks heads back, or ends the trip on the way back. With splash on, each snap at a fish bursts bubbles
+    -- from its head and splashes the surface above it, playing splash_sound at splash_volume and splash_pitch (NONE
+    -- for silence). A trip that reached a spot catches a fish gift_chance of the time (0 to 1) and shows the model's
+    -- carry_bone on the way back (NONE for none; list the bone under the pet file's hiddenBones so it starts hidden).
+    -- catch is any item, NONE for no gift, dropped within gift_range blocks of the owner (up to 8) with sound at
+    -- volume and pitch. wild and pets switch it on for wild and for owned pets.
     settings = { radius = 8, min_depth = 1, max_depth = 3, spots = 3, interval_seconds = 60, chance = 0.5,
                  speed = 0.15, trip_seconds = 40, stuck_ticks = 40, wild = true, pets = true, gift_chance = 0.3,
                  catch = 'COD', gift_range = 3, sound = 'entity.cod.flop', volume = 1.0, pitch = 1.0, splash = true,
-                 splash_sound = 'entity.fishing_bobber.splash', splash_volume = 1.0, splash_pitch = 1.0 },
+                 splash_sound = 'entity.fishing_bobber.splash', splash_volume = 1.0, splash_pitch = 1.0,
+                 carry_bone = 'fish' },
     memories = { fishing_phase = 'integer', fishing_to = 'position', fishing_from = 'position',
                  fishing_left = 'integer', fishing_until = 'integer', fishing_next = 'integer',
-                 fishing_last = 'position', fishing_stuck = 'integer', fishing_done = 'boolean' },
+                 fishing_last = 'position', fishing_stuck = 'integer', fishing_done = 'boolean',
+                 fishing_caught = 'integer', fishing_carrying = 'boolean' },
     behaviors = {
         ai.behavior {
             -- Asked to start every 10 ticks: it looks for water only every interval_seconds anyway.
@@ -73,6 +84,8 @@ return ai.module {
                 c.memory:set('fishing_until', c.tick + seconds_ticks(s.trip_seconds))
                 c.memory:set('fishing_last', c.pet.position)
                 c.memory:set('fishing_stuck', 0)
+                c.memory:set('fishing_caught', 0)
+                c.memory:forget('fishing_carrying')
             end,
             tick = function(c)
                 local s = c.settings
@@ -89,6 +102,7 @@ return ai.module {
                     if to ~= nil and c.pet:distance_to(to) <= ARRIVED then
                         -- A snap at a fish, then on to the next spot.
                         if s.splash then c.pet:splash(s.splash_sound, s.splash_volume, s.splash_pitch) end
+                        c.memory:set('fishing_caught', (c.memory:get('fishing_caught') or 0) + 1)
                         local left = (c.memory:get('fishing_left') or 1) - 1
                         c.memory:set('fishing_left', left)
                         if left > 0 then
@@ -99,9 +113,12 @@ return ai.module {
                         if to ~= nil then c.memory:set('fishing_to', to) end
                     end
                     if to == nil or stuck >= s.stuck_ticks then
-                        -- Caught enough, nowhere left to swim, or stuck: back it goes.
+                        -- Caught enough, nowhere left to swim, or stuck: back it goes, with a fish if it caught one.
                         c.memory:set('fishing_phase', BACK)
                         stuck = 0
+                        if (c.memory:get('fishing_caught') or 0) > 0 and math.random() < s.gift_chance then
+                            carry(c, true)
+                        end
                     end
                 end
                 c.memory:set('fishing_stuck', stuck)
@@ -114,8 +131,9 @@ return ai.module {
                         to = c.pet.owner_location
                         if to == nil then return done(c) end
                         if c.pet.owner_distance <= s.gift_range then
-                            if math.random() < s.gift_chance then
+                            if c.memory:get('fishing_carrying') then
                                 c.pet:gift(s.catch, 1, s.gift_range, s.sound, s.volume, s.pitch)
+                                carry(c, false)
                             end
                             return done(c)
                         end
@@ -124,8 +142,10 @@ return ai.module {
                 c.pet:steer_to(to, s.speed * c.pet.species.speed)
             end,
             stop = function(c)
+                -- A wild pet eats its catch at home; a trip cut short drops it.
+                if c.memory:get('fishing_carrying') then carry(c, false) end
                 for _, name in ipairs({ 'fishing_phase', 'fishing_to', 'fishing_from', 'fishing_left', 'fishing_until',
-                                        'fishing_last', 'fishing_stuck', 'fishing_done' }) do
+                                        'fishing_last', 'fishing_stuck', 'fishing_done', 'fishing_caught' }) do
                     c.memory:forget(name)
                 end
                 c.pet:stop()
