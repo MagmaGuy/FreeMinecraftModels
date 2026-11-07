@@ -3,7 +3,6 @@ package com.magmaguy.freeminecraftmodels.pets;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.customentity.core.Bone;
 import com.magmaguy.freeminecraftmodels.customentity.core.OrientedBoundingBox;
-import com.magmaguy.freeminecraftmodels.pets.behavior.PetBehaviorCatalog;
 import com.magmaguy.freeminecraftmodels.pets.interactions.CampfireIndex;
 import com.magmaguy.freeminecraftmodels.pets.interactions.PetSky;
 import com.magmaguy.magmacore.ai.MindActuator;
@@ -87,7 +86,8 @@ public final class PetLuaTable {
     /** Every name a module can read on c.pet. */
     public static final Set<String> PROPERTIES = Set.of("wild", "staying", "settled", "baby", "model",
             "species", "position", "home", "anchor", "stay_anchor", "owner_location", "owner_distance", "follow_range",
-            "roam_range", "night", "day", "raining", "snowing", "speed", "threat", "attacker", "hurt_count");
+            "roam_range", "night", "day", "raining", "snowing", "speed", "threat", "attacker", "hurt_count",
+            "march_requested");
     /** How far from its owner an owned pet looks for someone to defend them against. */
     static final double THREAT_RANGE = 16D;
     /** How long a wild pet keeps the player who hurt it in mind: 30 seconds. */
@@ -96,8 +96,8 @@ public final class PetLuaTable {
     public static final Set<String> METHODS = Set.of("steer_to", "stop", "hover_point", "rest_point", "ground_below",
             "ground_point", "water_point", "trail_point", "teleport_near_owner", "distance_to", "find_perch", "nearest_campfire", "campfire_usable", "set_glow", "clear_glow", "scale_toward",
             "sting_contacts", "sting_enemies", "strike_attacker", "drizzle", "owner_effect", "play_animation",
-            "kin_center", "line_ahead", "gift", "nearest_item", "eat_item", "slide_point", "set_walk_animation",
-            "steer_onto", "splash", "set_bone_hidden");
+            "kin_center", "march_call", "march_spot", "gift", "nearest_item", "eat_item", "slide_point",
+            "set_walk_animation", "steer_onto", "splash", "set_bone_hidden");
     /** The fields of c.pet.species. */
     public static final Set<String> SPECIES_FIELDS = Set.of("id", "speed", "hover_height", "hover_variance",
             "roam_radius", "follow_distance", "leash_distance", "teleport_distance", "scale", "baby_scale");
@@ -125,8 +125,10 @@ public final class PetLuaTable {
     /** The sting effect name that freezes its victim, as powder snow does, instead of giving a potion effect. */
     static final String FREEZE = "FREEZE";
     private static final int MAX_DRIZZLE_DEPTH = 8;
-    // A huddle or a line counts kin this far off at most; a gift, an eaten item and a slide stay within these.
+    // A huddle or a march counts kin this far off at most; a gift, an eaten item and a slide stay within these.
     private static final double MAX_KIN_RADIUS = 32D, MAX_GIFT_RANGE = 8D, MAX_ITEM_RADIUS = 16D, MAX_SLIDE_LENGTH = 24D;
+    // A march lasts 10 seconds to half an hour, its marchers 0.5 to 8 blocks apart.
+    private static final double MIN_MARCH_SECONDS = 10D, MAX_MARCH_SECONDS = 1800D, MIN_SPACING = 0.5D, MAX_SPACING = 8D;
     // Half hearts one eaten item heals at most: a full health bar of 20 twice over.
     private static final double MAX_HEAL = 40D;
     /** A slide is traced in steps this long, so it never skips a block. */
@@ -228,6 +230,10 @@ public final class PetLuaTable {
         Supplier<Location> attacker = ticks.perTick(this::attacker);
         property("attacker", () -> location(attacker.get()));
         property("hurt_count", ticks.perTick(() -> LuaValue.valueOf(control.hurtCount())));
+        // Whether an admin's /fmm petadmin march asked this pet to call a march, and the request still waits: a
+        // module may skip its dice and its time of day for it.
+        property("march_requested", ticks.perTick(() ->
+                LuaValue.valueOf(PetMarches.requested(body(), PetManager.ticks()))));
 
         // steer_to(point, cruise): one tick toward the point; false when the body cannot go there. cruise is 0 to 4
         // (positive infinity means 4 and negative infinity 0). A flying body flies at cruise blocks per tick. A walking
@@ -445,16 +451,31 @@ public final class PetLuaTable {
             double radius = number(args, 1, 0D, MAX_KIN_RADIUS);
             return location(kinCenter(radius, whole(args, 2, 1, MAX_LIST_ENTRIES)));
         });
-        // line_ahead(radius, leaders): single file. Where the pet ahead of this one in its line is, after keeping its
-        // place behind it for 10 more ticks; without a place, it joins the end of the line of the nearest kin within
-        // radius (up to 32) that runs one of the leaders behaviors (module names, such as wander). nil when it has no
-        // line: none to join, its head stopped leading, or the pet ahead is gone or more than radius off.
-        method("line_ahead", args -> {
+        // march_call(radius, min_group, chance, min_seconds, max_seconds, spacing, sound, volume, pitch): calls a
+        // march with this pet at its head. Its kin within radius (up to 32) that are free, settled and in no march,
+        // with itself, must number min_group (2 to 64); chance (0 to 1) is shared out among them, so a group calls as
+        // often whatever its size, and an admin's request (march_requested) skips it. The march sets off along the
+        // heading whose straight run of standing ground goes farthest, which must reach 6 blocks, and lasts min_seconds
+        // to max_seconds (10 to 1800). Its kin, nearest first, follow in single file spacing blocks apart (0.5 to 8).
+        // sound (a sound key, or NONE) plays twice from the caller at volume 0 to 4 and pitch 0.5 to 2. false when it
+        // called none.
+        method("march_call", args -> {
             double radius = number(args, 1, 0D, MAX_KIN_RADIUS);
-            Set<String> leaders = new HashSet<>();
-            for (String name : texts(args.arg(2))) leaders.add(PetBehaviorCatalog.ID_PREFIX + name);
-            return location(PetLines.ahead(control, body(), radius, leaders, PetManager.ticks()));
+            int minGroup = whole(args, 2, 2, PetMarches.MAX_MARCHERS);
+            double chance = number(args, 3, 0D, 1D);
+            double minSeconds = number(args, 4, MIN_MARCH_SECONDS, MAX_MARCH_SECONDS);
+            double maxSeconds = number(args, 5, minSeconds, MAX_MARCH_SECONDS);
+            double spacing = number(args, 6, MIN_SPACING, MAX_SPACING);
+            String sound = args.optjstring(7, "");
+            float volume = (float) number(args, 8, 0D, MAX_VOLUME), pitch = (float) number(args, 9, MIN_PITCH, MAX_PITCH);
+            return LuaValue.valueOf(PetMarches.call(control, body(), radius, minGroup, chance, minSeconds, maxSeconds,
+                    spacing, named(sound) ? sound.trim() : null, volume, pitch, PetManager.ticks()));
         });
+        // march_spot(): where this marcher walks to now, which also keeps its place in line for 10 more ticks: the
+        // leader's next step along its straight leg, its own spot while the line forms behind it, or a follower's
+        // place on the leader's footprints. A follower back after being away goes to the back of the line. nil when it
+        // is in no march, or the march ended: back where it was called, too few left, or out of time.
+        method("march_spot", args -> location(PetMarches.spot(body(), PetManager.ticks())));
         // gift(item, amount, range, sound, volume, pitch): an owned pet drops amount (1 to a stack) of item in front of
         // it, toward its owner, for the owner alone to pick up, playing sound (a sound key, or NONE) at volume 0 to 4
         // and pitch 0.5 to 2. false for a wild pet, an item that names nothing, or an owner away or past range (0 to 8).
@@ -1114,7 +1135,7 @@ public final class PetLuaTable {
             for (Entity entity : body.getWorld().getNearbyEntities(here, radius, radius, radius,
                     candidate -> candidate instanceof LivingEntity && candidate != body)) {
                 Location at = entity.getLocation();
-                if (at.distanceSquared(here) > radius * radius || !PetLines.kin(control, manager.pet(entity))) continue;
+                if (at.distanceSquared(here) > radius * radius || !control.isKin(manager.pet(entity))) continue;
                 x += at.getX();
                 y += at.getY();
                 z += at.getZ();
@@ -1333,14 +1354,14 @@ public final class PetLuaTable {
     }
 
     /** A block a body's feet or head fit in: a snow layer, or anything passable but liquid and powder snow. */
-    private static boolean room(Block block) {
+    static boolean room(Block block) {
         Material type = block.getType();
         if (type == Material.SNOW) return true;
         return block.isPassable() && !block.isLiquid() && type != Material.POWDER_SNOW;
     }
 
     /** A block a body stands on: solid, and neither a snow layer, which it stands in, nor powder snow, which it sinks in. */
-    private static boolean firm(Block block) {
+    static boolean firm(Block block) {
         Material type = block.getType();
         return !block.isPassable() && type != Material.SNOW && type != Material.POWDER_SNOW;
     }

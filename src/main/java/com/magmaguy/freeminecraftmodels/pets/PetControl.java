@@ -160,6 +160,18 @@ public final class PetControl {
         return body;
     }
 
+    /**
+     * Kin: a pet of this species, wild like this one or of the same owner, alive and carrying no rider. A pet is not its
+     * own kin. Huddles and marches gather kin.
+     */
+    boolean isKin(PetControl other) {
+        if (other == null || other == this || !other.species().id().equals(species().id())) return false;
+        if (other.isWild() != isWild()) return false;
+        if (!isWild() && !ownerId().equals(other.ownerId())) return false;
+        LivingEntity otherBody = other.body();
+        return otherBody != null && otherBody.isValid() && otherBody.isEmpty();
+    }
+
     public DynamicEntity modeled() {
         return modeled;
     }

@@ -205,7 +205,7 @@ public final class PetManager {
         manager.ownedBodies.clear();
         manager.aggressors.clear();
         manager.paces.clear();
-        PetLines.clear();
+        PetMarches.clear();
         if (manager.behaviors != null) manager.behaviors.close();
     }
 
@@ -219,6 +219,7 @@ public final class PetManager {
         if (ticks % WATCH_TICKS == 0) manager.regenerate();
         manager.tickHealthBars();
         manager.rides.tick();
+        PetMarches.tick(ticks);
         manager.workChunks();
         if (ticks >= manager.nextWildSpawnTick) {
             manager.nextWildSpawnTick = ticks + Math.max(20, PetsConfig.wildSpawnIntervalTicks);
@@ -330,6 +331,17 @@ public final class PetManager {
     /** The pet behind a body, or null when the entity is not a live pet. */
     public PetControl pet(Entity entity) {
         return entity == null ? null : byBody.get(entity.getUniqueId());
+    }
+
+    /**
+     * Asks this wild pet to call a march as soon as it is free, for filming: its march module skips its dice and its
+     * time of day, though it still needs another of its kind within reach. False when the pet has no body.
+     */
+    public boolean requestMarch(PetControl pet) {
+        LivingEntity body = pet == null ? null : pet.body();
+        if (body == null || !body.isValid()) return false;
+        PetMarches.request(body, ticks);
+        return true;
     }
 
     public Collection<PetControl> pets() {
