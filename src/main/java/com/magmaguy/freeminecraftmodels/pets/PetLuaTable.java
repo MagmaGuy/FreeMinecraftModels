@@ -97,7 +97,7 @@ public final class PetLuaTable {
             "ground_point", "water_point", "trail_point", "teleport_near_owner", "distance_to", "find_perch", "nearest_campfire", "campfire_usable", "set_glow", "clear_glow", "scale_toward",
             "sting_contacts", "sting_enemies", "strike_attacker", "drizzle", "owner_effect", "play_animation",
             "kin_center", "line_ahead", "gift", "nearest_item", "eat_item", "slide_point", "set_walk_animation",
-            "steer_onto");
+            "steer_onto", "splash");
     /** The fields of c.pet.species. */
     public static final Set<String> SPECIES_FIELDS = Set.of("id", "speed", "hover_height", "hover_variance",
             "roam_radius", "follow_distance", "leash_distance", "teleport_distance", "scale", "baby_scale");
@@ -512,6 +512,15 @@ public final class PetLuaTable {
             boolean has = named(name) && modeled.hasAnimation(name);
             modeled.getAnimationComponent().setWalkAnimation(has ? name : null);
             return LuaValue.valueOf(has);
+        });
+        // splash(sound, volume, pitch): a snap at a fish. Under water, bubbles burst from the pet's head and the
+        // surface above it splashes as a fishing bobber's does when a fish bites; out of water it splashes where the
+        // pet is. sound (a sound key, or NONE) plays from the splash at volume 0 to 4 and pitch 0.5 to 2.
+        method("splash", args -> {
+            String sound = args.optjstring(1, "");
+            float volume = (float) number(args, 2, 0D, MAX_VOLUME), pitch = (float) number(args, 3, MIN_PITCH, MAX_PITCH);
+            splash(body(), sound, volume, pitch);
+            return LuaValue.NIL;
         });
 
         Set<String> expected = new HashSet<>(PROPERTIES);
@@ -1147,6 +1156,37 @@ public final class PetLuaTable {
         drop.setVelocity(new Vector(0D, 0.15D, 0D));
         drop.setOwner(owner.getUniqueId());
         if (named(sound) && volume > 0F) body.getWorld().playSound(from, sound, volume, pitch);
+    }
+
+    /**
+     * Bubbles at the head and a splash on the water's surface straight above it, the particles a fishing bobber shows
+     * when a fish bites; a body whose head is out of water splashes at its feet.
+     */
+    private static void splash(LivingEntity body, String sound, float volume, float pitch) {
+        World world = body.getWorld();
+        Location head = body.getEyeLocation();
+        double spread = Math.max(0.2D, body.getWidth() * 0.5D);
+        Location surface = waterSurfaceAbove(head);
+        if (surface == null) {
+            surface = body.getLocation().add(0D, 0.1D, 0D);
+        } else {
+            world.spawnParticle(Particle.BUBBLE, head, 16, spread * 0.5D, 0.15D, spread * 0.5D, 0.1D);
+        }
+        world.spawnParticle(Particle.SPLASH, surface, 30, spread, 0.05D, spread, 0.2D);
+        world.spawnParticle(Particle.FISHING, surface, 10, spread, 0D, spread, 0.03D);
+        if (named(sound) && volume > 0F) world.playSound(surface, sound, volume, pitch);
+    }
+
+    /** The top of the water over this point, when the point is in water: up to 16 blocks of it; otherwise null. */
+    private static Location waterSurfaceAbove(Location point) {
+        Block block = point.getBlock();
+        if (!PetRides.isWater(block)) return null;
+        for (int climbed = 0; climbed < (int) MAX_WATER_DEPTH; climbed++) {
+            Block above = block.getRelative(0, 1, 0);
+            if (!PetRides.isWater(above)) break;
+            block = above;
+        }
+        return new Location(point.getWorld(), point.getX(), block.getY() + 1.0D, point.getZ());
     }
 
     /** The nearest loose stack of these kinds within radius, and within an owned pet's leash; null when none is. */

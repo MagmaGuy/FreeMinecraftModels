@@ -1,7 +1,7 @@
 -- Now and then, near water, it goes fishing. It walks in and dives to a spot between min_depth and max_depth under
--- the surface, swims on to a few more spots near it, and comes back: a wild pet to where it set off, an owned one to
--- its owner. Back beside its owner, gift_chance of the time it brings them a fish, dropping catch at their feet for
--- them alone to pick up.
+-- the surface, swims on to a few more spots near it, snapping at a fish at each one, and comes back: a wild pet to
+-- where it set off, an owned one to its owner. Back beside its owner, gift_chance of the time it brings them a fish,
+-- dropping catch at their feet for them alone to pick up.
 
 -- Within this many blocks of a spot it has reached it: native navigation stops about a block short of its goal.
 local ARRIVED = 1.5
@@ -25,11 +25,13 @@ return ai.module {
     -- first within radius and each next one within 4 blocks of the last, the depths in blocks (0 to 16). speed sets
     -- the walk and swim as in wander. The whole trip gives up after trip_seconds; a leg that gets nowhere for
     -- stuck_ticks heads back, or ends the trip on the way back. catch is any item, NONE for no gift, dropped within
-    -- gift_range blocks of the owner (up to 8) with sound at volume and pitch. wild and pets switch it on for wild
-    -- and for owned pets.
+    -- gift_range blocks of the owner (up to 8) with sound at volume and pitch. With splash on, each snap at a fish
+    -- bursts bubbles from its head and splashes the surface above it, playing splash_sound at splash_volume and
+    -- splash_pitch (NONE for silence). wild and pets switch it on for wild and for owned pets.
     settings = { radius = 8, min_depth = 1, max_depth = 3, spots = 3, interval_seconds = 60, chance = 0.5,
                  speed = 0.15, trip_seconds = 40, stuck_ticks = 40, wild = true, pets = true, gift_chance = 0.3,
-                 catch = 'COD', gift_range = 3, sound = 'entity.cod.flop', volume = 1.0, pitch = 1.0 },
+                 catch = 'COD', gift_range = 3, sound = 'entity.cod.flop', volume = 1.0, pitch = 1.0, splash = true,
+                 splash_sound = 'entity.fishing_bobber.splash', splash_volume = 1.0, splash_pitch = 1.0 },
     memories = { fishing_phase = 'integer', fishing_to = 'position', fishing_from = 'position',
                  fishing_left = 'integer', fishing_until = 'integer', fishing_next = 'integer',
                  fishing_last = 'position', fishing_stuck = 'integer', fishing_done = 'boolean' },
@@ -85,6 +87,8 @@ return ai.module {
                 if (c.memory:get('fishing_phase') or OUT) == OUT then
                     to = c.memory:get('fishing_to')
                     if to ~= nil and c.pet:distance_to(to) <= ARRIVED then
+                        -- A snap at a fish, then on to the next spot.
+                        if s.splash then c.pet:splash(s.splash_sound, s.splash_volume, s.splash_pitch) end
                         local left = (c.memory:get('fishing_left') or 1) - 1
                         c.memory:set('fishing_left', left)
                         if left > 0 then
