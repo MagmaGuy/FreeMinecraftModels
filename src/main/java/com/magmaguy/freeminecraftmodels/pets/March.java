@@ -27,10 +27,17 @@ final class March {
     /** A marcher this near its spot is in place, for forming up. */
     static final double FORMED = 1.5D;
     /**
-     * The leader walks at a point this far ahead on its leg: inside steer_onto's 2-block reach, so it walks straight at
-     * it, and past the last block over which steer_onto eases off.
+     * The leader walks at this share of the slowest marcher's own pace, so every follower, whatever its speed stat, has
+     * pace to spare to close up behind it.
      */
-    static final double LOOKAHEAD = 1.75D;
+    static final double PACE = 0.85D;
+    /**
+     * The nearest the leader's walking point comes. steer_onto eases a walk off over its last block in proportion, so
+     * the point's distance sets the leader's pace (see {@link #lookahead}); nearer than this, march.lua would stop it.
+     */
+    static final double MIN_LOOKAHEAD = 0.5D;
+    /** A straight leg goes on from this far before its end, beyond any walking point, so the leader keeps its pace. */
+    static final double LEG_MARGIN = 2.25D;
     /** The hairpin's walk to the side, so the way back passes beside the way out. */
     static final double LANE = 4D;
     /** A leader this near where the march was called, on the way back, ends it. */
@@ -48,12 +55,15 @@ final class March {
 
     private static final class Marcher {
         final UUID id;
+        // Its speed stat, which its walks are times.
+        final double speed;
         long seen = NEVER;
         Vector at;
 
-        Marcher(UUID id, Vector at) {
+        Marcher(UUID id, Vector at, double speed) {
             this.id = id;
             this.at = at;
+            this.speed = speed;
         }
     }
 
@@ -77,19 +87,20 @@ final class March {
     private boolean over;
 
     /**
-     * A march called at {@code home} by the leader, the marchers following in the given order, the line forming
-     * opposite the unit heading (dx, dz) it sets off on, spacing blocks apart. It walks out for half its duration.
+     * A march called at {@code home} by the leader, the marchers following in the given order, each with its speed stat
+     * in {@code speeds} (the leader's first), the line forming opposite the unit heading (dx, dz) it sets off on,
+     * spacing blocks apart. It walks out for half its duration.
      */
-    March(UUID leader, Vector home, List<UUID> marchers, Vector[] marcherPositions, double dx, double dz,
-          double spacing, long now, long durationTicks) {
+    March(UUID leader, Vector home, List<UUID> marchers, Vector[] marcherPositions, double[] speeds, double dx,
+          double dz, double spacing, long now, long durationTicks) {
         this.home = home.clone();
         this.spacing = spacing;
         this.calledAt = now;
         this.durationTicks = Math.max(1L, durationTicks);
         this.hardEnd = now + FORM_TICKS + 2L * this.durationTicks;
-        line.add(new Marcher(leader, home.clone()));
+        line.add(new Marcher(leader, home.clone(), speeds[0]));
         for (int index = 0; index < marchers.size(); index++)
-            line.add(new Marcher(marchers.get(index), marcherPositions[index].clone()));
+            line.add(new Marcher(marchers.get(index), marcherPositions[index].clone(), speeds[index + 1]));
         trail = new MarchTrail(home, dx, dz);
         headingX = dx;
         headingZ = dz;
@@ -212,11 +223,14 @@ final class March {
         } else {
             // A straight leg goes on from a little before its end, so the leader keeps its pace; the hairpin's walk to
             // the side runs its full length, so the way back passes LANE blocks beside the way out.
-            double margin = phase == Phase.HAIRPIN ? 0.25D : LOOKAHEAD + 0.5D;
+            double margin = phase == Phase.HAIRPIN ? 0.25D : LEG_MARGIN;
             double along = along(at);
             if (along >= legLength - margin && !nextLeg(onLeg(along, at), ground)) return null;
         }
-        double along = Math.min(along(at) + LOOKAHEAD, legLength);
+        // The hairpin's walking point runs on past the end of its walk to the side, so the leader walks the whole of it
+        // at its pace instead of slowing to a stop just short.
+        double along = along(at) + lookahead();
+        if (phase != Phase.HAIRPIN) along = Math.min(along, legLength);
         double x = legOrigin.getX() + headingX * along, z = legOrigin.getZ() + headingZ * along;
         int feet = ground.standing((int) Math.floor(x), (int) Math.floor(at.getY()), (int) Math.floor(z));
         return new Vector(x, feet == MarchRoute.Ground.NO_FOOTING ? at.getY() : feet, z);
@@ -318,6 +332,18 @@ final class March {
         headingX = dx;
         headingZ = dz;
         legLength = length;
+    }
+
+    /**
+     * How far ahead on its leg the leader walks at: {@link #PACE} of the slowest marcher's speed stat over the leader's,
+     * since steer_onto walks at that share of a pace over its last block; at most a block, at least
+     * {@link #MIN_LOOKAHEAD}.
+     */
+    double lookahead() {
+        double leader = line.get(0).speed, slowest = leader;
+        for (Marcher marcher : line) slowest = Math.min(slowest, marcher.speed);
+        if (!(leader > 0D) || !(slowest > 0D)) return 1D;
+        return Math.max(MIN_LOOKAHEAD, Math.min(1D, PACE * slowest / leader));
     }
 
     private Vector end() {

@@ -98,12 +98,16 @@ final class PetMarches {
         if (kin.size() > MAX_MARCHERS - 1) kin = kin.subList(0, MAX_MARCHERS - 1);
         List<UUID> ids = new ArrayList<>(kin.size());
         Vector[] positions = new Vector[kin.size()];
+        double[] speeds = new double[kin.size() + 1];
+        speeds[0] = caller.stats().speed;
         for (int index = 0; index < kin.size(); index++) {
             ids.add(kin.get(index).getUniqueId());
             positions[index] = kin.get(index).getLocation().toVector();
+            PetControl marcher = manager.pet(kin.get(index));
+            speeds[index + 1] = marcher == null ? 1D : marcher.stats().speed;
         }
         double seconds = minSeconds + random.nextDouble() * Math.max(0D, maxSeconds - minSeconds);
-        March march = new March(body.getUniqueId(), start, ids, positions, heading[0], heading[1], spacing, now,
+        March march = new March(body.getUniqueId(), start, ids, positions, speeds, heading[0], heading[1], spacing, now,
                 Math.round(seconds * 20D));
         Walk walk = new Walk(march, body.getWorld(), caller, sound, volume, pitch);
         walk.bodies.put(body.getUniqueId(), body);

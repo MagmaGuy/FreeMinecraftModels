@@ -10,21 +10,22 @@
 local CHECK_TICKS = 100
 -- Nearer its spot than this, a marcher stands still.
 local CLOSE = 0.3
--- Farther from its spot than this, a marcher has fallen behind and hurries. The leader's own spot is 1.75 blocks ahead
--- of it, so the leader never hurries.
+-- Farther from its spot than this, a marcher has fallen behind and hurries. The leader's own spot is at most a block
+-- ahead of it, so the leader never hurries.
 local BEHIND = 3
 
 return ai.module {
     id = 'fmm:pet/march', revision = 1,
     -- radius is how far off the others may be, in blocks (up to 32), and min_group how many must be there to set off,
     -- the caller included. A group calls a march about every every_minutes, however many are in it. A march lasts
-    -- min_seconds to max_seconds, half of it out and the rest on the way back. speed sets the walk as in wander;
-    -- a marcher that fell behind walks catch_up times as fast. sound (any Minecraft or resource pack sound, or NONE)
+    -- min_seconds to max_seconds, half of it out and the rest on the way back. speed sets the walk as in wander,
+    -- the leader keeping to 85% of the slowest marcher's so the others can always close up; a marcher that fell
+    -- behind walks catch_up times as fast. sound (any Minecraft or resource pack sound, or NONE)
     -- is the call, at volume and pitch, and animation (a model animation, or '' for none) plays with it. Only adults
     -- call a march, and only by day with no snow falling, unless an admin asks for one. wild and pets switch it on for
     -- wild and for owned pets.
     settings = { radius = 12, min_group = 4, every_minutes = 8, min_seconds = 60, max_seconds = 120, spacing = 1.5,
-                 speed = 0.15, catch_up = 1.6, sound = 'block.note_block.didgeridoo', volume = 1.0, pitch = 2.0,
+                 speed = 0.18, catch_up = 1.6, sound = 'block.note_block.didgeridoo', volume = 1.0, pitch = 2.0,
                  animation = '', wild = true, pets = false },
     memories = { march_next = 'integer', march_close = 'boolean' },
     behaviors = {

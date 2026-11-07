@@ -20,14 +20,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Marches on made-up ground: flat at feet height 64, with walls where a test puts them. Marchers walk toward the spots
- * the march gives them each tick, at the march module's pace, hurrying when they fall more than 3 blocks behind, so a
- * whole march plays out without a server.
+ * the march gives them each tick as march.lua and steer_onto walk them: at the module's pace times each one's speed
+ * stat, hurrying when more than 3 blocks behind, easing off over the last block, and standing still within 0.3 of the
+ * spot. So a whole march plays out without a server.
  */
 class MarchTest {
     private static final int FEET = 64;
     private static final Vector HOME = new Vector(0.5, FEET, 0.5);
     private static final double SPACING = 1.5;
-    private static final double PACE = 0.15, HURRY = 0.24;
+    /** Blocks a tick at a speed stat of 1, and march.lua's hurry, stop and hurry distance. */
+    private static final double PACE = 0.15, CATCH_UP = 1.6, CLOSE = 0.3, BEHIND = 3;
+    /** steer_onto's least share of its pace over the last block, and its floor: MIN_SPEED over march.lua's 4 x speed. */
+    private static final double SLOWEST_SHARE = 0.3, FLOOR = PACE * 0.25 / (4 * 0.18);
 
     /** Flat ground 200 blocks round, with no footing where {@code wall} says. */
     private static MarchRoute.Ground ground(BiPredicate<Integer, Integer> wall) {
@@ -95,9 +99,29 @@ class MarchTest {
         }
         for (int rank = 0; rank <= 6; rank++)
             assertEquals(HOME.getZ(), sim.at(rank).getZ(), 0.05, "rank " + rank + " is on the line");
-        for (int rank = 1; rank <= 6; rank++) {
+        assertEvenlySpaced(sim, 6);
+    }
+
+    @Test
+    void slowerMarchersKeepTheirPlaces() {
+        // Wild pets roll speed stats from 0.8 to 1; a follower slower than the leader must not drop back.
+        Sim sim = new Sim(OPEN, 2400, 1.0, 0.8, 1.0, 0.85, 0.95, 0.8);
+        while (sim.at(0).getX() < 40) {
+            sim.step();
+            assertFalse(sim.march.over());
+        }
+        for (int rank = 0; rank <= 5; rank++)
+            assertEquals(HOME.getZ(), sim.at(rank).getZ(), 0.05, "rank " + rank + " is on the line");
+        assertEvenlySpaced(sim, 5);
+    }
+
+    /** Followers about a spacing apart, and the leader at most a block more ahead of the first. */
+    private static void assertEvenlySpaced(Sim sim, int followers) {
+        double lead = sim.at(0).getX() - sim.at(1).getX();
+        assertTrue(lead > SPACING - 0.3 && lead < SPACING + 1.0, "the leader ahead of rank 1: " + lead);
+        for (int rank = 2; rank <= followers; rank++) {
             double gap = sim.at(rank - 1).getX() - sim.at(rank).getX();
-            assertTrue(gap > SPACING - 0.6 && gap < SPACING + 0.6, "gap ahead of rank " + rank + ": " + gap);
+            assertTrue(gap > SPACING - 0.3 && gap < SPACING + 0.3, "gap ahead of rank " + rank + ": " + gap);
         }
     }
 
@@ -195,11 +219,22 @@ class MarchTest {
         static final long START = 1000;
         long now = START;
 
+        final Map<UUID, Double> speeds = new LinkedHashMap<>();
+
         Sim(MarchRoute.Ground ground, int followers, long durationTicks) {
+            this(ground, durationTicks, 1D, ones(followers));
+        }
+
+        /** As above, with the leader's speed stat and each follower's. */
+        Sim(MarchRoute.Ground ground, long durationTicks, double leaderSpeed, double... followerSpeeds) {
             this.ground = ground;
+            int followers = followerSpeeds.length;
             UUID leader = new UUID(0, 0);
             ids.add(leader);
             positions.put(leader, HOME.clone());
+            speeds.put(leader, leaderSpeed);
+            double[] all = new double[followers + 1];
+            all[0] = leaderSpeed;
             List<UUID> marchers = new ArrayList<>();
             Vector[] at = new Vector[followers];
             for (int index = 0; index < followers; index++) {
@@ -209,8 +244,16 @@ class MarchTest {
                 // Scattered round the leader, a few blocks off, on either side.
                 at[index] = new Vector(HOME.getX() + (index % 3) - 1, FEET, HOME.getZ() + (index % 2 == 0 ? 3 : -3));
                 positions.put(id, at[index].clone());
+                speeds.put(id, followerSpeeds[index]);
+                all[index + 1] = followerSpeeds[index];
             }
-            march = new March(leader, HOME, marchers, at, 1, 0, SPACING, now, durationTicks);
+            march = new March(leader, HOME, marchers, at, all, 1, 0, SPACING, now, durationTicks);
+        }
+
+        private static double[] ones(int count) {
+            double[] ones = new double[count];
+            java.util.Arrays.fill(ones, 1D);
+            return ones;
         }
 
         Vector at(int index) {
@@ -223,24 +266,23 @@ class MarchTest {
                 Vector position = positions.get(id);
                 Vector spot = march.spot(id, position, now, ground);
                 if (march.over()) break;
-                if (spot != null) walk(position, spot);
+                if (spot != null) walk(position, spot, speeds.get(id));
             }
             march.sweep(now);
             now++;
         }
 
-        private static void walk(Vector position, Vector spot) {
+        /** One tick of march.lua's walk to a spot through steer_onto, for a marcher of this speed stat. */
+        private static void walk(Vector position, Vector spot, double speed) {
             double dx = spot.getX() - position.getX(), dz = spot.getZ() - position.getZ();
             double distance = Math.sqrt(dx * dx + dz * dz);
-            double pace = distance > 3 ? HURRY : PACE;
-            if (distance <= pace) {
-                position.setX(spot.getX());
-                position.setZ(spot.getZ());
-            } else {
-                position.setX(position.getX() + dx / distance * pace);
-                position.setZ(position.getZ() + dz / distance * pace);
-            }
             position.setY(spot.getY());
+            if (distance <= CLOSE) return;
+            double hurry = distance > BEHIND ? CATCH_UP : 1;
+            double pace = Math.max(FLOOR, PACE * speed * hurry * Math.max(SLOWEST_SHARE, Math.min(1, distance)));
+            double step = Math.min(pace, distance);
+            position.setX(position.getX() + dx / distance * step);
+            position.setZ(position.getZ() + dz / distance * step);
         }
     }
 }

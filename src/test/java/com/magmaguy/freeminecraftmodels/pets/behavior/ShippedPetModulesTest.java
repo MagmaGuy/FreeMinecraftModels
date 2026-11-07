@@ -164,7 +164,7 @@ class ShippedPetModulesTest {
             "fmm:pet/march march_spot()",
             "fmm:pet/march march_call(12, 4, 1, 60, 120, 1.5, block.note_block.didgeridoo, 1, 2)",
             "fmm:pet/march play_animation(slide)", "fmm:pet/march distance_to(L)",
-            "fmm:pet/march steer_onto(L, 0.225)", "fmm:pet/march steer_onto(L, 0.36)", "fmm:pet/march stop()",
+            "fmm:pet/march steer_onto(L, 0.27)", "fmm:pet/march steer_onto(L, 0.432)", "fmm:pet/march stop()",
             "fmm:pet/pebble_gift gift(FLINT, 1, 2, block.gravel.hit, 1, 1.2)", "fmm:pet/pebble_gift steer_to(L, 0.225)",
             "fmm:pet/pebble_gift stop()",
             "fmm:pet/fish_thief nearest_item(8, {COD, SALMON, TROPICAL_FISH, COOKED_COD, COOKED_SALMON})",
@@ -210,7 +210,7 @@ class ShippedPetModulesTest {
     private static final Map<Owner, Set<String>> MARCH_CALLS = Map.of(
             Owner.WILD, Set.of("march_spot()",
                     "march_call(12, 4, 1, 60, 120, 1.5, block.note_block.didgeridoo, 1, 2)", "play_animation(slide)",
-                    "distance_to(L)", "steer_onto(L, 0.225)", "steer_onto(L, 0.36)", "stop()"),
+                    "distance_to(L)", "steer_onto(L, 0.27)", "steer_onto(L, 0.432)", "stop()"),
             Owner.WITHIN_FOLLOW, Set.of(), Owner.PAST_FOLLOW, Set.of(), Owner.PAST_LEASH, Set.of(),
             Owner.PAST_TELEPORT, Set.of(), Owner.AWAY, Set.of());
     /** strike_back's calls by where the owner is: only a wild pet strikes back. */
