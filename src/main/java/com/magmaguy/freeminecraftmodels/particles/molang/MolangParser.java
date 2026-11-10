@@ -107,6 +107,50 @@ public final class MolangParser {
     }
 
     /**
+     * The program with its value negated, for an axis its reader takes with the opposite sign. A single expression
+     * becomes {@code -(expression)}. A program negates what each of its {@code return} statements gives and keeps
+     * its assignments as they are; one without {@code return} is worth 0 and comes back unchanged. So does a
+     * source that does not tokenize.
+     */
+    public static String negated(String source) {
+        if (source == null || source.isBlank()) return source;
+        List<Token> tokens;
+        try {
+            tokens = tokenize(source);
+        } catch (MolangParseException malformed) {
+            return source;
+        }
+        // Each returned expression, from the token after return to the end of its statement.
+        List<int[]> returned = new ArrayList<>();
+        boolean complex = false;
+        int depth = 0, statementStart = 0;
+        for (int index = 0; index < tokens.size(); index++) {
+            Token token = tokens.get(index);
+            boolean separator = token.kind == Kind.END || (token.kind == Kind.OPERATOR && token.text.equals(";") && depth == 0);
+            if (token.kind == Kind.OPERATOR) {
+                if (token.text.equals(";") || token.text.equals("=")) complex = true;
+                if (token.text.equals("(") || token.text.equals("{") || token.text.equals("[")) depth++;
+                else if (token.text.equals(")") || token.text.equals("}") || token.text.equals("]")) depth--;
+            }
+            if (!separator) continue;
+            Token first = tokens.get(statementStart);
+            if (index > statementStart + 1 && first.kind == Kind.NAME && first.text.equals("return")) {
+                int end = token.offset;
+                while (end > 0 && Character.isWhitespace(source.charAt(end - 1))) end--;
+                returned.add(new int[]{tokens.get(statementStart + 1).offset, end});
+            }
+            statementStart = index + 1;
+        }
+        if (returned.isEmpty()) return complex ? source : "-(" + source.strip() + ")";
+        StringBuilder program = new StringBuilder(source);
+        for (int last = returned.size() - 1; last >= 0; last--) {
+            program.insert(returned.get(last)[1], ")");
+            program.insert(returned.get(last)[0], "-(");
+        }
+        return program.toString();
+    }
+
+    /**
      * Whether the program assigns a {@code variable.} name, which keeps its value after the evaluation; a
      * {@code temp.} name does not. A source that does not tokenize assigns nothing, since it never runs.
      */

@@ -82,6 +82,32 @@ class MolangParserTest {
     }
 
     @Test
+    void negatedFlipsWhatAProgramGivesAndKeepsItsAssignments() {
+        assertEquals("-(math.sin(30))", MolangParser.negated("math.sin(30)"));
+        assertEquals(-0.5, eval(MolangParser.negated("math.sin(30)")), 1e-9);
+        assertEquals("-(q.x - 1)", MolangParser.negated(" q.x - 1 "), "a difference is negated whole");
+        assertEquals(-3, eval(MolangParser.negated("1 > 0 ? 3 : 4")), "a conditional is negated whole");
+
+        String program = MolangParser.returningLastLine("v.a = 2;\nv.b = v.a * 3;\nv.b + 5\n");
+        String negated = MolangParser.negated(program);
+        assertEquals("v.a = 2;\nv.b = v.a * 3;\nreturn -(v.b + 5)\n", negated);
+        MolangContext context = new MolangContext(new SplittableRandom(1));
+        assertEquals(-11, MolangParser.parse(negated).evaluate(context));
+        assertEquals(6, context.get("v.b"), "assignments keep their sign");
+        assertEquals("v.a = 2;\nv.b = v.a * 3;\nreturn -(v.b + 5);", MolangParser.terminatedForBedrock(negated));
+
+        assertEquals("v.a = 1; return -(v.a) ;", MolangParser.negated("v.a = 1; return v.a ;"));
+        assertEquals("return -(1); return -(2);", MolangParser.negated("return 1; return 2;"), "every return");
+        assertEquals("v.a = 1;", MolangParser.negated("v.a = 1;"), "a program without return is worth 0");
+        assertEquals("v.a = 1", MolangParser.negated("v.a = 1"));
+        assertEquals("return -(5)", MolangParser.negated("return 5"), "a lone return is a program too");
+        assertEquals(-5, eval(MolangParser.negated("return 5")));
+        assertEquals("'unterminated", MolangParser.negated("'unterminated"), "a source that does not tokenize");
+        assertEquals("", MolangParser.negated(""));
+        assertEquals(null, MolangParser.negated(null));
+    }
+
+    @Test
     void unknownNamesReadAsZeroAndDivisionByZeroIsZero() {
         assertEquals(0, eval("query.anything + variable.missing"));
         assertEquals(0, eval("1 / 0"));

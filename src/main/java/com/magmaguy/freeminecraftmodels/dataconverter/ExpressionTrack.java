@@ -25,6 +25,15 @@ public record ExpressionTrack(TransformationType channel, List<Keyframe> keyfram
         return false;
     }
 
+    /**
+     * Whether the pose takes this axis with the opposite sign to the value the artist keyed: x and y of a rotation
+     * and x of a position in a format 5 file, whose keys are on Blockbench's own axes. The pose is in Bedrock's
+     * convention, so these are the axes the Bedrock export has to negate.
+     */
+    public boolean mirrored(int axis) {
+        return AnimationTimeline.toPoseUnits(channel, axis, 1F, blockBenchVersion) < 0F;
+    }
+
     /** The channel's value on an axis (0 = x, 1 = y, 2 = z) at a tick, in the pose mixer's units. */
     public float sample(int axis, int tick, MolangContext context) {
         return AnimationTimeline.toPoseUnits(channel, axis,

@@ -873,22 +873,26 @@ public final class BedrockEntityBundleExporter {
     }
 
     /**
-     * Writes an expression channel as the artist keyed it: Bedrock evaluates MoLang natively, so each axis goes
-     * through unchanged, numbers included, except for the closing {@code ;} Bedrock requires on a complex program
-     * ({@link MolangParser#terminatedForBedrock}). The keys blend linearly whatever interpolation was authored.
-     * A format 4 file is authored in Bedrock's convention, so this matches the Java pose. A format 5 file is
-     * authored on Blockbench's own axes, which Java reads by negating x and y rotation and x position: on such a
-     * model those axes of an expression channel still play mirrored on Bedrock. The baked channels below do not
-     * have this problem, because they export the pose Java plays.
+     * Writes an expression channel with the artist's own keys: Bedrock evaluates MoLang natively, so the keyframes
+     * go out at their authored times instead of baked per tick, with the closing {@code ;} Bedrock requires on a
+     * complex program ({@link MolangParser#terminatedForBedrock}). The keys blend linearly whatever interpolation
+     * was authored.
+     * <p>
+     * Each axis is in Bedrock's convention, like the baked channels. A format 4 file is authored in it, so its
+     * axes go through unchanged. A format 5 file is authored on Blockbench's own axes, where x and y of a rotation
+     * and x of a position have the opposite sign ({@link ExpressionTrack#mirrored}): those axes go out negated,
+     * a number as its negative and a program with what it returns negated ({@link MolangParser#negated}).
      */
     private static JsonObject expressionChannel(ExpressionTrack track) {
         JsonObject keyframes = new JsonObject();
         for (Keyframe keyframe : track.keyframes()) {
             JsonArray values = new JsonArray();
             for (int axis = 0; axis < 3; axis++) {
+                boolean mirrored = track.mirrored(axis);
                 String source = keyframe.getSource(axis);
-                if (source != null) values.add(MolangParser.terminatedForBedrock(source));
-                else values.add(round(keyframe.getData(axis)));
+                if (source != null)
+                    values.add(MolangParser.terminatedForBedrock(mirrored ? MolangParser.negated(source) : source));
+                else values.add(round(mirrored ? -keyframe.getData(axis) : keyframe.getData(axis)));
             }
             keyframes.add(timeKey(keyframe.getExactTimeInTicks() / 20.0), values);
         }
