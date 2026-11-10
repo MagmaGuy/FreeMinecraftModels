@@ -169,6 +169,11 @@ public final class PetLuaTable {
     private Location threatPoint;
     // The attacker this pet stopped beside, holding still, or null while it closes in or does something else.
     private UUID besideThreat;
+    // trail_point's and march_spot's answers this tick (see Ticks#stamp), so a running behavior's can_continue and
+    // tick, which both ask, work each out once; trail_point's for the arguments it was asked with.
+    private long trailStamp = Ticks.UNBOUND, marchStamp = Ticks.UNBOUND;
+    private double trailBack, trailHeight;
+    private Location trail, march;
 
     /** {@code warnings} belongs to the load that builds this pet, and is shared by every pet that load builds. */
     PetLuaTable(PetControl control, Warnings warnings) {
@@ -311,10 +316,18 @@ public final class PetLuaTable {
             double minDepth = number(args, 3, 0D, MAX_WATER_DEPTH), maxDepth = number(args, 4, 0D, MAX_WATER_DEPTH);
             return center == null ? LuaValue.NIL : location(PetMotion.waterPoint(center, radius, minDepth, maxDepth));
         });
-        // trail_point(back, height): behind the owner, or nil when the owner is away or in another world.
+        // trail_point(back, height): behind the owner, or nil when the owner is away or in another world. Worked out
+        // once per tick for the same arguments.
         method("trail_point", args -> {
             double back = number(args, 1), height = number(args, 2);
-            return location(control.owner().map(owner -> PetMotion.trailPoint(control, owner, back, height)).orElse(null));
+            long stamp = ticks.stamp();
+            if (stamp == Ticks.UNBOUND || stamp != trailStamp || back != trailBack || height != trailHeight) {
+                trail = control.owner().map(owner -> PetMotion.trailPoint(control, owner, back, height)).orElse(null);
+                trailStamp = stamp;
+                trailBack = back;
+                trailHeight = height;
+            }
+            return location(trail);
         });
         // teleport_near_owner(radius): radius up to 64; false when nothing fits beside the owner or the spot is not at
         // least a block nearer them than the body is. A walker's or swimmer's spot is at least a block across from the
@@ -478,7 +491,15 @@ public final class PetLuaTable {
         // leader's next step along its straight leg, its own spot while the line forms behind it, or a follower's
         // place on the leader's footprints. A follower back after being away goes to the back of the line. nil when it
         // is in no march, or the march ended: back where it was called, too few left, or out of time.
-        method("march_spot", args -> location(PetMarches.spot(body(), PetManager.ticks())));
+        // Worked out once per tick: a second ask in the same tick would find the same spot.
+        method("march_spot", args -> {
+            long stamp = ticks.stamp();
+            if (stamp == Ticks.UNBOUND || stamp != marchStamp) {
+                march = PetMarches.spot(body(), PetManager.ticks());
+                marchStamp = stamp;
+            }
+            return location(march);
+        });
         // gift(item, amount, range, sound, volume, pitch): an owned pet drops amount (1 to a stack) of item in front of
         // it, toward its owner, for the owner alone to pick up, playing sound (a sound key, or NONE) at volume 0 to 4
         // and pitch 0.5 to 2. false for a wild pet, an item that names nothing, or an owner away or past range (0 to 8).
@@ -1581,6 +1602,8 @@ public final class PetLuaTable {
      * Server thread only.
      */
     static final class Ticks {
+        /** {@link #stamp} outside a callback, which no cache takes as current. */
+        static final long UNBOUND = -1L;
         private long petTick, gameTick;
         private Object body;
         private boolean bound;
@@ -1599,6 +1622,14 @@ public final class PetLuaTable {
         /** c.pet moved or stopped the body, so what its properties read may have changed. */
         void moved() {
             epoch++;
+        }
+
+        /**
+         * What a cached answer keeps to stay current: it changes with each tick, body and c.pet move, as
+         * {@link #perTick} values do. {@link #UNBOUND} outside a callback.
+         */
+        long stamp() {
+            return bound ? epoch : UNBOUND;
         }
 
         /** {@code source}, asked at most once per tick. */
