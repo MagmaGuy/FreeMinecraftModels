@@ -11,11 +11,12 @@ return ai.module {
     id = 'fmm:pet/pebble_gift', revision = 1,
     -- items lists the presents (item names), one picked at random each time; the first chance comes at a random
     -- moment of the first interval_seconds. It drops the present within range blocks of its owner (up to 8), with
-    -- sound at volume and pitch, and gives up after give_up_seconds when it cannot reach them. speed sets the walk as
-    -- in wander. wild switches it on for wild pets, which never give presents, so it is off and their bodies leave it
-    -- out.
+    -- sound at volume and pitch. When it cannot reach them it gives up after give_up_seconds, or sooner after
+    -- stuck_ticks without getting anywhere. speed sets the walk as in wander. wild switches it on for wild pets, which
+    -- never give presents, so it is off and their bodies leave it out.
     settings = { items = { 'FLINT', 'GRAVEL' }, interval_seconds = 600, chance = 0.5, range = 2, speed = 0.15,
-                 give_up_seconds = 15, sound = 'block.gravel.hit', volume = 1.0, pitch = 1.2, wild = false },
+                 give_up_seconds = 15, stuck_ticks = 40, sound = 'block.gravel.hit', volume = 1.0, pitch = 1.2,
+                 wild = false },
     memories = { pebble_next = 'integer', pebble_until = 'integer', pebble_done = 'boolean' },
     behaviors = {
         ai.behavior {
@@ -38,6 +39,7 @@ return ai.module {
             can_continue = function(c)
                 return not c.memory:get('pebble_done') and not c.pet.staying and c.pet.owner_location ~= nil
                         and c.tick < (c.memory:get('pebble_until') or 0)
+                        and c.pet.stuck_ticks < c.settings.stuck_ticks
             end,
             start = function(c)
                 c.memory:forget('pebble_done')
