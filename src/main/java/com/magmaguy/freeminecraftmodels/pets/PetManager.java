@@ -128,7 +128,10 @@ public final class PetManager {
     private PetManager() {
     }
 
-    /** The running manager, or null when pets are unavailable on this server or no species are installed. */
+    /**
+     * The running manager, or null when pets are unavailable on this server (it has no Mind host) and while pets are
+     * shut down or reloading. A server with no species installed still has one.
+     */
     public static PetManager get() {
         return instance;
     }

@@ -24,7 +24,7 @@ return ai.module {
                  retaliate_flee_to = 'position' },
     behaviors = {
         ai.behavior {
-            -- Runs from the player it just reached. Ahead of the charge and of every shipped movement but migrate.
+            -- Runs from the player it just reached. Ahead of the charge and of every other shipped movement.
             id = 'fmm:pet/retaliate_flee', priority = 2, probe_interval = 2,
             controls = { ai.controls.move, ai.controls.look },
             can_start = function(c)
