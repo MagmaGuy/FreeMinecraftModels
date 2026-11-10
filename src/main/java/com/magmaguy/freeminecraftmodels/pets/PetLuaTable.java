@@ -883,7 +883,10 @@ public final class PetLuaTable {
     /**
      * A walking or swimming body's path. A request is kept for a second while the target stays within a block, the
      * cruise is the same and the body's navigation still heads for that request: a released MOVE lease, an arrival or
-     * another module's request ends that, and the next call asks again.
+     * another module's request ends that, and the next call asks again. For its first {@link #REPATH_TICKS} a request
+     * is also kept for a target that moved further, while that target still lies along it (see {@link #along}): a
+     * target that moves a block every 4 or 5 ticks, as behind a walking owner, then costs a path every 10 ticks, as
+     * vanilla's follow goal does, not one each time.
      * <p>
      * The request's speed is {@link #speed}: 4 × cruise, at least {@link #MIN_SPEED}, which multiplies the body type's
      * own movement speed. A cruise of 0 or less stops the body instead and reads as false, since it does not go there.
@@ -900,10 +903,16 @@ public final class PetLuaTable {
         static final double ONTO_DONE = 0.15D, ONTO_SLOWEST = 0.3D;
         /** How finely steer_onto checks the ground along its straight line, in blocks. */
         static final double ONTO_SAMPLE = 0.25D;
+        /** For this many ticks after a request, a target that moved a block or more can keep it (see {@link #along}). */
+        static final long REPATH_TICKS = 10L;
+        /** The cosine of the widest angle, about 25 degrees, between a request and a moved target that keeps it. */
+        static final double ALONG_COSINE = 0.9D;
+        /** Both must lie at least this far from the body, in blocks squared: nearer, the old point leads it astray. */
+        static final double ALONG_FAR_SQUARED = 4D;
         private Location target, stoppedOn;
         private boolean stoppedNow;
         private double cruise;
-        private long until;
+        private long requested, until;
         private boolean accepted;
 
         boolean steer(MindContext context, Location to, double cruise) {
@@ -914,9 +923,11 @@ public final class PetLuaTable {
             }
             long now = context.gameTick();
             if (target != null && cruise == this.cruise && now < until && target.getWorld() == to.getWorld()
-                    && target.distanceSquared(to) < 1D && heading(context)) return accepted;
+                    && (target.distanceSquared(to) < 1D || now < requested + REPATH_TICKS && along(context, to))
+                    && heading(context)) return accepted;
             target = to.clone();
             this.cruise = cruise;
+            requested = now;
             until = now + 20L;
             accepted = context.entity().getLocation().distanceSquared(to) < 0.25D
                     || context.actuator().moveTo(to, speed(cruise));
@@ -992,6 +1003,22 @@ public final class PetLuaTable {
 
         void forget() {
             target = null;
+        }
+
+        /**
+         * Whether the moved target to still lies along the kept request, seen from the body: within about 25 degrees
+         * of it ({@link #ALONG_COSINE}), with both at least 2 blocks away. Walking on toward the old point a few ticks
+         * more then takes the body much the same way; a sharper turn, or a target it is nearly at, asks again at once.
+         */
+        private boolean along(MindContext context, Location to) {
+            Location here = context.entity().getLocation();
+            if (here.getWorld() != to.getWorld()) return false;
+            double ax = target.getX() - here.getX(), ay = target.getY() - here.getY(), az = target.getZ() - here.getZ();
+            double bx = to.getX() - here.getX(), by = to.getY() - here.getY(), bz = to.getZ() - here.getZ();
+            double kept = ax * ax + ay * ay + az * az, moved = bx * bx + by * by + bz * bz;
+            if (kept < ALONG_FAR_SQUARED || moved < ALONG_FAR_SQUARED) return false;
+            double dot = ax * bx + ay * by + az * bz;
+            return dot > 0D && dot * dot >= ALONG_COSINE * ALONG_COSINE * kept * moved;
         }
 
         private boolean heading(MindContext context) {
