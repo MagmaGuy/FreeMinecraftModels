@@ -952,6 +952,8 @@ class ShippedPetModulesTest {
             properties.put("hurt_count", () -> LuaValue.valueOf(owner == Owner.WILD ? 1 : 0));
             // An admin asks a wild pet to call a march for half of every 10 seconds.
             properties.put("march_requested", () -> LuaValue.valueOf(owner == Owner.WILD && tick % 200 >= 100));
+            // In a march whenever march_spot gives a spot.
+            properties.put("marching", () -> LuaValue.valueOf(tick % 120 >= 20 && !answersNothing("march_spot")));
             assertEquals(PetLuaTable.PROPERTIES, properties.keySet(), "the stand-in's properties match PetLuaTable's");
 
             // Shapes: L a location, N a finite number, C a cruise (a number that may be infinite), T a list of text,

@@ -87,7 +87,7 @@ public final class PetLuaTable {
     public static final Set<String> PROPERTIES = Set.of("wild", "staying", "settled", "baby", "model",
             "species", "position", "home", "anchor", "stay_anchor", "owner_location", "owner_distance", "follow_range",
             "roam_range", "night", "day", "raining", "snowing", "speed", "threat", "attacker", "hurt_count",
-            "march_requested");
+            "march_requested", "marching");
     /** How far from its owner an owned pet looks for someone to defend them against. */
     static final double THREAT_RANGE = 16D;
     /** How long a wild pet keeps the player who hurt it in mind: 30 seconds. */
@@ -234,6 +234,9 @@ public final class PetLuaTable {
         // module may skip its dice and its time of day for it.
         property("march_requested", ticks.perTick(() ->
                 LuaValue.valueOf(PetMarches.requested(body(), PetManager.ticks()))));
+        // Whether this pet is in a march under way. Unlike march_spot it does not keep the pet's place in line, so a
+        // module asks it to learn whether the pet marches, and march_spot only while it walks the march.
+        property("marching", ticks.perTick(() -> LuaValue.valueOf(PetMarches.marching(body()))));
 
         // steer_to(point, cruise): one tick toward the point; false when the body cannot go there. cruise is 0 to 4
         // (positive infinity means 4 and negative infinity 0). A flying body flies at cruise blocks per tick. A walking

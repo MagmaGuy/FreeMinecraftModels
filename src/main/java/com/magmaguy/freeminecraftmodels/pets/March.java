@@ -129,6 +129,11 @@ final class March {
         return line.isEmpty() ? null : line.get(0).id;
     }
 
+    /** Whether this marcher is still in the line of a march that is not over. Changes nothing, unlike spot. */
+    boolean includes(UUID id) {
+        return !over && indexOf(id) >= 0;
+    }
+
     /**
      * Where this marcher, now at {@code at}, should walk to: the leader's next step, the leader's own spot while the
      * line forms, or a follower's place in line. A follower back after being away goes to the back of the line. Null

@@ -39,8 +39,9 @@ return ai.module {
                 local allowed = s.pets
                 if c.pet.wild then allowed = s.wild end
                 if not allowed or not c.pet.settled then return false end
-                -- Already in a march: one it was called to, or its own.
-                if c.pet:march_spot() ~= nil then return true end
+                -- Already in a march: one it was called to, or its own. Asked without march_spot, which would keep its
+                -- place in line while something else holds it, so it never counted as away.
+                if c.pet.marching then return true end
                 if not c.pet.march_requested then
                     if c.pet.baby or not c.pet.day or c.pet.snowing then return false end
                     if c.tick < (c.memory:get('march_next') or 0) then return false end
