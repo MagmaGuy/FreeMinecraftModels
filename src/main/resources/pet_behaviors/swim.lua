@@ -20,8 +20,7 @@ return ai.module {
     -- stuck_ticks without moving; a rest lasts rest_ticks plus a random 0 to rest_random_ticks - 1 more.
     settings = { speed = 0.15, min_depth = 0.5, max_depth = 3, swim_ticks = 120, stuck_ticks = 20, rest_ticks = 40,
                  rest_random_ticks = 60 },
-    memories = { swim_to = 'position', swim_next = 'integer', swim_until = 'integer', swim_last = 'position',
-                 swim_stuck = 'integer' },
+    memories = { swim_to = 'position', swim_next = 'integer', swim_until = 'integer' },
     behaviors = {
         ai.behavior {
             -- Asked to start every 10 ticks: it rests 2 to 5 seconds between swims anyway.
@@ -36,7 +35,7 @@ return ai.module {
                 if to == nil or c.tick >= (c.memory:get('swim_until') or 0) or c.pet.staying then return false end
                 if c.pet:distance_to(to) <= ARRIVED then return false end
                 -- Not moving: no path reaches the spot, or the path ended short of it. Rest, then try another.
-                return (c.memory:get('swim_stuck') or 0) < c.settings.stuck_ticks
+                return c.pet.stuck_ticks < c.settings.stuck_ticks
             end,
             start = function(c)
                 local s = c.settings
@@ -48,20 +47,10 @@ return ai.module {
                 if to == nil then return end
                 c.memory:set('swim_to', to)
                 c.memory:set('swim_until', c.tick + s.swim_ticks)
-                c.memory:set('swim_last', c.pet.position)
-                c.memory:set('swim_stuck', 0)
             end,
             tick = function(c)
                 local to = c.memory:get('swim_to')
                 if to == nil then return end
-                local here, last = c.pet.position, c.memory:get('swim_last')
-                local stuck = 0
-                if last ~= nil then
-                    local dx, dy, dz = here.x - last.x, here.y - last.y, here.z - last.z
-                    if dx * dx + dy * dy + dz * dz < 1e-4 then stuck = (c.memory:get('swim_stuck') or 0) + 1 end
-                end
-                c.memory:set('swim_stuck', stuck)
-                c.memory:set('swim_last', here)
                 c.pet:steer_to(to, c.settings.speed * c.pet.species.speed)
             end,
             stop = function(c)

@@ -44,8 +44,7 @@ return ai.module {
                  carry_bone = 'fish' },
     memories = { fishing_phase = 'integer', fishing_to = 'position', fishing_from = 'position',
                  fishing_left = 'integer', fishing_until = 'integer', fishing_next = 'integer',
-                 fishing_last = 'position', fishing_stuck = 'integer', fishing_done = 'boolean',
-                 fishing_caught = 'integer', fishing_carrying = 'boolean' },
+                 fishing_done = 'boolean', fishing_caught = 'integer', fishing_carrying = 'boolean' },
     behaviors = {
         ai.behavior {
             -- Asked to start every 10 ticks: it looks for water only every interval_seconds anyway.
@@ -82,20 +81,12 @@ return ai.module {
                 c.memory:set('fishing_from', c.pet.position)
                 c.memory:set('fishing_left', math.max(1, math.min(16, math.floor(s.spots))))
                 c.memory:set('fishing_until', c.tick + seconds_ticks(s.trip_seconds))
-                c.memory:set('fishing_last', c.pet.position)
-                c.memory:set('fishing_stuck', 0)
                 c.memory:set('fishing_caught', 0)
                 c.memory:forget('fishing_carrying')
             end,
             tick = function(c)
                 local s = c.settings
-                local here, last = c.pet.position, c.memory:get('fishing_last')
-                local stuck = 0
-                if last ~= nil then
-                    local dx, dy, dz = here.x - last.x, here.y - last.y, here.z - last.z
-                    if dx * dx + dy * dy + dz * dz < 1e-4 then stuck = (c.memory:get('fishing_stuck') or 0) + 1 end
-                end
-                c.memory:set('fishing_last', here)
+                local stuck = c.pet.stuck_ticks
                 local to
                 if (c.memory:get('fishing_phase') or OUT) == OUT then
                     to = c.memory:get('fishing_to')
@@ -115,13 +106,16 @@ return ai.module {
                     if to == nil or stuck >= s.stuck_ticks then
                         -- Caught enough, nowhere left to swim, or stuck: back it goes, with a fish if it caught one.
                         c.memory:set('fishing_phase', BACK)
-                        stuck = 0
+                        if stuck >= s.stuck_ticks then
+                            -- Stopping starts the count again, so the way back gets its own stuck_ticks.
+                            c.pet:stop()
+                            stuck = 0
+                        end
                         if (c.memory:get('fishing_caught') or 0) > 0 and math.random() < s.gift_chance then
                             carry(c, true)
                         end
                     end
                 end
-                c.memory:set('fishing_stuck', stuck)
                 if c.memory:get('fishing_phase') == BACK then
                     if stuck >= s.stuck_ticks then return done(c) end
                     if c.pet.wild then
@@ -145,7 +139,7 @@ return ai.module {
                 -- A wild pet eats its catch at home; a trip cut short drops it.
                 if c.memory:get('fishing_carrying') then carry(c, false) end
                 for _, name in ipairs({ 'fishing_phase', 'fishing_to', 'fishing_from', 'fishing_left', 'fishing_until',
-                                        'fishing_last', 'fishing_stuck', 'fishing_done', 'fishing_caught' }) do
+                                        'fishing_done', 'fishing_caught' }) do
                     c.memory:forget(name)
                 end
                 c.pet:stop()

@@ -12,8 +12,7 @@ return ai.module {
     -- random 0 to rest_random_ticks - 1 more) made drift_frequency times shorter, but never under 10 ticks.
     settings = { speed_multiplier = 1.4, scale_multiplier = 1.25, drift_frequency = 2.5, rise = 1, scale_seconds = 3,
                  speed = 0.06, drift_ticks = 120, stuck_ticks = 20, rest_ticks = 60, rest_random_ticks = 80 },
-    memories = { rain_bloom_to = 'position', rain_bloom_next = 'integer', rain_bloom_until = 'integer',
-                 rain_bloom_last = 'position', rain_bloom_stuck = 'integer' },
+    memories = { rain_bloom_to = 'position', rain_bloom_next = 'integer', rain_bloom_until = 'integer' },
     sensors = {
         ai.sensor {
             id = 'fmm:pet/rain_bloom_swell', interval = SWELL_TICKS,
@@ -42,7 +41,7 @@ return ai.module {
                 if to == nil or c.tick >= (c.memory:get('rain_bloom_until') or 0) or c.pet.staying then return false end
                 if c.pet:distance_to(to) < 0.5 then return false end
                 -- Blocked by something: give up this drift rather than push against it.
-                return (c.memory:get('rain_bloom_stuck') or 0) < c.settings.stuck_ticks
+                return c.pet.stuck_ticks < c.settings.stuck_ticks
             end,
             start = function(c)
                 local anchor = c.pet.anchor
@@ -53,20 +52,10 @@ return ai.module {
                 to.y = to.y + c.settings.rise
                 c.memory:set('rain_bloom_to', to)
                 c.memory:set('rain_bloom_until', c.tick + c.settings.drift_ticks)
-                c.memory:set('rain_bloom_last', c.pet.position)
-                c.memory:set('rain_bloom_stuck', 0)
             end,
             tick = function(c)
                 local to = c.memory:get('rain_bloom_to')
                 if to == nil then return end
-                local here, last = c.pet.position, c.memory:get('rain_bloom_last')
-                local stuck = 0
-                if last ~= nil then
-                    local dx, dy, dz = here.x - last.x, here.y - last.y, here.z - last.z
-                    if dx * dx + dy * dy + dz * dz < 1e-4 then stuck = (c.memory:get('rain_bloom_stuck') or 0) + 1 end
-                end
-                c.memory:set('rain_bloom_stuck', stuck)
-                c.memory:set('rain_bloom_last', here)
                 local multiplier = math.max(0.1, c.settings.speed_multiplier)
                 c.pet:steer_to(to, c.settings.speed * c.pet.species.speed * multiplier)
             end,

@@ -20,8 +20,7 @@ return ai.module {
                  surfaces = { 'SNOW', 'SNOW_BLOCK', 'ICE', 'PACKED_ICE', 'BLUE_ICE', 'FROSTED_ICE' },
                  animation = 'slide', speed = 0.35, interval_seconds = 15, chance = 0.5, slide_seconds = 8,
                  stuck_ticks = 20, wild = true, pets = true },
-    memories = { toboggan_to = 'position', toboggan_next = 'integer', toboggan_until = 'integer',
-                 toboggan_last = 'position', toboggan_stuck = 'integer' },
+    memories = { toboggan_to = 'position', toboggan_next = 'integer', toboggan_until = 'integer' },
     behaviors = {
         ai.behavior {
             -- Asked to start every 10 ticks: it looks for a run only every interval_seconds anyway.
@@ -45,26 +44,16 @@ return ai.module {
                 local to = c.memory:get('toboggan_to')
                 if to == nil or c.pet.staying or c.tick >= (c.memory:get('toboggan_until') or 0) then return false end
                 if c.pet:distance_to(to) <= ARRIVED then return false end
-                return (c.memory:get('toboggan_stuck') or 0) < c.settings.stuck_ticks
+                return c.pet.stuck_ticks < c.settings.stuck_ticks
             end,
             start = function(c)
                 c.memory:set('toboggan_until', c.tick + seconds_ticks(c.settings.slide_seconds))
-                c.memory:set('toboggan_last', c.pet.position)
-                c.memory:set('toboggan_stuck', 0)
                 -- A model without the animation, such as a baby's, does not slide.
                 if not c.pet:set_walk_animation(c.settings.animation) then c.memory:forget('toboggan_to') end
             end,
             tick = function(c)
                 local to = c.memory:get('toboggan_to')
                 if to == nil then return end
-                local here, last = c.pet.position, c.memory:get('toboggan_last')
-                local stuck = 0
-                if last ~= nil then
-                    local dx, dy, dz = here.x - last.x, here.y - last.y, here.z - last.z
-                    if dx * dx + dy * dy + dz * dz < 1e-4 then stuck = (c.memory:get('toboggan_stuck') or 0) + 1 end
-                end
-                c.memory:set('toboggan_stuck', stuck)
-                c.memory:set('toboggan_last', here)
                 c.pet:steer_to(to, c.settings.speed * c.pet.species.speed)
             end,
             stop = function(c)

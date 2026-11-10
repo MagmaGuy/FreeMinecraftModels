@@ -89,7 +89,7 @@ public final class PetLuaTable {
     public static final Set<String> PROPERTIES = Set.of("wild", "staying", "settled", "baby", "model",
             "species", "position", "home", "anchor", "stay_anchor", "owner_location", "owner_distance", "follow_range",
             "roam_range", "night", "day", "raining", "snowing", "speed", "threat", "attacker", "hurt_count",
-            "march_requested", "marching");
+            "march_requested", "marching", "stuck_ticks");
     /** How far from its owner an owned pet looks for someone to defend them against. */
     static final double THREAT_RANGE = 16D;
     /** How long a wild pet keeps the player who hurt it in mind: 30 seconds. */
@@ -176,6 +176,8 @@ public final class PetLuaTable {
     private long trailStamp = Ticks.UNBOUND, marchStamp = Ticks.UNBOUND;
     private double trailBack, trailHeight;
     private Location trail, march;
+    // A flying body's stuck count; MagmaCore's navigation tracker keeps a walking or swimming body's.
+    private final FlightTrack flight = new FlightTrack();
     // The item, block and campfire kinds the lists a module passes name, kept while a list's entries stay the same.
     private final MaterialLists itemLists = new MaterialLists(), blockLists = new MaterialLists(),
             campfireLists = new MaterialLists();
@@ -247,6 +249,12 @@ public final class PetLuaTable {
         // Whether this pet is in a march under way. Unlike march_spot it does not keep the pet's place in line, so a
         // module asks it to learn whether the pet marches, and march_spot only while it walks the march.
         property("marching", ticks.perTick(() -> LuaValue.valueOf(PetMarches.marching(body()))));
+        // How many ticks in a row the pet has steered somewhere without getting anywhere: its body has not moved 0.05
+        // blocks from where it last did. 0 while it steers nowhere, once it comes within half a block of the point it
+        // steers at, and after c.pet:stop; a new steer_to point keeps the count. A walking or swimming body's count is
+        // MagmaCore's navigation tracker's, from each path request; a flying body's is kept the same way from its
+        // steer_to and steer_onto calls, and ends when a tick passes without one or another module steers.
+        property("stuck_ticks", ticks.perTick(() -> LuaValue.valueOf(stuckTicks())));
 
         // steer_to(point, cruise): one tick toward the point; false when the body cannot go there. cruise is 0 to 4
         // (positive infinity means 4 and negative infinity 0). A flying body flies at cruise blocks per tick. A walking
@@ -279,6 +287,7 @@ public final class PetLuaTable {
                 context.actuator().stopMoving();
                 return null;
             });
+            flight.reset();
             ticks.moved();
             return LuaValue.NIL;
         });
@@ -820,6 +829,7 @@ public final class PetLuaTable {
         if (!beside) {
             path.forget();
             context.actuator().stopMoving();
+            flight.reset();
             ticks.moved();
             besideThreat = threat.getUniqueId();
         }
@@ -842,14 +852,29 @@ public final class PetLuaTable {
     /** One tick toward the target at the cruise a module asks for, times the pet's speed stat. */
     private boolean steerTo(Location target, double cruise) {
         cruise *= control.stats().speed;
-        if (control.species().locomotion() == MindBodyLocomotion.FLYING) return PetMotion.steerFlight(context, target, cruise);
+        if (control.species().locomotion() == MindBodyLocomotion.FLYING) return steerFlight(target, cruise);
         return path.steer(context, target, cruise);
+    }
+
+    /** A flying body's steer, counted toward its stuck_ticks when the body takes it. */
+    private boolean steerFlight(Location target, double cruise) {
+        boolean steered = PetMotion.steerFlight(context, target, cruise);
+        if (steered) flight.steered(context.gameTick(), position.get(), target, module);
+        return steered;
+    }
+
+    /** c.pet.stuck_ticks: MagmaCore's count for a walking or swimming body, the FlightTrack's for a flying one. */
+    private int stuckTicks() {
+        if (context == null) return 0;
+        if (control.species().locomotion() == MindBodyLocomotion.FLYING)
+            return flight.stuck(context.gameTick(), position.get());
+        return context.perception().navigation().consecutiveStuckTicks();
     }
 
     /** steer_onto's tick: as {@link #steerTo}, ending on the target (see {@link WalkPath#steerOnto}). */
     private boolean steerOnto(Location target, double cruise) {
         cruise *= control.stats().speed;
-        if (control.species().locomotion() == MindBodyLocomotion.FLYING) return PetMotion.steerFlight(context, target, cruise);
+        if (control.species().locomotion() == MindBodyLocomotion.FLYING) return steerFlight(target, cruise);
         boolean steered = path.steerOnto(context, target, cruise);
         if (path.stoppedNow()) ticks.moved();
         return steered;
@@ -974,6 +999,63 @@ public final class PetLuaTable {
             return destination != null && destination.world().equals(target.getWorld().getName())
                     && destination.x() == target.getX() && destination.y() == target.getY()
                     && destination.z() == target.getZ();
+        }
+    }
+
+    /**
+     * A flying body's stuck count, kept by MagmaCore's rule for a walking body's (NativeMindNavigationTracker), since
+     * MagmaCore tracks no flight: a steer starts it at 0 where the body is, and once a tick it counts up while the body
+     * stays within 0.05 blocks of where it last made progress, starts again at 0 when it gets past that, and ends
+     * within half a block of the point steered at. A steer at another point keeps the count. Where MagmaCore ends it
+     * when the steering behavior gives up its MOVE control, which c.pet does not see, this ends it when a tick passes
+     * without a steer or another module steers. c.pet:stop ends it as stopMoving ends MagmaCore's. Server thread only.
+     */
+    static final class FlightTrack {
+        private static final double ARRIVED_SQUARED = 0.25D, PROGRESS_SQUARED = 0.0025D;
+        private Location destination, progress;
+        private String steerer;
+        private int stuck;
+        private long sampled = Long.MIN_VALUE, steered = Long.MIN_VALUE;
+
+        /** The count on this tick, for a body here now. */
+        int stuck(long tick, Location here) {
+            sample(tick, here);
+            return stuck;
+        }
+
+        /** The body here took a steer toward target on this tick, from this module. */
+        void steered(long tick, Location here, Location target, String module) {
+            sample(tick, here);
+            if (destination == null || !module.equals(steerer)) {
+                progress = here.clone();
+                stuck = 0;
+            }
+            destination = target.clone();
+            steerer = module;
+            steered = tick;
+        }
+
+        void reset() {
+            destination = null;
+            progress = null;
+            steerer = null;
+            stuck = 0;
+        }
+
+        // Once a tick, as MagmaCore's tracker begins each tick.
+        private void sample(long tick, Location here) {
+            if (tick == sampled) return;
+            sampled = tick;
+            if (destination == null) return;
+            if (steered < tick - 1 || here.getWorld() != destination.getWorld()
+                    || here.distanceSquared(destination) <= ARRIVED_SQUARED) {
+                reset();
+            } else if (here.distanceSquared(progress) >= PROGRESS_SQUARED) {
+                progress = here.clone();
+                stuck = 0;
+            } else if (stuck < Integer.MAX_VALUE) {
+                stuck++;
+            }
         }
     }
 

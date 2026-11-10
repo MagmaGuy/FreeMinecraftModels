@@ -648,6 +648,7 @@ class ShippedPetModulesTest {
         Set<MindBehavior> running = new LinkedHashSet<>();
         Coverage ignored = new Coverage();
         for (long tick = 0; tick < lifeTicks; tick++) {
+            pet.previousTick = tick - 1;
             pet.tick = tick;
             MindContext context = context(memory, tick, pet);
             for (MindBehavior behavior : behaviors) {
@@ -747,6 +748,7 @@ class ShippedPetModulesTest {
         List<MindBehavior> behaviors = instance.behaviors();
         boolean[] running = new boolean[behaviors.size()];
         for (long tick : TICKS) {
+            pet.previousTick = pet.tick;
             pet.tick = tick;
             MindContext context = context(memory, tick, pet);
             pet.leases = null;
@@ -874,6 +876,14 @@ class ShippedPetModulesTest {
         private long lastSearch = -1;
         /** The steer_to calls of each module's trip in progress. */
         private final Map<String, Integer> tripSteers = new HashMap<>();
+        /** The tick before this one in the life lived, so steering that runs on through a jump in TICKS is unbroken. */
+        long previousTick = -1;
+        /**
+         * Each module's steering for c.pet.stuck_ticks: the tick from which it has got nowhere, and its last steer.
+         * The real count is the body's, held by whichever behavior holds MOVE; run lets modules steer side by side,
+         * so each keeps its own here.
+         */
+        private final Map<String, long[]> steering = new HashMap<>();
 
         StubPet(Owner owner, boolean staying, boolean night, Answers answers, Coverage coverage) {
             this.owner = owner;
@@ -954,6 +964,7 @@ class ShippedPetModulesTest {
             properties.put("march_requested", () -> LuaValue.valueOf(owner == Owner.WILD && tick % 200 >= 100));
             // In a march whenever march_spot gives a spot.
             properties.put("marching", () -> LuaValue.valueOf(tick % 120 >= 20 && !answersNothing("march_spot")));
+            properties.put("stuck_ticks", () -> LuaValue.valueOf(stuckTicks()));
             assertEquals(PetLuaTable.PROPERTIES, properties.keySet(), "the stand-in's properties match PetLuaTable's");
 
             // Shapes: L a location, N a finite number, C a cruise (a number that may be infinite), T a list of text,
@@ -1012,6 +1023,26 @@ class ShippedPetModulesTest {
             }, null);
         }
 
+        /**
+         * c.pet.stuck_ticks, as MagmaCore's navigation tracker counts it for the running module: the ticks since its
+         * steering began or last got somewhere, 0 when it steers nowhere or its steering lapsed (no steer on the tick
+         * before), and always 0 while every method finds something, since the pet then moves 0.05 blocks a tick,
+         * MagmaCore's progress step.
+         */
+        private int stuckTicks() {
+            if (answers == Answers.SOMETHING) return 0;
+            long[] state = steering.get(module);
+            if (state == null || state[1] < previousTick) return 0;
+            return (int) Math.max(0L, tick - state[0]);
+        }
+
+        /** A steer by the running module: a fresh count unless it steered on the tick before. */
+        private void steered() {
+            long[] state = steering.get(module);
+            if (state == null || state[1] < previousTick) steering.put(module, state = new long[]{tick, tick});
+            state[1] = tick;
+        }
+
         /** Moves along x while every method finds something; otherwise it stays put, as a blocked pet does. */
         private double x() {
             return answers == Answers.SOMETHING ? 0.5 + 0.05 * tick : 0.5;
@@ -1056,11 +1087,18 @@ class ShippedPetModulesTest {
                     coverage.call(owner, answers, module + " " + called + "(" + arguments(method.shape(), own) + ")");
                     if (called.equals("steer_to") || called.equals("steer_onto")) {
                         tripSteers.merge(module, 1, Integer::sum);
+                        steered();
                     } else if (called.equals("stop")) {
                         Integer steers = tripSteers.remove(module);
                         if (steers != null) coverage.trip(module, answers, steers);
+                        // Stopping ends MagmaCore's count.
+                        steering.remove(module);
                     }
-                    return answersNothing(called) ? method.nothing() : method.something().apply(own);
+                    LuaValue answer = answersNothing(called) ? method.nothing() : method.something().apply(own);
+                    // A teleport moves the body, which counts as getting somewhere from the next tick.
+                    long[] state = steering.get(module);
+                    if (called.equals("teleport_near_owner") && answer.toboolean() && state != null) state[0] = tick + 1;
+                    return answer;
                 }
             };
         }

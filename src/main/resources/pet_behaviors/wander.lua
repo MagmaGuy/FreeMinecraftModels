@@ -17,8 +17,7 @@ return ai.module {
     -- quarter of it, and 0 stands still. A walk gives up after walk_ticks, or after stuck_ticks without moving; a rest
     -- lasts rest_ticks plus a random 0 to rest_random_ticks - 1 more.
     settings = { speed = 0.15, walk_ticks = 120, stuck_ticks = 20, rest_ticks = 80, rest_random_ticks = 120 },
-    memories = { wander_to = 'position', wander_next = 'integer', wander_until = 'integer', wander_last = 'position',
-                 wander_stuck = 'integer' },
+    memories = { wander_to = 'position', wander_next = 'integer', wander_until = 'integer' },
     behaviors = {
         ai.behavior {
             -- Asked to start every 10 ticks: it rests 4 to 10 seconds between walks anyway.
@@ -33,7 +32,7 @@ return ai.module {
                 if to == nil or c.tick >= (c.memory:get('wander_until') or 0) or c.pet.staying then return false end
                 if c.pet:distance_to(to) <= ARRIVED then return false end
                 -- Standing still: no path reaches the spot, or the path ended short of it. Rest, then try another.
-                return (c.memory:get('wander_stuck') or 0) < c.settings.stuck_ticks
+                return c.pet.stuck_ticks < c.settings.stuck_ticks
             end,
             start = function(c)
                 local anchor = c.pet.anchor
@@ -44,20 +43,10 @@ return ai.module {
                 if to == nil then return end
                 c.memory:set('wander_to', to)
                 c.memory:set('wander_until', c.tick + c.settings.walk_ticks)
-                c.memory:set('wander_last', c.pet.position)
-                c.memory:set('wander_stuck', 0)
             end,
             tick = function(c)
                 local to = c.memory:get('wander_to')
                 if to == nil then return end
-                local here, last = c.pet.position, c.memory:get('wander_last')
-                local stuck = 0
-                if last ~= nil then
-                    local dx, dy, dz = here.x - last.x, here.y - last.y, here.z - last.z
-                    if dx * dx + dy * dy + dz * dz < 1e-4 then stuck = (c.memory:get('wander_stuck') or 0) + 1 end
-                end
-                c.memory:set('wander_stuck', stuck)
-                c.memory:set('wander_last', here)
                 c.pet:steer_to(to, c.settings.speed * c.pet.species.speed)
             end,
             stop = function(c)

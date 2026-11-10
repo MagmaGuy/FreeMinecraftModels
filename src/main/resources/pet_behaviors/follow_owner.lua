@@ -11,7 +11,7 @@ return ai.module {
     -- many blocks behind the owner the pet aims. wild switches it on for wild pets, which have no owner to follow, so
     -- it is off and their bodies leave it out.
     settings = { speed = 0.25, leash_urgency = 1.6, trail_back = 1.5, stuck_ticks = 60, wild = false },
-    memories = { follow_owner_stuck = 'integer', follow_owner_last = 'position' },
+    memories = { follow_owner_retry = 'integer' },
     behaviors = {
         ai.behavior {
             -- Asked to start every 4 ticks: it sets off within 0.2 s of the owner passing the follow distance.
@@ -30,10 +30,6 @@ return ai.module {
                 local target = c.pet:trail_point(c.settings.trail_back, species.hover_height)
                 return target == nil or c.pet:distance_to(target) > 0.5
             end,
-            start = function(c)
-                c.memory:set('follow_owner_stuck', 0)
-                c.memory:forget('follow_owner_last')
-            end,
             tick = function(c)
                 local species = c.pet.species
                 local distance = c.pet.owner_distance
@@ -45,26 +41,17 @@ return ai.module {
                 if target == nil then return end
                 local urgency = 1
                 if distance > species.leash_distance then urgency = c.settings.leash_urgency end
-                -- A tick counts as stuck when the steering is refused or the pet has not moved since the last one:
-                -- native navigation accepts a path that ends short of the owner, and keeps accepting it.
-                local here, last = c.pet.position, c.memory:get('follow_owner_last')
-                c.memory:set('follow_owner_last', here)
-                local moved = true
-                if last ~= nil then
-                    local dx, dy, dz = here.x - last.x, here.y - last.y, here.z - last.z
-                    moved = dx * dx + dy * dy + dz * dz >= 1e-4
-                end
-                local stuck = 0
-                if not c.pet:steer_to(target, c.settings.speed * urgency * species.speed) or not moved then
-                    stuck = (c.memory:get('follow_owner_stuck') or 0) + 1
-                end
-                if stuck >= c.settings.stuck_ticks then
+                c.pet:steer_to(target, c.settings.speed * urgency * species.speed)
+                -- Stuck whether its steering is refused or accepted: native navigation accepts a path that ends short
+                -- of the owner, and keeps accepting it.
+                if c.pet.stuck_ticks >= c.settings.stuck_ticks
+                        and c.tick >= (c.memory:get('follow_owner_retry') or 0) then
                     -- Refused when no spot beside the owner is nearer them than the pet already is; it tries again
-                    -- after another stuck_ticks.
-                    c.pet:teleport_near_owner(2)
-                    stuck = 0
+                    -- after another stuck_ticks. One that lands moves the pet, which starts the count again.
+                    if not c.pet:teleport_near_owner(2) then
+                        c.memory:set('follow_owner_retry', c.tick + c.settings.stuck_ticks)
+                    end
                 end
-                c.memory:set('follow_owner_stuck', stuck)
             end
         }
     }

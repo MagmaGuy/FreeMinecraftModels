@@ -5,8 +5,7 @@ return ai.module {
     -- speed is in blocks per tick at species speed 1. A rest lasts rest_ticks plus a random 0 to rest_random_ticks - 1
     -- more; a drift gives up after drift_ticks, or after stuck_ticks without moving.
     settings = { speed = 0.06, drift_ticks = 160, rest_ticks = 60, rest_random_ticks = 80, stuck_ticks = 20 },
-    memories = { drift_to = 'position', drift_next = 'integer', drift_until = 'integer', drift_last = 'position',
-                 drift_stuck = 'integer' },
+    memories = { drift_to = 'position', drift_next = 'integer', drift_until = 'integer' },
     behaviors = {
         ai.behavior {
             -- Asked to start every 10 ticks: it rests 3 to 7 seconds between drifts anyway.
@@ -21,7 +20,7 @@ return ai.module {
                 if to == nil or c.tick >= (c.memory:get('drift_until') or 0) or c.pet.staying then return false end
                 if c.pet:distance_to(to) < 0.5 then return false end
                 -- Blocked by something: give up this drift rather than push against it.
-                return (c.memory:get('drift_stuck') or 0) < c.settings.stuck_ticks
+                return c.pet.stuck_ticks < c.settings.stuck_ticks
             end,
             start = function(c)
                 local anchor = c.pet.anchor
@@ -31,20 +30,10 @@ return ai.module {
                 if to == nil then return end
                 c.memory:set('drift_to', to)
                 c.memory:set('drift_until', c.tick + c.settings.drift_ticks)
-                c.memory:set('drift_last', c.pet.position)
-                c.memory:set('drift_stuck', 0)
             end,
             tick = function(c)
                 local to = c.memory:get('drift_to')
                 if to == nil then return end
-                local here, last = c.pet.position, c.memory:get('drift_last')
-                local stuck = 0
-                if last ~= nil then
-                    local dx, dy, dz = here.x - last.x, here.y - last.y, here.z - last.z
-                    if dx * dx + dy * dy + dz * dz < 1e-4 then stuck = (c.memory:get('drift_stuck') or 0) + 1 end
-                end
-                c.memory:set('drift_stuck', stuck)
-                c.memory:set('drift_last', here)
                 c.pet:steer_to(to, c.settings.speed * c.pet.species.speed)
             end,
             stop = function(c)
