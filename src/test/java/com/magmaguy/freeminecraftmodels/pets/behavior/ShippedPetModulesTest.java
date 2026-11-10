@@ -624,10 +624,11 @@ class ShippedPetModulesTest {
 
     /**
      * One pet's life as MagmaCore's Brain leads it, priorities and pre-emption included. Each tick, first every stopped
-     * behavior whose probe is due and whose can_start passes takes its controls, unless a running behavior that comes
-     * first (a lower priority number, then its identifier, as MagmaCore's lease book orders them) holds one; it stops
-     * the running ones it displaces. Then every running behavior continues or stops. Counts each behavior's starts and
-     * ticks.
+     * behavior whose probe is due is checked against the controls: when a running behavior that comes first (a lower
+     * priority number, then its identifier, as MagmaCore's lease book orders them) holds one, its can_start is not
+     * asked, and the refusal counts as the probe, so the next one comes on the next grid tick. Otherwise, when its
+     * can_start passes, it takes its controls and stops the running ones it displaces. Then every running behavior
+     * continues or stops. Counts each behavior's starts and ticks.
      */
     private static void runArbitrated(PetPrograms.Program program, StubPet pet, long lifeTicks,
                                       Map<String, Integer> starts, Map<String, Integer> ticks) {
@@ -653,8 +654,7 @@ class ShippedPetModulesTest {
             MindContext context = context(memory, tick, pet);
             for (MindBehavior behavior : behaviors) {
                 if (running.contains(behavior) || tick % behavior.probeInterval() != 0) continue;
-                pet.leases = null;
-                if (!behavior.canStart(context)) continue;
+                // MagmaCore's lease pre-check (NativeMindControlLeaseBook.wouldAcquire) comes before can_start.
                 Set<MindBehavior> displaced = new LinkedHashSet<>();
                 boolean refused = false;
                 for (MindControl control : behavior.controls()) {
@@ -664,6 +664,8 @@ class ShippedPetModulesTest {
                     else displaced.add(current);
                 }
                 if (refused) continue;
+                pet.leases = null;
+                if (!behavior.canStart(context)) continue;
                 for (MindBehavior current : displaced) {
                     stop(current, pet, context, MindStopReason.PREEMPTED, ignored);
                     running.remove(current);
