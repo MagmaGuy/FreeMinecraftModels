@@ -499,11 +499,17 @@ public final class PetManager {
         return swimming == null ? profile : profile.withSwimWave(swimming.wave()).withSwimSpeed(swimming.speed());
     }
 
-    /** Sets a pet's model up on its body: clicks, leaning, swim animations, centring, nameplate and riding. */
+    /**
+     * Sets a pet's model up on its body: clicks, touches, leaning, swim animations, centring, nameplate and riding.
+     */
     private void dress(PetControl control, LivingEntity entity, DynamicEntity modeled) {
         PetSpecies pet = control.species();
         // Clicks land on the model players see, not on the small body hidden inside it.
         modeled.setClickSurface(true);
+        // No pet deals the model's contact attack (PetSting cancels it), so a pet whose program never reads touches
+        // needs no contact check at all: without a contact callback its model skips the player scan every two ticks
+        // and keeps its hitbox current on the model clock instead.
+        if (!control.readsContacts()) modeled.setHitboxContactCallback(null);
         modeled.setTravelOrientation(pet.orientation());
         PetSwimming swimming = pet.swimming();
         if (swimming != null) {

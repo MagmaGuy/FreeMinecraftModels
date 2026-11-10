@@ -10,7 +10,8 @@ import org.bukkit.entity.Player;
 /**
  * Contact with a pet's model. No pet deals FMM's contact attack; a wild pet whose program reads the touches (its sting
  * module is on for wild pets) remembers the players whose touch reaches its model, and the sting behavior module stings
- * them, as it stings the hostile mobs that come close to an owned pet.
+ * them, as it stings the hostile mobs that come close to an owned pet. Every other pet's model has no contact callback
+ * (see PetManager), so FMM finds no touches on it to report.
  */
 public final class PetSting {
     private PetSting() {
