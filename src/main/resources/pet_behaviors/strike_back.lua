@@ -8,9 +8,10 @@ return ai.module {
     -- effect is a potion effect name, FREEZE to freeze the player as powder snow does, or NONE, given for
     -- duration_ticks at amplifier (0 is level I); a freeze past 140 ticks holds them fully frozen for half the rest.
     -- sound plays from the pet at volume and pitch: a Minecraft sound or a resource pack's own, or NONE. particle shows
-    -- on the player: a Minecraft particle that needs no colour or item, or NONE.
+    -- on the player: a Minecraft particle that needs no colour or item, or NONE. pets switches it on for owned pets,
+    -- which never strike back, so it is off and their bodies leave it out.
     settings = { reach = 1.0, damage = 2.0, effect = 'NONE', duration_ticks = 60, amplifier = 0,
-                 sound = 'entity.goat.ram_impact', volume = 1.0, pitch = 1.0, particle = 'crit' },
+                 sound = 'entity.goat.ram_impact', volume = 1.0, pitch = 1.0, particle = 'crit', pets = false },
     memories = { strike_back_answered = 'integer' },
     sensors = {
         ai.sensor {

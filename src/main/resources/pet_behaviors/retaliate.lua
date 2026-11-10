@@ -16,9 +16,10 @@ return ai.module {
     id = 'fmm:pet/retaliate', revision = 1,
     -- Speeds are in blocks per tick at species speed 1 for a flying body; for a walking or swimming one, 4 x speed x
     -- the species speed multiplies its body type's own movement speed, never under a quarter of it. reach is how close
-    -- to the player's middle the charge ends.
+    -- to the player's middle the charge ends. pets switches it on for owned pets, which ignore hits, so it is off and
+    -- their bodies leave it out.
     settings = { chase_seconds = 10, chase_speed = 0.3, reach = 1.5, flee_distance = 8, flee_seconds = 4,
-                 flee_speed = 0.3 },
+                 flee_speed = 0.3, pets = false },
     memories = { retaliate_answered = 'integer', retaliate_charge_until = 'integer', retaliate_flee_until = 'integer',
                  retaliate_flee_to = 'position' },
     behaviors = {

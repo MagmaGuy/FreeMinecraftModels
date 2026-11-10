@@ -275,7 +275,8 @@ public final class PetManager {
 
     /**
      * Loads the behavior modules from plugins/FreeMinecraftModels/pet_behaviors/, writing each missing shipped default
-     * there first, then builds the program of every species for its own model and each variant. Building them all now puts every warning about a pet file's list in the load's log, and keeps the building out
+     * there first, then builds the programs of every species for its own model and each variant, wild and owned.
+     * Building them all now puts every warning about a pet file's list in the load's log, and keeps the building out
      * of Lua callbacks, as PetPrograms requires.
      */
     private void loadBehaviors() {
@@ -286,8 +287,10 @@ public final class PetManager {
         programs = new PetPrograms(behaviors, Logger::warn);
         warnings = new PetLuaTable.Warnings();
         for (PetSpecies pet : species.values()) {
-            program(pet, pet.model());
-            for (PetSpecies.Variant variant : pet.variants()) program(pet, variant.model());
+            for (PetPrograms.Ownership ownership : PetPrograms.Ownership.values()) {
+                program(pet, pet.model(), ownership);
+                for (PetSpecies.Variant variant : pet.variants()) program(pet, variant.model(), ownership);
+            }
             PetSpecies.babyModelProblems(pet.file().getName(), pet.variants(), pet.babyModel(), PetManager::loaded)
                     .forEach(Logger::warn);
         }
@@ -303,10 +306,13 @@ public final class PetManager {
         return FileModelConverter.getModel(model) != null;
     }
 
-    /** The program a pet of the species wearing this variant runs; the first call for a variant builds it. */
-    private PetPrograms.Program program(PetSpecies pet, String variant) {
+    /**
+     * The program a pet of the species wearing this variant runs, wild or owned; the first call for a variant and
+     * ownership builds it.
+     */
+    private PetPrograms.Program program(PetSpecies pet, String variant, PetPrograms.Ownership ownership) {
         List<PetBehaviorEntry> entries = pet.behaviors(variant);
-        return programs.program(pet.id(), variant, entries, where(pet.file().getName(), pet.listsBehaviors(),
+        return programs.program(pet.id(), variant, ownership, entries, where(pet.file().getName(), pet.listsBehaviors(),
                 pet.locomotion(), variant, !entries.equals(pet.behaviors(null))));
     }
 
@@ -437,10 +443,11 @@ public final class PetManager {
         }
         MindHandle mind;
         try {
-            PetPrograms.Program program = program(pet, variant);
+            PetPrograms.Program program = program(pet, variant,
+                    owner == null ? PetPrograms.Ownership.WILD : PetPrograms.Ownership.OWNED);
+            control.setReadsContacts(program.readsContacts());
             // One context per body: its c.pet table holds this pet's glow and sting cooldowns.
-            mind = host.open(UUID.randomUUID(),
-                    program.definition().instantiate(new PetLuaContext(control, program, warnings)));
+            mind = host.open(UUID.randomUUID(), program.instantiate(new PetLuaContext(control, program, warnings)));
         } catch (RuntimeException failure) {
             return refuse(pet, "its behaviors could not start (" + reason(failure) + ")");
         }

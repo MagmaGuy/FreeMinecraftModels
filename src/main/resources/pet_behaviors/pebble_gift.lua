@@ -12,9 +12,10 @@ return ai.module {
     -- items lists the presents (item names), one picked at random each time; the first chance comes at a random
     -- moment of the first interval_seconds. It drops the present within range blocks of its owner (up to 8), with
     -- sound at volume and pitch, and gives up after give_up_seconds when it cannot reach them. speed sets the walk as
-    -- in wander.
+    -- in wander. wild switches it on for wild pets, which never give presents, so it is off and their bodies leave it
+    -- out.
     settings = { items = { 'FLINT', 'GRAVEL' }, interval_seconds = 600, chance = 0.5, range = 2, speed = 0.15,
-                 give_up_seconds = 15, sound = 'block.gravel.hit', volume = 1.0, pitch = 1.2 },
+                 give_up_seconds = 15, sound = 'block.gravel.hit', volume = 1.0, pitch = 1.2, wild = false },
     memories = { pebble_next = 'integer', pebble_until = 'integer', pebble_done = 'boolean' },
     behaviors = {
         ai.behavior {

@@ -54,6 +54,8 @@ public final class PetBehaviorCatalog implements AutoCloseable {
     /** Ends a warning about a part of the folder that could not be read. */
     private static final String UNTIL_READ = ", and missing default pet behaviors are not written"
             + " until it can be read.";
+    /** The c.pet method that reads the touches on a pet's model; see {@link #readsContacts}. */
+    private static final String CONTACT_READER = "sting_contacts";
     private static final String ALREADY_READ = ": links to a folder that is already being read;"
             + " the pet behaviors in it are skipped.";
 
@@ -62,6 +64,8 @@ public final class PetBehaviorCatalog implements AutoCloseable {
     private final Map<String, LuaMindModuleDescriptor> modules = new TreeMap<>();
     /** Each file name a module was found under but did not load from, with that file as its warning names it. */
     private final Map<String, String> failed = new HashMap<>();
+    /** The ids of the modules whose source mentions c.pet:sting_contacts, which reads the touches on a pet's model. */
+    private final Set<String> contactReaders = new HashSet<>();
 
     private PetBehaviorCatalog() {
     }
@@ -137,6 +141,7 @@ public final class PetBehaviorCatalog implements AutoCloseable {
                 try {
                     catalog.modules.put(entry.getKey(), catalog.owner.registerModule(ID_PREFIX + entry.getKey(),
                             module.revision(), module.where(), module.source()));
+                    if (module.source().contains(CONTACT_READER)) catalog.contactReaders.add(ID_PREFIX + entry.getKey());
                     failures.remove(entry.getKey());
                     it.remove();
                     advanced = true;
@@ -378,6 +383,14 @@ public final class PetBehaviorCatalog implements AutoCloseable {
     Optional<String> failedFile(String name) {
         String key = name.toLowerCase(Locale.ROOT);
         return modules.containsKey(key) ? Optional.empty() : Optional.ofNullable(failed.get(key));
+    }
+
+    /**
+     * Whether the module of this id may read the touches on a pet's model: its source names c.pet:sting_contacts. A
+     * mention in a comment counts too, which only keeps touches recorded for a pet that never reads them.
+     */
+    boolean readsContacts(String identifier) {
+        return contactReaders.contains(identifier);
     }
 
     /** The owner the modules are registered under, for composing them into programs. */

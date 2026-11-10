@@ -4,8 +4,9 @@
 return ai.module {
     id = 'fmm:pet/defend_owner', revision = 1,
     -- speed is in blocks per tick at species speed 1 for a flying body; for a walking or swimming one, 4 x speed x the
-    -- species speed multiplies its body type's own movement speed, never under a quarter of it.
-    settings = { speed = 0.3 },
+    -- species speed multiplies its body type's own movement speed, never under a quarter of it. wild switches it on
+    -- for wild pets, which have no owner to defend, so it is off and their bodies leave it out.
+    settings = { speed = 0.3, wild = false },
     behaviors = {
         ai.behavior {
             -- Asked to start every 4 ticks: it turns on an attacker within 0.2 s.

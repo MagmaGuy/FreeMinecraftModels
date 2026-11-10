@@ -6,8 +6,9 @@
 -- when renewed every second.
 return ai.module {
     id = 'fmm:pet/owner_effect', revision = 1,
-    -- effect is a potion effect name, at amplifier (0 is level I). range is in blocks from the pet.
-    settings = { effect = 'NIGHT_VISION', amplifier = 0, range = 16 },
+    -- effect is a potion effect name, at amplifier (0 is level I). range is in blocks from the pet. wild switches it
+    -- on for wild pets, which have no owner to give it to, so it is off and their bodies leave it out.
+    settings = { effect = 'NIGHT_VISION', amplifier = 0, range = 16, wild = false },
     sensors = {
         ai.sensor {
             id = 'fmm:pet/owner_effect', interval = 20,

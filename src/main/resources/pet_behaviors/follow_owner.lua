@@ -8,8 +8,9 @@ return ai.module {
     -- speed is in blocks per tick at species speed 1 for a flying body; for a walking or swimming one, 4 x speed x the
     -- species speed multiplies its body type's own movement speed, never under a quarter of it. At speed 0 the pet
     -- follows only by its catch-up teleports. leash_urgency multiplies it past the leash distance; trail_back is how
-    -- many blocks behind the owner the pet aims.
-    settings = { speed = 0.25, leash_urgency = 1.6, trail_back = 1.5, stuck_ticks = 60 },
+    -- many blocks behind the owner the pet aims. wild switches it on for wild pets, which have no owner to follow, so
+    -- it is off and their bodies leave it out.
+    settings = { speed = 0.25, leash_urgency = 1.6, trail_back = 1.5, stuck_ticks = 60, wild = false },
     memories = { follow_owner_stuck = 'integer', follow_owner_last = 'position' },
     behaviors = {
         ai.behavior {

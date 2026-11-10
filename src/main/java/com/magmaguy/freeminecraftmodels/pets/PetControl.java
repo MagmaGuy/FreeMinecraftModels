@@ -62,6 +62,8 @@ public final class PetControl {
     // Players whose touch reached this wild pet's model since its sting last looked, each with the pet clock tick of
     // their latest touch; a map, so a long touch counts once.
     private final Map<UUID, Long> contacts = new LinkedHashMap<>();
+    // Whether its program reads those touches; a pet whose program never does records none.
+    private boolean readsContacts;
 
     PetControl(PetSpecies species, UUID owner, PetRecord record, String model, boolean baby, Location home) {
         this.species = species;
@@ -318,6 +320,15 @@ public final class PetControl {
         });
         contacts.clear();
         return touched;
+    }
+
+    /** Whether its program reads the touches on its model, so they are worth recording. */
+    public boolean readsContacts() {
+        return readsContacts;
+    }
+
+    void setReadsContacts(boolean readsContacts) {
+        this.readsContacts = readsContacts;
     }
 
     void setLastInteractionTick(long tick) {

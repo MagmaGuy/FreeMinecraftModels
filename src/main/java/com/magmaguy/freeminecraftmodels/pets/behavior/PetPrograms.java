@@ -1,9 +1,13 @@
 package com.magmaguy.freeminecraftmodels.pets.behavior;
 
 import com.magmaguy.magmacore.ai.MindBodyLocomotion;
+import com.magmaguy.magmacore.ai.MindProgram;
+import com.magmaguy.magmacore.ai.MindSensor;
+import com.magmaguy.magmacore.scripting.LuaMindContextExtension;
 import com.magmaguy.magmacore.scripting.LuaMindDefinition;
 import com.magmaguy.magmacore.scripting.LuaMindModuleDescriptor;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -19,23 +23,67 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
- * One Mind program per species and variant, assembled from the catalog's modules and built once, with the settings
- * each module reads as c.settings. A pet instantiates its own copy (Lua state is per pet; compiled code is shared).
+ * One Mind program per species, variant and ownership (wild or owned), assembled from the catalog's modules and built
+ * once, with the settings each module reads as c.settings. A pet instantiates its own copy (Lua state is per pet;
+ * compiled code is shared).
+ * <p>
+ * A body's ownership never changes (taming or setting a pet free spawns a new body), so each ownership's program
+ * leaves out what can never act for it: a listed module whose settings switch it off for that ownership ({@code wild
+ * = false} for wild pets, {@code pets = false} for owned ones), and the one-sided sensors of a module that serves
+ * both (sting). Nothing left out would have done anything on that body; leaving it out saves its Lua callbacks.
  * <p>
  * A PetPrograms belongs to one catalog load and says each warning once for that load. Use it on the main thread only,
  * and outside Lua Mind callbacks: building a program runs Lua, which inside a callback would share that callback's
- * budget. The first call for a species and variant decides its program; later calls get that program whatever
- * entries and file name they pass.
+ * budget. The first call for a species, variant and ownership decides its program; later calls get that program
+ * whatever entries and file name they pass.
  */
 public final class PetPrograms {
-    /** A creature's program, and the settings of each module it runs by module id. */
-    public record Program(LuaMindDefinition definition, Map<String, Map<String, Object>> settings) {
+    /** Whose body a program is for. */
+    public enum Ownership {
+        WILD, OWNED
+    }
+
+    /** The setting that switches a module on for wild pets, and the one for owned pets. */
+    static final String WILD_SWITCH = "wild", PETS_SWITCH = "pets";
+    /**
+     * The shipped sting module's sensors, which act for one ownership each, with whether that is the wild one.
+     * sting_players stings the players whose touch reached a wild pet's model, and an owned pet's model records no
+     * touches; sting_mobs returns at once for a wild pet. So each body runs only its own side. This relies on an
+     * edited sting.lua keeping that meaning for these sensor ids; one that renames them keeps both.
+     */
+    private static final Map<String, Boolean> ONE_SIDED_SENSORS = Map.of(
+            PetBehaviorCatalog.ID_PREFIX + "sting_players", true,
+            PetBehaviorCatalog.ID_PREFIX + "sting_mobs", false);
+
+    /**
+     * A creature's program, the settings of each module it runs by module id, the sensors its bodies leave out, and
+     * whether a body running it reads the touches on its model (a wild pet running a module that calls
+     * c.pet:sting_contacts), so a body that never would can skip recording them.
+     */
+    public record Program(LuaMindDefinition definition, Map<String, Map<String, Object>> settings,
+                          Set<String> leftOutSensors, boolean readsContacts) {
         /** Whether the program runs the module of this file name, listed or pulled in by another module. */
         public boolean runs(String module) {
             String id = PetBehaviorCatalog.ID_PREFIX + module.toLowerCase(Locale.ROOT);
             for (LuaMindModuleDescriptor resolved : definition.resolvedModules())
                 if (resolved.identifier().equals(id)) return true;
             return false;
+        }
+
+        /**
+         * A fresh copy of the program for one pet body, with the extension's fields in every callback, leaving out
+         * {@link #leftOutSensors}. Everything else runs as its module declares.
+         */
+        public MindProgram instantiate(LuaMindContextExtension extension) {
+            MindProgram full = definition.instantiate(extension);
+            if (full.sensors().stream().noneMatch(sensor -> leftOutSensors.contains(sensor.identifier()))) return full;
+            MindProgram.Builder copy = MindProgram.builder(full.identifier(), full.revision())
+                    .schema(full.schema())
+                    .executionPolicy(full.executionPolicy());
+            for (MindSensor sensor : full.sensors())
+                if (!leftOutSensors.contains(sensor.identifier())) copy.sensor(sensor);
+            full.behaviors().forEach(copy::behavior);
+            return copy.build();
         }
     }
 
@@ -76,29 +124,58 @@ public final class PetPrograms {
     }
 
     /**
-     * The program for one variant of a species, from its list: the species' entries, then the variant's.
-     * {@code where} names the pet file in warnings. A module that is missing or failed to load is left out with a
-     * warning; a module listed twice runs once, with its first entry's settings. When the modules cannot all run
-     * together, they are added in list order and each one that clashes with those kept before it is left out with a
-     * warning, so the earlier entry wins. The creature loads either way, and the outcome is kept for the next call.
+     * The program for one variant of a species, for bodies of either ownership: nothing is left out for ownership.
+     * See {@link #program(String, String, Ownership, List, String)}.
      */
     public Program program(String species, String variant, List<PetBehaviorEntry> entries, String where) {
+        return program(species, variant, null, entries, where);
+    }
+
+    /**
+     * The program for one variant of a species and its bodies of this ownership (null for either), from its list: the
+     * species' entries, then the variant's. {@code where} names the pet file in warnings. A module that is missing or
+     * failed to load is left out with a warning; a module listed twice runs once, with its first entry's settings. A
+     * listed module whose settings switch it off for the ownership is left out quietly, unless a module that stays
+     * needs it. When the modules cannot all run together, they are added in list order and each one that clashes with
+     * those kept before it is left out with a warning, so the earlier entry wins. The creature loads either way, and
+     * the outcome is kept for the next call.
+     */
+    public Program program(String species, String variant, Ownership ownership, List<PetBehaviorEntry> entries,
+                           String where) {
         Objects.requireNonNull(species, "species");
         Objects.requireNonNull(variant, "variant");
         Objects.requireNonNull(entries, "entries");
         Objects.requireNonNull(where, "where");
-        return programs.computeIfAbsent(new Key(species, variant), key -> build(species, variant, entries, where));
+        return programs.computeIfAbsent(new Key(species, variant, ownership),
+                key -> build(species, variant, ownership, entries, where));
     }
 
-    private Program build(String species, String variant, List<PetBehaviorEntry> entries, String where) {
-        // Each listed module that loaded, once, in list order.
-        Map<String, Listed> listed = new LinkedHashMap<>();
+    private Program build(String species, String variant, Ownership ownership, List<PetBehaviorEntry> entries,
+                          String where) {
+        // Each listed module that loaded, once, in list order, with its settings as this pet file sets them. Problems
+        // with those settings are said below, for the modules that run.
+        Map<String, Listed> loaded = new LinkedHashMap<>();
         for (PetBehaviorEntry entry : entries) {
             Optional<LuaMindModuleDescriptor> module = catalog.module(entry.module());
             if (module.isEmpty()) warn.accept(missing(entry.module(), where));
-            else listed.putIfAbsent(module.get().identifier(), new Listed(entry, module.get()));
+            else if (!loaded.containsKey(module.get().identifier()))
+                loaded.put(module.get().identifier(), new Listed(entry, module.get(), PetBehaviorSettings.merge(
+                        entry.module(), module.get().settings(), entry.settings(), where, quiet -> {
+                        })));
         }
-        String id = PetBehaviorCatalog.ID_PREFIX + "creature/" + key(species) + "/" + key(variant);
+        // The ones bodies of this ownership run: a module switched off for it goes, unless one that stays needs it.
+        Set<String> off = new HashSet<>();
+        List<Listed> on = new ArrayList<>();
+        for (Listed module : loaded.values()) {
+            if (switchedOff(module.settings(), ownership)) off.add(module.descriptor().identifier());
+            else on.add(module);
+        }
+        off.removeAll(dependencies(on));
+        Map<String, Listed> listed = new LinkedHashMap<>();
+        for (Listed module : loaded.values())
+            if (!off.contains(module.descriptor().identifier())) listed.put(module.descriptor().identifier(), module);
+        String id = PetBehaviorCatalog.ID_PREFIX + "creature/" + key(species) + "/" + key(variant)
+                + (ownership == null ? "" : "/" + ownership.name().toLowerCase(Locale.ROOT));
         String label = where + ", variant " + variant;
         List<Listed> kept = new ArrayList<>(listed.values());
         LuaMindDefinition definition;
@@ -115,7 +192,7 @@ public final class PetPrograms {
                         + "); the creature runs none of them.");
                 // A program without modules needs no catalog, and its source is generated here, so this fails only
                 // when that generated source is wrong.
-                return new Program(LuaMindDefinition.validate(label, source(id, List.of())), Map.of());
+                return new Program(LuaMindDefinition.validate(label, source(id, List.of())), Map.of(), Set.of(), false);
             }
             kept.clear();
             for (Listed module : listed.values()) {
@@ -137,9 +214,37 @@ public final class PetPrograms {
         for (Listed module : kept)
             settings.put(module.descriptor().identifier(), PetBehaviorSettings.merge(module.entry().module(),
                     module.descriptor().settings(), module.entry().settings(), where, warn));
-        for (LuaMindModuleDescriptor module : definition.resolvedModules())
+        boolean readsContacts = false;
+        for (LuaMindModuleDescriptor module : definition.resolvedModules()) {
             settings.putIfAbsent(module.identifier(), module.settings());
-        return new Program(definition, Collections.unmodifiableMap(settings));
+            readsContacts |= catalog.readsContacts(module.identifier());
+        }
+        // Only a wild pet's model records touches.
+        if (ownership == Ownership.OWNED) readsContacts = false;
+        Set<String> leftOut = new HashSet<>();
+        if (ownership != null) ONE_SIDED_SENSORS.forEach((sensor, wild) -> {
+            if (wild != (ownership == Ownership.WILD)) leftOut.add(sensor);
+        });
+        return new Program(definition, Collections.unmodifiableMap(settings), Set.copyOf(leftOut), readsContacts);
+    }
+
+    /** Whether a module's settings switch it off for bodies of this ownership; for either ownership, never. */
+    private static boolean switchedOff(Map<String, Object> settings, Ownership ownership) {
+        if (ownership == null) return false;
+        return Boolean.FALSE.equals(settings.get(ownership == Ownership.WILD ? WILD_SWITCH : PETS_SWITCH));
+    }
+
+    /** Every module these modules need, directly or through another. */
+    private Set<String> dependencies(List<Listed> modules) {
+        Set<String> needed = new HashSet<>();
+        ArrayDeque<String> pending = new ArrayDeque<>();
+        for (Listed module : modules) pending.addAll(module.descriptor().dependencies());
+        while (!pending.isEmpty()) {
+            String dependency = pending.poll();
+            if (needed.add(dependency))
+                catalog.owner().module(dependency).ifPresent(module -> pending.addAll(module.dependencies()));
+        }
+        return needed;
     }
 
     private LuaMindDefinition validate(String label, String id, List<Listed> modules) {
@@ -227,10 +332,11 @@ public final class PetPrograms {
         return name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9._-]", "_");
     }
 
-    private record Key(String species, String variant) {
+    /** A program's species, variant and ownership; a null ownership is for bodies of either. */
+    private record Key(String species, String variant, Ownership ownership) {
     }
 
-    /** A listed module that loaded, with the entry that listed it first. */
-    private record Listed(PetBehaviorEntry entry, LuaMindModuleDescriptor descriptor) {
+    /** A listed module that loaded, with the entry that listed it first and its settings as that entry sets them. */
+    private record Listed(PetBehaviorEntry entry, LuaMindModuleDescriptor descriptor, Map<String, Object> settings) {
     }
 }
