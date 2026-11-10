@@ -5,6 +5,7 @@ import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.core.ModelDensity;
+import com.magmaguy.freeminecraftmodels.customentity.core.components.PlayerPositions;
 import com.magmaguy.freeminecraftmodels.debug.PacketDiagnostics;
 import com.magmaguy.freeminecraftmodels.particles.held.HeldItemParticles;
 import org.bukkit.Location;
@@ -207,9 +208,11 @@ public class ModeledEntitiesClock {
 
     private static void tickHitboxes() {
         if (!running) return;
+        // One read of each world's players for the pass, not one per model.
+        PlayerPositions players = new PlayerPositions();
         ModeledEntity.getLoadedModeledEntities().forEach(modeledEntity -> {
             if (!modeledEntity.isRemoved()) {
-                modeledEntity.getHitboxComponent().tickPrimaryThread();
+                modeledEntity.getHitboxComponent().tickPrimaryThread(players);
             }
         });
     }

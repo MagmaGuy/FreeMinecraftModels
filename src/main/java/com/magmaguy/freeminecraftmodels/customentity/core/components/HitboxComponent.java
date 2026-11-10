@@ -15,6 +15,7 @@ import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import com.magmaguy.freeminecraftmodels.packets.PacketEntityDisplayHelper;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
@@ -91,9 +92,19 @@ public class HitboxComponent {
 
     /**
      * Refreshes contact-enabled hitboxes and fires contact callbacks on the
-     * primary thread. Invoked every two ticks by ModeledEntitiesClock.
+     * primary thread, reading the world's players now.
      */
     public void tickPrimaryThread() {
+        tickPrimaryThread(null);
+    }
+
+    /**
+     * Refreshes contact-enabled hitboxes and fires contact callbacks on the
+     * primary thread. Invoked every two ticks by ModeledEntitiesClock, which
+     * passes one snapshot of the players for its whole pass; null reads the
+     * world's players now.
+     */
+    public void tickPrimaryThread(PlayerPositions players) {
         if (!Bukkit.isPrimaryThread()) {
             throw new IllegalStateException(
                     "Model hitbox contacts must run on the primary thread");
@@ -105,7 +116,8 @@ public class HitboxComponent {
         Location location = modeledEntity.getLocation();
         if (location == null) return;
         getObbHitbox().update(location);
-        checkPlayerCollisions();
+        if (players == null) checkPlayerCollisions();
+        else checkPlayerCollisions(players);
     }
 
     /**
@@ -133,6 +145,26 @@ public class HitboxComponent {
                 Player viewer = Bukkit.getPlayer(viewerUUID);
                 if (viewer != null) PacketEntityDisplayHelper.displayToPlayer(packetInteractionEntity, viewer);
             }
+        }
+    }
+
+    /**
+     * Checks for collisions with nearby players and fires appropriate events, as {@link #checkPlayerCollisions()} does,
+     * with the players and their positions from this pass's snapshot. A player the pass saw in this world who has
+     * since left it or the server is skipped.
+     */
+    private void checkPlayerCollisions(PlayerPositions players) {
+        World world = modeledEntity.getWorld();
+        if (world == null) return;
+        Location entityLocation = modeledEntity.getLocation();
+        if (entityLocation == null || entityLocation.getWorld() != world) return;
+        PlayerPositions.InWorld inWorld = players.of(world);
+        double x = entityLocation.getX(), y = entityLocation.getY(), z = entityLocation.getZ();
+        for (int i = 0; i < inWorld.size(); i++) {
+            if (inWorld.distanceSquared(i, x, y, z) >= PLAYER_COLLISION_RANGE_SQUARED) continue;
+            Player player = inWorld.player(i);
+            if (player.getWorld() != world || !player.isOnline()) continue;
+            if (isPlayerColliding(player)) modeledEntity.getInteractionComponent().callHitboxContactEvent(player);
         }
     }
 
