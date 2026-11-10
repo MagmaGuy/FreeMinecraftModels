@@ -1,9 +1,12 @@
 package com.magmaguy.freeminecraftmodels.pets.behavior;
 
+import com.magmaguy.magmacore.ai.MindBehavior;
 import com.magmaguy.magmacore.ai.MindBodyLocomotion;
 import com.magmaguy.magmacore.ai.MindContext;
+import com.magmaguy.magmacore.ai.MindControl;
 import com.magmaguy.magmacore.ai.MindProgram;
 import com.magmaguy.magmacore.ai.MindSensor;
+import com.magmaguy.magmacore.ai.MindStopReason;
 import com.magmaguy.magmacore.scripting.LuaMindContextExtension;
 import com.magmaguy.magmacore.scripting.LuaMindDefinition;
 import com.magmaguy.magmacore.scripting.LuaMindModuleDescriptor;
@@ -22,6 +25,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.LongPredicate;
 import java.util.stream.Collectors;
 
 /**
@@ -63,6 +67,18 @@ public final class PetPrograms {
      * every earlier count. This relies on an edited strike_back.lua keeping that meaning for its sensor id.
      */
     private static final Set<String> HURT_SENSORS = Set.of(PetBehaviorCatalog.ID_PREFIX + "strike_back");
+    /**
+     * The shipped retaliate module and its two behaviors, which can start only within some ticks of a player's latest
+     * hit on the pet, so a body asks their can_start only then. The charge starts on an unanswered hit while
+     * c.pet.attacker is set, which is for 30 seconds after the latest hit. The flee starts only before the
+     * retaliate_flee_until the charge sets as it reaches the player, which is the module's flee_seconds after a tick
+     * when c.pet.attacker was set, so it can start only within those 30 seconds plus flee_seconds of the latest hit.
+     * Outside those windows their can_start could only answer false. This relies on an edited retaliate.lua keeping
+     * that meaning for these behavior ids.
+     */
+    private static final String RETALIATE = PetBehaviorCatalog.ID_PREFIX + "retaliate",
+            RETALIATE_CHARGE = PetBehaviorCatalog.ID_PREFIX + "retaliate_charge",
+            RETALIATE_FLEE = PetBehaviorCatalog.ID_PREFIX + "retaliate_flee";
 
     /**
      * A creature's program, the settings of each module it runs by module id, the sensors its bodies leave out, and
@@ -81,23 +97,52 @@ public final class PetPrograms {
 
         /**
          * A fresh copy of the program for one pet body, with the extension's fields in every callback. It leaves out
-         * {@link #leftOutSensors}, and runs a sensor that acts only after a player's hit (strike_back) only while
-         * {@code hurt} says the pet's latest hit from a player is recent. Everything else runs as its module declares.
+         * {@link #leftOutSensors}. {@code hurtWithin} says whether the pet's latest hit from a player is at most that
+         * many ticks past the 30 seconds c.pet.attacker keeps it, so {@code hurtWithin.test(0)} is whether
+         * c.pet.attacker can be set. A sensor that acts only after such a hit (strike_back) runs only while that holds,
+         * and retaliate's behaviors are asked to start only within their windows (see {@link #RETALIATE}). Everything
+         * else runs as its module declares.
          */
-        public MindProgram instantiate(LuaMindContextExtension extension, BooleanSupplier hurt) {
+        public MindProgram instantiate(LuaMindContextExtension extension, LongPredicate hurtWithin) {
             MindProgram full = definition.instantiate(extension);
+            Map<String, Long> windows = hurtWindows(settings);
             if (full.sensors().stream().noneMatch(sensor -> leftOutSensors.contains(sensor.identifier())
-                    || HURT_SENSORS.contains(sensor.identifier()))) return full;
+                    || HURT_SENSORS.contains(sensor.identifier()))
+                    && full.behaviors().stream().noneMatch(behavior -> windows.containsKey(behavior.identifier())))
+                return full;
             MindProgram.Builder copy = MindProgram.builder(full.identifier(), full.revision())
                     .schema(full.schema())
                     .executionPolicy(full.executionPolicy());
             for (MindSensor sensor : full.sensors()) {
                 if (leftOutSensors.contains(sensor.identifier())) continue;
-                copy.sensor(HURT_SENSORS.contains(sensor.identifier()) ? new HurtSensor(sensor, hurt) : sensor);
+                copy.sensor(HURT_SENSORS.contains(sensor.identifier())
+                        ? new HurtSensor(sensor, () -> hurtWithin.test(0L)) : sensor);
             }
-            full.behaviors().forEach(copy::behavior);
+            for (MindBehavior behavior : full.behaviors()) {
+                Long window = windows.get(behavior.identifier());
+                if (window == null) {
+                    copy.behavior(behavior);
+                    continue;
+                }
+                long past = window;
+                copy.behavior(new HurtBehavior(behavior, () -> hurtWithin.test(past)));
+            }
             return copy.build();
         }
+    }
+
+    /**
+     * How many ticks past c.pet.attacker's 30 seconds each of retaliate's behaviors can still start after a player's
+     * latest hit, by behavior id; none for a program without retaliate. The flee's needs the module's flee_seconds,
+     * read as retaliate.lua's ticks() reads it; without a number there, the flee is asked as it declares.
+     */
+    static Map<String, Long> hurtWindows(Map<String, Map<String, Object>> settings) {
+        Map<String, Object> retaliate = settings.get(RETALIATE);
+        if (retaliate == null) return Map.of();
+        if (!(retaliate.get("flee_seconds") instanceof Number seconds) || Double.isNaN(seconds.doubleValue()))
+            return Map.of(RETALIATE_CHARGE, 0L);
+        long flee = Math.max(1L, (long) Math.floor(Math.min(seconds.doubleValue() * 20D, Integer.MAX_VALUE)));
+        return Map.of(RETALIATE_CHARGE, 0L, RETALIATE_FLEE, flee);
     }
 
     /** A sensor whose Lua runs only while its pet's latest hit from a player is recent. */
@@ -115,6 +160,63 @@ public final class PetPrograms {
         @Override
         public void sense(MindContext context) {
             if (hurt.getAsBoolean()) sensor.sense(context);
+        }
+    }
+
+    /**
+     * A behavior whose can_start is asked only while its pet's latest hit from a player is recent enough; otherwise
+     * the probe answers false without Lua. Everything else is the behavior's own: each MindBehavior method is passed
+     * on, so a method MagmaCore adds needs passing on here too, or it falls back to the interface's default.
+     */
+    private record HurtBehavior(MindBehavior behavior, BooleanSupplier hurt) implements MindBehavior {
+        @Override
+        public String identifier() {
+            return behavior.identifier();
+        }
+
+        @Override
+        public int priority() {
+            return behavior.priority();
+        }
+
+        @Override
+        public Set<MindControl> controls() {
+            return behavior.controls();
+        }
+
+        @Override
+        public int probeInterval() {
+            return behavior.probeInterval();
+        }
+
+        @Override
+        public int tickInterval() {
+            return behavior.tickInterval();
+        }
+
+        @Override
+        public boolean canStart(MindContext context) {
+            return hurt.getAsBoolean() && behavior.canStart(context);
+        }
+
+        @Override
+        public boolean canContinue(MindContext context) {
+            return behavior.canContinue(context);
+        }
+
+        @Override
+        public void start(MindContext context) {
+            behavior.start(context);
+        }
+
+        @Override
+        public void tick(MindContext context) {
+            behavior.tick(context);
+        }
+
+        @Override
+        public void stop(MindContext context, MindStopReason reason) {
+            behavior.stop(context, reason);
         }
     }
 
