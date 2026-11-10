@@ -61,6 +61,13 @@ final class PetRides {
      * feet, so a whole block would keep it diving in the shallowest water, until it climbed out at the bank.
      */
     private static final double SURFACE_MARGIN = 0.5D;
+    /**
+     * Ticks a ridden pet waits after its other body could not spawn before it tries again. Each try gets the rider off
+     * and seats them back, and something that refuses the spawn, such as a region denying mob spawns, refuses it every
+     * tick: tried each tick, the rider was thrown off and seated twenty times a second. It keeps trying, a second apart,
+     * so a refusal that lifts, or a pet ridden on into a place that allows it, still dives or surfaces.
+     */
+    static final long SWAP_RETRY_TICKS = 20L;
     private final PetManager manager;
     /** Each ridden pet with the movement speed and jump strength its body had before, and where it stood last tick. */
     private final Map<PetControl, Ride> ridden = new IdentityHashMap<>();
@@ -76,6 +83,8 @@ final class PetRides {
         private double lastX = Double.NaN, lastZ = Double.NaN;
         // Whether the pet swims as its diving body now, its rider steering it as a vanilla nautilus.
         private boolean diving;
+        // The pet tick from which it may try to dive or surface again, after its other body could not spawn.
+        private long swapAgainAt = Long.MIN_VALUE;
 
         private Ride(Unridden before) {
             this.before = before;
@@ -221,9 +230,12 @@ final class PetRides {
                 // The rider's client reports whether the body it steers stands on something.
                 boolean airborne = depth == 0 && !body.isOnGround();
                 boolean diving = diving(ride.diving, depth, eyes, isWater(rider.getEyeLocation().getBlock()), airborne);
-                if (diving != ride.diving) {
+                if (diving != ride.diving && PetManager.ticks() >= ride.swapAgainAt) {
                     LivingEntity next = swap(control, rider, diving);
-                    if (next == null) continue;
+                    if (next == null) {
+                        ride.swapAgainAt = PetManager.ticks() + SWAP_RETRY_TICKS;
+                        continue;
+                    }
                     body = next;
                     ride.diving = diving;
                     ride.lastX = Double.NaN;
