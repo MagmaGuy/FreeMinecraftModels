@@ -54,6 +54,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -99,6 +100,8 @@ public final class PetManager {
     // Each species and cause a spawn was refused for this load, so the retries stay quiet.
     private final Set<String> refusals = new HashSet<>();
     private final Map<UUID, PetControl> byBody = new HashMap<>();
+    // The wild pets among byBody, so chunk unloads look at those alone, and at none on a server without wild pets.
+    private final Set<PetControl> wildLive = new LinkedHashSet<>();
     private final Map<UUID, PetCollection> collections = new HashMap<>();
     private final Map<UUID, Map<String, PetControl>> ownedBodies = new HashMap<>();
     /** Players whose attack on an owner or one of their pets went through, by owner, until the tick they are let go. */
@@ -465,6 +468,7 @@ public final class PetManager {
         control.attach(entity, modeled, mind);
         dress(control, entity, modeled);
         byBody.put(entity.getUniqueId(), control);
+        if (control.isWild()) wildLive.add(control);
         if (owner != null && record != null) {
             Map<String, PetControl> owned = ownedBodies.computeIfAbsent(owner, ignored -> new HashMap<>());
             List<Integer> taken = new ArrayList<>();
@@ -550,6 +554,7 @@ public final class PetManager {
         restoreHealth(entity, health);
         byBody.remove(old.getUniqueId(), control);
         byBody.put(entity.getUniqueId(), control);
+        if (control.isWild()) wildLive.add(control);
         control.attach(entity, modeled, mind);
         dress(control, entity, modeled);
         // Its first frame carries on from the old model's, so the switch of bodies does not show in its animation.
@@ -724,6 +729,7 @@ public final class PetManager {
     private void forget(PetControl control) {
         LivingEntity body = control.body();
         if (body != null) byBody.remove(body.getUniqueId(), control);
+        wildLive.remove(control);
         if (control.ownerId() != null && control.record() != null) {
             Map<String, PetControl> owned = ownedBodies.get(control.ownerId());
             if (owned != null) owned.remove(control.record().id, control);
@@ -1279,12 +1285,23 @@ public final class PetManager {
             Logger.warn("Could not delete " + legacyWildFile + "; its wild pets are in chunk data now, so delete it by hand.");
     }
 
-    /** Writes a loaded chunk's waiting wild pets into its persistent data, or clears it when none wait there. */
+    /**
+     * Writes a loaded chunk's waiting wild pets into its persistent data, or clears it when none wait there. It touches
+     * the data only when the stored value changes: the server counts a chunk as unsaved after any set or remove, even
+     * one that changes nothing or removes a key the chunk never had, and then writes that chunk to disk as it unloads
+     * and on autosaves. Every chunk unload comes through here, on servers without any pets too.
+     */
     private void writeChunk(Chunk chunk) {
         List<WildPetStore.Entry> entries = wildStore.peek(chunk.getWorld().getUID(), chunk.getX(), chunk.getZ());
         PersistentDataContainer data = chunk.getPersistentDataContainer();
-        if (entries.isEmpty()) data.remove(wildKey);
-        else data.set(wildKey, PersistentDataType.STRING, WildPetStore.encodeAll(entries));
+        if (entries.isEmpty()) {
+            if (data.has(wildKey)) data.remove(wildKey);
+            return;
+        }
+        String encoded = WildPetStore.encodeAll(entries);
+        if (!data.has(wildKey, PersistentDataType.STRING)
+                || !encoded.equals(data.get(wildKey, PersistentDataType.STRING)))
+            data.set(wildKey, PersistentDataType.STRING, encoded);
     }
 
     /** Keeps a loaded chunk's persistent data in step after its waiting pets changed; an unloaded one waits. */
@@ -1313,14 +1330,20 @@ public final class PetManager {
      */
     public void chunkUnloading(Chunk chunk) {
         World world = chunk.getWorld();
-        for (PetControl control : new ArrayList<>(byBody.values())) {
+        List<PetControl> leaving = null;
+        for (PetControl control : wildLive) {
             LivingEntity body = control.body();
-            if (!control.isWild() || body == null || body.getWorld() != world) continue;
+            if (body == null || body.getWorld() != world) continue;
             Location at = body.getLocation();
             if (at.getBlockX() >> 4 == chunk.getX() && at.getBlockZ() >> 4 == chunk.getZ()) {
-                store(control);
-                despawn(control);
+                if (leaving == null) leaving = new ArrayList<>();
+                leaving.add(control);
             }
+        }
+        // Stored and despawned after the walk, which despawning would otherwise disturb.
+        if (leaving != null) for (PetControl control : leaving) {
+            store(control);
+            despawn(control);
         }
         writeChunk(chunk);
         wildStore.take(world.getUID(), chunk.getX(), chunk.getZ());
