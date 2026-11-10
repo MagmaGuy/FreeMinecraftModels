@@ -483,7 +483,8 @@ public final class PetLuaTable {
         });
         // march_call(radius, min_group, chance, min_seconds, max_seconds, spacing, sound, volume, pitch): calls a
         // march with this pet at its head. Its kin within radius (up to 32) that are free, settled and in no march,
-        // with itself, must number min_group (2 to 64); chance (0 to 1) is shared out among them, so a group calls as
+        // with itself, must number min_group (2 to 64); a kin is not free while something that comes before its own
+        // behavior with this module's id holds its body; chance (0 to 1) is shared out among them, so a group calls as
         // often whatever its size, and an admin's request (march_requested) skips it. The march sets off along the
         // heading whose straight run of standing ground goes farthest, which must reach 6 blocks, and lasts min_seconds
         // to max_seconds (10 to 1800). Its kin, nearest first, follow in single file spacing blocks apart (0.5 to 8).
@@ -498,8 +499,8 @@ public final class PetLuaTable {
             double spacing = number(args, 6, MIN_SPACING, MAX_SPACING);
             String sound = args.optjstring(7, "");
             float volume = (float) number(args, 8, 0D, MAX_VOLUME), pitch = (float) number(args, 9, MIN_PITCH, MAX_PITCH);
-            return LuaValue.valueOf(PetMarches.call(control, body(), radius, minGroup, chance, minSeconds, maxSeconds,
-                    spacing, named(sound) ? sound.trim() : null, volume, pitch, PetManager.ticks()));
+            return LuaValue.valueOf(PetMarches.call(control, body(), module, radius, minGroup, chance, minSeconds,
+                    maxSeconds, spacing, named(sound) ? sound.trim() : null, volume, pitch, PetManager.ticks()));
         });
         // march_spot(): where this marcher walks to now, which also keeps its place in line for 10 more ticks: the
         // leader's next step along its straight leg, its own spot while the line forms behind it, or a follower's

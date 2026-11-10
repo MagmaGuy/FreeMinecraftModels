@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.pets;
 
+import com.magmaguy.magmacore.ai.MindHandle;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
@@ -68,10 +69,15 @@ final class PetMarches {
      * itself included, must number at least minGroup (at least 2), and chance is shared out among them, so a colony
      * calls as often whatever its size; an admin's request skips the dice. The leader sets off along the heading whose
      * straight run goes farthest, which must reach {@link MarchRoute#MIN_LEG}. True when this pet now leads a march.
+     * <p>
+     * Free kin are settled, not told to stay, in no march, and not kept from marching: a kin whose behavior with the
+     * calling module's id could not start now, because something that comes first holds its body (a fight, a stolen
+     * fish, its owner), is left out, as the caller would be. Enrolled anyway, it filled the group and a place in line
+     * it could not take, and was held out of any other march until this one ended.
      */
-    static boolean call(PetControl caller, LivingEntity body, double radius, int minGroup, double chance,
-                        double minSeconds, double maxSeconds, double spacing, String sound, float volume, float pitch,
-                        long now) {
+    static boolean call(PetControl caller, LivingEntity body, String module, double radius, int minGroup,
+                        double chance, double minSeconds, double maxSeconds, double spacing, String sound, float volume,
+                        float pitch, long now) {
         PetManager manager = PetManager.get();
         if (manager == null || byBody.containsKey(body.getUniqueId())) return false;
         Long requestEnd = requests.get(body.getUniqueId());
@@ -87,6 +93,8 @@ final class PetMarches {
                 continue;
             PetControl other = manager.pet(entity);
             if (!caller.isKin(other) || other.isStaying() || !PetMotion.settled(other, (LivingEntity) entity)) continue;
+            MindHandle mind = other.mind();
+            if (mind != null && mind.isBlocked(module)) continue;
             kin.add((LivingEntity) entity);
         }
         if (kin.size() + 1 < Math.max(2, minGroup)) return false;
