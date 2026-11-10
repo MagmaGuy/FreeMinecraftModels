@@ -486,8 +486,15 @@ public class DynamicEntity extends ModeledEntity {
         // Two-argument remove: a model replaced on its mob must not drop the entry of the model that took its place.
         if (underlyingEntity != null) dynamicEntities.remove(underlyingEntity.getUniqueId(), this);
         // A horse /fmm mount spawned exists for its model; without it, it is an invisible saddled horse.
-        if (underlyingEntity != null && com.magmaguy.freeminecraftmodels.commands.MountCommand.isMountHorse(underlyingEntity))
-            underlyingEntity.remove();
+        if (underlyingEntity != null && com.magmaguy.freeminecraftmodels.commands.MountCommand.isMountHorse(underlyingEntity)) {
+            // The model clock removes a model whose mob is gone, and Bukkit only removes an entity on the primary thread.
+            Entity mountHorse = underlyingEntity;
+            if (Bukkit.isPrimaryThread() || MetadataHandler.PLUGIN == null || !MetadataHandler.PLUGIN.isEnabled()) {
+                mountHorse.remove();
+            } else {
+                Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, mountHorse::remove);
+            }
+        }
     }
 
     @Override

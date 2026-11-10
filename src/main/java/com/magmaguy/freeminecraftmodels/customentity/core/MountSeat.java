@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import lombok.Getter;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Interaction;
@@ -82,6 +83,11 @@ public class MountSeat {
      * Dismounts the current occupant and removes the vehicle.
      */
     public void dismount() {
+        // The model clock removes a model off the primary thread, where Bukkit can neither unseat nor remove an entity.
+        if (!Bukkit.isPrimaryThread() && MetadataHandler.PLUGIN != null && MetadataHandler.PLUGIN.isEnabled()) {
+            Bukkit.getScheduler().runTask(MetadataHandler.PLUGIN, this::dismount);
+            return;
+        }
         if (occupant != null && vehicle != null) {
             vehicle.removePassenger(occupant);
         }
