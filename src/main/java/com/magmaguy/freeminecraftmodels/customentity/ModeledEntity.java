@@ -87,6 +87,8 @@ public class ModeledEntity {
     @Setter
     private double scaleModifier = 1.0;
     private volatile org.bukkit.attribute.AttributeInstance scaleAttribute;
+    // currentScale() as the primary thread last read it, for the model clock (see sampleScale).
+    private volatile double sampledScale = 1.0;
     @Getter
     private MountPointManager mountPointManager = null;
     @Getter
@@ -332,6 +334,7 @@ public class ModeledEntity {
         synchronized (this) {
             if (isRemoved) return;
             hitboxComponent.refreshPacketInteractionAliases();
+            sampleScale();
             loadedModeledEntities.add(this);
         }
     }
@@ -418,12 +421,24 @@ public class ModeledEntity {
         hitboxComponent.tick(abstractPacketBundle);
         animationComponent.tick();
         particleComponent.tick(abstractPacketBundle, skeleton.getSkeletonWatchers().getJavaViewers());
-        if (scaleAttribute != null && underlyingEntity != null && underlyingEntity.isValid()) scaleModifier = currentScale();
+        if (scaleAttribute != null && underlyingEntity != null && underlyingEntity.isValid()) scaleModifier = sampledScale;
+    }
+
+    /**
+     * Reads the model's scale for the model clock, on the primary thread: when the model is published to the clock,
+     * then every primary-thread pass (see {@link ModeledEntitiesClock}). The clock used to read the attribute itself,
+     * but reading an attribute's value is not read-only: it caches the value and clears the flag that the attribute's
+     * changes set, and walks its modifiers. Read off the main thread, it could race a change, such as a pet's rain
+     * swell or saddle lift, and leave the server's own view of the mob's scale at the old value until the next change.
+     */
+    public void sampleScale() {
+        if (scaleAttribute != null && underlyingEntity != null) sampledScale = currentScale();
     }
 
     /**
      * The model's scale now: its mob's scale attribute without the part that only lifts a rider's seat, or 1 without
-     * one. {@link #getScaleModifier} keeps the value the model clock last read.
+     * one. {@link #getScaleModifier} keeps the value the model clock last took from {@link #sampleScale}. Primary
+     * thread only.
      */
     public double currentScale() {
         org.bukkit.attribute.AttributeInstance scale = scaleAttribute;

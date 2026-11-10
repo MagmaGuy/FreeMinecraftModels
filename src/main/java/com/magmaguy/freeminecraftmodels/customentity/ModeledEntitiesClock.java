@@ -212,6 +212,9 @@ public class ModeledEntitiesClock {
         PlayerPositions players = new PlayerPositions();
         ModeledEntity.getLoadedModeledEntities().forEach(modeledEntity -> {
             if (!modeledEntity.isRemoved()) {
+                // The model clock takes the scale from here: reading an attribute's value off the main thread is
+                // not safe (see ModeledEntity.sampleScale).
+                modeledEntity.sampleScale();
                 modeledEntity.getHitboxComponent().tickPrimaryThread(players);
             }
         });
