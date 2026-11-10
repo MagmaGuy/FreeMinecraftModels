@@ -10,6 +10,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -117,6 +118,36 @@ final class WildPetStore {
         Map<Long, List<Entry>> chunks = byWorld.get(world);
         return chunks != null && chunks.containsKey(WildSpawner.chunkKey(cx, cz));
     }
+
+    /**
+     * The chunks of a world with pets waiting within radius chunks of cx, cz on both axes, as keys. It walks whichever
+     * is smaller, the world's waiting chunks or the square around cx, cz, and allocates nothing when none are near.
+     */
+    long[] chunksNear(UUID world, int cx, int cz, int radius) {
+        Map<Long, List<Entry>> chunks = byWorld.get(world);
+        if (chunks == null || chunks.isEmpty()) return NONE;
+        long[] found = NONE;
+        int count = 0;
+        int side = 2 * radius + 1;
+        if (chunks.size() < side * side) {
+            for (long key : chunks.keySet()) {
+                if (Math.abs((int) (key >> 32) - cx) > radius || Math.abs((int) key - cz) > radius) continue;
+                if (count == found.length) found = Arrays.copyOf(found, Math.max(4, count * 2));
+                found[count++] = key;
+            }
+        } else {
+            for (int dx = -radius; dx <= radius; dx++)
+                for (int dz = -radius; dz <= radius; dz++) {
+                    long key = WildSpawner.chunkKey(cx + dx, cz + dz);
+                    if (!chunks.containsKey(key)) continue;
+                    if (count == found.length) found = Arrays.copyOf(found, Math.max(4, count * 2));
+                    found[count++] = key;
+                }
+        }
+        return count == found.length ? found : Arrays.copyOf(found, count);
+    }
+
+    private static final long[] NONE = new long[0];
 
     /** The worlds with pets waiting. */
     Set<UUID> worlds() {

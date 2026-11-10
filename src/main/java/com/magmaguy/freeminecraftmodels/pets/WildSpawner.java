@@ -11,6 +11,7 @@ import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -213,28 +214,67 @@ final class WildSpawner {
         }
     }
 
+    /**
+     * Every chunk within {@link #SPAWN_DISTANCE_CHUNKS} of a player gets one wildSpawnChunkChance roll, and the chunks
+     * that roll in are worked through in random order, each topped up when one of the players whose area holds it has
+     * room. The odds and the order come out as shuffling every chunk and rolling each in turn, with no map of all of
+     * them: a chunk is rolled by the first player whose area holds it, and only the few that roll in are kept and
+     * shuffled.
+     */
     private static void passWorld(PetManager manager, World world, List<Player> players, List<PetSpecies> candidates,
                                   Random random) {
-        Map<Long, List<Player>> chunks = new HashMap<>();
-        for (Player player : players) {
-            int cx = player.getLocation().getBlockX() >> 4, cz = player.getLocation().getBlockZ() >> 4;
-            for (int dx = -SPAWN_DISTANCE_CHUNKS; dx <= SPAWN_DISTANCE_CHUNKS; dx++)
-                for (int dz = -SPAWN_DISTANCE_CHUNKS; dz <= SPAWN_DISTANCE_CHUNKS; dz++)
-                    chunks.computeIfAbsent(chunkKey(cx + dx, cz + dz), ignored -> new ArrayList<>()).add(player);
+        int count = players.size();
+        int[] playerX = new int[count], playerZ = new int[count];
+        for (int index = 0; index < count; index++) {
+            Location at = players.get(index).getLocation();
+            playerX[index] = at.getBlockX() >> 4;
+            playerZ[index] = at.getBlockZ() >> 4;
         }
-        List<Long> order = new ArrayList<>(chunks.keySet());
-        Collections.shuffle(order, random);
-        for (long key : order) {
-            if (random.nextDouble() >= PetsConfig.wildSpawnChunkChance) continue;
+        long[] rolled = new long[16];
+        int picked = 0;
+        for (int index = 0; index < count; index++)
+            for (int dx = -SPAWN_DISTANCE_CHUNKS; dx <= SPAWN_DISTANCE_CHUNKS; dx++)
+                for (int dz = -SPAWN_DISTANCE_CHUNKS; dz <= SPAWN_DISTANCE_CHUNKS; dz++) {
+                    if (random.nextDouble() >= PetsConfig.wildSpawnChunkChance) continue;
+                    int cx = playerX[index] + dx, cz = playerZ[index] + dz;
+                    // An earlier player's area holds it, so its roll came then.
+                    if (nearAny(playerX, playerZ, index, cx, cz)) continue;
+                    if (picked == rolled.length) rolled = Arrays.copyOf(rolled, picked * 2);
+                    rolled[picked++] = chunkKey(cx, cz);
+                }
+        // Collections.shuffle's walk, on the keys as they are.
+        for (int index = picked - 1; index > 0; index--) {
+            int other = random.nextInt(index + 1);
+            long swap = rolled[index];
+            rolled[index] = rolled[other];
+            rolled[other] = swap;
+        }
+        for (int next = 0; next < picked; next++) {
+            long key = rolled[next];
             int cx = (int) (key >> 32), cz = (int) key;
-            if (!world.isChunkLoaded(cx, cz)) continue;
-            if (chunks.get(key).stream().noneMatch(player -> manager.wildInSpawnArea(player, null) < PetsConfig.wildPetCapPerPlayer))
-                continue;
+            if (!world.isChunkLoaded(cx, cz) || !roomAround(manager, players, playerX, playerZ, cx, cz)) continue;
             int x = (cx << 4) + random.nextInt(16), z = (cz << 4) + random.nextInt(16);
             int surface = world.getHighestBlockYAt(x, z);
             int y = world.getMinHeight() + random.nextInt(Math.max(1, surface + 2 - world.getMinHeight()));
             spawnPacks(manager, world, players, candidates, x, y, z, random);
         }
+    }
+
+    /** Whether the chunk lies within {@link #SPAWN_DISTANCE_CHUNKS} of one of the first {@code before} players. */
+    private static boolean nearAny(int[] playerX, int[] playerZ, int before, int cx, int cz) {
+        for (int index = 0; index < before; index++)
+            if (Math.abs(playerX[index] - cx) <= SPAWN_DISTANCE_CHUNKS && Math.abs(playerZ[index] - cz) <= SPAWN_DISTANCE_CHUNKS)
+                return true;
+        return false;
+    }
+
+    /** Whether a player whose area holds the chunk is under the overall cap. */
+    private static boolean roomAround(PetManager manager, List<Player> players, int[] playerX, int[] playerZ, int cx,
+                                      int cz) {
+        for (int index = 0; index < players.size(); index++)
+            if (Math.abs(playerX[index] - cx) <= SPAWN_DISTANCE_CHUNKS && Math.abs(playerZ[index] - cz) <= SPAWN_DISTANCE_CHUNKS
+                    && manager.wildInSpawnArea(players.get(index), null) < PetsConfig.wildPetCapPerPlayer) return true;
+        return false;
     }
 
     /**

@@ -1389,10 +1389,12 @@ public final class PetManager {
         for (Player player : Bukkit.getOnlinePlayers()) {
             World world = player.getWorld();
             UUID worldId = world.getUID();
-            int px = player.getLocation().getBlockX() >> 4, pz = player.getLocation().getBlockZ() >> 4;
-            for (int dx = -WildSpawner.SPAWN_DISTANCE_CHUNKS; dx <= WildSpawner.SPAWN_DISTANCE_CHUNKS; dx++)
-                for (int dz = -WildSpawner.SPAWN_DISTANCE_CHUNKS; dz <= WildSpawner.SPAWN_DISTANCE_CHUNKS; dz++)
-                    if (wildStore.has(worldId, px + dx, pz + dz) && world.isChunkLoaded(px + dx, pz + dz)) restore(world, px + dx, pz + dz);
+            Location at = player.getLocation();
+            for (long chunk : wildStore.chunksNear(worldId, at.getBlockX() >> 4, at.getBlockZ() >> 4,
+                    WildSpawner.SPAWN_DISTANCE_CHUNKS)) {
+                int cx = (int) (chunk >> 32), cz = (int) chunk;
+                if (wildStore.has(worldId, cx, cz) && world.isChunkLoaded(cx, cz)) restore(world, cx, cz);
+            }
         }
     }
 
@@ -1434,11 +1436,18 @@ public final class PetManager {
 
     /** Wild pets of all species, or of one, in the player's spawn area: the chunks within 8 of theirs. */
     int wildInSpawnArea(Player player, PetSpecies only) {
+        Location standing = player.getLocation();
+        World world = standing.getWorld();
+        int x = standing.getBlockX(), z = standing.getBlockZ();
+        // One Location for the walk: a top-up pass asks this for every candidate chunk and spot.
+        Location at = new Location(world, 0D, 0D, 0D);
         int count = 0;
-        for (PetControl control : byBody.values()) {
-            if (!control.isWild() || (only != null && control.species() != only)) continue;
+        for (PetControl control : wildLive) {
+            if (only != null && control.species() != only) continue;
             LivingEntity body = control.body();
-            if (body != null && body.isValid() && WildSpawner.inSpawnArea(player, body.getLocation())) count++;
+            if (body == null || !body.isValid() || body.getWorld() != world) continue;
+            body.getLocation(at);
+            if (WildSpawner.inSpawnArea(x, z, at.getBlockX(), at.getBlockZ())) count++;
         }
         return count;
     }
