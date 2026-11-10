@@ -876,9 +876,10 @@ public final class BedrockEntityBundleExporter {
      * Writes an expression channel as the artist keyed it: Bedrock evaluates MoLang natively, so each axis goes
      * through unchanged, numbers included, except for the closing {@code ;} Bedrock requires on a complex program
      * ({@link MolangParser#terminatedForBedrock}). The keys blend linearly whatever interpolation was authored.
-     * The baked channels below instead export the Java pose with FMM's format-5 mirroring undone, which on a
-     * format 4 model negates x and y rotation and x position relative to the authored numbers; an expression axis
-     * on such a model may therefore differ in sign between the Java path and Bedrock.
+     * A format 4 file is authored in Bedrock's convention, so this matches the Java pose. A format 5 file is
+     * authored on Blockbench's own axes, which Java reads by negating x and y rotation and x position: on such a
+     * model those axes of an expression channel still play mirrored on Bedrock. The baked channels below do not
+     * have this problem, because they export the pose Java plays.
      */
     private static JsonObject expressionChannel(ExpressionTrack track) {
         JsonObject keyframes = new JsonObject();
@@ -920,15 +921,22 @@ public final class BedrockEntityBundleExporter {
         return allDefault ? null : keyframes;
     }
 
+    /**
+     * A baked frame as Bedrock reads it, in degrees and pixels. The pose mixer's units are already in Bedrock's
+     * convention: Java turns a bone by (-x, -y, z) of its pose rotation and moves it by (-x, y, z) of its pose
+     * translation on Blockbench axes (BoneTransforms), which is how Bedrock reads a bone's rotation and position
+     * (see {@link BedrockBodyLean}). So the frame goes out with its own signs, whatever format the file is. Rest
+     * rotations and pivots are on Blockbench axes instead, which is why the geometry negates theirs.
+     */
     private static void vector(AnimationFrame frame, TransformationType channel, double[] result) {
         switch (channel) {
             case ROTATION -> {
-                result[0] = Math.toDegrees(-frame.xRotation);
-                result[1] = Math.toDegrees(-frame.yRotation);
+                result[0] = Math.toDegrees(frame.xRotation);
+                result[1] = Math.toDegrees(frame.yRotation);
                 result[2] = Math.toDegrees(frame.zRotation);
             }
             case POSITION -> {
-                result[0] = -frame.xPosition * 16.0;
+                result[0] = frame.xPosition * 16.0;
                 result[1] = frame.yPosition * 16.0;
                 result[2] = frame.zPosition * 16.0;
             }
