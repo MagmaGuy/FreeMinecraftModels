@@ -1,6 +1,7 @@
 package com.magmaguy.freeminecraftmodels.pets.behavior;
 
 import com.magmaguy.magmacore.ai.MindBodyLocomotion;
+import com.magmaguy.magmacore.ai.MindContext;
 import com.magmaguy.magmacore.ai.MindProgram;
 import com.magmaguy.magmacore.ai.MindSensor;
 import com.magmaguy.magmacore.scripting.LuaMindContextExtension;
@@ -19,6 +20,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -54,6 +56,13 @@ public final class PetPrograms {
     private static final Map<String, Boolean> ONE_SIDED_SENSORS = Map.of(
             PetBehaviorCatalog.ID_PREFIX + "sting_players", true,
             PetBehaviorCatalog.ID_PREFIX + "sting_mobs", false);
+    /**
+     * Shipped sensors that can act only while a player's latest hit on the pet is recent, so a body runs them only
+     * then. strike_back answers a hit while c.pet.attacker is set, which is for 30 seconds after the hit; past that it
+     * would only mark the hit answered, which no later hit can tell apart, since each hit raises c.pet.hurt_count past
+     * every earlier count. This relies on an edited strike_back.lua keeping that meaning for its sensor id.
+     */
+    private static final Set<String> HURT_SENSORS = Set.of(PetBehaviorCatalog.ID_PREFIX + "strike_back");
 
     /**
      * A creature's program, the settings of each module it runs by module id, the sensors its bodies leave out, and
@@ -71,19 +80,41 @@ public final class PetPrograms {
         }
 
         /**
-         * A fresh copy of the program for one pet body, with the extension's fields in every callback, leaving out
-         * {@link #leftOutSensors}. Everything else runs as its module declares.
+         * A fresh copy of the program for one pet body, with the extension's fields in every callback. It leaves out
+         * {@link #leftOutSensors}, and runs a sensor that acts only after a player's hit (strike_back) only while
+         * {@code hurt} says the pet's latest hit from a player is recent. Everything else runs as its module declares.
          */
-        public MindProgram instantiate(LuaMindContextExtension extension) {
+        public MindProgram instantiate(LuaMindContextExtension extension, BooleanSupplier hurt) {
             MindProgram full = definition.instantiate(extension);
-            if (full.sensors().stream().noneMatch(sensor -> leftOutSensors.contains(sensor.identifier()))) return full;
+            if (full.sensors().stream().noneMatch(sensor -> leftOutSensors.contains(sensor.identifier())
+                    || HURT_SENSORS.contains(sensor.identifier()))) return full;
             MindProgram.Builder copy = MindProgram.builder(full.identifier(), full.revision())
                     .schema(full.schema())
                     .executionPolicy(full.executionPolicy());
-            for (MindSensor sensor : full.sensors())
-                if (!leftOutSensors.contains(sensor.identifier())) copy.sensor(sensor);
+            for (MindSensor sensor : full.sensors()) {
+                if (leftOutSensors.contains(sensor.identifier())) continue;
+                copy.sensor(HURT_SENSORS.contains(sensor.identifier()) ? new HurtSensor(sensor, hurt) : sensor);
+            }
             full.behaviors().forEach(copy::behavior);
             return copy.build();
+        }
+    }
+
+    /** A sensor whose Lua runs only while its pet's latest hit from a player is recent. */
+    private record HurtSensor(MindSensor sensor, BooleanSupplier hurt) implements MindSensor {
+        @Override
+        public String identifier() {
+            return sensor.identifier();
+        }
+
+        @Override
+        public int intervalTicks() {
+            return sensor.intervalTicks();
+        }
+
+        @Override
+        public void sense(MindContext context) {
+            if (hurt.getAsBoolean()) sensor.sense(context);
         }
     }
 
