@@ -49,6 +49,8 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -174,6 +176,9 @@ public final class PetLuaTable {
     private long trailStamp = Ticks.UNBOUND, marchStamp = Ticks.UNBOUND;
     private double trailBack, trailHeight;
     private Location trail, march;
+    // The item, block and campfire kinds the lists a module passes name, kept while a list's entries stay the same.
+    private final MaterialLists itemLists = new MaterialLists(), blockLists = new MaterialLists(),
+            campfireLists = new MaterialLists();
 
     /** {@code warnings} belongs to the load that builds this pet, and is shared by every pet that load builds. */
     PetLuaTable(PetControl control, Warnings warnings) {
@@ -1035,7 +1040,10 @@ public final class PetLuaTable {
 
     /** The fire kinds, soul variants and smoke height a campfire call gives, from argument {@code first}. */
     private Campfire campfire(Varargs args, int first) {
-        return new Campfire(materials(args.arg(first)), texts(args.arg(first + 1)), number(args, first + 2));
+        LuaValue list = args.arg(first);
+        Set<Material> blocks = campfireLists.kept(list);
+        if (blocks == null) blocks = campfireLists.keep(list, materials(list));
+        return new Campfire(blocks, texts(args.arg(first + 1)), number(args, first + 2));
     }
 
     private final class Campfire {
@@ -1169,14 +1177,19 @@ public final class PetLuaTable {
         return count < min ? null : new Location(here.getWorld(), x / count, y / count, z / count);
     }
 
-    /** The item kinds a list names, of its first MAX_LIST_ENTRIES; a name that is no item is warned about once. */
+    /**
+     * The item kinds a list names, of its first MAX_LIST_ENTRIES; a name that is no item is warned about once. Read
+     * only; the same list gives the same set until its entries change.
+     */
     private Set<Material> items(LuaValue list, String call) {
-        Set<Material> kinds = new HashSet<>();
+        Set<Material> kinds = itemLists.kept(list);
+        if (kinds != null) return kinds;
+        kinds = new HashSet<>();
         for (String name : texts(list)) {
             Material material = item(name, call);
             if (material != null) kinds.add(material);
         }
-        return kinds;
+        return itemLists.keep(list, kinds);
     }
 
     /** The item a name gives. NONE and blanks give none quietly; any other name that is no item is warned about. */
@@ -1186,12 +1199,56 @@ public final class PetLuaTable {
 
     /** The block kinds a list names, as {@link #items} reads items. */
     private Set<Material> blocks(LuaValue list, String call) {
-        Set<Material> kinds = new HashSet<>();
+        Set<Material> kinds = blockLists.kept(list);
+        if (kinds != null) return kinds;
+        kinds = new HashSet<>();
         for (String name : texts(list)) {
             Material material = material(name, call, "block", Material::isBlock);
             if (material != null) kinds.add(material);
         }
-        return kinds;
+        return blockLists.keep(list, kinds);
+    }
+
+    /**
+     * The material sets the last few lists of one kind parsed to, each with the entries it was parsed from. A module
+     * passes the same settings list on every call, and parsing one looks up every name; a list whose entries are the
+     * same as one kept gives that set again, whatever table holds them. Entries are compared raw, one by one, so a
+     * list a module changes (c.settings is the pet's own, and writable) is parsed again. A few slots, reused in turn,
+     * so lists made afresh on every call cannot pile up. Only tables are kept: anything else reads as an empty list.
+     * Each set is read only. Server thread only.
+     */
+    static final class MaterialLists {
+        private static final int SLOTS = 4;
+        private final LuaValue[][] entries = new LuaValue[SLOTS][];
+        private final List<Set<Material>> sets = new ArrayList<>(Collections.nCopies(SLOTS, null));
+        private int next;
+
+        /** The set kept for a list with these entries, or null when none is, or the list is no table. */
+        Set<Material> kept(LuaValue list) {
+            if (!(list instanceof LuaTable table)) return null;
+            int length = Math.min(MAX_LIST_ENTRIES, table.rawlen());
+            for (int slot = 0; slot < SLOTS; slot++) if (same(entries[slot], table, length)) return sets.get(slot);
+            return null;
+        }
+
+        /** Keeps the set parsed from this list, in the oldest slot, and gives it back read only. */
+        Set<Material> keep(LuaValue list, Set<Material> parsed) {
+            Set<Material> kept = Collections.unmodifiableSet(parsed);
+            if (!(list instanceof LuaTable table)) return kept;
+            int length = Math.min(MAX_LIST_ENTRIES, table.rawlen());
+            LuaValue[] read = new LuaValue[length];
+            for (int index = 0; index < length; index++) read[index] = table.rawget(index + 1);
+            entries[next] = read;
+            sets.set(next, kept);
+            next = (next + 1) % SLOTS;
+            return kept;
+        }
+
+        private static boolean same(LuaValue[] kept, LuaTable table, int length) {
+            if (kept == null || kept.length != length) return false;
+            for (int index = 0; index < length; index++) if (!kept[index].raweq(table.rawget(index + 1))) return false;
+            return true;
+        }
     }
 
     private Material material(String name, String call, String kind, Predicate<Material> fits) {
