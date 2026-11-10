@@ -125,6 +125,16 @@ final class March {
         return ids;
     }
 
+    /** How many marchers the line holds, leader included; with {@link #marcherAt} a walk through it with no copy. */
+    int size() {
+        return line.size();
+    }
+
+    /** The marcher at this place in line, 0 being the leader. */
+    UUID marcherAt(int index) {
+        return line.get(index).id;
+    }
+
     UUID leader() {
         return line.isEmpty() ? null : line.get(0).id;
     }

@@ -9,7 +9,6 @@ import org.bukkit.util.Vector;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -56,6 +55,8 @@ final class PetMarches {
 
     // Each marcher's march, by its body's id.
     private static final Map<UUID, Walk> byBody = new HashMap<>();
+    // The marches under way, each once: those byBody holds, kept so the tick's sweep need not gather them.
+    private static final List<Walk> walks = new ArrayList<>();
     // The pets an admin asked to call a march, with the tick each request ends.
     private static final Map<UUID, Long> requests = new HashMap<>();
 
@@ -113,6 +114,7 @@ final class PetMarches {
         walk.bodies.put(body.getUniqueId(), body);
         for (LivingEntity marcher : kin) walk.bodies.put(marcher.getUniqueId(), marcher);
         for (UUID id : walk.bodies.keySet()) byBody.put(id, walk);
+        walks.add(walk);
         requests.remove(body.getUniqueId());
         toot(walk, here);
         return true;
@@ -162,13 +164,16 @@ final class PetMarches {
      * rider, each march's own rules, and the marches that ended.
      */
     static void tick(long now) {
-        requests.values().removeIf(end -> now >= end);
-        if (byBody.isEmpty()) return;
+        if (!requests.isEmpty()) requests.values().removeIf(end -> now >= end);
+        if (walks.isEmpty()) return;
         PetManager manager = PetManager.get();
-        Map<Walk, Boolean> walks = new IdentityHashMap<>();
-        for (Walk walk : byBody.values()) walks.put(walk, Boolean.TRUE);
-        for (Walk walk : walks.keySet()) {
-            for (UUID id : walk.march.marchers()) {
+        // From the back, so a march that ends and leaves the list skips none, and the same inside each line: a
+        // removal moves only the marchers behind it. The marchers left, and their order, come out as they would
+        // walking a copy from the front.
+        for (int next = walks.size() - 1; next >= 0; next--) {
+            Walk walk = walks.get(next);
+            for (int index = walk.march.size() - 1; index >= 0; index--) {
+                UUID id = walk.march.marcherAt(index);
                 LivingEntity body = walk.bodies.get(id);
                 PetControl control = manager == null || body == null ? null : manager.pet(body);
                 if (control == null || !body.isValid() || body.getWorld() != walk.world || !body.isEmpty()
@@ -192,6 +197,7 @@ final class PetMarches {
     /** Forgets every march and request. */
     static void clear() {
         byBody.clear();
+        walks.clear();
         requests.clear();
     }
 
@@ -202,6 +208,8 @@ final class PetMarches {
 
     private static void end(Walk walk) {
         byBody.values().removeIf(other -> other == walk);
+        // Walk keeps identity equality, so this drops this march alone.
+        walks.remove(walk);
     }
 
     private static void toot(Walk walk, Location at) {
