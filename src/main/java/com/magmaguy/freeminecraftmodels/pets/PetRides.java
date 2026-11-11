@@ -260,8 +260,9 @@ final class PetRides {
 
     /**
      * Moves the rider onto the pet's other body: its diving body when it dives, a body of its own kind when it
-     * surfaces. Returns the new body, or null when it could not spawn and the rider is seated back on the old one.
-     * Either seating can fail, leaving the pet without its rider.
+     * surfaces. Returns the new body, or null when it could not spawn, which leaves the rider seated on the old one:
+     * they get off it only once the new body exists. Seating them on the new body can fail, leaving the pet without
+     * its rider.
      */
     private LivingEntity swap(PetControl control, Player rider, boolean dive) {
         String carrier = dive ? SwimMounts.CARRIER : control.species().body().getKey().toString();
@@ -270,8 +271,7 @@ final class PetRides {
             // Vanilla turns a horse's new rider to the horse's view, on the server and their client, so the new body
             // faces where the rider looks first and their view stays put.
             Location view = rider.getLocation();
-            rider.leaveVehicle();
-            LivingEntity next = manager.rebody(control, carrier, view);
+            LivingEntity next = manager.rebody(control, carrier, view, rider::leaveVehicle);
             DynamicEntity modeled = control.modeled();
             if (modeled != null) modeled.seatSteeringRider(rider);
             if (next != null) setBase(next, Attribute.JUMP_STRENGTH, control.species().riding().jump());

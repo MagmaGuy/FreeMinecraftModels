@@ -535,6 +535,15 @@ public final class PetManager {
      * spawn.
      */
     LivingEntity rebody(PetControl control, String carrier, Location facing) {
+        return rebody(control, carrier, facing, null);
+    }
+
+    /**
+     * {@link #rebody(PetControl, String, Location)}, running {@code ready} once the new body and its model exist and
+     * before the pet moves to them: what must leave the old body first, such as its rider, leaves only when there is
+     * a body to go to. It does not run when the new body could not spawn.
+     */
+    LivingEntity rebody(PetControl control, String carrier, Location facing, Runnable ready) {
         LivingEntity old = control.body();
         DynamicEntity oldModel = control.modeled();
         MindHandle mind = control.mind();
@@ -558,6 +567,7 @@ public final class PetManager {
             entity.remove();
             return null;
         }
+        if (ready != null) ready.run();
         try {
             mind.detachBody();
             mind.attachBody(next);
