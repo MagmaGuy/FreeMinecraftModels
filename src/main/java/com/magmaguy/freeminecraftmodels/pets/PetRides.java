@@ -6,6 +6,7 @@ import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.customentity.SwimMounts;
 import com.magmaguy.freeminecraftmodels.dataconverter.HitboxBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
+import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.magmacore.ai.MindHandle;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import org.bukkit.GameMode;
@@ -68,6 +69,14 @@ final class PetRides {
      * so a refusal that lifts, or a pet ridden on into a place that allows it, still dives or surfaces.
      */
     static final long SWAP_RETRY_TICKS = 20L;
+    /**
+     * Ticks between two corrections sent to the client of a rider whose head was in a block. The client snaps its
+     * pet to each one, back to where the server last heard it was, so they are spaced out: one is on its way while
+     * the server keeps the head out of the block on its own side.
+     */
+    static final long CORRECTION_TICKS = 5L;
+    /** The most ticks a rider's client is taken to need to act on a velocity it is sent, however slow its connection. */
+    private static final int MAX_DELAY_TICKS = 10;
     private final PetManager manager;
     /** Each ridden pet with the movement speed and jump strength its body had before, and where it stood last tick. */
     private final Map<PetControl, Ride> ridden = new IdentityHashMap<>();
@@ -80,11 +89,13 @@ final class PetRides {
     private static final class Ride {
         private final Unridden before;
         // The rider's client moves the body and the server only snaps it there, so it has no velocity to read.
-        private double lastX = Double.NaN, lastZ = Double.NaN;
+        private double lastX = Double.NaN, lastY, lastZ = Double.NaN;
         // Whether the pet swims as its diving body now, its rider steering it as a vanilla nautilus.
         private boolean diving;
         // The pet tick from which it may try to dive or surface again, after its other body could not spawn.
         private long swapAgainAt = Long.MIN_VALUE;
+        // The pet tick from which its rider's client may be sent another correction (see CORRECTION_TICKS).
+        private long correctAgainAt = Long.MIN_VALUE;
 
         private Ride(Unridden before) {
             this.before = before;
@@ -252,10 +263,51 @@ final class PetRides {
                         * riding.multiplier(feet.getType(), feet.getRelative(BlockFace.DOWN).getType());
             }
             setBase(body, Attribute.MOVEMENT_SPEED, speed);
+            if (ride.diving) holdUnderCeiling(ride, body, rider, at, speed);
             if (!Double.isNaN(ride.lastX)) pushAside(control, body, at, at.getX() - ride.lastX, at.getZ() - ride.lastZ);
             ride.lastX = at.getX();
+            ride.lastY = at.getY();
             ride.lastZ = at.getZ();
         }
+    }
+
+    /**
+     * Keeps a diving pet's rider under the blocks over them (see {@link RideCeiling}): {@code at} is where the rider's
+     * client last put the body, and {@code speed} the movement speed it swims with. A head already in a block has
+     * the body moved down, as far as the floor allows; a head nearing one, over the body or over where it is
+     * heading, has the body's climb slowed with a velocity that keeps its sideways travel.
+     */
+    private static void holdUnderCeiling(Ride ride, LivingEntity body, Player rider, Location at, double speed) {
+        Vector seat = NMSManager.getAdapter().getPassengerSeatOffset(body, 0);
+        // The rider's own position is only put on the seat when the body next ticks, so it is worked out from the body.
+        double head = seat == null ? rider.getBoundingBox().getMaxY()
+                : at.getY() + seat.getY() - RideCeiling.PLAYER_SEAT + rider.getHeight();
+        RideCeiling.Blocks blocks = RideCeiling.of(body.getWorld());
+        BoundingBox box = body.getBoundingBox();
+        double upTo = head + RideCeiling.REACH;
+        double room = RideCeiling.above(box, 0D, 0D, upTo, blocks) - head;
+        if (room < 0D) {
+            double floor = RideCeiling.below(box, RideCeiling.MARGIN - room, blocks);
+            double down = RideCeiling.duck(room, box.getMinY() - floor);
+            boolean tell = PetManager.ticks() >= ride.correctAgainAt;
+            if (down > 0D && NMSManager.getAdapter().moveSteeredVehicle(body, at.getX(), at.getY() - down, at.getZ(), tell)) {
+                if (tell) ride.correctAgainAt = PetManager.ticks() + CORRECTION_TICKS;
+                box = body.getBoundingBox();
+                head -= down;
+                upTo -= down;
+            }
+        }
+        boolean moved = !Double.isNaN(ride.lastX);
+        double stepX = moved ? at.getX() - ride.lastX : 0D, stepZ = moved ? at.getZ() - ride.lastZ : 0D;
+        double climbed = moved ? at.getY() - ride.lastY : 0D;
+        // A server tick, and the trip to the rider's client and back.
+        int delay = Math.min(MAX_DELAY_TICKS, 1 + (Math.max(0, rider.getPing()) + 49) / 50);
+        double over = RideCeiling.above(box, stepX * (delay + 1), stepZ * (delay + 1), upTo, blocks);
+        // Vanilla steers a nautilus along its rider's view: looking up, part of its thrust lifts it.
+        double thrust = RideCeiling.THRUST * speed * Math.max(0D, -Math.sin(Math.toRadians(rider.getLocation().getPitch())));
+        double up = RideCeiling.brake(over - head, climbed, thrust, delay);
+        if (!Double.isNaN(up))
+            body.setVelocity(new Vector(RideCeiling.WATER_DRAG * stepX, up, RideCeiling.WATER_DRAG * stepZ));
     }
 
     /**
