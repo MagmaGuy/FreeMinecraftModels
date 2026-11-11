@@ -281,6 +281,17 @@ class PetLuaTableTest {
                         + "which does not exist; it applies none."), messages);
     }
 
+    @Test
+    void aStrikePlaysTheAnimationItNamesAndNoneForNone() {
+        assertEquals("attack", PetLuaTable.STING_ANIMATION, "what a strike plays when its module names none");
+        assertEquals("headbutt", PetLuaTable.strikeAnimation("headbutt"));
+        assertEquals("attack.headbutt", PetLuaTable.strikeAnimation(" attack.headbutt "));
+        assertNull(PetLuaTable.strikeAnimation("NONE"));
+        assertNull(PetLuaTable.strikeAnimation("none"));
+        assertNull(PetLuaTable.strikeAnimation(""));
+        assertNull(PetLuaTable.strikeAnimation(null));
+    }
+
     private static Varargs args(LuaValue... values) {
         return LuaValue.varargsOf(values);
     }

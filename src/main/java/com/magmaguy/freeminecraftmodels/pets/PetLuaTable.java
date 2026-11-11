@@ -437,18 +437,21 @@ public final class PetLuaTable {
             }
             return LuaValue.valueOf(stung);
         });
-        // strike_attacker(reach, effect, duration, amplifier, damage, cooldown, sound, volume, pitch, particle): stings
-        // the player who last hurt this wild pet (see attacker) once the model's touch reaches them, as sting_enemies
-        // reaches a mob, playing sound (a sound key, a resource pack's own included) at volume 0 to 4 and pitch 0.5 to
-        // 2 and showing particle instead of the sting's buzz and sparks; '' or NONE plays or shows none. false for an
-        // owned pet, without an attacker, out of reach or within the cooldown.
+        // strike_attacker(reach, effect, duration, amplifier, damage, cooldown, sound, volume, pitch, particle,
+        // animation): stings the player who last hurt this wild pet (see attacker) once the model's touch reaches
+        // them, as sting_enemies reaches a mob, playing sound (a sound key, a resource pack's own included) at volume
+        // 0 to 4 and pitch 0.5 to 2 and showing particle instead of the sting's buzz and sparks; '' or NONE plays or
+        // shows none. animation is the model animation it plays as it strikes, attack when left out, as every sting
+        // plays; '' or NONE plays none, and a model without that animation plays none. false for an owned pet,
+        // without an attacker, out of reach or within the cooldown.
         method("strike_attacker", args -> {
             double reach = number(args, 1, 0D, MAX_STING_REACH);
             Sting sting = sting(args, 2);
             String sound = args.optjstring(7, "");
             float volume = (float) number(args, 8, 0D, MAX_VOLUME), pitch = (float) number(args, 9, MIN_PITCH, MAX_PITCH);
             Look look = new Look(named(sound) ? sound : null, volume, pitch,
-                    particle(args.optjstring(10, ""), "c.pet:strike_attacker"));
+                    particle(args.optjstring(10, ""), "c.pet:strike_attacker"),
+                    strikeAnimation(args.optjstring(11, STING_ANIMATION)));
             Player player = attackerPlayer();
             return LuaValue.valueOf(player != null && touches(player, reach)
                     && sting(player, sting, look, "c.pet:strike_attacker"));
@@ -1673,8 +1676,19 @@ public final class PetLuaTable {
     private record Sting(String effect, int duration, int amplifier, double damage, int cooldown) {
     }
 
-    /** How a strike sounds and looks: a sound key at a volume and pitch, and a particle; null plays or shows none. */
-    private record Look(String sound, float volume, float pitch, Particle particle) {
+    /**
+     * How a strike sounds and looks: a sound key at a volume and pitch, a particle, and the model animation it plays;
+     * null plays or shows none.
+     */
+    private record Look(String sound, float volume, float pitch, Particle particle, String animation) {
+    }
+
+    /** The model animation every sting plays, and a strike that names no other. */
+    static final String STING_ANIMATION = "attack";
+
+    /** The animation a strike names, trimmed, or null for a blank one or NONE: it plays none. */
+    static String strikeAnimation(String name) {
+        return named(name) ? name.trim() : null;
     }
 
     /** Whether a text names something: not blank, and not NONE. */
@@ -1741,9 +1755,10 @@ public final class PetLuaTable {
                 body().getWorld().playSound(body().getLocation(), look.sound(), look.volume(), look.pitch());
         }
         DynamicEntity modeled = control.modeled();
-        // Every model that has an attack animation plays it, babies' included.
-        if (modeled != null && !modeled.isRemoved() && modeled.hasAnimation("attack"))
-            modeled.playAnimation("attack", true, false);
+        // Every model that has the animation plays it, babies' included: attack, or the one a strike names.
+        String animation = look == null ? STING_ANIMATION : look.animation();
+        if (animation != null && modeled != null && !modeled.isRemoved() && modeled.hasAnimation(animation))
+            modeled.playAnimation(animation, true, false);
         return true;
     }
 

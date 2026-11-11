@@ -1,6 +1,6 @@
 -- A wild pet strikes the player who hurt it once its touch reaches them, once per hit: a headbutt, a peck. Listed
--- beside retaliate, which charges that player, it strikes as the charge arrives, before the pet runs off. It plays its
--- attack animation as it strikes. Owned pets ignore it.
+-- beside retaliate, which charges that player, it strikes as the charge arrives, before the pet runs off. It plays an
+-- animation of its model as it strikes. Owned pets ignore it.
 
 return ai.module {
     id = 'fmm:pet/strike_back', revision = 1,
@@ -8,10 +8,12 @@ return ai.module {
     -- effect is a potion effect name, FREEZE to freeze the player as powder snow does, or NONE, given for
     -- duration_ticks at amplifier (0 is level I); a freeze past 140 ticks holds them fully frozen for half the rest.
     -- sound plays from the pet at volume and pitch: a Minecraft sound or a resource pack's own, or NONE. particle shows
-    -- on the player: a Minecraft particle that needs no colour or item, or NONE. pets switches it on for owned pets,
-    -- which never strike back, so it is off and their bodies leave it out.
+    -- on the player: a Minecraft particle that needs no colour or item, or NONE. animation is the model animation it
+    -- plays as it strikes, or NONE; a model without it plays none. pets switches it on for owned pets, which never
+    -- strike back, so it is off and their bodies leave it out.
     settings = { reach = 1.0, damage = 2.0, effect = 'NONE', duration_ticks = 60, amplifier = 0,
-                 sound = 'entity.goat.ram_impact', volume = 1.0, pitch = 1.0, particle = 'crit', pets = false },
+                 sound = 'entity.goat.ram_impact', volume = 1.0, pitch = 1.0, particle = 'crit', animation = 'attack',
+                 pets = false },
     memories = { strike_back_answered = 'integer' },
     sensors = {
         ai.sensor {
@@ -26,7 +28,7 @@ return ai.module {
                 end
                 local s = c.settings
                 if c.pet:strike_attacker(s.reach, s.effect, s.duration_ticks, s.amplifier, s.damage, 1, s.sound,
-                        s.volume, s.pitch, s.particle) then
+                        s.volume, s.pitch, s.particle, s.animation) then
                     c.memory:set('strike_back_answered', c.pet.hurt_count)
                 end
             end
