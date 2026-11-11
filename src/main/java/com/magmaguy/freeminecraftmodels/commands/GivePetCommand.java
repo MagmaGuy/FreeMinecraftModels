@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.commands;
 
+import com.magmaguy.freeminecraftmodels.commands.arguments.PetVariantArgument;
 import com.magmaguy.freeminecraftmodels.config.PetsConfig;
 import com.magmaguy.freeminecraftmodels.pets.PetManager;
 import com.magmaguy.freeminecraftmodels.pets.PetRecord;
@@ -34,14 +35,9 @@ public class GivePetCommand extends AdvancedCommand {
             if (manager != null) manager.species().forEach(species -> values.add(species.id()));
             return values;
         }, "<species>"));
-        addOptionalArgument("variant", new DynamicListStringCommandArgument(() -> {
-            List<String> values = new ArrayList<>();
-            PetManager manager = PetManager.get();
-            if (manager != null)
-                for (PetSpecies species : manager.species())
-                    for (PetSpecies.Variant variant : species.variants()) values.add(variant.model());
-            return values;
-        }, "[variant]"));
+        // The variants of the species typed after the player's name.
+        addOptionalArgument("variant",
+                PetVariantArgument.create(earlier -> earlier.size() < 2 ? null : earlier.get(1), "[variant]"));
         setUsage("/fmm givepet <player> <species> [variant]");
         setPermission("freeminecraftmodels.pets.give");
         setSenderType(SenderType.ANY);

@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.commands;
 
+import com.magmaguy.freeminecraftmodels.commands.arguments.PetVariantArgument;
 import com.magmaguy.freeminecraftmodels.config.PetsConfig;
 import com.magmaguy.freeminecraftmodels.pets.PetControl;
 import com.magmaguy.freeminecraftmodels.pets.PetManager;
@@ -36,18 +37,23 @@ public class PetAdminCommand extends AdvancedCommand {
             if (manager != null) manager.species().forEach(species -> values.add(species.id()));
             return values;
         }, "[value]"));
-        addOptionalArgument("variant", new DynamicListStringCommandArgument(() -> {
-            List<String> values = new ArrayList<>();
-            PetManager manager = PetManager.get();
-            if (manager != null)
-                for (PetSpecies species : manager.species())
-                    for (PetSpecies.Variant variant : species.variants()) values.add(variant.model());
-            return values;
-        }, "[variant]"));
+        addOptionalArgument("variant", PetVariantArgument.create(PetAdminCommand::speciesTyped, "[variant]"));
         setUsage("/fmm petadmin <mode|spawn|cluster|give|march|list> [value] [variant]");
         setPermission("freeminecraftmodels.pets.admin");
         setSenderType(SenderType.PLAYER);
         setDescription("Pet mode switch and testing spawns.");
+    }
+
+    /**
+     * The species a variant is being typed for, from the action and value typed before it: spawn, cluster and give
+     * take a species and then one of its variants. null after the other actions, which take no variant.
+     */
+    static String speciesTyped(List<String> earlier) {
+        if (earlier.size() < 2) return null;
+        return switch (earlier.get(0).toLowerCase(Locale.ROOT)) {
+            case "spawn", "cluster", "give" -> earlier.get(1);
+            default -> null;
+        };
     }
 
     @Override
