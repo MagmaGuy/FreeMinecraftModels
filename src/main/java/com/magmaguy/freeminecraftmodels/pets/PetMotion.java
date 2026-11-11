@@ -12,6 +12,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.IntPredicate;
 
 /**
  * Movement maths shared by the pet behaviors: hover, standing and swimming spots, the ground under a point, and one
@@ -40,7 +41,7 @@ public final class PetMotion {
         Location point = center.clone().add(Math.cos(angle) * distance, 0D, Math.sin(angle) * distance);
         // Reading the ground there would load its chunk.
         if (!loaded(point)) return point;
-        double ground = groundBelow(point, 12, floatsOnLiquid(control));
+        double ground = groundBelow(point, 12, floatsOnLiquid(control), halfWidth(control));
         double height = control.species().hoverHeight() + (random.nextDouble() * 2D - 1D) * control.species().hoverVariance();
         point.setY(Math.max(ground + Math.max(0.5D, height), center.getY() - 3D));
         return point;
@@ -52,13 +53,53 @@ public final class PetMotion {
      * seabed; swimmers keep the seabed as their floor.
      */
     public static double groundBelow(Location point, int depth, boolean liquidIsGround) {
+        return groundBelow(point, depth, liquidIsGround, 0D);
+    }
+
+    /**
+     * As {@link #groundBelow(Location, int, boolean)}, for a body {@code halfWidth} blocks wide each way round the
+     * point: the highest ground under any part of it. A body's box rests on whatever block it overlaps, so one whose
+     * middle is just past the edge of a block still stands on that block. Read from its middle's column alone, the
+     * ground was the floor far below, and a flying pet headed down for it and stayed pressed on the block's edge.
+     * In the columns beside the middle only blocks whose top is at or under the point count: a block beside the body
+     * at its own height is a wall, not ground. Columns in unloaded chunks are left out.
+     */
+    public static double groundBelow(Location point, int depth, boolean liquidIsGround, double halfWidth) {
         World world = point.getWorld();
-        int x = point.getBlockX(), z = point.getBlockZ();
-        for (int y = point.getBlockY(); y > point.getBlockY() - depth && y > world.getMinHeight(); y--) {
-            Block block = world.getBlockAt(x, y, z);
-            if (block.getType().isSolid() || (liquidIsGround && block.isLiquid())) return y + 1D;
-        }
-        return point.getY() - depth;
+        int middleX = point.getBlockX(), middleZ = point.getBlockZ();
+        double none = point.getY() - depth, highest = none;
+        int minX = (int) Math.floor(point.getX() - halfWidth), maxX = (int) Math.floor(point.getX() + halfWidth);
+        int minZ = (int) Math.floor(point.getZ() - halfWidth), maxZ = (int) Math.floor(point.getZ() + halfWidth);
+        for (int x = minX; x <= maxX; x++)
+            for (int z = minZ; z <= maxZ; z++) {
+                boolean middle = x == middleX && z == middleZ;
+                if (!middle && !world.isChunkLoaded(x >> 4, z >> 4)) continue;
+                int column = x, row = z;
+                highest = Math.max(highest, groundInColumn(point.getY(), depth, world.getMinHeight(), middle, none,
+                        y -> {
+                            Block block = world.getBlockAt(column, y, row);
+                            return block.getType().isSolid() || (liquidIsGround && block.isLiquid());
+                        }));
+            }
+        return highest;
+    }
+
+    /**
+     * The top of the highest ground block in one column, searched down from a point at height y: from the block the
+     * point is in for the body's middle column, and from the highest block whose top is at or under the point for a
+     * column beside it. {@code none} when there is none within depth blocks or above the world's bottom.
+     */
+    static double groundInColumn(double y, int depth, int minHeight, boolean middle, double none, IntPredicate ground) {
+        int from = (int) Math.floor(y);
+        int start = middle ? from : (int) Math.floor(y + 1.0E-3D) - 1;
+        for (int at = start; at > from - depth && at > minHeight; at--) if (ground.test(at)) return at + 1D;
+        return none;
+    }
+
+    /** Half the width of a pet's body, or 0 for a pet without one yet. */
+    static double halfWidth(PetControl control) {
+        LivingEntity body = control.body();
+        return body == null || !body.isValid() ? 0D : body.getBoundingBox().getWidthX() / 2D;
     }
 
     /** Whether the species hovers over liquid surfaces: everything that does not swim. */
@@ -85,6 +126,11 @@ public final class PetMotion {
         LivingEntity body = context.entity();
         if (target.getWorld() != body.getWorld()) return false;
         Vector to = target.toVector().subtract(body.getLocation().toVector());
+        // Landed on something on its way down: it slides across it toward the point instead of pushing into it. Aimed
+        // down at the point, its sideways share of the speed was a crawl, and it sat on the edge of a block for
+        // seconds on the way to a point just past and under it. Right over the point it holds still, and counts as
+        // stuck.
+        if (to.getY() < 0D && body.isOnGround()) to.setY(0D);
         double distance = to.length();
         Vector current = body.getVelocity();
         Vector wanted = distance < 0.05D ? new Vector() : to.multiply(Math.min(cruise, distance * 0.25D) / distance);

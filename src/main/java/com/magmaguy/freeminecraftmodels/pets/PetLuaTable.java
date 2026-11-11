@@ -305,12 +305,15 @@ public final class PetLuaTable {
             Location point = PetMotion.hoverPoint(control, center, radius);
             return PetMotion.loaded(point) ? LuaTableSupport.locationToTable(point) : LuaValue.NIL;
         });
-        // ground_below(point, depth): the ground's top within depth blocks down (1 to 64), nil when unloaded.
+        // ground_below(point, depth): the ground's top within depth blocks down (1 to 64), nil when unloaded: the
+        // highest ground under a body as wide as the pet's standing at the point, so a pet resting on the edge of a
+        // block reads that block, not the floor past it.
         method("ground_below", args -> {
             Location point = at(args, 1);
             int depth = whole(args, 2, 1, MAX_GROUND_DEPTH);
             if (point == null || !PetMotion.loaded(point)) return LuaValue.NIL;
-            return LuaValue.valueOf(PetMotion.groundBelow(point, depth, PetMotion.floatsOnLiquid(control)));
+            return LuaValue.valueOf(PetMotion.groundBelow(point, depth, PetMotion.floatsOnLiquid(control),
+                    PetMotion.halfWidth(control)));
         });
         // rest_point(center, radius): a spot to rest within radius (up to 64) in the body's own medium: in its hover
         // band when it flies, on standing ground when it walks, in water when it swims, on ground or else in water when
@@ -1210,6 +1213,12 @@ public final class PetLuaTable {
                     break;
                 }
             }
+        }
+        // The ground right below is whatever the body would come down on: a block its middle is just past the edge
+        // of holds it up, so the perch is over that block, not over the floor beside it.
+        if (leaves == null && ground != null) {
+            double under = PetMotion.groundBelow(from, depth + 1, false, PetMotion.halfWidth(control));
+            ground.setY(Math.max(ground.getY(), under + height + sink));
         }
         Location chosen = leaves != null ? leaves : ground;
         if (chosen == null || !PetMotion.loaded(chosen) || !withinLeash(chosen)) return null;
