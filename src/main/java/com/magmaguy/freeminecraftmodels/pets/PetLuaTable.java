@@ -171,6 +171,9 @@ public final class PetLuaTable {
     private Location threatPoint;
     // The attacker this pet stopped beside, holding still, or null while it closes in or does something else.
     private UUID besideThreat;
+    // The player c.pet.attacker last gave, and the point it gave for them: their middle at that tick.
+    private Player attackerEntity;
+    private Location attackerPoint;
     // trail_point's and march_spot's answers this tick (see Ticks#stamp), so a running behavior's can_continue and
     // tick, which both ask, work each out once; trail_point's for the arguments it was asked with.
     private long trailStamp = Ticks.UNBOUND, marchStamp = Ticks.UNBOUND;
@@ -760,8 +763,10 @@ public final class PetLuaTable {
 
     /** The middle of the player who last hurt this wild pet, within ATTACKER_TICKS of the hit, or null. */
     private Location attacker() {
-        Player player = attackerPlayer();
-        return player == null ? null : player.getLocation().add(0D, player.getHeight() * 0.5D, 0D);
+        attackerEntity = attackerPlayer();
+        attackerPoint = attackerEntity == null ? null
+                : attackerEntity.getLocation().add(0D, attackerEntity.getHeight() * 0.5D, 0D);
+        return attackerPoint == null ? null : attackerPoint.clone();
     }
 
     /** The player who last hurt this wild pet, within ATTACKER_TICKS of the hit, alive, here and hurtable, or null. */
@@ -831,13 +836,15 @@ public final class PetLuaTable {
      * steer_to's tick. Toward c.pet.threat it closes in as a vanilla melee mob does: once the model touches the
      * attacker's box it stops beside them, facing them, and sets off again only when they are more than
      * {@link #BESIDE_REACH} clear of its touch. Mobs only nudge each other apart, so a pet that kept walking at the
-     * attacker's middle pushed its model inside them. Anywhere else it steers there.
+     * attacker's middle pushed its model inside them. Toward c.pet.attacker it walks the last stretch straight at the
+     * player (see {@link #steerAt}). Anywhere else it steers there.
      */
     private boolean approach(Location target, double cruise) {
         LivingEntity threat = threatAt(target);
         if (threat == null) {
             besideThreat = null;
-            return steerTo(target, cruise);
+            Player attacker = attackerAt(target);
+            return attacker == null ? steerTo(target, cruise) : steerAt(target, attacker, cruise);
         }
         boolean beside = threat.getUniqueId().equals(besideThreat);
         if (!touches(threat, beside ? BESIDE_REACH : 0D)) {
@@ -865,6 +872,31 @@ public final class PetLuaTable {
         if (threat == null || point == null || threat.isDead() || threat.getWorld() != body().getWorld()) return null;
         return target.getWorld() == point.getWorld() && target.getX() == point.getX() && target.getY() == point.getY()
                 && target.getZ() == point.getZ() ? threat : null;
+    }
+
+    /**
+     * The player c.pet.attacker gave this point for, while they are alive and in the pet's world; null for any other
+     * point. As with a threat, only a steer at that very point matches.
+     */
+    private Player attackerAt(Location target) {
+        Player player = attackerEntity;
+        Location point = attackerPoint;
+        if (player == null || point == null || player.isDead() || player.getWorld() != body().getWorld()) return null;
+        return target.getWorld() == point.getWorld() && target.getX() == point.getX() && target.getY() == point.getY()
+                && target.getZ() == point.getZ() ? player : null;
+    }
+
+    /**
+     * One tick toward the middle of the player a wild pet charges. A path ends up to a block short of where it leads,
+     * and a body counts as arrived within half its width of the path's end, so a wide body pathing at a still player
+     * stopped about a block and a half from them with nothing left to walk: outside a charge's reach of 1.5 blocks
+     * from their middle, where it stood until the charge ran out. A walking body therefore walks the last stretch
+     * straight at their feet (see {@link WalkPath#steerAt}); a flying one steers at their middle as before.
+     */
+    private boolean steerAt(Location target, Player player, double cruise) {
+        cruise *= control.stats().speed;
+        if (control.species().locomotion() == MindBodyLocomotion.FLYING) return steerFlight(target, cruise);
+        return path.steerAt(context, target, player.getLocation(), cruise);
     }
 
     /** One tick toward the target at the cruise a module asks for, times the pet's speed stat. */
@@ -994,6 +1026,26 @@ public final class PetLuaTable {
             stoppedOn = null;
             double eased = speed(cruise) * Math.max(ONTO_SLOWEST, Math.min(1D, across));
             return context.actuator().moveDirect(to, Math.max(MIN_SPEED, eased));
+        }
+
+        /**
+         * A walk at a creature whose middle is to and whose feet are at feet. It paths as {@link #steer} does until
+         * the feet are within {@link #ONTO_REACH} blocks across and {@link #ONTO_RISE} up or down, with room and firm
+         * ground on the body's level all the way there (see {@link #level}); then it walks straight at them through
+         * MindActuator.moveDirect at its full speed, so a path that ends about a block short of the creature does
+         * not leave it standing there. Whoever asks decides when it is near enough and stops asking. A body in water
+         * keeps to its path.
+         */
+        boolean steerAt(MindContext context, Location to, Location feet, double cruise) {
+            if (cruise <= 0D) return steer(context, to, cruise);
+            LivingEntity body = context.entity();
+            Location here = body.getLocation();
+            if (feet.getWorld() != here.getWorld() || body.isInWater()) return steer(context, to, cruise);
+            double dx = feet.getX() - here.getX(), dz = feet.getZ() - here.getZ();
+            if (dx * dx + dz * dz > ONTO_REACH * ONTO_REACH || Math.abs(feet.getY() - here.getY()) > ONTO_RISE
+                    || !level(here, feet)) return steer(context, to, cruise);
+            forget();
+            return context.actuator().moveDirect(feet, speed(cruise));
         }
 
         /** Whether the last steerOnto stopped the body. */

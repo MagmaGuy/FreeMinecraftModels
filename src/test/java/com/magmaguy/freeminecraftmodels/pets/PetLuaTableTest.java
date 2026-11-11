@@ -698,6 +698,12 @@ class PetLuaTableTest {
 
     /** The calls steer_onto's walk makes for a body standing at x 0.5, y 64, z 0.5, as "name x speed". */
     private static List<String> steerOnto(World world, boolean inWater, Location target, double cruise) {
+        return walk(world, inWater, (path, context) -> path.steerOnto(context, target, cruise));
+    }
+
+    /** The calls a walk makes for a body standing at x 0.5, y 64, z 0.5, as "name x speed". */
+    private static List<String> walk(World world, boolean inWater,
+                                     java.util.function.BiConsumer<PetLuaTable.WalkPath, MindContext> steer) {
         List<String> calls = new ArrayList<>();
         MindActuator actuator = stub(MindActuator.class, (proxy, method, args) -> switch (method.getName()) {
             case "moveTo", "moveDirect" -> {
@@ -717,9 +723,35 @@ class PetLuaTableTest {
             case "isInWater" -> inWater;
             default -> plain(proxy, method, args);
         });
-        new PetLuaTable.WalkPath().steerOnto(new MindContext(body, 0L, 1L, stub(MindMemoryView.class, PetLuaTableTest::plain),
-                perception, actuator), target, cruise);
+        steer.accept(new PetLuaTable.WalkPath(), new MindContext(body, 0L, 1L,
+                stub(MindMemoryView.class, PetLuaTableTest::plain), perception, actuator));
         return calls;
+    }
+
+    /** The calls a walk at a creature makes, whose feet are at this point and whose middle is 0.9 above them. */
+    private static List<String> steerAt(World world, boolean inWater, Location feet, double cruise) {
+        return walk(world, inWater, (path, context) ->
+                path.steerAt(context, feet.clone().add(0D, 0.9D, 0D), feet, cruise));
+    }
+
+    @Test
+    void aWalkAtACreatureWalksTheLastStretchStraightAtItsFeet() {
+        World ground = ground(false);
+        assertEquals(List.of("moveTo 5.50 0.60"), steerAt(ground, false, new Location(ground, 5.5, 64, 0.5), 0.15D),
+                "far off it paths at the creature's middle, as steer_to does");
+        assertEquals(List.of("moveDirect 2.00 0.60"), steerAt(ground, false, new Location(ground, 2, 64, 0.5), 0.15D),
+                "where a path would end about a block short, it walks straight at the creature's feet");
+        assertEquals(List.of("moveDirect 0.90 1.20"), steerAt(ground, false, new Location(ground, 0.9, 64, 0.5), 0.3D),
+                "at its full speed to the end: the caller decides when it is near enough");
+        assertEquals(List.of("moveTo 1.70 0.60"), steerAt(ground, false, new Location(ground, 1.7, 65, 0.5), 0.15D),
+                "a creature a block up is a climb for the path");
+        assertEquals(List.of("moveTo 1.70 0.60"), steerAt(ground, true, new Location(ground, 1.7, 64, 0.5), 0.15D),
+                "a body in water keeps to its path");
+        World walled = ground(true);
+        assertEquals(List.of("moveTo 1.70 0.60"), steerAt(walled, false, new Location(walled, 1.7, 64, 0.5), 0.15D),
+                "a block in the way is for the path to go round");
+        assertEquals(List.of("stopMoving"), steerAt(ground, false, new Location(ground, 1.7, 64, 0.5), 0D),
+                "a cruise of 0 stops it");
     }
 
     @Test
