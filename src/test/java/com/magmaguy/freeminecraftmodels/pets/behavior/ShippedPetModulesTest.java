@@ -142,7 +142,7 @@ class ShippedPetModulesTest {
             "fmm:pet/sting sting_contacts(true, SLOWNESS, 60, 0, 0, 60)",
             "fmm:pet/sting sting_enemies(0.5, SLOWNESS, 60, 0, 0, 60)",
             "fmm:pet/retaliate distance_to(L)", "fmm:pet/retaliate steer_to(L, 0.45)", "fmm:pet/retaliate rest_point(L, 3)",
-            "fmm:pet/retaliate stop()",
+            "fmm:pet/retaliate stop()", "fmm:pet/retaliate touching_attacker()",
             "fmm:pet/strike_back strike_attacker(1, NONE, 60, 0, 2, 1, entity.goat.ram_impact, 1, 1, crit)",
             "fmm:pet/crop_drizzle drizzle(4, 0.1)",
             "fmm:pet/owner_effect owner_effect(NIGHT_VISION, 300, 0, 16)",
@@ -300,7 +300,7 @@ class ShippedPetModulesTest {
             } catch (IOException failure) {
                 throw new UncheckedIOException(failure);
             }
-        }, warn);
+        }, warn, name -> PetBehaviorDefaults.text(name, resource -> ShippedPetModulesTest.class.getResourceAsStream("/" + resource)));
     }
 
     @Test
@@ -996,6 +996,8 @@ class ShippedPetModulesTest {
             methods.put("sting_contacts", new Method("BsNNNN", args -> LuaValue.valueOf(1), LuaValue.valueOf(0)));
             methods.put("sting_enemies", new Method("NsNNNN", args -> LuaValue.valueOf(1), LuaValue.valueOf(0)));
             methods.put("strike_attacker", new Method("NsNNNNsNNs", args -> LuaValue.TRUE, LuaValue.FALSE));
+            // Touching while the attacker stands within reach, as the real touch comes and goes with the distance.
+            methods.put("touching_attacker", new Method("", args -> LuaValue.valueOf(tick % 40 < 20), LuaValue.FALSE));
             methods.put("drizzle", new Method("NN", args -> LuaValue.TRUE, LuaValue.FALSE));
             methods.put("owner_effect", new Method("SNNN", args -> LuaValue.valueOf(owner.present()), LuaValue.FALSE));
             methods.put("play_animation", new Method("S", args -> LuaValue.TRUE, LuaValue.FALSE));

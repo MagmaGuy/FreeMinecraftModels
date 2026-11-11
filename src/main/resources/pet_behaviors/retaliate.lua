@@ -1,4 +1,4 @@
--- A wild pet a player hurts charges that player until it reaches them (sting, listed beside it, stings on that
+-- A wild pet a player hurts charges that player until it touches them (sting, listed beside it, stings on that
 -- touch) or chase_seconds run out, then turns and flees flee_distance blocks away. Each hit is answered once; owned
 -- pets ignore it.
 
@@ -15,10 +15,12 @@ end
 return ai.module {
     id = 'fmm:pet/retaliate', revision = 1,
     -- Speeds are in blocks per tick at species speed 1 for a flying body; for a walking or swimming one, 4 x speed x
-    -- the species speed multiplies its body type's own movement speed, never under a quarter of it. reach is how close
-    -- to the player's middle the charge ends. pets switches it on for owned pets, which ignore hits, so it is off and
-    -- their bodies leave it out.
-    settings = { chase_seconds = 10, chase_speed = 0.3, reach = 1.5, flee_distance = 8, flee_seconds = 4,
+    -- the species speed multiplies its body type's own movement speed, never under a quarter of it. The charge ends
+    -- when the pet's model touches the player, whatever its size. A reach above 0 ends it that many blocks from the
+    -- player's middle instead, for a pet that strikes from a distance (strike_back's reach); sting needs the touch,
+    -- so keep reach at 0 beside it or under what the body touches at. pets switches it on for owned pets, which
+    -- ignore hits, so it is off and their bodies leave it out.
+    settings = { chase_seconds = 10, chase_speed = 0.3, reach = 0, flee_distance = 8, flee_seconds = 4,
                  flee_speed = 0.3, pets = false },
     memories = { retaliate_answered = 'integer', retaliate_charge_until = 'integer', retaliate_flee_until = 'integer',
                  retaliate_flee_to = 'position' },
@@ -62,7 +64,13 @@ return ai.module {
             tick = function(c)
                 local target = c.pet.attacker
                 if target == nil then return end
-                if c.pet:distance_to(target) > c.settings.reach then
+                local reached
+                if c.settings.reach > 0 then
+                    reached = c.pet:distance_to(target) <= c.settings.reach
+                else
+                    reached = c.pet:touching_attacker()
+                end
+                if not reached then
                     c.pet:steer_to(target, c.settings.chase_speed * c.pet.species.speed)
                     return
                 end

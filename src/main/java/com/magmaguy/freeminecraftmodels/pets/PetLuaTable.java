@@ -97,7 +97,7 @@ public final class PetLuaTable {
     /** Every method a module can call on c.pet. */
     public static final Set<String> METHODS = Set.of("steer_to", "stop", "hover_point", "rest_point", "ground_below",
             "ground_point", "water_point", "trail_point", "teleport_near_owner", "distance_to", "find_perch", "nearest_campfire", "campfire_usable", "set_glow", "clear_glow", "scale_toward",
-            "sting_contacts", "sting_enemies", "strike_attacker", "drizzle", "owner_effect", "play_animation",
+            "sting_contacts", "sting_enemies", "strike_attacker", "touching_attacker", "drizzle", "owner_effect", "play_animation",
             "kin_center", "march_call", "march_spot", "gift", "nearest_item", "eat_item", "slide_point",
             "set_walk_animation", "steer_onto", "splash", "set_bone_hidden");
     /** The fields of c.pet.species. */
@@ -449,6 +449,12 @@ public final class PetLuaTable {
             Player player = attackerPlayer();
             return LuaValue.valueOf(player != null && touches(player, reach)
                     && sting(player, sting, look, "c.pet:strike_attacker"));
+        });
+        // touching_attacker(): whether a wild pet's model, or else its body, touches the player c.pet.attacker gives;
+        // the touch that sting_contacts and strike_attacker(0, ...) act on. false for an owned pet or without one.
+        method("touching_attacker", args -> {
+            Player player = attackerPlayer();
+            return LuaValue.valueOf(player != null && touches(player, 0D));
         });
         // drizzle(depth, chance): depth 1 to 8, chance 0 to 1.
         method("drizzle", args -> LuaValue.valueOf(drizzle(whole(args, 1, 1, MAX_DRIZZLE_DEPTH), number(args, 2, 0D, 1D))));
