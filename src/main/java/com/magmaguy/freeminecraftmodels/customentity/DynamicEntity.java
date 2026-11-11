@@ -451,7 +451,8 @@ public class DynamicEntity extends ModeledEntity {
 
     /**
      * Sets whether the model's position and rotation should be synced with the underlying entity.
-     * When set to false, captures the entity's current position so the model stays where it is.
+     * When set to false, captures the entity's current position so the model stays where it is. A model frozen in
+     * the tick its mob spawned faces the yaw the mob was spawned at.
      *
      * @param syncMovement true to sync with entity, false to freeze at current position
      */
@@ -459,6 +460,7 @@ public class DynamicEntity extends ModeledEntity {
         // When disabling sync, capture the current position for bone transforms
         if (!syncMovement && this.syncMovement && underlyingEntity != null) {
             Location frozenLocation = getBodyLocation();
+            if (followsUnsetBodyYaw(frozenLocation)) frozenLocation.setYaw(underlyingEntity.getLocation().getYaw());
             currentLocation = frozenLocation;
             // Set the cached bone transform location so skeleton uses this frozen position
             setCachedBoneTransformLocation(frozenLocation);
@@ -550,6 +552,17 @@ public class DynamicEntity extends ModeledEntity {
 
         // new body yaw is headYaw minus that clamped delta
         return headYaw - delta;
+    }
+
+    /**
+     * Whether the model's yaw at this body location comes from a body yaw the server has not set yet. In the tick a
+     * mob spawns, its body yaw still reads 0: the server turns the body toward the spawn yaw over the mob's first
+     * ticks. Read then, it puts the model up to 45° off the yaw the mob was spawned at. A rider or a look target
+     * faces the model without it.
+     */
+    private boolean followsUnsetBodyYaw(Location bodyLoc) {
+        return underlyingEntity.getTicksLived() == 0 && steeringRider() == null
+                && getSkeleton().getLookDirection(bodyLoc) == null;
     }
 
     @Override
