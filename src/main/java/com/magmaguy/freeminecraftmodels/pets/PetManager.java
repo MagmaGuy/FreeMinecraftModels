@@ -1348,10 +1348,12 @@ public final class PetManager {
     public void chunkUnloading(Chunk chunk) {
         World world = chunk.getWorld();
         List<PetControl> leaving = null;
+        // One Location for the walk: every live wild pet is asked where it is on each chunk unload.
+        Location at = null;
         for (PetControl control : wildLive) {
             LivingEntity body = control.body();
             if (body == null || body.getWorld() != world) continue;
-            Location at = body.getLocation();
+            at = at == null ? body.getLocation() : body.getLocation(at);
             if (at.getBlockX() >> 4 == chunk.getX() && at.getBlockZ() >> 4 == chunk.getZ()) {
                 if (leaving == null) leaving = new ArrayList<>();
                 leaving.add(control);
