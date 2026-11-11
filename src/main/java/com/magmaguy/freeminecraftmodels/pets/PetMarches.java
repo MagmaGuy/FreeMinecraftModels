@@ -198,7 +198,16 @@ final class PetMarches {
                 if (head != null && head.isValid()) toot(walk, head.getLocation());
             }
             walk.march.sweep(now);
-            if (walk.march.over()) end(walk);
+            if (walk.march.over()) {
+                end(walk);
+                continue;
+            }
+            // A marcher the sweep dropped for being away too long is free again: it can call or join another march.
+            if (walk.bodies.size() != walk.march.size()) walk.bodies.keySet().removeIf(id -> {
+                if (walk.march.includes(id)) return false;
+                byBody.remove(id, walk);
+                return true;
+            });
         }
     }
 
