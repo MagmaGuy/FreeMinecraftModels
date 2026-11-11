@@ -181,6 +181,9 @@ public final class PetLuaTable {
     // The item, block and campfire kinds the lists a module passes name, kept while a list's entries stay the same.
     private final MaterialLists itemLists = new MaterialLists(), blockLists = new MaterialLists(),
             campfireLists = new MaterialLists();
+    // The last campfire call's answer and the soul variant entries it was made from (see #campfire).
+    private Campfire campfire;
+    private LuaValue[] campfireSoul;
 
     /** {@code warnings} belongs to the load that builds this pet, and is shared by every pet that load builds. */
     PetLuaTable(PetControl control, Warnings warnings) {
@@ -1153,7 +1156,16 @@ public final class PetLuaTable {
         LuaValue list = args.arg(first);
         Set<Material> blocks = campfireLists.kept(list);
         if (blocks == null) blocks = campfireLists.keep(list, materials(list));
-        return new Campfire(blocks, texts(args.arg(first + 1)), number(args, first + 2));
+        LuaValue soul = args.arg(first + 1);
+        double height = number(args, first + 2);
+        // A module passes the same settings on every call: the same fire kinds, soul variants and height give the
+        // Campfire made for them last time.
+        Campfire kept = campfire;
+        if (kept != null && kept.blocks == blocks && kept.height == height && MaterialLists.same(campfireSoul, soul))
+            return kept;
+        campfireSoul = MaterialLists.entries(soul);
+        campfire = new Campfire(blocks, texts(soul), height);
+        return campfire;
     }
 
     private final class Campfire {
@@ -1352,6 +1364,20 @@ public final class PetLuaTable {
             sets.set(next, kept);
             next = (next + 1) % SLOTS;
             return kept;
+        }
+
+        /** A list's first {@link #MAX_LIST_ENTRIES} entries, read raw; none for anything but a table. */
+        static LuaValue[] entries(LuaValue list) {
+            if (!(list instanceof LuaTable table)) return new LuaValue[0];
+            LuaValue[] read = new LuaValue[Math.min(MAX_LIST_ENTRIES, table.rawlen())];
+            for (int index = 0; index < read.length; index++) read[index] = table.rawget(index + 1);
+            return read;
+        }
+
+        /** Whether a list's entries are raw-equal, one by one, to the ones {@link #entries} read before. */
+        static boolean same(LuaValue[] kept, LuaValue list) {
+            if (!(list instanceof LuaTable table)) return kept != null && kept.length == 0;
+            return same(kept, table, Math.min(MAX_LIST_ENTRIES, table.rawlen()));
         }
 
         private static boolean same(LuaValue[] kept, LuaTable table, int length) {
