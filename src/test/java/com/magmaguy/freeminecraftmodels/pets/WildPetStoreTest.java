@@ -36,6 +36,38 @@ class WildPetStoreTest {
     }
 
     @Test
+    void theChunksNearAPointAreFoundByEitherWalk() {
+        WildPetStore store = new WildPetStore();
+        assertEquals(0, store.chunksNear(OVERWORLD, 0, 0, 3).length, "a world without waiting pets");
+        // Chunks (0,0), (2,-2), (3,0) and (-4,1): the last two are past a radius of 2 on x.
+        store.put(OVERWORLD, jellyfish(1D, 1D));
+        store.put(OVERWORLD, jellyfish(33D, -31D));
+        store.put(OVERWORLD, jellyfish(49D, 1D));
+        store.put(OVERWORLD, jellyfish(-63D, 17D));
+        store.put(NETHER, jellyfish(17D, 17D));
+        Set<Long> near = Set.of(WildSpawner.chunkKey(0, 0), WildSpawner.chunkKey(2, -2));
+        // Four waiting chunks against a square of 25: the store's chunks are walked.
+        assertEquals(near, keys(store.chunksNear(OVERWORLD, 0, 0, 2)));
+        assertEquals(0, store.chunksNear(OVERWORLD, 40, 40, 2).length, "none near gives the shared empty answer");
+        // A radius of 0 is a square of one chunk, fewer than the four waiting: the square is walked.
+        assertEquals(Set.of(WildSpawner.chunkKey(3, 0)), keys(store.chunksNear(OVERWORLD, 3, 0, 0)));
+        assertEquals(0, store.chunksNear(OVERWORLD, 1, 0, 0).length);
+        // Both walks agree wherever they overlap: fill a 5 by 5 block of chunks, then ask with a radius of 1 (the
+        // square of 9 is walked) and of 4 (the 29 waiting chunks are).
+        for (int cx = 10; cx < 15; cx++) for (int cz = 10; cz < 15; cz++) store.put(OVERWORLD, jellyfish(cx * 16 + 1D, cz * 16 + 1D));
+        assertEquals(9, keys(store.chunksNear(OVERWORLD, 12, 12, 1)).size());
+        assertEquals(25, keys(store.chunksNear(OVERWORLD, 12, 12, 4)).size());
+        assertEquals(Set.of(WildSpawner.chunkKey(10, 10)), keys(store.chunksNear(OVERWORLD, 9, 9, 1)));
+        assertEquals(Set.of(WildSpawner.chunkKey(1, 1)), keys(store.chunksNear(NETHER, 0, 0, 1)), "each world its own");
+    }
+
+    private static Set<Long> keys(long[] chunks) {
+        Set<Long> keys = new java.util.HashSet<>();
+        for (long chunk : chunks) assertTrue(keys.add(chunk), "no chunk twice");
+        return keys;
+    }
+
+    @Test
     void takingAChunkHandsItsPetsOverOnce() {
         WildPetStore store = new WildPetStore();
         store.put(OVERWORLD, jellyfish(3D, 4D));

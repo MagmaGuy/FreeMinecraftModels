@@ -481,6 +481,115 @@ class PetLuaTableTest {
     }
 
     @Test
+    void aWalkAtAMovingTargetKeepsItsPathWhileTheTargetStaysAhead() {
+        Walker walker = new Walker();
+        PetLuaTable.WalkPath path = new PetLuaTable.WalkPath();
+        assertTrue(path.steer(walker.context(), new Location(world, 10, 64, 0), 0.06D));
+        // The target runs on along the line of the walk: more than a block from the request, within 25 degrees.
+        walker.tick = 4;
+        path.steer(walker.context(), new Location(world, 12, 64, 0.5), 0.06D);
+        walker.tick = PetLuaTable.WalkPath.REPATH_TICKS - 1;
+        path.steer(walker.context(), new Location(world, 13, 64, 1), 0.06D);
+        assertEquals(1, walker.requests.size(), "a target still ahead keeps the request for REPATH_TICKS");
+        walker.tick = PetLuaTable.WalkPath.REPATH_TICKS;
+        path.steer(walker.context(), new Location(world, 13, 64, 1), 0.06D);
+        assertEquals(2, walker.requests.size(), "then the walk asks for the target where it is now");
+        // A target that turns away sharply is asked for at once.
+        walker.tick = PetLuaTable.WalkPath.REPATH_TICKS + 2;
+        path.steer(walker.context(), new Location(world, 4, 64, 12), 0.06D);
+        assertEquals(3, walker.requests.size(), "a turn of more than 25 degrees asks again");
+        // So is one the body is nearly at: the old point would lead it astray.
+        path.forget();
+        walker.tick = 100;
+        path.steer(walker.context(), new Location(world, 1.5, 64, 0), 0.06D);
+        walker.tick = 102;
+        path.steer(walker.context(), new Location(world, 1.5, 64, 1.2), 0.06D);
+        assertEquals(5, walker.requests.size(), "a target within 2 blocks asks again when it moves a block");
+    }
+
+    @Test
+    void aFlyersStuckCountFollowsItsSteersTickByTick() {
+        PetLuaTable.FlightTrack track = new PetLuaTable.FlightTrack();
+        Location here = new Location(world, 0, 64, 0), target = new Location(world, 10, 64, 0);
+        assertEquals(0, track.stuck(0, here), "nothing steered yet");
+        for (long tick = 1; tick <= 25; tick++) track.steered(tick, here, target, "fmm:pet/drift");
+        assertEquals(24, track.stuck(25, here), "a body that stays put counts a tick for each tick after the first steer");
+        // Progress of more than 0.05 blocks starts the count again.
+        track.steered(26, new Location(world, 0.2, 64, 0), target, "fmm:pet/drift");
+        assertEquals(0, track.stuck(26, new Location(world, 0.2, 64, 0)));
+        track.steered(27, new Location(world, 0.22, 64, 0), target, "fmm:pet/drift");
+        assertEquals(1, track.stuck(27, new Location(world, 0.22, 64, 0)), "a creep under 0.05 blocks is no progress");
+        // Another module steering starts it again, and so does a tick without a steer.
+        track.steered(28, new Location(world, 0.22, 64, 0), target, "fmm:pet/hover");
+        assertEquals(0, track.stuck(28, new Location(world, 0.22, 64, 0)));
+        track.steered(29, new Location(world, 0.22, 64, 0), target, "fmm:pet/hover");
+        assertEquals(1, track.stuck(29, new Location(world, 0.22, 64, 0)));
+        assertEquals(0, track.stuck(31, new Location(world, 0.22, 64, 0)), "a tick passed without a steer");
+        // Within half a block of the point steered at, the flight has arrived.
+        track.steered(40, here, target, "fmm:pet/drift");
+        track.steered(41, here, target, "fmm:pet/drift");
+        assertEquals(1, track.stuck(41, here));
+        track.steered(42, new Location(world, 9.7, 64, 0), target, "fmm:pet/drift");
+        assertEquals(0, track.stuck(43, new Location(world, 9.7, 64, 0)));
+        track.steered(50, here, target, "fmm:pet/drift");
+        track.steered(51, here, target, "fmm:pet/drift");
+        track.reset();
+        assertEquals(0, track.stuck(52, here), "c.pet:stop ends the count");
+    }
+
+    @Test
+    void aFlyerSteeredEveryNthTickStillCountsAsStuck() {
+        Location here = new Location(world, 0, 64, 0), target = new Location(world, 10, 64, 0);
+        // Without the allowance a behavior that ticks every 5th tick never counts: each gap ends the flight.
+        PetLuaTable.FlightTrack every = new PetLuaTable.FlightTrack();
+        for (long tick = 0; tick <= 60; tick += 5) every.steered(tick, here, target, "fmm:pet/drift");
+        assertEquals(0, every.stuck(60, here));
+        // Told the program's longest tick interval, it counts game ticks across the gaps.
+        PetLuaTable.FlightTrack allowed = new PetLuaTable.FlightTrack();
+        allowed.allow(5);
+        for (long tick = 0; tick <= 60; tick += 5) allowed.steered(tick, here, target, "fmm:pet/drift");
+        assertEquals(60, allowed.stuck(60, here), "twelve gaps of five ticks");
+        assertEquals(63, allowed.stuck(63, here), "and on between steers");
+        assertEquals(0, allowed.stuck(66, here), "more than the allowance without a steer ends the flight");
+        // Progress still starts it again.
+        allowed.steered(70, here, target, "fmm:pet/drift");
+        allowed.steered(75, new Location(world, 1, 64, 0), target, "fmm:pet/drift");
+        assertEquals(0, allowed.stuck(75, new Location(world, 1, 64, 0)));
+        allowed.allow(0);
+        allowed.steered(80, here, target, "fmm:pet/drift");
+        allowed.steered(81, here, target, "fmm:pet/drift");
+        assertEquals(0, allowed.stuck(83, here), "an allowance under 1 is 1");
+    }
+
+    @Test
+    void aMaterialListIsParsedOnceForTheSameEntries() {
+        PetLuaTable.MaterialLists lists = new PetLuaTable.MaterialLists();
+        assertNull(lists.kept(list("COD", "SALMON")), "nothing kept yet");
+        assertNull(lists.kept(LuaValue.NIL), "only tables are kept");
+        Set<Material> parsed = new java.util.HashSet<>();
+        Set<Material> kept = lists.keep(list("COD", "SALMON"), parsed);
+        assertSame(kept, lists.kept(list("COD", "SALMON")), "another table with the same entries gives the kept set");
+        assertThrows(UnsupportedOperationException.class, () -> kept.add(null), "the kept set is read only");
+        assertNull(lists.kept(list("COD")), "a shorter list is another list");
+        assertNull(lists.kept(list("COD", "TROPICAL_FISH")), "a changed entry is another list");
+        assertNull(lists.kept(list("SALMON", "COD")), "entries are compared in order");
+        // Four slots, reused in turn: a fifth list takes the oldest one's place.
+        for (String other : new String[]{"A", "B", "C"}) lists.keep(list(other), new java.util.HashSet<>());
+        assertSame(kept, lists.kept(list("COD", "SALMON")));
+        lists.keep(list("D"), new java.util.HashSet<>());
+        assertNull(lists.kept(list("COD", "SALMON")), "the oldest list gave up its slot");
+        assertFalse(lists.kept(list("D")) == null);
+        // The raw comparison the campfire's soul variants use.
+        LuaValue[] entries = PetLuaTable.MaterialLists.entries(list("gold", "blue"));
+        assertTrue(PetLuaTable.MaterialLists.same(entries, list("gold", "blue")));
+        assertFalse(PetLuaTable.MaterialLists.same(entries, list("gold")));
+        assertFalse(PetLuaTable.MaterialLists.same(entries, LuaValue.NIL));
+        assertFalse(PetLuaTable.MaterialLists.same(null, LuaValue.NIL), "nothing read yet matches nothing");
+        assertTrue(PetLuaTable.MaterialLists.same(PetLuaTable.MaterialLists.entries(LuaValue.NIL), new LuaTable()),
+                "no list and an empty one both name nothing");
+    }
+
+    @Test
     void aWalkingPathIsKeptOnlyWhileNavigationStillHeadsForIt() {
         Walker walker = new Walker();
         PetLuaTable.WalkPath path = new PetLuaTable.WalkPath();

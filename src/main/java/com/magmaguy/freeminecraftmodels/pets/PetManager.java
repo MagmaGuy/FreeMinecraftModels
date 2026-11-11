@@ -1323,16 +1323,19 @@ public final class PetManager {
      * and on autosaves. Every chunk unload comes through here, on servers without any pets too.
      */
     private void writeChunk(Chunk chunk) {
-        List<WildPetStore.Entry> entries = wildStore.peek(chunk.getWorld().getUID(), chunk.getX(), chunk.getZ());
-        PersistentDataContainer data = chunk.getPersistentDataContainer();
+        writeChunk(chunk.getPersistentDataContainer(), wildKey,
+                wildStore.peek(chunk.getWorld().getUID(), chunk.getX(), chunk.getZ()));
+    }
+
+    /** {@link #writeChunk(Chunk)}'s rule for one chunk's data, key and waiting pets. */
+    static void writeChunk(PersistentDataContainer data, NamespacedKey key, List<WildPetStore.Entry> entries) {
         if (entries.isEmpty()) {
-            if (data.has(wildKey)) data.remove(wildKey);
+            if (data.has(key)) data.remove(key);
             return;
         }
         String encoded = WildPetStore.encodeAll(entries);
-        if (!data.has(wildKey, PersistentDataType.STRING)
-                || !encoded.equals(data.get(wildKey, PersistentDataType.STRING)))
-            data.set(wildKey, PersistentDataType.STRING, encoded);
+        if (!data.has(key, PersistentDataType.STRING) || !encoded.equals(data.get(key, PersistentDataType.STRING)))
+            data.set(key, PersistentDataType.STRING, encoded);
     }
 
     /** Keeps a loaded chunk's persistent data in step after its waiting pets changed; an unloaded one waits. */
