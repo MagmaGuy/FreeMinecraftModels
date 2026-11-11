@@ -32,6 +32,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 
 /**
@@ -66,6 +67,8 @@ public final class PetBehaviorCatalog implements AutoCloseable {
     private final Map<String, String> failed = new HashMap<>();
     /** The ids of the modules whose source mentions c.pet:sting_contacts, which reads the touches on a pet's model. */
     private final Set<String> contactReaders = new HashSet<>();
+    /** The ids of the modules whose file holds the shipped default's text; see {@link #shipped}. */
+    private final Set<String> shipped = new HashSet<>();
 
     private PetBehaviorCatalog() {
     }
@@ -81,6 +84,16 @@ public final class PetBehaviorCatalog implements AutoCloseable {
      */
     public static PetBehaviorCatalog load(Path folder, List<String> defaults, Consumer<String> writeDefault,
                                           Consumer<String> warn) {
+        return load(folder, defaults, writeDefault, warn, name -> null);
+    }
+
+    /**
+     * {@link #load(Path, List, Consumer, Consumer)}, also told each shipped default's text: {@code bundled} gives the
+     * text this build ships for a module's file name, or null when it ships none. A loaded module whose file holds
+     * exactly that text, line endings aside, is {@link #shipped}.
+     */
+    public static PetBehaviorCatalog load(Path folder, List<String> defaults, Consumer<String> writeDefault,
+                                          Consumer<String> warn, Function<String, String> bundled) {
         PetBehaviorCatalog catalog = new PetBehaviorCatalog();
         try {
             Files.createDirectories(folder);
@@ -142,6 +155,8 @@ public final class PetBehaviorCatalog implements AutoCloseable {
                     catalog.modules.put(entry.getKey(), catalog.owner.registerModule(ID_PREFIX + entry.getKey(),
                             module.revision(), module.where(), module.source()));
                     if (module.source().contains(CONTACT_READER)) catalog.contactReaders.add(ID_PREFIX + entry.getKey());
+                    if (sameText(module.source(), bundled.apply(entry.getKey())))
+                        catalog.shipped.add(ID_PREFIX + entry.getKey());
                     failures.remove(entry.getKey());
                     it.remove();
                     advanced = true;
@@ -391,6 +406,20 @@ public final class PetBehaviorCatalog implements AutoCloseable {
      */
     boolean readsContacts(String identifier) {
         return contactReaders.contains(identifier);
+    }
+
+    /**
+     * Whether the module of this id runs the text this build ships for it: its file is the default as written, not an
+     * owner's edit and not an older version's default. Only such a module is known to mean what the shipped one
+     * means, so only it may be treated by its ids (see PetPrograms). False for a catalog loaded without the texts.
+     */
+    boolean shipped(String identifier) {
+        return shipped.contains(identifier);
+    }
+
+    /** Whether a module's text is the bundled one, whatever line endings either was saved with. */
+    private static boolean sameText(String source, String bundled) {
+        return bundled != null && source.replace("\r", "").equals(bundled.replace("\r", ""));
     }
 
     /** The owner the modules are registered under, for composing them into programs. */

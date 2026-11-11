@@ -8,6 +8,7 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryIteratorException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -70,6 +71,18 @@ public final class PetBehaviorDefaults {
                     // Its name keeps every load from reading it.
                 }
             }
+        }
+    }
+
+    /**
+     * The text of the shipped behavior module {@code name}, from the resource pet_behaviors/name.lua that
+     * {@code resources} opens; null when there is none or it cannot be read.
+     */
+    public static String text(String name, Function<String, InputStream> resources) {
+        try (InputStream source = resources.apply("pet_behaviors/" + name + ".lua")) {
+            return source == null ? null : new String(source.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException | RuntimeException failure) {
+            return null;
         }
     }
 

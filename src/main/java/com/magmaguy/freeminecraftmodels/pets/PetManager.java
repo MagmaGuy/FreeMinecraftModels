@@ -286,7 +286,8 @@ public final class PetManager {
         Path folder = new File(MetadataHandler.PLUGIN.getDataFolder(), "pet_behaviors").toPath();
         PetBehaviorDefaults.removeLeftovers(folder, System.currentTimeMillis());
         behaviors = PetBehaviorCatalog.load(folder, PetBehaviorCatalog.DEFAULTS,
-                name -> PetBehaviorDefaults.write(folder, name, MetadataHandler.PLUGIN::getResource), Logger::warn);
+                name -> PetBehaviorDefaults.write(folder, name, MetadataHandler.PLUGIN::getResource), Logger::warn,
+                name -> PetBehaviorDefaults.text(name, MetadataHandler.PLUGIN::getResource));
         programs = new PetPrograms(behaviors, Logger::warn);
         warnings = new PetLuaTable.Warnings();
         for (PetSpecies pet : species.values()) {

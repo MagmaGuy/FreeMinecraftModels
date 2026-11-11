@@ -54,9 +54,11 @@ public final class PetPrograms {
     /**
      * The shipped sting module's sensors, which act for one ownership each, with whether that is the wild one.
      * sting_players stings the players whose touch reached a wild pet's model, and an owned pet's model records no
-     * touches; sting_mobs returns at once for a wild pet. So each body runs only its own side. This relies on an
-     * edited sting.lua keeping that meaning for these sensor ids; one that renames them keeps both.
+     * touches; sting_mobs returns at once for a wild pet. So each body runs only its own side. That is what the shipped
+     * sting.lua means by these ids, so it holds only while the module is the shipped one
+     * ({@link PetBehaviorCatalog#shipped}): an edited sting.lua, or an older version's, keeps both sensors.
      */
+    private static final String STING = PetBehaviorCatalog.ID_PREFIX + "sting";
     private static final Map<String, Boolean> ONE_SIDED_SENSORS = Map.of(
             PetBehaviorCatalog.ID_PREFIX + "sting_players", true,
             PetBehaviorCatalog.ID_PREFIX + "sting_mobs", false);
@@ -64,8 +66,9 @@ public final class PetPrograms {
      * Shipped sensors that can act only while a player's latest hit on the pet is recent, so a body runs them only
      * then. strike_back answers a hit while c.pet.attacker is set, which is for 30 seconds after the hit; past that it
      * would only mark the hit answered, which no later hit can tell apart, since each hit raises c.pet.hurt_count past
-     * every earlier count. This relies on an edited strike_back.lua keeping that meaning for its sensor id.
+     * every earlier count. Only the shipped strike_back.lua is gated: an edited one runs as it declares.
      */
+    private static final String STRIKE_BACK = PetBehaviorCatalog.ID_PREFIX + "strike_back";
     private static final Set<String> HURT_SENSORS = Set.of(PetBehaviorCatalog.ID_PREFIX + "strike_back");
     /**
      * The shipped retaliate module and its two behaviors, which can start only within some ticks of a player's latest
@@ -73,8 +76,8 @@ public final class PetPrograms {
      * c.pet.attacker is set, which is for 30 seconds after the latest hit. The flee starts only before the
      * retaliate_flee_until the charge sets as it reaches the player, which is the module's flee_seconds after a tick
      * when c.pet.attacker was set, so it can start only within those 30 seconds plus flee_seconds of the latest hit.
-     * Outside those windows their can_start could only answer false. This relies on an edited retaliate.lua keeping
-     * that meaning for these behavior ids.
+     * Outside those windows their can_start could only answer false. Only the shipped retaliate.lua is gated: an
+     * edited one, which may start on something else, is asked as it declares.
      */
     private static final String RETALIATE = PetBehaviorCatalog.ID_PREFIX + "retaliate",
             RETALIATE_CHARGE = PetBehaviorCatalog.ID_PREFIX + "retaliate_charge",
@@ -86,7 +89,7 @@ public final class PetPrograms {
      * c.pet:sting_contacts), so a body that never would can skip recording them.
      */
     public record Program(LuaMindDefinition definition, Map<String, Map<String, Object>> settings,
-                          Set<String> leftOutSensors, boolean readsContacts) {
+                          Set<String> leftOutSensors, Set<String> gated, boolean readsContacts) {
         /** Whether the program runs the module of this file name, listed or pulled in by another module. */
         public boolean runs(String module) {
             String id = PetBehaviorCatalog.ID_PREFIX + module.toLowerCase(Locale.ROOT);
@@ -105,9 +108,11 @@ public final class PetPrograms {
          */
         public MindProgram instantiate(LuaMindContextExtension extension, LongPredicate hurtWithin) {
             MindProgram full = definition.instantiate(extension);
-            Map<String, Long> windows = hurtWindows(settings);
+            // gated holds the modules among strike_back and retaliate that are the shipped ones in this program.
+            Set<String> hurtSensors = gated.contains(STRIKE_BACK) ? HURT_SENSORS : Set.of();
+            Map<String, Long> windows = gated.contains(RETALIATE) ? hurtWindows(settings) : Map.of();
             if (full.sensors().stream().noneMatch(sensor -> leftOutSensors.contains(sensor.identifier())
-                    || HURT_SENSORS.contains(sensor.identifier()))
+                    || hurtSensors.contains(sensor.identifier()))
                     && full.behaviors().stream().noneMatch(behavior -> windows.containsKey(behavior.identifier())))
                 return full;
             MindProgram.Builder copy = MindProgram.builder(full.identifier(), full.revision())
@@ -115,7 +120,7 @@ public final class PetPrograms {
                     .executionPolicy(full.executionPolicy());
             for (MindSensor sensor : full.sensors()) {
                 if (leftOutSensors.contains(sensor.identifier())) continue;
-                copy.sensor(HURT_SENSORS.contains(sensor.identifier())
+                copy.sensor(hurtSensors.contains(sensor.identifier())
                         ? new HurtSensor(sensor, () -> hurtWithin.test(0L)) : sensor);
             }
             for (MindBehavior behavior : full.behaviors()) {
@@ -335,7 +340,8 @@ public final class PetPrograms {
                         + "); the creature runs none of them.");
                 // A program without modules needs no catalog, and its source is generated here, so this fails only
                 // when that generated source is wrong.
-                return new Program(LuaMindDefinition.validate(label, source(id, List.of())), Map.of(), Set.of(), false);
+                return new Program(LuaMindDefinition.validate(label, source(id, List.of())), Map.of(), Set.of(),
+                        Set.of(), false);
             }
             kept.clear();
             for (Listed module : listed.values()) {
@@ -365,10 +371,14 @@ public final class PetPrograms {
         // Only a wild pet's model records touches.
         if (ownership == Ownership.OWNED) readsContacts = false;
         Set<String> leftOut = new HashSet<>();
-        if (ownership != null) ONE_SIDED_SENSORS.forEach((sensor, wild) -> {
+        if (ownership != null && catalog.shipped(STING)) ONE_SIDED_SENSORS.forEach((sensor, wild) -> {
             if (wild != (ownership == Ownership.WILD)) leftOut.add(sensor);
         });
-        return new Program(definition, Collections.unmodifiableMap(settings), Set.copyOf(leftOut), readsContacts);
+        Set<String> gated = new HashSet<>();
+        for (String module : List.of(STRIKE_BACK, RETALIATE))
+            if (settings.containsKey(module) && catalog.shipped(module)) gated.add(module);
+        return new Program(definition, Collections.unmodifiableMap(settings), Set.copyOf(leftOut), Set.copyOf(gated),
+                readsContacts);
     }
 
     /** Whether a module's settings switch it off for bodies of this ownership; for either ownership, never. */
