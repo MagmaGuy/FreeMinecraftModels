@@ -1,4 +1,6 @@
--- Between drifts: holds position with a small bob in its hover band, so the model never sits dead still.
+-- Between drifts: holds position with a small bob in its hover band, so the model never sits dead still. The band
+-- starts hover_height less hover_variance over the ground, half a block at the least, as a drift's point does: a bob
+-- never takes the pet under that, so it does not settle onto the block under it and bump against it.
 return ai.module {
     id = 'fmm:pet/hover', revision = 1,
     -- speed is in blocks per tick at species speed 1. A pet more than correct_above blocks off its hover height
@@ -26,6 +28,9 @@ return ai.module {
                         local anchor = c.pet.anchor
                         if anchor ~= nil and anchor.world == here.world then wanted = math.max(wanted, anchor.y - 3) end
                         if math.abs(here.y - wanted) > c.settings.correct_above then y = wanted end
+                        -- The bottom of the band. A pet under it, resting on the block it came down on, rises to it.
+                        local lowest = ground + math.max(0.5, c.pet.species.hover_height - c.pet.species.hover_variance)
+                        if y < lowest then y = lowest end
                     end
                     c.memory:set('hover_target', { world = here.world, x = here.x, y = y, z = here.z })
                 end
