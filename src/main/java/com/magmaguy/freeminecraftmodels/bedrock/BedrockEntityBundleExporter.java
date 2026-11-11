@@ -569,8 +569,8 @@ public final class BedrockEntityBundleExporter {
         JsonObject controllers = new JsonObject();
         for (int i = 0; i < animations.size(); i++) {
             String animation = animations.get(i);
-            int propertyIndex = i / 24;
-            int bit = 1 << (i % 24);
+            int propertyIndex = i / PackedBooleanPropertySet.BITS_PER_PROPERTY;
+            int bit = 1 << (i % PackedBooleanPropertySet.BITS_PER_PROPERTY);
             String query = "math.mod(math.floor(query.property('" + animationPropertyName(propertyIndex)
                     + "') / " + bit + "), 2)";
 

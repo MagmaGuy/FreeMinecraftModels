@@ -179,9 +179,9 @@ class BedrockLeanExportTest {
 
     @Test
     void aCarrierFullOfAnimationFlagsLeavesTheLeanOut() {
-        // 24 flags per property, 32 properties: 28 flag properties leave room for the lean bone's four.
-        assertTrue(BedrockEntityBundleExporter.leans(28 * 24));
-        assertFalse(BedrockEntityBundleExporter.leans(28 * 24 + 1));
+        // 32 properties: 28 flag properties leave room for the lean bone's four.
+        assertTrue(BedrockEntityBundleExporter.leans(28 * com.magmaguy.easyminecraftgoals.customentity.PackedBooleanPropertySet.BITS_PER_PROPERTY));
+        assertFalse(BedrockEntityBundleExporter.leans(28 * com.magmaguy.easyminecraftgoals.customentity.PackedBooleanPropertySet.BITS_PER_PROPERTY + 1));
     }
 
     private void invokeAnimationWriter(String method, Path root) throws Exception {
