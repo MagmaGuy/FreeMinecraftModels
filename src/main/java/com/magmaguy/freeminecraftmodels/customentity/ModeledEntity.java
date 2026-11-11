@@ -89,6 +89,9 @@ public class ModeledEntity {
     private volatile org.bukkit.attribute.AttributeInstance scaleAttribute;
     // currentScale() as the primary thread last read it, for the model clock (see sampleScale).
     private volatile double sampledScale = 1.0;
+    // Where the bones sit on the underlying entity as the primary thread last read it, for the model clock; null when
+    // they cannot ride it (see sampleSeat). Never changed once published.
+    private volatile org.bukkit.util.Vector sampledSeat;
     @Getter
     private MountPointManager mountPointManager = null;
     @Getter
@@ -335,6 +338,7 @@ public class ModeledEntity {
             if (isRemoved) return;
             hitboxComponent.refreshPacketInteractionAliases();
             sampleScale();
+            sampleSeat();
             loadedModeledEntities.add(this);
         }
     }
@@ -436,6 +440,24 @@ public class ModeledEntity {
     }
 
     /**
+     * Reads where the bones sit on the underlying entity for the model clock, on the primary thread, at the same two
+     * points as {@link #sampleScale}. The seat comes from the mob's dimensions, which the server scales by the same
+     * scale attribute, so the clock reading it had the race {@link #sampleScale} describes; the mob's passenger list
+     * is the server's own too. The clock places the bones from the last seat read here, so a change of scale or of
+     * passengers reaches them within one primary-thread pass.
+     */
+    public void sampleSeat() {
+        org.bukkit.util.Vector seat = null;
+        if (DefaultConfig.displayBonesRideTheirEntity && bonesCanRideUnderlyingEntity()) {
+            com.magmaguy.easyminecraftgoals.NMSAdapter adapter = com.magmaguy.easyminecraftgoals.NMSManager.getAdapter();
+            // Packet passengers follow the real ones, so the bones take the next seat.
+            if (adapter != null)
+                seat = adapter.getPassengerSeatOffset(underlyingEntity, underlyingEntity.getPassengers().size());
+        }
+        sampledSeat = seat;
+    }
+
+    /**
      * The model's scale now: its mob's scale attribute without the part that only lifts a rider's seat, or 1 without
      * one. {@link #getScaleModifier} keeps the value the model clock last took from {@link #sampleScale}. Primary
      * thread only.
@@ -455,16 +477,10 @@ public class ModeledEntity {
      * client-side smoothing instead of trailing it; every other model keeps the per-bone teleports.
      */
     private void updateBonePlacement() {
-        int vehicleId = -1;
-        org.bukkit.util.Vector seat = null;
-        if (DefaultConfig.displayBonesRideTheirEntity && ridesUnderlyingEntity()) {
-            com.magmaguy.easyminecraftgoals.NMSAdapter adapter = com.magmaguy.easyminecraftgoals.NMSManager.getAdapter();
-            // Packet passengers follow the real ones, so the bones take the next seat.
-            seat = adapter == null ? null
-                    : adapter.getPassengerSeatOffset(underlyingEntity, underlyingEntity.getPassengers().size());
-            if (seat != null) vehicleId = underlyingEntity.getEntityId();
-        }
-        skeleton.setRiddenPlacement(vehicleId, seat);
+        // The seat as the primary thread last read it: this runs on the model clock (see sampleSeat).
+        org.bukkit.util.Vector seat = DefaultConfig.displayBonesRideTheirEntity && ridesUnderlyingEntity()
+                ? sampledSeat : null;
+        skeleton.setRiddenPlacement(seat == null ? -1 : underlyingEntity.getEntityId(), seat);
     }
 
     /** Whether Java clients track the underlying entity, which its bones need in order to ride it. */
