@@ -32,6 +32,11 @@ final class PetLuaContext implements LuaMindContextExtension {
         program.settings().forEach((module, values) -> settings.put(module, PetBehaviorSettings.toLua(values)));
     }
 
+    /** See {@link PetLuaTable#steerGap}. */
+    void steerGap(int ticks) {
+        pet.steerGap(ticks);
+    }
+
     @Override
     public void extend(LuaTable table, MindContext context, String contribution) {
         pet.bind(context, contribution);

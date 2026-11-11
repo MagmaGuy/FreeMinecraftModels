@@ -450,8 +450,11 @@ public final class PetManager {
                     owner == null ? PetPrograms.Ownership.WILD : PetPrograms.Ownership.OWNED);
             control.setReadsContacts(program.readsContacts());
             // One context per body: its c.pet table holds this pet's glow and sting cooldowns.
-            mind = host.open(UUID.randomUUID(), program.instantiate(new PetLuaContext(control, program, warnings),
-                    extra -> control.attacker(ticks, PetLuaTable.ATTACKER_TICKS + extra) != null));
+            PetLuaContext lua = new PetLuaContext(control, program, warnings);
+            com.magmaguy.magmacore.ai.MindProgram instance = program.instantiate(lua,
+                    extra -> control.attacker(ticks, PetLuaTable.ATTACKER_TICKS + extra) != null);
+            lua.steerGap(PetPrograms.longestTickInterval(instance));
+            mind = host.open(UUID.randomUUID(), instance);
         } catch (RuntimeException failure) {
             return refuse(pet, "its behaviors could not start (" + reason(failure) + ")");
         }

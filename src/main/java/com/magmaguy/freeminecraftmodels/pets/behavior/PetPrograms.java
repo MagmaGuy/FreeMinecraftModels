@@ -145,6 +145,16 @@ public final class PetPrograms {
         return Map.of(RETALIATE_CHARGE, 0L, RETALIATE_FLEE, flee);
     }
 
+    /**
+     * The longest tick interval among a program's behaviors, 1 when every one runs each tick: the most ticks that can
+     * pass between two steers of a behavior that steers on every run.
+     */
+    public static int longestTickInterval(MindProgram program) {
+        int longest = 1;
+        for (MindBehavior behavior : program.behaviors()) longest = Math.max(longest, behavior.tickInterval());
+        return longest;
+    }
+
     /** A sensor whose Lua runs only while its pet's latest hit from a player is recent. */
     private record HurtSensor(MindSensor sensor, BooleanSupplier hurt) implements MindSensor {
         @Override

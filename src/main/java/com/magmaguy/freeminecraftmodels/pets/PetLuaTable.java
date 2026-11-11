@@ -611,6 +611,14 @@ public final class PetLuaTable {
      * Points the table at a callback's context, and names the module it runs for in warnings. A callback on a new pet
      * tick, a new game tick or another body reads every property afresh.
      */
+    /**
+     * The longest tick interval among the behaviors of this pet's program, so a flying body steered by one that runs
+     * every Nth tick still counts as stuck (see {@link FlightTrack}).
+     */
+    void steerGap(int ticks) {
+        flight.allow(ticks);
+    }
+
     void bind(MindContext context, String module) {
         this.context = context;
         this.module = module;
@@ -1038,8 +1046,14 @@ public final class PetLuaTable {
      * MagmaCore tracks no flight: a steer starts it at 0 where the body is, and once a tick it counts up while the body
      * stays within 0.05 blocks of where it last made progress, starts again at 0 when it gets past that, and ends
      * within half a block of the point steered at. A steer at another point keeps the count. Where MagmaCore ends it
-     * when the steering behavior gives up its MOVE control, which c.pet does not see, this ends it when a tick passes
-     * without a steer or another module steers. c.pet:stop ends it as stopMoving ends MagmaCore's. Server thread only.
+     * when the steering behavior gives up its MOVE control, which c.pet does not see, this ends it when the steers
+     * stop or another module steers. c.pet:stop ends it as stopMoving ends MagmaCore's. Server thread only.
+     * <p>
+     * The steers have stopped when more ticks pass without one than {@link #allow} allows: one, unless a behavior of
+     * the pet's program runs every Nth tick (ai.behavior's tick_interval), which steers every Nth tick at most. The
+     * count is in game ticks either way: a sample taken N ticks after the last counts all N. The allowance is the
+     * program's longest interval, not the steering behavior's own, which c.pet cannot tell; so in a program with a
+     * slower behavior a flight that just stopped steering keeps its count that many ticks longer.
      */
     static final class FlightTrack {
         private static final double ARRIVED_SQUARED = 0.25D, PROGRESS_SQUARED = 0.0025D;
@@ -1047,6 +1061,12 @@ public final class PetLuaTable {
         private String steerer;
         private int stuck;
         private long sampled = Long.MIN_VALUE, steered = Long.MIN_VALUE;
+        private long gap = 1L;
+
+        /** The most ticks between two steers of one flight: the longest tick interval of the pet's behaviors. */
+        void allow(int ticks) {
+            gap = Math.max(1L, ticks);
+        }
 
         /** The count on this tick, for a body here now. */
         int stuck(long tick, Location here) {
@@ -1076,16 +1096,18 @@ public final class PetLuaTable {
         // Once a tick, as MagmaCore's tracker begins each tick.
         private void sample(long tick, Location here) {
             if (tick == sampled) return;
+            // Ticks since the last sample; more than one only between the steers of a behavior that runs every Nth.
+            long elapsed = sampled == Long.MIN_VALUE ? 1L : Math.max(1L, tick - sampled);
             sampled = tick;
             if (destination == null) return;
-            if (steered < tick - 1 || here.getWorld() != destination.getWorld()
+            if (steered < tick - gap || here.getWorld() != destination.getWorld()
                     || here.distanceSquared(destination) <= ARRIVED_SQUARED) {
                 reset();
             } else if (here.distanceSquared(progress) >= PROGRESS_SQUARED) {
                 progress = here.clone();
                 stuck = 0;
-            } else if (stuck < Integer.MAX_VALUE) {
-                stuck++;
+            } else {
+                stuck = (int) Math.min(Integer.MAX_VALUE, stuck + elapsed);
             }
         }
     }
