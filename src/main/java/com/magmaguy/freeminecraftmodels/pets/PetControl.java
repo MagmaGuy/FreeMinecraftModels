@@ -45,6 +45,8 @@ public final class PetControl {
     // The pet clock tick its health display goes away (0 while none shows), and the health it last showed.
     private long healthBarUntil;
     private double shownHealth = -1D;
+    // The rider its health display is kept from now, who sees its nameplate without the display's lines; else null.
+    private UUID healthDisplaySpared;
     // The pet clock tick it next regains a point of health on its own.
     private long nextRegenTick;
     // Epoch milliseconds a wild baby was born (one set free keeps its own); an owned pet's is on its record.
@@ -125,6 +127,14 @@ public final class PetControl {
 
     void setShownHealth(double health) {
         this.shownHealth = health;
+    }
+
+    UUID healthDisplaySpared() {
+        return healthDisplaySpared;
+    }
+
+    void setHealthDisplaySpared(UUID rider) {
+        this.healthDisplaySpared = rider;
     }
 
     long nextRegenTick() {

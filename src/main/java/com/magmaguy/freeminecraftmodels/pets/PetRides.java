@@ -88,6 +88,8 @@ final class PetRides {
 
     private static final class Ride {
         private final Unridden before;
+        // Who rides it. Kept here, not read off the body: a dive or surfacing has them off both bodies for a moment.
+        private final UUID rider;
         // The rider's client moves the body and the server only snaps it there, so it has no velocity to read.
         private double lastX = Double.NaN, lastY, lastZ = Double.NaN;
         // Whether the pet swims as its diving body now, its rider steering it as a vanilla nautilus.
@@ -97,8 +99,9 @@ final class PetRides {
         // The pet tick from which its rider's client may be sent another correction (see CORRECTION_TICKS).
         private long correctAgainAt = Long.MIN_VALUE;
 
-        private Ride(Unridden before) {
+        private Ride(Unridden before, UUID rider) {
             this.before = before;
+            this.rider = rider;
         }
     }
 
@@ -208,7 +211,9 @@ final class PetRides {
             mind.setReleased(false);
             return false;
         }
-        ridden.put(control, new Ride(before));
+        ridden.put(control, new Ride(before, player.getUniqueId()));
+        // A health display already up leaves its new rider's view now, not a tick later.
+        manager.refreshHealthDisplay(control);
         // A staying pet the owner rides away follows again afterwards rather than walking back to its spot.
         if (control.isStaying()) manager.follow(player, control);
         return true;
@@ -445,6 +450,8 @@ final class PetRides {
         if (ride == null) return;
         LivingEntity body = control.body();
         if (body != null && body.isValid()) restore(body, ride.before);
+        // A health display still up is theirs to see again.
+        manager.refreshHealthDisplay(control);
         MindHandle mind = control.mind();
         if (mind == null) return;
         try {
@@ -457,6 +464,12 @@ final class PetRides {
     /** Whether the owner rides this pet now. */
     boolean isRidden(PetControl control) {
         return ridden.containsKey(control);
+    }
+
+    /** Who rides this pet now, from getting on to getting off, through its dives and surfacings; null when nobody. */
+    UUID rider(PetControl control) {
+        Ride ride = ridden.get(control);
+        return ride == null ? null : ride.rider;
     }
 
     /** Drops the saddle a pet wore where it was, when it dies or is set free; its record no longer has one. */

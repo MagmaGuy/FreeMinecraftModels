@@ -226,6 +226,14 @@ public class ModeledEntity {
         setDisplayName(String.join("\n", lines));
     }
 
+    /**
+     * Shows one player these lines, top to bottom, in place of the display name everyone else sees; no lines shows
+     * them none. Null gives them everyone's again. Theirs stay as given while the display name changes.
+     */
+    public void setDisplayNameLinesFor(UUID player, List<String> lines) {
+        nameplate.setLinesFor(player, lines);
+    }
+
     public void setDisplayNameScale(float scale) { nameplate.setScale(scale); }
 
     /** Clear gap in blocks at scale 1; scaled Java text scales both glyphs and spacing. */

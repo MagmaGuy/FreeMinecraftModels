@@ -77,6 +77,16 @@ class PetManagerTest {
     }
 
     @Test
+    void aRiderKeepsTheNameplateWithoutTheHealthDisplay() {
+        com.magmaguy.freeminecraftmodels.config.PetsConfig.healthBarSeparator = " &7/ ";
+        // What everyone else reads while the display is up, and what the pet's rider reads: the name alone.
+        assertEquals(List.of("Bubbles"), PetManager.riderLines("Bubbles"));
+        assertEquals(PetManager.healthLines("Bubbles", 10D, 20D, 1D).subList(0, 1), PetManager.riderLines("Bubbles"));
+        // A pet no name tag named has no nameplate without the display, so its rider has no line at all.
+        assertEquals(List.of(), PetManager.riderLines(null));
+    }
+
+    @Test
     void warningsSayWhenAListIsTheLocomotionsDefault() {
         assertEquals("jellyfish.pet.yml", PetManager.where("jellyfish.pet.yml", true, MindBodyLocomotion.FLYING,
                 "em_pet_jellyfish_gold", true));
