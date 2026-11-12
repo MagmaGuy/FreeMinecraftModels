@@ -46,6 +46,14 @@ class PetCatchUpTest {
     }
 
     @Test
+    void aPetKeepsCompanyWithItsOwnerInEveryGameModeButSpectator() {
+        assertTrue(PetControl.keepsCompany(org.bukkit.GameMode.SURVIVAL));
+        assertTrue(PetControl.keepsCompany(org.bukkit.GameMode.ADVENTURE));
+        assertTrue(PetControl.keepsCompany(org.bukkit.GameMode.CREATIVE));
+        assertFalse(PetControl.keepsCompany(org.bukkit.GameMode.SPECTATOR));
+    }
+
+    @Test
     void aNewBodyIsPutBesideAnOwnerOnlyWithGroundCloseUnderThem() {
         // Standing on it, or a few blocks over it.
         assertTrue(PetMotion.lands(64D, 64D, PetMotion.LANDING_DEPTH));

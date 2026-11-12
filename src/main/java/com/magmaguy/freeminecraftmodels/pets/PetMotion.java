@@ -285,7 +285,7 @@ public final class PetMotion {
      * radius of the owner when nothing behind them fits.
      */
     public static boolean teleportNearOwner(PetControl control, LivingEntity body, double radius) {
-        Player owner = control.owner().orElse(null);
+        Player owner = control.companion().orElse(null);
         if (owner == null || owner.getWorld() != body.getWorld()) return false;
         Location at = owner.getLocation();
         MindBodyLocomotion locomotion = control.species().locomotion();

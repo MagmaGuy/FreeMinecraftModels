@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.pets;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.magmacore.ai.MindHandle;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -134,6 +135,23 @@ public final class PetControl {
         if (owner == null) return Optional.empty();
         Player player = Bukkit.getPlayer(owner);
         return player != null && player.isOnline() && !player.isDead() ? Optional.of(player) : Optional.empty();
+    }
+
+    /**
+     * The owner as someone the pet can be with: {@link #owner()}, but nobody while they are a spectator. Everything
+     * a pet does about its owner asks this: following and catching up, where it roams, what it brings them, whom it
+     * defends. A spectator is a camera that flies through blocks, faster than any pet, to places with nowhere to
+     * stand; a pet that tried to keep up ran after them, teleported into whatever they flew through, or was left in
+     * chunks that had stopped ticking. So while its owner is a spectator a pet stays where they left it, as it does
+     * while they are dead, and as a tamed wolf does; once they play again it comes to them.
+     */
+    public Optional<Player> companion() {
+        return owner().filter(player -> keepsCompany(player.getGameMode()));
+    }
+
+    /** Whether a pet can be with an owner in this game mode: any but spectator. */
+    static boolean keepsCompany(GameMode mode) {
+        return mode != GameMode.SPECTATOR;
     }
 
     /** The collection entry behind an owned pet; null for a wild one. */
@@ -312,7 +330,7 @@ public final class PetControl {
     }
 
     public double ownerDistance(LivingEntity body) {
-        Player player = owner().orElse(null);
+        Player player = companion().orElse(null);
         if (player == null || body == null || player.getWorld() != body.getWorld()) return Double.POSITIVE_INFINITY;
         return player.getLocation().distance(body.getLocation());
     }

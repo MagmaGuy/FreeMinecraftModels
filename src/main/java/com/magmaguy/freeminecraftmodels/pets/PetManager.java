@@ -1367,9 +1367,11 @@ public final class PetManager {
                     continue;
                 }
                 // Lost to a chunk unload, a world change or a teleport too far: bring the pet back beside its owner.
+                // Not beside a spectator (see PetControl#companion): it waits without a body, and comes back when
+                // they play again.
                 if (body == null || !body.isValid() || body.getWorld() != player.getWorld()) {
                     if (live != null) despawn(live);
-                    spawnOwned(player, record);
+                    if (PetControl.keepsCompany(player.getGameMode())) spawnOwned(player, record);
                     continue;
                 }
                 catchUp(player, record, live, body);
@@ -1407,7 +1409,7 @@ public final class PetManager {
         int age = body.getTicksLived();
         boolean frozen = age == live.watchedAge();
         live.setWatchedAge(age);
-        boolean withOwner = live.owner().isPresent();
+        boolean withOwner = live.companion().isPresent();
         double distance = withOwner ? owner.getLocation().distance(body.getLocation()) : 0D;
         PetCatchUp.Verdict verdict = PetCatchUp.verdict(withOwner, distance, live.species().teleportDistance(),
                 rides.isRidden(live), frozen, live.farSince(), ticks);

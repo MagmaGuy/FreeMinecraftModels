@@ -224,7 +224,7 @@ public final class PetLuaTable {
         position = ticks.perTick(() -> body().getLocation());
         Supplier<Location> home = ticks.perTick(control::home), anchor = ticks.perTick(this::anchor),
                 stayAnchor = ticks.perTick(control::stayAnchor),
-                ownerLocation = ticks.perTick(() -> control.owner().map(Player::getLocation).orElse(null));
+                ownerLocation = ticks.perTick(() -> control.companion().map(Player::getLocation).orElse(null));
         property("position", () -> locations.table(position.get()));
         property("home", () -> location(home.get()));
         property("anchor", () -> location(anchor.get()));
@@ -350,7 +350,7 @@ public final class PetLuaTable {
             double back = number(args, 1), height = number(args, 2);
             long stamp = ticks.stamp();
             if (stamp == Ticks.UNBOUND || stamp != trailStamp || back != trailBack || height != trailHeight) {
-                trail = control.owner().map(owner -> PetMotion.trailPoint(control, owner, back, height)).orElse(null);
+                trail = control.companion().map(owner -> PetMotion.trailPoint(control, owner, back, height)).orElse(null);
                 trailStamp = stamp;
                 trailBack = back;
                 trailHeight = height;
@@ -484,7 +484,7 @@ public final class PetLuaTable {
             String name = args.checkjstring(1);
             int duration = whole(args, 2, 1, MAX_EFFECT_TICKS), amplifier = whole(args, 3, 0, MAX_AMPLIFIER);
             double range = number(args, 4);
-            Player owner = control.owner().orElse(null);
+            Player owner = control.companion().orElse(null);
             LivingEntity body = body();
             if (owner == null || owner.getWorld() != body.getWorld()
                     || owner.getLocation().distance(body.getLocation()) > range) return LuaValue.FALSE;
@@ -552,7 +552,7 @@ public final class PetLuaTable {
             double range = number(args, 3, 0D, MAX_GIFT_RANGE);
             String sound = args.optjstring(4, "");
             float volume = (float) number(args, 5, 0D, MAX_VOLUME), pitch = (float) number(args, 6, MIN_PITCH, MAX_PITCH);
-            Player owner = control.owner().orElse(null);
+            Player owner = control.companion().orElse(null);
             LivingEntity body = body();
             if (control.isWild() || owner == null || owner.getWorld() != body.getWorld()
                     || owner.getLocation().distance(body.getLocation()) > range) return LuaValue.FALSE;
@@ -802,7 +802,7 @@ public final class PetLuaTable {
         threatEntity = null;
         threatPoint = null;
         PetManager manager = PetManager.get();
-        Player owner = control.owner().orElse(null);
+        Player owner = control.companion().orElse(null);
         LivingEntity body = body();
         if (manager == null || owner == null || owner.getWorld() != body.getWorld()) return null;
         Set<UUID> aggressors = manager.aggressors(owner.getUniqueId());
@@ -826,7 +826,7 @@ public final class PetLuaTable {
     }
 
     private Location anchor() {
-        if (!control.isWild()) return control.owner().map(Player::getLocation).orElse(null);
+        if (!control.isWild()) return control.companion().map(Player::getLocation).orElse(null);
         Location home = control.home();
         return home != null ? home : body().getLocation();
     }
@@ -1240,7 +1240,7 @@ public final class PetLuaTable {
 
     private boolean withinLeash(Location spot) {
         if (control.isWild()) return true;
-        Player owner = control.owner().orElse(null);
+        Player owner = control.companion().orElse(null);
         return owner != null && owner.getWorld() == spot.getWorld()
                 && owner.getLocation().distance(spot) <= control.followRange();
     }
@@ -1291,7 +1291,7 @@ public final class PetLuaTable {
             if (!soulVariants.isEmpty() && (type == Material.SOUL_CAMPFIRE) != soulVariants.contains(control.model())) return false;
             if (!(block.getBlockData() instanceof Lightable lightable) || !lightable.isLit()) return false;
             if (control.isWild()) return true;
-            Player owner = control.owner().orElse(null);
+            Player owner = control.companion().orElse(null);
             if (owner == null || owner.getWorld() != block.getWorld()) return false;
             Location above = block.getLocation().add(0.5D, height, 0.5D);
             return owner.getLocation().distance(above) <= Math.max(1D, control.followRange() - 1D);
