@@ -178,6 +178,8 @@ public final class PetListeners implements Listener {
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onAttacked(EntityDamageByEntityEvent event) {
+        // A pet's own hit, if this is one, went through (see PetStrike).
+        PetStrike.wentThrough(event.getDamager(), event.getEntity(), event.getFinalDamage());
         PetManager manager = PetManager.get();
         if (manager == null) return;
         // A creature an owned pet hurts, a mob it stung say, becomes one its owner's pets fight for a while, as a wolf

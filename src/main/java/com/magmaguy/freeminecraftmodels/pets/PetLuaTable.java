@@ -428,14 +428,16 @@ public final class PetLuaTable {
             PetManager manager = PetManager.get();
             if (manager == null) return LuaValue.valueOf(0);
             LivingEntity body = body();
-            Set<UUID> aggressors = manager.aggressors(control.ownerId());
+            UUID owner = control.ownerId();
+            Set<UUID> aggressors = manager.aggressors(owner);
             int stung = 0;
             for (Entity entity : body.getWorld().getNearbyEntities(body.getBoundingBox().expand(reach + 1.5D),
                     candidate -> candidate instanceof LivingEntity && (candidate instanceof Enemy && !(candidate instanceof Player)
-                            || !aggressors.isEmpty() && defendsAgainst(manager, aggressors, candidate)))) {
+                            || !aggressors.isEmpty() && defendsAgainst(manager, owner, aggressors, candidate)))) {
                 LivingEntity victim = (LivingEntity) entity;
-                if (victim.isDead()) continue;
-                if (manager.pet(victim) != null && !defendsAgainst(manager, aggressors, victim)) continue;
+                // One its owner's pets could not hurt is left alone for a while (see PetTruce).
+                if (victim.isDead() || manager.spares(owner, victim.getUniqueId())) continue;
+                if (manager.pet(victim) != null && !defendsAgainst(manager, owner, aggressors, victim)) continue;
                 if (touches(victim, reach) && sting(victim, sting, null, "c.pet:sting_enemies")) stung++;
             }
             return LuaValue.valueOf(stung);
@@ -756,9 +758,11 @@ public final class PetLuaTable {
     /** Owned: the owner. Wild: its home, or where it is when it has none. */
     /**
      * Whether an owned pet defends its owner against this entity: a player among the aggressors who can be hurt
-     * (alive, not in creative or spectator), or a pet one of them owns.
+     * (alive, not in creative or spectator), or a pet one of them owns. Never one its owner's pets have given up on
+     * because their hit did not go through (see {@link PetTruce}).
      */
-    private static boolean defendsAgainst(PetManager manager, Set<UUID> aggressors, Entity entity) {
+    private static boolean defendsAgainst(PetManager manager, UUID owner, Set<UUID> aggressors, Entity entity) {
+        if (manager.spares(owner, entity.getUniqueId())) return false;
         if (entity instanceof Player player) {
             GameMode mode = player.getGameMode();
             return aggressors.contains(player.getUniqueId()) && !player.isDead() && mode != GameMode.CREATIVE
@@ -802,7 +806,8 @@ public final class PetLuaTable {
         Entity nearest = null;
         double best = Double.POSITIVE_INFINITY;
         for (Entity entity : owner.getWorld().getNearbyEntities(owner.getLocation(), THREAT_RANGE, THREAT_RANGE, THREAT_RANGE,
-                candidate -> candidate instanceof LivingEntity && defendsAgainst(manager, aggressors, candidate))) {
+                candidate -> candidate instanceof LivingEntity
+                        && defendsAgainst(manager, owner.getUniqueId(), aggressors, candidate))) {
             double distance = entity.getLocation().distanceSquared(here);
             if (distance < best) {
                 best = distance;
@@ -1735,16 +1740,33 @@ public final class PetLuaTable {
                 whole(args, first + 4, 1, Integer.MAX_VALUE));
     }
 
-    /** Stings the victim; a null look buzzes and sparks as a sting does. FREEZE freezes it for the duration's ticks. */
+    /**
+     * Stings the victim; a null look buzzes and sparks as a sting does. FREEZE freezes it for the duration's ticks.
+     * <p>
+     * The hit comes first, and the rest only follows a hit that went through (see {@link PetStrike}): the effect, the
+     * sound and sparks, and the swing. A pet so never swings at something it did not hit. A victim still inside the
+     * hurt immunity another hit left is tried again at the next look, without starting the cooldown. One the hit did
+     * not go through on, because it cannot be hurt or something protects it, starts the cooldown and is given up on:
+     * an owned pet's owner's pets leave it alone for a while (see {@link PetTruce}). A sting that deals no damage
+     * goes through on anything that can be hurt at all.
+     */
     private boolean sting(LivingEntity victim, Sting sting, Look look, String call) {
         long now = PetManager.ticks();
         Long readyAt = stingReadyAt.get(victim.getUniqueId());
         if (readyAt != null && now < readyAt) return false;
-        if (stingReadyAt.size() > 32) stingReadyAt.values().removeIf(at -> at <= now);
-        stingReadyAt.put(victim.getUniqueId(), now + sting.cooldown());
         // The pet's sting and poison stats scale what the module asks for; a baby's are halved until it grows up.
         PetStats stats = control.stats();
         double share = control.babyShare();
+        double damage = sting.damage() * stats.sting * share;
+        if (damage > 0D && !PetStrike.ready(victim.getNoDamageTicks(), victim.getMaximumNoDamageTicks())) return false;
+        if (stingReadyAt.size() > 32) stingReadyAt.values().removeIf(at -> at <= now);
+        stingReadyAt.put(victim.getUniqueId(), now + sting.cooldown());
+        boolean landed = damage > 0D ? PetStrike.deal(body(), victim, damage) : !victim.isInvulnerable();
+        if (!landed) {
+            PetManager manager = PetManager.get();
+            if (manager != null) manager.spare(control.ownerId(), victim.getUniqueId());
+            return false;
+        }
         int duration = (int) Math.max(1L, Math.round(sting.duration() * stats.poison * share));
         if (FREEZE.equalsIgnoreCase(sting.effect())) {
             // Frost creeps in over 140 frozen ticks and thaws 2 a tick, so past 140 the victim is fully frozen (shaking,
@@ -1755,8 +1777,6 @@ public final class PetLuaTable {
             if (effect != null)
                 victim.addPotionEffect(new PotionEffect(effect, duration, sting.amplifier(), false, true, true));
         }
-        double damage = sting.damage() * stats.sting * share;
-        if (damage > 0D) victim.damage(damage, body());
         Location at = victim.getLocation().add(0D, victim.getHeight() * 0.5D, 0D);
         if (look == null) {
             victim.getWorld().spawnParticle(Particle.ELECTRIC_SPARK, at, 8, 0.25D, 0.3D, 0.25D, 0.05D);

@@ -110,6 +110,8 @@ public final class PetManager {
     private final Map<UUID, OwnerPace> paces = new HashMap<>();
     /** How long an owner's pets keep defending them against an attacker after its latest hit: 15 seconds. */
     static final long AGGRESSION_TICKS = 20L * 15L;
+    /** The creatures each owner's pets have given up on, since their hits do not go through on them. */
+    private final PetTruce truce = new PetTruce();
     /**
      * The wild pets waiting to come back. Each chunk's are also in that chunk's persistent data (wildKey), written
      * whenever they change while it is loaded, as it unloads, and at shutdown, so Minecraft saves them with the chunk.
@@ -955,6 +957,7 @@ public final class PetManager {
         if (owned != null) for (PetControl control : new ArrayList<>(owned.values())) despawn(control);
         collections.remove(player.getUniqueId());
         aggressors.remove(player.getUniqueId());
+        truce.forget(player.getUniqueId());
         paces.remove(player.getUniqueId());
     }
 
@@ -984,6 +987,19 @@ public final class PetManager {
     public void attacked(UUID owner, UUID attacker) {
         if (owner == null || attacker == null || owner.equals(attacker) || !ownedBodies.containsKey(owner)) return;
         aggressors.computeIfAbsent(owner, ignored -> new HashMap<>()).put(attacker, ticks + AGGRESSION_TICKS);
+    }
+
+    /**
+     * A hit of one of this owner's pets did not go through on the creature: for {@link #AGGRESSION_TICKS}, as long
+     * as an attacker is kept in mind, their pets neither go after it nor sting it, and then try again.
+     */
+    void spare(UUID owner, UUID creature) {
+        truce.spare(owner, creature, ticks + AGGRESSION_TICKS);
+    }
+
+    /** Whether this owner's pets leave the creature alone right now (see {@link #spare}). */
+    boolean spares(UUID owner, UUID creature) {
+        return truce.spares(owner, creature, ticks);
     }
 
     /** The players this owner's pets defend against right now. */
