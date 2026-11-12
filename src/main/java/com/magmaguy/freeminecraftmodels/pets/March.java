@@ -219,10 +219,14 @@ final class March {
             progressAt = null;
         }
         if (phase == Phase.FORMING) {
-            if (now - calledAt < FORM_TICKS && !formed(now)) return at.clone();
+            // The leader waits on the spot it called from, at its own height: the marchers gathering round it shove
+            // it, and it walks back.
+            if (now - calledAt < FORM_TICKS && !formed(now)) return new Vector(home.getX(), at.getY(), home.getZ());
             phase = Phase.OUT;
             outEnd = now + durationTicks / 2L;
-            if (!nextLeg(at, ground)) return null;
+            // The first leg runs from that spot, along the heading that was found clear from there. From wherever
+            // the leader stood a block to the side, that heading could be shut, and the march turned away or ended.
+            if (!nextLeg(home, ground)) return null;
         }
         trail.step(at, (line.size() + 1) * spacing + 2D);
         if (progressAt == null || horizontal(at, progressAt) >= 1D) {

@@ -91,6 +91,26 @@ class MarchTest {
     }
 
     @Test
+    void aLeaderShovedOffItsSpotWhileTheLineFormsWalksBackAndSetsOffTheWayItCalled() {
+        // Open ground round the spot the march is called from, and from that spot one way out: a corridor a block
+        // wide toward +x. A block to the side of the spot, no heading runs 6 blocks.
+        MarchRoute.Ground corridor = ground((x, z) -> x > 2 && z != 0 || Math.abs(z) > 3 || x < -8);
+        Sim sim = new Sim(corridor, 4, 2400);
+        for (int tick = 0; tick < 5; tick++) sim.step();
+        assertEquals(March.Phase.FORMING, sim.march.phase(), "the line is still forming");
+        // The marchers gathering round the leader shove it more than a block off its spot.
+        sim.at(0).setZ(HOME.getZ() - 1.3);
+        while (sim.march.phase() == March.Phase.FORMING) {
+            sim.step();
+            assertTrue(sim.now < Sim.START + 400, "the line sets off");
+        }
+        assertEquals(HOME.getZ(), sim.at(0).getZ(), 0.35, "the leader is back on the spot it called from");
+        for (int tick = 0; tick < 400; tick++) sim.step();
+        assertFalse(sim.march.over(), "the march goes on");
+        assertTrue(sim.at(0).getX() > HOME.getX() + 8, "the leader walked out along the corridor: " + sim.at(0));
+    }
+
+    @Test
     void aMarchingLineStaysStraightAndEvenlySpaced() {
         Sim sim = new Sim(OPEN, 6, 2400);
         while (sim.at(0).getX() < 25) {
