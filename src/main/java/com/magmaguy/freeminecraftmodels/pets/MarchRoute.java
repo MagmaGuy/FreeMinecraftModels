@@ -15,6 +15,11 @@ final class MarchRoute {
     static final double MIN_LEG = 6D;
     /** A run ahead shorter than this means the way is blocked. */
     static final double BLOCKED = 2.5D;
+    /**
+     * A run keeps this far clear of a wall on either side: half the width of a marcher's body, 0.35 for a penguin,
+     * and a tenth of a block for the body straying off its line.
+     */
+    static final double CLEAR = 0.45D;
     /** The headings a leader looks along, all round. */
     static final int HEADINGS = 16;
 
@@ -33,6 +38,15 @@ final class MarchRoute {
          * fits.
          */
         int standing(int x, int feet, int z);
+
+        /**
+         * Whether a body with its feet at this height would be in a block of this column that it cannot step onto: a
+         * wall, a tree's trunk, leaves at the height of its head. False where the ground only steps or drops away,
+         * and for ground that knows no walls, as a test's.
+         */
+        default boolean walled(int x, int feet, int z) {
+            return false;
+        }
     }
 
     /** A straight run: how long it is and where it ends, at the standing block's feet height. */
@@ -43,6 +57,10 @@ final class MarchRoute {
      * The straight run from {@code from} along the unit heading (dx, dz), up to {@code max} blocks: each step stands a
      * step up, level or a step down from the one before. It stops before a wall, a drop of two or more, liquid or an
      * unloaded column. Its end is {@code from} itself when the first step fails.
+     * <p>
+     * A run is a body wide, not a line: it also stops where a wall stands within {@link #CLEAR} of it on either side
+     * (see {@link Ground#walled}). A line passing a tree's trunk a quarter block off was a clear run, and the leader
+     * that walked it stood against the trunk until it counted as stuck.
      */
     static Run run(Ground ground, Vector from, double dx, double dz, double max) {
         int feet = (int) Math.floor(from.getY());
@@ -52,6 +70,9 @@ final class MarchRoute {
             double x = from.getX() + dx * along, z = from.getZ() + dz * along;
             int next = ground.standing((int) Math.floor(x), feet, (int) Math.floor(z));
             if (next == Ground.NO_FOOTING) break;
+            // To the left of the heading and to its right: (-dz, dx) and (dz, -dx).
+            if (ground.walled((int) Math.floor(x - dz * CLEAR), next, (int) Math.floor(z + dx * CLEAR))
+                    || ground.walled((int) Math.floor(x + dz * CLEAR), next, (int) Math.floor(z - dx * CLEAR))) break;
             feet = next;
             length = along;
             end = new Vector(x, next, z);

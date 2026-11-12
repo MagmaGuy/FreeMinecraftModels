@@ -268,16 +268,31 @@ final class PetMarches {
         if (walk.sound != null && walk.volume > 0F) walk.world.playSound(at, walk.sound, walk.volume, walk.pitch);
     }
 
-    /** The world's columns as a march sees them: see {@link MarchRoute.Ground#standing}. */
+    /**
+     * The world's columns as a march sees them: see {@link MarchRoute.Ground#standing} and
+     * {@link MarchRoute.Ground#walled}.
+     */
     static MarchRoute.Ground ground(World world) {
-        return (x, feet, z) -> {
-            if (!world.isChunkLoaded(x >> 4, z >> 4)) return MarchRoute.Ground.NO_FOOTING;
-            for (int y = feet + 1; y >= feet - 1; y--) {
-                if (y - 1 < world.getMinHeight() || y + 1 >= world.getMaxHeight()) continue;
-                if (PetLuaTable.room(world.getBlockAt(x, y, z)) && PetLuaTable.room(world.getBlockAt(x, y + 1, z))
-                        && footing(world.getBlockAt(x, y - 1, z))) return y;
+        return new MarchRoute.Ground() {
+            @Override
+            public int standing(int x, int feet, int z) {
+                if (!world.isChunkLoaded(x >> 4, z >> 4)) return NO_FOOTING;
+                for (int y = feet + 1; y >= feet - 1; y--) {
+                    if (y - 1 < world.getMinHeight() || y + 1 >= world.getMaxHeight()) continue;
+                    if (PetLuaTable.room(world.getBlockAt(x, y, z)) && PetLuaTable.room(world.getBlockAt(x, y + 1, z))
+                            && footing(world.getBlockAt(x, y - 1, z))) return y;
+                }
+                return NO_FOOTING;
             }
-            return MarchRoute.Ground.NO_FOOTING;
+
+            @Override
+            public boolean walled(int x, int feet, int z) {
+                // A column a body can step onto is no wall, and neither is one that only drops away: there the
+                // blocks its feet and head would be in are free.
+                if (!world.isChunkLoaded(x >> 4, z >> 4) || standing(x, feet, z) != NO_FOOTING) return false;
+                if (feet < world.getMinHeight() || feet + 1 >= world.getMaxHeight()) return false;
+                return !PetLuaTable.room(world.getBlockAt(x, feet, z)) || !PetLuaTable.room(world.getBlockAt(x, feet + 1, z));
+            }
         };
     }
 
