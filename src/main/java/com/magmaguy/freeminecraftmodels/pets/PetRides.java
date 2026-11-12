@@ -257,6 +257,7 @@ final class PetRides {
             }
             Player rider = rider(body);
             if (rider == null) {
+                standClear(ride.rider);
                 dismount(control);
                 continue;
             }
@@ -553,6 +554,27 @@ final class PetRides {
         Vector spot = BodyFit.nearest(at.getX(), at.getY(), at.getZ(), BodyFit.Shape.of(box.getWidthX(), box.getHeight()),
                 steered, RideCeiling.of(body.getWorld()));
         if (spot != null) PetManager.moveBody(body, spot.getX(), spot.getY(), spot.getZ());
+    }
+
+    /**
+     * A rider who just got off stands where their pet stood, and a player's box is wider than the body a pet is
+     * ridden with: 0.6 blocks against 0.54 for a penguin. Off a pet that stood flat against a wall, their box
+     * reached up to 0.08 blocks into the wall and they suffocated for 2 or 3 ticks until Minecraft had pushed them
+     * out. They are moved to the nearest spot where they fit, the tick after they get off.
+     */
+    private static void standClear(UUID riderId) {
+        Player player = riderId == null ? null : org.bukkit.Bukkit.getPlayer(riderId);
+        if (player == null || player.isDead() || player.isInsideVehicle() || player.getGameMode() == GameMode.SPECTATOR) return;
+        RideCeiling.Blocks blocks = RideCeiling.of(player.getWorld());
+        BoundingBox box = player.getBoundingBox();
+        if (BodyFit.colliders(box, blocks).isEmpty()) return;
+        Location at = player.getLocation();
+        Vector spot = BodyFit.nearest(at.getX(), at.getY(), at.getZ(), BodyFit.Shape.of(box.getWidthX(), box.getHeight()), null, blocks);
+        if (spot == null) return;
+        at.setX(spot.getX());
+        at.setY(spot.getY());
+        at.setZ(spot.getZ());
+        player.teleport(at);
     }
 
     /**
