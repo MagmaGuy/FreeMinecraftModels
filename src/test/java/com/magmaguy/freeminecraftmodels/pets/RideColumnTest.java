@@ -23,6 +23,9 @@ class RideColumnTest {
         return RideColumn.head(body(x, y, z), 0.24D, y + 1.8D);
     }
 
+    /** A penguin's top swimming speed at movement speed 2: 0.65 blocks a tick. */
+    private static final double SWIM = RideColumn.swim(2D);
+
     private static RideCeiling.Blocks blocks(int[]... full) {
         Map<String, BoundingBox> world = new HashMap<>();
         for (int[] at : full)
@@ -124,30 +127,52 @@ class RideColumnTest {
 
     @Test
     void inOpenWaterNothingIsSent() {
-        assertTrue(Double.isNaN(RideColumn.brake(column(2D, 60D, 0.5D), true, 0.6D, 0.065D, 0D, 1, blocks())));
+        assertTrue(Double.isNaN(RideColumn.brake(column(2D, 60D, 0.5D), body(2D, 60D, 0.5D), true, 0.6D, 0.065D, 0D, 1, SWIM, blocks())));
     }
 
     @Test
     void aHeadHeadingForAWallKeepsItsSpeedUntilTheLastTick() {
         // 0.6 blocks a tick, a block and a half from the wall: nothing yet.
-        assertTrue(Double.isNaN(RideColumn.brake(column(3.26D, 60D, 0.5D), true, 0.6D, 0.065D, 0D, 1, wall())));
+        assertTrue(Double.isNaN(RideColumn.brake(column(3.26D, 60D, 0.5D), body(3.26D, 60D, 0.5D), true, 0.6D, 0.065D, 0D, 1, SWIM, wall())));
         // Under a block from it, with a tick's travel still to come before the client acts: slower, and still
         // toward the wall.
-        double sent = RideColumn.brake(column(3.8D, 60D, 0.5D), true, 0.6D, 0.065D, 0D, 1, wall());
+        double sent = RideColumn.brake(column(3.8D, 60D, 0.5D), body(3.8D, 60D, 0.5D), true, 0.6D, 0.065D, 0D, 1, SWIM, wall());
         assertTrue(sent < RideCeiling.WATER_DRAG * 0.6D && sent > 0D, "slowed, not thrown back: " + sent);
     }
 
     @Test
-    void theBodyIsNeverAllowedPastTheMargin() {
+    void theBodyIsNeverAllowedPastTheMarginNorSentBackFromOutsideIt() {
         // Far from the block it may cover all the room but the settling stretch; close, a share of it.
         assertEquals(1D - RideColumn.MARGIN - RideColumn.SETTLE, RideColumn.allowed(1D, 0.6D, 0), 1.0E-9D);
         assertEquals(RideCeiling.GAIN * 0.1D, RideColumn.allowed(RideColumn.MARGIN + 0.1D, 0.6D, 0), 1.0E-9D);
         // The travel of the ticks the client takes to act comes off the room first.
         assertEquals(1D - RideColumn.MARGIN - 0.6D - RideColumn.SETTLE, RideColumn.allowed(1D, 0.6D, 1), 1.0E-9D);
+        // Too fast to stop in time, it is stopped, never thrown back: 2 blocks a tick, 1.7 from the wall, 2 ticks late.
+        assertEquals(0D, RideColumn.allowed(1.7D, 2D, 2), 1.0E-9D);
         // Inside the margin it is sent back, gently, and never harder than the ceiling's own push.
-        assertTrue(RideColumn.allowed(0D, 0D, 0) < 0D && RideColumn.allowed(0D, 0D, 0) > -0.05D);
-        assertEquals(-RideCeiling.MAX_PUSH, RideColumn.allowed(-5D, 0D, 0), 1.0E-9D);
-        assertEquals(Double.POSITIVE_INFINITY, RideColumn.allowed(Double.POSITIVE_INFINITY, 0.6D, 1));
+        assertTrue(RideColumn.back(0D) < 0D && RideColumn.back(0D) > -0.05D);
+        assertEquals(-RideCeiling.MAX_PUSH, RideColumn.back(-5D), 1.0E-9D);
+    }
+
+    @Test
+    void aDashAtAWallTheBodyMeetsIsNotSlowed() {
+        // A dash out of the water at a wall on the bank, 2 blocks a tick, 1.7 blocks off, the client 2 ticks behind:
+        // the wall stops the body with the head 0.02 in. Slowed, the pet was thrown back into the water.
+        assertTrue(Double.isNaN(RideColumn.brake(column(3.06D, 60D, 0.5D), body(3.06D, 60D, 0.5D), true, 2D, 0.065D, 0D, 2,
+                SWIM, wall())));
+        // A swim at the same wall is stopped short of it.
+        assertTrue(!Double.isNaN(RideColumn.brake(column(4.3D, 60D, 0.5D), body(4.3D, 60D, 0.5D), true, 0.6D, 0.065D, 0D, 2,
+                SWIM, wall())));
+    }
+
+    @Test
+    void aDashUnderAnOverhangIsStoppedNotThrownBack() {
+        // Stone from y 61 up: the body has nothing ahead of it, and its rider's head would go all the way in.
+        RideCeiling.Blocks overhang = blocks(new int[]{5, 61, 0}, new int[]{5, 62, 0});
+        double sent = RideColumn.brake(column(3.06D, 60D, 0.5D), body(3.06D, 60D, 0.5D), true, 2D, 0.065D, 0D, 2, SWIM, overhang);
+        assertEquals(-0.065D, sent, 1.0E-9D);
+        assertTrue(RideColumn.meets(0.76D, 0.78D));
+        assertTrue(!RideColumn.meets(0.76D, Double.POSITIVE_INFINITY));
     }
 
     @Test
@@ -155,7 +180,7 @@ class RideColumnTest {
         // The rider keeps pushing at the wall. Each tick the client adds its thrust to what it was sent and moves.
         double x = 4D, step = 0.3D, thrust = 0.065D;
         for (int tick = 0; tick < 80; tick++) {
-            double sent = RideColumn.brake(column(x, 60D, 0.5D), true, step, thrust, 0D, 0, wall());
+            double sent = RideColumn.brake(column(x, 60D, 0.5D), body(x, 60D, 0.5D), true, step, thrust, 0D, 0, SWIM, wall());
             double velocity = (Double.isNaN(sent) ? RideCeiling.WATER_DRAG * step : sent) + thrust;
             // The body's own side stops at the wall, as the client stops it.
             double next = Math.min(x + velocity, 5D - 0.22D);
@@ -169,15 +194,15 @@ class RideColumnTest {
     @Test
     void aColumnAtRestInsideTheMarginIsEasedBackOut() {
         // 0.02 into the wall, as a body pressed to it leaves its rider: sent away from the wall.
-        double sent = RideColumn.brake(column(4.78D, 60D, 0.5D), true, 0D, 0D, 0D, 1, wall());
+        double sent = RideColumn.brake(column(4.78D, 60D, 0.5D), body(4.78D, 60D, 0.5D), true, 0D, 0D, 0D, 1, SWIM, wall());
         assertTrue(sent < 0D && sent > -0.1D, "eased back: " + sent);
         // A margin clear, nothing.
-        assertTrue(Double.isNaN(RideColumn.brake(column(4.70D, 60D, 0.5D), true, 0D, 0D, 0D, 1, wall())));
+        assertTrue(Double.isNaN(RideColumn.brake(column(4.70D, 60D, 0.5D), body(4.70D, 60D, 0.5D), true, 0D, 0D, 0D, 1, SWIM, wall())));
     }
 
     @Test
     void aColumnLeavingAWallIsNotHeldBack() {
-        assertTrue(Double.isNaN(RideColumn.brake(column(4.6D, 60D, 0.5D), true, -0.3D, -0.065D, 0D, 1, wall())));
+        assertTrue(Double.isNaN(RideColumn.brake(column(4.6D, 60D, 0.5D), body(4.6D, 60D, 0.5D), true, -0.3D, -0.065D, 0D, 1, SWIM, wall())));
     }
 
     @Test

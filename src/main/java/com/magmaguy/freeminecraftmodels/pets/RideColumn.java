@@ -22,6 +22,11 @@ import org.bukkit.util.Vector;
  * The head alone, not the whole rider: what is lower than the rider's head is no taller than a bank or a beach's
  * step, which the body meets itself, and a pet slowed toward every such block lost the pace it leaps out of the
  * water with. And only at the last moment: a pet slowed from blocks away fell short of the bank it dashed at.
+ * <p>
+ * A dash is never slowed toward a wall the body meets itself. It covers 2 blocks a tick, further than any brake can
+ * stop it in once the trip to the rider's client and back is counted, and the wall stops it anyway with the head
+ * only 0.02 blocks in; slowed, a pet that dashed out of the water at a wall on the bank was thrown back into the
+ * water in mid-air. It is eased back out to the margin once it is there.
  */
 final class RideColumn {
     /** Blocks kept between the rider's head and a block beside it: the client's test must stay clear of the block. */
@@ -45,6 +50,11 @@ final class RideColumn {
      * 1 / GAIN ticks to take a body down under a tunnel's mouth before its rider's head gets there.
      */
     static final int LOOK_TICKS = (int) Math.round(1D / RideCeiling.GAIN);
+    /**
+     * How many times its top swimming speed a body must be heading at to count as dashing: a swim tops out at
+     * {@link #swim}, and the dash throws it at three times that.
+     */
+    static final double DASH = 1.25D;
     /** The share of a movement key's push a rider's client hands the body it steers, as vanilla scales it. */
     static final double KEY = 0.98D;
     private static final double EDGE = 1.0E-3D;
@@ -131,11 +141,14 @@ final class RideColumn {
      * The velocity to send a body along one horizontal axis so its rider's head stops {@link #MARGIN} short of the
      * block it is heading for, or NaN when it needs none. {@code step} is how far the body moved along the axis in
      * the last tick, {@code thrust} what its rider's steering adds along it each tick, {@code sideways} how far it
-     * moved along the other horizontal axis, and {@code delay} the ticks until the rider's client acts on what is
-     * sent. A head at rest closer to a block than the margin is eased back out to it.
+     * moved along the other horizontal axis, {@code delay} the ticks until the rider's client acts on what is
+     * sent, and {@code swim} the body's top swimming speed in blocks a tick (see {@link #swim}).
+     * <p>
+     * A head at rest closer to a block than the margin is eased back out to it. A head heading for a block is
+     * stopped short of it, unless the body meets a block of its own first and is dashing: see the class comment.
      */
-    static double brake(BoundingBox head, boolean alongX, double step, double thrust, double sideways, int delay,
-                        RideCeiling.Blocks blocks) {
+    static double brake(BoundingBox head, BoundingBox body, boolean alongX, double step, double thrust, double sideways,
+                        int delay, double swim, RideCeiling.Blocks blocks) {
         double heading = RideCeiling.WATER_DRAG * step + thrust;
         int wait = Math.max(0, delay);
         for (int sign = 1; sign >= -1; sign -= 2) {
@@ -143,25 +156,52 @@ final class RideColumn {
             // Heading the other way, it is leaving whatever is on this side.
             if (toward < -EDGE) continue;
             double reach = MARGIN + SETTLE + Math.max(0D, toward) * (wait + 1);
-            double room = room(head, alongX, sign, sideways * (wait + 1), reach, blocks);
-            double allowed = allowed(room, toward, wait);
+            double travel = sideways * (wait + 1);
+            double room = room(head, alongX, sign, travel, reach, blocks);
+            if (room == Double.POSITIVE_INFINITY) continue;
+            double allowed = room < MARGIN ? back(room)
+                    : toward > DASH * swim && meets(room, room(body, alongX, sign, travel, reach + DEEP, blocks))
+                    ? Double.POSITIVE_INFINITY : allowed(room, toward, wait);
             if (toward > allowed) return sign * (allowed - sign * thrust);
         }
         return Double.NaN;
     }
 
     /**
-     * How far a body may move toward a block in its next tick with {@code room} blocks between its rider's head
-     * and the block, heading for it at {@code toward} blocks a tick, when what it is sent takes {@code delay}
-     * ticks to act on. Never further than the room left short of the margin once that delay's travel is taken
-     * off, so it does not reach the block; all of that room but {@link #SETTLE} while it is far, so it keeps its
-     * speed to the last tick; and {@link RideCeiling#GAIN} of it once it is close, so it settles. With no room
-     * left it is sent back, at most {@link RideCeiling#MAX_PUSH} a tick. Positive infinity with no block there.
+     * How far a body may move toward a block in its next tick with {@code room} blocks, at least the margin,
+     * between its rider's head and the block, heading for it at {@code toward} blocks a tick, when what it is sent
+     * takes {@code delay} ticks to act on. Never further than the room left short of the margin once that delay's
+     * travel is taken off, so it does not reach the block; all of that room but {@link #SETTLE} while it is far,
+     * so it keeps its speed to the last tick; and {@link RideCeiling#GAIN} of it once it is close, so it settles.
+     * Never backward: a body that cannot stop in time is stopped, not thrown back.
      */
     static double allowed(double room, double toward, int delay) {
-        if (room == Double.POSITIVE_INFINITY) return Double.POSITIVE_INFINITY;
         double left = room - MARGIN - Math.max(0D, toward) * Math.max(0, delay);
-        return Math.max(-RideCeiling.MAX_PUSH, Math.max(RideCeiling.GAIN * left, left - SETTLE));
+        return Math.max(0D, Math.max(RideCeiling.GAIN * left, left - SETTLE));
+    }
+
+    /**
+     * How far back a body is sent in a tick with its rider's head {@code room} blocks from a block, closer than the
+     * margin or in it: {@link RideCeiling#GAIN} of the way back to the margin, at most
+     * {@link RideCeiling#MAX_PUSH}. A negative number.
+     */
+    static double back(double room) {
+        return Math.max(-RideCeiling.MAX_PUSH, RideCeiling.GAIN * (room - MARGIN));
+    }
+
+    /**
+     * Whether the body meets a block of its own before its rider's head is deep in one: with {@code headRoom}
+     * blocks ahead of the head and {@code bodyRoom} ahead of the body, the head is {@code bodyRoom - headRoom} into
+     * its block when the body stops at its own. A wall the body swims against leaves that at 0.02; under an
+     * overhang the body has nothing ahead and its rider's head goes all the way in.
+     */
+    static boolean meets(double headRoom, double bodyRoom) {
+        return bodyRoom - headRoom <= DEEP;
+    }
+
+    /** A ridden nautilus's top swimming speed in blocks a tick: its thrust each tick against the water's drag. */
+    static double swim(double speed) {
+        return RideCeiling.THRUST * speed / (1D - RideCeiling.WATER_DRAG);
     }
 
     private static int floor(double value) {

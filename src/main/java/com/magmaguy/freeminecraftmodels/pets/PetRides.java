@@ -381,8 +381,9 @@ final class PetRides {
         Vector thrust = RideColumn.thrust(speed, view.getYaw(), view.getPitch(), forward(rider), strafe(rider));
         double up = RideCeiling.brake(over - head, climbed, thrust.getY(), delay);
         BoundingBox headBox = RideColumn.head(box, half, head);
-        double alongX = RideColumn.brake(headBox, true, stepX, thrust.getX(), stepZ, delay, blocks);
-        double alongZ = RideColumn.brake(headBox, false, stepZ, thrust.getZ(), stepX, delay, blocks);
+        double swim = RideColumn.swim(speed);
+        double alongX = RideColumn.brake(headBox, box, true, stepX, thrust.getX(), stepZ, delay, swim, blocks);
+        double alongZ = RideColumn.brake(headBox, box, false, stepZ, thrust.getZ(), stepX, delay, swim, blocks);
         if (Double.isNaN(up) && Double.isNaN(alongX) && Double.isNaN(alongZ)) return;
         // What is not slowed is what the client would have next tick by itself.
         body.setVelocity(new Vector(Double.isNaN(alongX) ? RideCeiling.WATER_DRAG * stepX : alongX,
