@@ -50,6 +50,8 @@ final class RideColumn {
      * 1 / GAIN ticks to take a body down under a tunnel's mouth before its rider's head gets there.
      */
     static final int LOOK_TICKS = (int) Math.round(1D / RideCeiling.GAIN);
+    /** The most a body outside the margin is sent back from a block in a tick, in blocks: a nudge, not a throw. */
+    static final double NUDGE = 0.05D;
     /**
      * How many times its top swimming speed a body must be heading at to count as dashing: a swim tops out at
      * {@link #swim}, and the dash throws it at three times that.
@@ -144,8 +146,8 @@ final class RideColumn {
      * moved along the other horizontal axis, {@code delay} the ticks until the rider's client acts on what is
      * sent, and {@code swim} the body's top swimming speed in blocks a tick (see {@link #swim}).
      * <p>
-     * A head at rest closer to a block than the margin is eased back out to it. A head heading for a block is
-     * stopped short of it, unless the body meets a block of its own first and is dashing: see the class comment.
+     * A head heading for a block is stopped short of it, and one closer to it than the margin is eased back out,
+     * unless the body meets a block of its own first and is dashing: see the class comment.
      */
     static double brake(BoundingBox head, BoundingBox body, boolean alongX, double step, double thrust, double sideways,
                         int delay, double swim, RideCeiling.Blocks blocks) {
@@ -159,8 +161,8 @@ final class RideColumn {
             double travel = sideways * (wait + 1);
             double room = room(head, alongX, sign, travel, reach, blocks);
             if (room == Double.POSITIVE_INFINITY) continue;
-            double allowed = room < MARGIN ? back(room)
-                    : toward > DASH * swim && meets(room, room(body, alongX, sign, travel, reach + DEEP, blocks))
+            double allowed = room >= MARGIN && toward > DASH * swim
+                    && meets(room, room(body, alongX, sign, travel, reach + DEEP, blocks))
                     ? Double.POSITIVE_INFINITY : allowed(room, toward, wait);
             if (toward > allowed) return sign * (allowed - sign * thrust);
         }
@@ -168,25 +170,21 @@ final class RideColumn {
     }
 
     /**
-     * How far a body may move toward a block in its next tick with {@code room} blocks, at least the margin,
-     * between its rider's head and the block, heading for it at {@code toward} blocks a tick, when what it is sent
-     * takes {@code delay} ticks to act on. Never further than the room left short of the margin once that delay's
-     * travel is taken off, so it does not reach the block; all of that room but {@link #SETTLE} while it is far,
-     * so it keeps its speed to the last tick; and {@link RideCeiling#GAIN} of it once it is close, so it settles.
-     * Never backward: a body that cannot stop in time is stopped, not thrown back.
+     * How far a body may move toward a block in its next tick with {@code room} blocks between its rider's head
+     * and the block, heading for it at {@code toward} blocks a tick, when what it is sent takes {@code delay}
+     * ticks to act on. Never further than the room left short of the margin once that delay's travel is taken
+     * off, so it does not reach the block; all of that room but {@link #SETTLE} while it is far, so it keeps its
+     * speed to the last tick; and {@link RideCeiling#GAIN} of it once it is close, so it settles.
+     * <p>
+     * With no room left it is sent back, the same share of what it is short by. That is what holds a rider who
+     * keeps pushing at the block a little outside the margin, whatever the rider's push is misjudged by; held at
+     * exactly nothing, the head crept into the block a hundredth of a block at a time. Outside the margin it is
+     * sent back {@link #NUDGE} a tick at most: a body that cannot stop in time is stopped, not thrown back. Inside
+     * the margin, up to {@link RideCeiling#MAX_PUSH}.
      */
     static double allowed(double room, double toward, int delay) {
         double left = room - MARGIN - Math.max(0D, toward) * Math.max(0, delay);
-        return Math.max(0D, Math.max(RideCeiling.GAIN * left, left - SETTLE));
-    }
-
-    /**
-     * How far back a body is sent in a tick with its rider's head {@code room} blocks from a block, closer than the
-     * margin or in it: {@link RideCeiling#GAIN} of the way back to the margin, at most
-     * {@link RideCeiling#MAX_PUSH}. A negative number.
-     */
-    static double back(double room) {
-        return Math.max(-RideCeiling.MAX_PUSH, RideCeiling.GAIN * (room - MARGIN));
+        return Math.max(room < MARGIN ? -RideCeiling.MAX_PUSH : -NUDGE, Math.max(RideCeiling.GAIN * left, left - SETTLE));
     }
 
     /**

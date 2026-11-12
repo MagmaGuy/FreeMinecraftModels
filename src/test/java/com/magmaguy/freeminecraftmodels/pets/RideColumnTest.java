@@ -147,11 +147,29 @@ class RideColumnTest {
         assertEquals(RideCeiling.GAIN * 0.1D, RideColumn.allowed(RideColumn.MARGIN + 0.1D, 0.6D, 0), 1.0E-9D);
         // The travel of the ticks the client takes to act comes off the room first.
         assertEquals(1D - RideColumn.MARGIN - 0.6D - RideColumn.SETTLE, RideColumn.allowed(1D, 0.6D, 1), 1.0E-9D);
-        // Too fast to stop in time, it is stopped, never thrown back: 2 blocks a tick, 1.7 from the wall, 2 ticks late.
-        assertEquals(0D, RideColumn.allowed(1.7D, 2D, 2), 1.0E-9D);
+        // Too fast to stop in time, it is stopped with a nudge, never thrown back: 2 blocks a tick, 1.7 from the
+        // wall, 2 ticks late.
+        assertEquals(-RideColumn.NUDGE, RideColumn.allowed(1.7D, 2D, 2), 1.0E-9D);
         // Inside the margin it is sent back, gently, and never harder than the ceiling's own push.
-        assertTrue(RideColumn.back(0D) < 0D && RideColumn.back(0D) > -0.05D);
-        assertEquals(-RideCeiling.MAX_PUSH, RideColumn.back(-5D), 1.0E-9D);
+        assertTrue(RideColumn.allowed(0D, 0D, 0) < 0D && RideColumn.allowed(0D, 0D, 0) > -0.05D);
+        assertEquals(-RideCeiling.MAX_PUSH, RideColumn.allowed(-5D, 0D, 0), 1.0E-9D);
+    }
+
+    @Test
+    void aRiderWhoKeepsPushingIsHeldOutsideTheBlockWhateverTheirPushIsMisjudgedBy() {
+        // The rider pushes 0.085 a tick where FMM reckons 0.065, and the client acts a tick late.
+        double x = 4D, step = 0.3D, reckoned = 0.065D, real = 0.085D;
+        double[] sent = {Double.NaN, Double.NaN};
+        for (int tick = 0; tick < 200; tick++) {
+            double now = RideColumn.brake(column(x, 60D, 0.5D), body(x, 60D, 0.5D), true, step, reckoned, 0D, 1, SWIM, wall());
+            // What was sent last tick arrives now; without one the client keeps its own speed.
+            double velocity = (Double.isNaN(sent[0]) ? RideCeiling.WATER_DRAG * step : sent[0]) + real;
+            sent[0] = now;
+            double next = Math.min(x + velocity, 5D - 0.22D);
+            step = next - x;
+            x = next;
+            assertTrue(x + 0.24D < 5D, "tick " + tick + ": the head kept out of the wall, its face at " + (x + 0.24D));
+        }
     }
 
     @Test
@@ -170,7 +188,7 @@ class RideColumnTest {
         // Stone from y 61 up: the body has nothing ahead of it, and its rider's head would go all the way in.
         RideCeiling.Blocks overhang = blocks(new int[]{5, 61, 0}, new int[]{5, 62, 0});
         double sent = RideColumn.brake(column(3.06D, 60D, 0.5D), body(3.06D, 60D, 0.5D), true, 2D, 0.065D, 0D, 2, SWIM, overhang);
-        assertEquals(-0.065D, sent, 1.0E-9D);
+        assertEquals(-RideColumn.NUDGE - 0.065D, sent, 1.0E-9D);
         assertTrue(RideColumn.meets(0.76D, 0.78D));
         assertTrue(!RideColumn.meets(0.76D, Double.POSITIVE_INFINITY));
     }
