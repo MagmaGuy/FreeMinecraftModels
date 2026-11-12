@@ -380,10 +380,16 @@ final class PetRides {
         Location view = rider.getLocation();
         Vector thrust = RideColumn.thrust(speed, view.getYaw(), view.getPitch(), forward(rider), strafe(rider));
         double up = RideCeiling.brake(over - head, climbed, thrust.getY(), delay);
-        BoundingBox headBox = RideColumn.head(box, half, head);
-        double swim = RideColumn.swim(speed);
-        double alongX = RideColumn.brake(headBox, box, true, stepX, thrust.getX(), stepZ, delay, swim, blocks);
-        double alongZ = RideColumn.brake(headBox, box, false, stepZ, thrust.getZ(), stepX, delay, swim, blocks);
+        // Beside the rider only in the water. A velocity sent for one axis carries the others as the water would
+        // leave them next tick; in the air that is not what gravity leaves, and a body leaping out of the water at
+        // a wall hung in the air against it for as long as it was sent one.
+        double alongX = Double.NaN, alongZ = Double.NaN;
+        if (isWater(at.clone().add(0D, box.getHeight() / 2D, 0D).getBlock())) {
+            BoundingBox headBox = RideColumn.head(box, half, head);
+            double swim = RideColumn.swim(speed);
+            alongX = RideColumn.brake(headBox, box, true, stepX, thrust.getX(), stepZ, delay, swim, blocks);
+            alongZ = RideColumn.brake(headBox, box, false, stepZ, thrust.getZ(), stepX, delay, swim, blocks);
+        }
         if (Double.isNaN(up) && Double.isNaN(alongX) && Double.isNaN(alongZ)) return;
         // What is not slowed is what the client would have next tick by itself.
         push(body, new Vector(Double.isNaN(alongX) ? RideCeiling.WATER_DRAG * stepX : alongX,
