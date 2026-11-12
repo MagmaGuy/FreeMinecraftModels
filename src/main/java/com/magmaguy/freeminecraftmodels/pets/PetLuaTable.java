@@ -289,7 +289,9 @@ public final class PetLuaTable {
         // steer_onto(point, cruise): as steer_to, but it ends on the point rather than about a block short of it, for
         // a pet that must reach something small, such as an item, or stand on an exact spot. Within 2 blocks of the
         // point, on its level with firm ground all the way, a walking body walks straight at it, easing off over the
-        // last block, and stands still on it. Needs a behavior holding MOVE and LOOK.
+        // last block, and stands still on it. A point a step up or down it walks straight at too, over ground that
+        // is one step at a time: down a step or into a ditch from within those 2 blocks, up a step from within 1.
+        // Needs a behavior holding MOVE and LOOK.
         method("steer_onto", args -> {
             Location target = at(args, 1);
             double cruise = cruise(args, 2);
@@ -982,6 +984,12 @@ public final class PetLuaTable {
          * ends about a block short, a waypoint more on a diagonal, and a body steps up 0.6.
          */
         static final double ONTO_REACH = 2D, ONTO_RISE = 0.6D;
+        /**
+         * steer_onto walks straight at a point across a climb of a block from this many blocks across or nearer. A
+         * body that cannot step up a block jumps one once its walking point is within a block of it, as vanilla's
+         * mobs do, so from farther off a climb is left to a path.
+         */
+        static final double ONTO_CLIMB = 1D;
         /** Within this many blocks across steer_onto stands still on its point; its share of speed at the very end. */
         static final double ONTO_DONE = 0.15D, ONTO_SLOWEST = 0.3D;
         /** How finely steer_onto checks the ground along its straight line, in blocks. */
@@ -1030,6 +1038,14 @@ public final class PetLuaTable {
          * ends about a block short does not
          * leave it there. Within {@link #ONTO_DONE} it stops once and stands still on the point. A body in water keeps
          * to its path.
+         * <p>
+         * A point a step up or down within that reach it walks straight at too, when the ground between is a single
+         * step at a time (see {@link #stepped}): off the edge of a step down, into a ditch and out of it, up a step
+         * once the point is within {@link #ONTO_CLIMB}. Such a point used to go to the path. A path to a point
+         * about a block away is done before it starts, and one to a point two blocks away starts at the middle of
+         * the block the body rests on: a body already on the edge of a step, its middle over the lower ground,
+         * walked back to that middle first, and whoever moves its point as the body moves, as a march does its
+         * leader's, got a new path each time and a body that went back and forth on the edge without getting off it.
          */
         boolean steerOnto(MindContext context, Location to, double cruise) {
             stoppedNow = false;
@@ -1041,11 +1057,18 @@ public final class PetLuaTable {
             Location here = body.getLocation();
             double dx = to.getX() - here.getX(), dz = to.getZ() - here.getZ();
             double across = Math.sqrt(dx * dx + dz * dz);
-            // Standing on the point needs no look at the ground between.
-            if (to.getWorld() != here.getWorld() || body.isInWater() || across > ONTO_REACH
-                    || Math.abs(to.getY() - here.getY()) > ONTO_RISE || (across > ONTO_DONE && !level(here, to))) {
+            if (to.getWorld() != here.getWorld() || body.isInWater() || across > ONTO_REACH) {
                 stoppedOn = null;
                 return steer(context, to, cruise);
+            }
+            // Standing on the point needs no look at the ground between.
+            boolean onItsLevel = Math.abs(to.getY() - here.getY()) <= ONTO_RISE && (across <= ONTO_DONE || level(here, to));
+            if (!onItsLevel) {
+                stoppedOn = null;
+                if (!stepped(here, to)) return steer(context, to, cruise);
+                forget();
+                double eased = speed(cruise) * Math.max(ONTO_SLOWEST, Math.min(1D, across));
+                return context.actuator().moveDirect(to, Math.max(MIN_SPEED, eased));
             }
             forget();
             if (across <= ONTO_DONE) {
@@ -1102,6 +1125,33 @@ public final class PetLuaTable {
                 if (standing(world, x, feet, z) != feet) return false;
             }
             return true;
+        }
+
+        /**
+         * Whether a body standing at from can walk straight to to across a step: every block the line crosses, in
+         * steps of {@link #ONTO_SAMPLE} and starting with the one the body's middle is over, has room for its feet
+         * and head over firm ground a step up from the block before, level with it or a step down (see
+         * {@link #footing}), and the last one is at to's height. A body on the edge of a step has its middle over
+         * the lower ground already, which is why its own block counts. A line that climbs anywhere counts only from
+         * within {@link #ONTO_CLIMB}.
+         */
+        static boolean stepped(Location from, Location to) {
+            World world = from.getWorld();
+            int feet = from.getBlockY();
+            double dx = to.getX() - from.getX(), dz = to.getZ() - from.getZ();
+            double across = Math.sqrt(dx * dx + dz * dz);
+            int steps = Math.max(1, (int) Math.ceil(across / ONTO_SAMPLE));
+            boolean climbs = false;
+            for (int step = 0; step <= steps; step++) {
+                double share = (double) step / steps;
+                int x = (int) Math.floor(from.getX() + dx * share), z = (int) Math.floor(from.getZ() + dz * share);
+                int next = footing(world, x, feet, z);
+                if (next == NO_FOOTING) return false;
+                // Its own block a step up is a body partway up that step, not a climb ahead of it.
+                if (next > feet && step > 0) climbs = true;
+                feet = next;
+            }
+            return feet == to.getBlockY() && (!climbs || across <= ONTO_CLIMB);
         }
 
         void forget() {
@@ -1685,6 +1735,19 @@ public final class PetLuaTable {
             if (y - 1 < world.getMinHeight() || y + 1 >= world.getMaxHeight()) return NO_FOOTING;
             if (!room(world.getBlockAt(x, y, z)) || !firm(world.getBlockAt(x, y - 1, z))) continue;
             return room(world.getBlockAt(x, y + 1, z)) ? y : NO_FOOTING;
+        }
+        return NO_FOOTING;
+    }
+
+    /**
+     * The block a body stands in at this column, a step up from feet, level with it or a step down: room for its feet
+     * and head over firm ground. NO_FOOTING when none of the three fits: a wall, a drop of two or more, or liquid.
+     */
+    private static int footing(World world, int x, int feet, int z) {
+        for (int y = feet + 1; y >= feet - 1; y--) {
+            if (y - 1 < world.getMinHeight() || y + 1 >= world.getMaxHeight()) continue;
+            if (room(world.getBlockAt(x, y, z)) && room(world.getBlockAt(x, y + 1, z))
+                    && firm(world.getBlockAt(x, y - 1, z))) return y;
         }
         return NO_FOOTING;
     }
