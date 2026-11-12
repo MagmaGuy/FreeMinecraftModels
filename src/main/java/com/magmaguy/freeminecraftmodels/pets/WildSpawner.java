@@ -4,6 +4,7 @@ import com.magmaguy.freeminecraftmodels.config.PetsConfig;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.GameRule;
+import org.bukkit.HeightMap;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -188,9 +189,19 @@ final class WildSpawner {
 
     /** That spot whatever the species' biomes, light and heights, as a test spawn takes it. */
     private static Location openSpot(PetSpecies pet, World world, int x, int z) {
-        int surface = world.getHighestBlockYAt(x, z);
-        int y = pet.wildSpawn().placement() == PetSpecies.Placement.WATER ? surface : surface + 1;
-        return standingSpot(world, x, y, z, pet.wildSpawn().placement());
+        PetSpecies.Placement placement = pet.wildSpawn().placement();
+        int surface = world.getHighestBlockYAt(x, z, surface(placement));
+        int y = placement == PetSpecies.Placement.WATER ? surface : surface + 1;
+        return standingSpot(world, x, y, z, placement);
+    }
+
+    /**
+     * The surface a column's member is put on. One that stands on the ground goes under the trees, where vanilla puts
+     * its animals: read off the top of the leaves, a group stocked in a forest stood on the treetops and stayed
+     * there. The others take the top of whatever is there.
+     */
+    static HeightMap surface(PetSpecies.Placement placement) {
+        return placement == PetSpecies.Placement.GROUND ? HeightMap.MOTION_BLOCKING_NO_LEAVES : HeightMap.MOTION_BLOCKING;
     }
 
     // ---- topping up around players -----------------------------------------------------------------------------
@@ -365,8 +376,8 @@ final class WildSpawner {
 
     /**
      * Where a member may stand in this column, or null. Ground and water members stand at the given height, so a
-     * top-up's caves and deep water count. Air and water-surface members float just over the column's surface, where
-     * the pet's hover takes over.
+     * top-up's caves and deep water count; a ground member never stands on a tree's leaves. Air and water-surface
+     * members float just over the column's surface, where the pet's hover takes over.
      */
     static Location standingSpot(World world, int x, int y, int z, PetSpecies.Placement placement) {
         switch (placement) {
@@ -382,7 +393,9 @@ final class WildSpawner {
             case GROUND -> {
                 Block feet = world.getBlockAt(x, y, z);
                 if (!feet.isPassable() || feet.isLiquid() || !feet.getRelative(0, 1, 0).isPassable()) return null;
-                if (!feet.getRelative(0, -1, 0).getType().isSolid()) return null;
+                // Solid ground, and not a tree's leaves, which a top-up's random height can land on as well.
+                Material under = feet.getRelative(0, -1, 0).getType();
+                if (PetMotion.isLeaves(under) || !under.isSolid()) return null;
                 return new Location(world, x + 0.5D, y, z + 0.5D);
             }
             case WATER -> {

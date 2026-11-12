@@ -1,6 +1,12 @@
 package com.magmaguy.freeminecraftmodels.pets;
 
+import org.bukkit.HeightMap;
+import org.bukkit.Material;
+import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.junit.jupiter.api.Test;
+
+import java.lang.reflect.Proxy;
 
 import java.util.HashSet;
 import java.util.List;
@@ -21,6 +27,44 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * and the clusters a new chunk now and then gets in place of a group.
  */
 class WildSpawnerTest {
+    /** A forest floor: stone up to y 63 with air above it, and at x 1 the top of a tree, spruce leaves at y 63. */
+    private static Block forestBlock(World world, int x, int y, int z) {
+        Material type = y > 63 ? Material.AIR : x == 1 && y == 63 ? Material.SPRUCE_LEAVES : Material.STONE;
+        return (Block) Proxy.newProxyInstance(Block.class.getClassLoader(), new Class<?>[]{Block.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "getType" -> type;
+                    case "isPassable" -> type == Material.AIR;
+                    case "isLiquid" -> false;
+                    case "getRelative" -> forestBlock(world, x + (Integer) args[0], y + (Integer) args[1], z + (Integer) args[2]);
+                    case "hashCode" -> System.identityHashCode(proxy);
+                    case "equals" -> proxy == args[0];
+                    case "toString" -> type.name();
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    private static World forest() {
+        return (World) Proxy.newProxyInstance(World.class.getClassLoader(), new Class<?>[]{World.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "getBlockAt" -> forestBlock((World) proxy, (Integer) args[0], (Integer) args[1], (Integer) args[2]);
+                    case "hashCode" -> System.identityHashCode(proxy);
+                    case "equals" -> proxy == args[0];
+                    case "toString" -> "forest";
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    @Test
+    void aGroundMemberIsPutUnderTheTreesAndNeverOnTheirLeaves() {
+        assertEquals(HeightMap.MOTION_BLOCKING_NO_LEAVES, WildSpawner.surface(PetSpecies.Placement.GROUND),
+                "a walker's column is read under the leaves");
+        for (PetSpecies.Placement other : PetSpecies.Placement.values())
+            if (other != PetSpecies.Placement.GROUND)
+                assertEquals(HeightMap.MOTION_BLOCKING, WildSpawner.surface(other), other + " takes the top of what is there");
+        // Open air over spruce leaves: feet and head fit, and the leaves are solid, yet it is a treetop.
+        assertNull(WildSpawner.standingSpot(forest(), 1, 64, 0, PetSpecies.Placement.GROUND), "a treetop is no spot");
+    }
+
     @Test
     void packStepsStayWithinFiveBlocksAndCentreOnZero() {
         Random random = new Random(7);
