@@ -62,6 +62,30 @@ class RideCeilingTest {
     }
 
     @Test
+    void aBankTheBodyHeadsForIsNotACeiling() {
+        // Frost's dash out of the water: a bank 4 blocks ahead, its top block at y 61 above the body's top (60.72)
+        // and under its rider's head. The body cannot get under it: the bank's face is in the way.
+        RideCeiling.Blocks bank = blocks(new int[]{4, 59, 0}, new int[]{4, 60, 0}, new int[]{4, 61, 0},
+                new int[]{5, 61, 0}, new int[]{6, 61, 0});
+        assertEquals(Double.POSITIVE_INFINITY, RideCeiling.above(body(0.5D, 60.2D, 0.5D), 6D, 0D, 68D, bank));
+    }
+
+    @Test
+    void nothingPastAWallIsACeiling() {
+        // A wall 2 blocks ahead, and ice over open water past it: the body stops at the wall.
+        RideCeiling.Blocks walled = blocks(new int[]{2, 60, 0}, new int[]{4, 62, 0});
+        assertEquals(Double.POSITIVE_INFINITY, RideCeiling.above(body(0.5D, 60.2D, 0.5D), 5D, 0D, 68D, walled));
+        // Without the wall the ice is over where it is heading.
+        assertEquals(62D, RideCeiling.above(body(0.5D, 60.2D, 0.5D), 5D, 0D, 68D, blocks(new int[]{4, 62, 0})));
+    }
+
+    @Test
+    void aLedgeTheBodyFitsUnderIsACeiling() {
+        // A ledge 3 blocks ahead with open water under it at the body's own height: its rider's head would meet it.
+        assertEquals(61D, RideCeiling.above(body(0.5D, 60.2D, 0.5D), 4D, 0D, 68D, blocks(new int[]{3, 61, 0})));
+    }
+
+    @Test
     void theLowestOfTwoCeilingsCounts() {
         assertEquals(62D, RideCeiling.above(body(0.5D, 60.2D, 0.5D), 0D, 0D, 68D,
                 blocks(new int[]{0, 64, 0}, new int[]{0, 62, 0})));

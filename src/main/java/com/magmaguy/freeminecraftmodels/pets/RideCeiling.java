@@ -36,6 +36,8 @@ final class RideCeiling {
     /** A ridden nautilus's thrust in water, in blocks per tick per point of movement speed, as vanilla moves it. */
     static final double THRUST = 0.0325D;
     private static final double EDGE = 1.0E-3D;
+    /** The step the way ahead is walked in, in blocks: under the body's own width, so no full block is stepped over. */
+    private static final double STRIDE = 0.25D;
 
     private RideCeiling() {
     }
@@ -59,14 +61,35 @@ final class RideCeiling {
     }
 
     /**
-     * The underside of the lowest block over a body: the lowest bottom of a collision box that starts at or above the
-     * body's top, below {@code upTo}, and lies over the body's footprint moved by ({@code aheadX}, {@code aheadZ}),
-     * the way it is travelling. Positive infinity when nothing is there. Blocks beside the body are not over it:
-     * vanilla keeps the body's own box out of them.
+     * The underside of the lowest block over a body, and over each place it gets to on its way ({@code aheadX},
+     * {@code aheadZ}) from where it is: see {@link #over}. Positive infinity when nothing is there.
+     * <p>
+     * The way ahead ends at the first place the body's own box does not fit. A bank or a wall in its path stops the
+     * body, as vanilla keeps its box out of blocks, so it is not a ceiling, and neither is anything past it. Counted
+     * as one, the bank a pet dashed at out of the water had its rider's head "in" it from several blocks off, and the
+     * pet was sent down at {@link #MAX_PUSH} a tick, into the foot of the bank it would have leapt onto.
      */
     static double above(BoundingBox body, double aheadX, double aheadZ, double upTo, Blocks blocks) {
-        double minX = body.getMinX() + Math.min(0D, aheadX) + EDGE, maxX = body.getMaxX() + Math.max(0D, aheadX) - EDGE;
-        double minZ = body.getMinZ() + Math.min(0D, aheadZ) + EDGE, maxZ = body.getMaxZ() + Math.max(0D, aheadZ) - EDGE;
+        double lowest = over(body, upTo, blocks);
+        double far = Math.sqrt(aheadX * aheadX + aheadZ * aheadZ);
+        int strides = (int) Math.ceil(far / STRIDE);
+        for (int stride = 1; stride <= strides; stride++) {
+            double share = (double) stride / strides;
+            BoundingBox there = body.clone().shift(aheadX * share, 0D, aheadZ * share);
+            if (!BodyFit.colliders(there, blocks).isEmpty()) break;
+            lowest = Math.min(lowest, over(there, upTo, blocks));
+        }
+        return lowest;
+    }
+
+    /**
+     * The underside of the lowest block over a body: the lowest bottom of a collision box that starts at or above the
+     * body's top, below {@code upTo}, and lies over the body's footprint. Positive infinity when nothing is there.
+     * Blocks beside the body are not over it: vanilla keeps the body's own box out of them.
+     */
+    static double over(BoundingBox body, double upTo, Blocks blocks) {
+        double minX = body.getMinX() + EDGE, maxX = body.getMaxX() - EDGE;
+        double minZ = body.getMinZ() + EDGE, maxZ = body.getMaxZ() - EDGE;
         double from = body.getMaxY() - EDGE;
         double lowest = Double.POSITIVE_INFINITY;
         for (int x = floor(minX); x <= floor(maxX); x++)
