@@ -619,8 +619,11 @@ public final class PetManager {
         redrawHealthDisplay(control);
         // Its first frame carries on from the old model's, so the switch of bodies does not show in its animation.
         modeled.getAnimationComponent().continueFrom(oldModel.getAnimationComponent());
-        // Before anyone sees it: a client turns a horse's new rider to the horse's view.
-        if (facing != null) entity.setRotation(facing.getYaw(), facing.getPitch());
+        // Before anyone sees it: a horse turns its new rider to its view, on the server and on their client, and the
+        // view it uses is its head's from the tick before. Bukkit's setRotation leaves that one at 0 on a body
+        // spawned this tick, which turned the rider to face south as they surfaced.
+        if (facing != null && !NMSManager.getAdapter().snapRotation(entity, facing.getYaw(), facing.getPitch()))
+            entity.setRotation(facing.getYaw(), facing.getPitch());
         // Shown now, in the tick the old model goes, rather than at the next viewer refresh up to 4 ticks later: the pet
         // never vanishes, and its rider's client gets the new body to steer at once.
         modeled.getSkeleton().getSkeletonWatchers().tickPrimaryThread();
