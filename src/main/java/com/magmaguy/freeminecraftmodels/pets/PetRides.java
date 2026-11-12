@@ -80,6 +80,8 @@ final class PetRides {
      * solid block hurts them. A rider's head needs that much room.
      */
     static final double HEAD_PROBE = 0.8D;
+    /** Half the height of the box tested round a rider's eyes, in blocks: vanilla's is as good as flat. */
+    private static final double PROBE_REACH = 0.01D;
     /** The most ticks a rider's client is taken to need to act on a velocity it is sent, however slow its connection. */
     private static final int MAX_DELAY_TICKS = 10;
     private final PetManager manager;
@@ -407,6 +409,34 @@ final class PetRides {
         if (ride != null && ride.diving)
             manager.rebody(control, control.species().body().getKey().toString(), null, null, PetRides::unriddenSpot);
         getOff(control);
+    }
+
+    /**
+     * Whether a ridden pet's rider is suffocating, when vanilla says so. Vanilla hurts a player while a box
+     * {@link #HEAD_PROBE} of their width round their eyes, 0.48 blocks, touches a solid block. A diving penguin's
+     * nautilus body is 0.44 wide and its rider sits in its middle, so swum flat against a wall it left 0.02 blocks of
+     * that box in the wall, and its rider suffocated beside a wall their head was never in.
+     */
+    static boolean suffocates(Player rider, Entity body) {
+        Location eyes = rider.getEyeLocation();
+        double half = HEAD_PROBE * rider.getWidth() / 2D;
+        BoundingBox probe = new BoundingBox(eyes.getX() - half, eyes.getY() - PROBE_REACH, eyes.getZ() - half,
+                eyes.getX() + half, eyes.getY() + PROBE_REACH, eyes.getZ() + half);
+        return headInBlock(probe, body.getBoundingBox(), RideCeiling.of(body.getWorld()));
+    }
+
+    /**
+     * Whether the part of vanilla's suffocation box that is over the body carrying the rider is in a block.
+     * Vanilla keeps the body's own box out of the blocks beside it, so the part of the test that sticks out past a
+     * narrow body is in a wall whenever the body touches one, and says nothing about the rider's head. What is over
+     * the body is in a block only when the head is: under a block over the body. A rider who is not over their body
+     * at all is left to vanilla.
+     */
+    static boolean headInBlock(BoundingBox probe, BoundingBox body, RideCeiling.Blocks blocks) {
+        double minX = Math.max(probe.getMinX(), body.getMinX()), maxX = Math.min(probe.getMaxX(), body.getMaxX());
+        double minZ = Math.max(probe.getMinZ(), body.getMinZ()), maxZ = Math.min(probe.getMaxZ(), body.getMaxZ());
+        if (minX >= maxX || minZ >= maxZ) return true;
+        return !BodyFit.colliders(new BoundingBox(minX, probe.getMinY(), minZ, maxX, probe.getMaxY(), maxZ), blocks).isEmpty();
     }
 
     /**

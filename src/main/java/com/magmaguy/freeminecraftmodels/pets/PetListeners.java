@@ -130,6 +130,21 @@ public final class PetListeners implements Listener {
             event.setCancelled(true);
     }
 
+    /**
+     * A ridden pet's rider only suffocates with their head in a block. Vanilla's test is wider than a diving pet's
+     * body, so it also fires beside any wall that body swims against (see {@link PetRides#suffocates}).
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onRiderSuffocation(EntityDamageEvent event) {
+        if (event.getCause() != EntityDamageEvent.DamageCause.SUFFOCATION || !(event.getEntity() instanceof Player player))
+            return;
+        PetManager manager = PetManager.get();
+        Entity vehicle = player.getVehicle();
+        if (manager == null || vehicle == null) return;
+        PetControl pet = manager.pet(vehicle);
+        if (pet != null && manager.rides().isRidden(pet) && !PetRides.suffocates(player, vehicle)) event.setCancelled(true);
+    }
+
     /** Damage that went through shows the pet's health display and holds back its own healing a while. */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onHurt(EntityDamageEvent event) {
