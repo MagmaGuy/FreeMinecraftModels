@@ -22,7 +22,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Marches on made-up ground: flat at feet height 64, with walls where a test puts them. Marchers walk toward the spots
  * the march gives them each tick as march.lua and steer_onto walk them: at the module's pace times each one's speed
  * stat, hurrying when more than 3 blocks behind, easing off over the last block, and standing still within 0.3 of the
- * spot. So a whole march plays out without a server.
+ * spot. A spot a level up or down goes to the body's pathfinder, as steer_onto hands it over: the marcher walks at its
+ * pace until the spot is a block away, which the pathfinder takes as reached. So a whole march plays out without a
+ * server.
  */
 class MarchTest {
     private static final int FEET = 64;
@@ -30,6 +32,11 @@ class MarchTest {
     private static final double SPACING = 1.5;
     /** Blocks a tick at a speed stat of 1, and march.lua's hurry, stop and hurry distance. */
     private static final double PACE = 0.15, CATCH_UP = 1.6, CLOSE = 0.3, BEHIND = 3;
+    /**
+     * steer_onto walks straight at a spot within this much of the body's height, and hands one further up or down to
+     * the pathfinder, whose walk ends this far short of it.
+     */
+    private static final double RISE = 0.6, PATH_SHORT = 1;
     /** steer_onto's least share of its pace over the last block, and its floor: MIN_SPEED over march.lua's 4 x speed. */
     private static final double SLOWEST_SHARE = 0.3, FLOOR = PACE * 0.25 / (4 * 0.18);
 
@@ -108,6 +115,23 @@ class MarchTest {
         for (int tick = 0; tick < 400; tick++) sim.step();
         assertFalse(sim.march.over(), "the march goes on");
         assertTrue(sim.at(0).getX() > HOME.getX() + 8, "the leader walked out along the corridor: " + sim.at(0));
+    }
+
+    @Test
+    void theLeaderWalksDownAStepAcrossItsWayAndTheLineFollows() {
+        // A step down across the way at x 10, as a terrace on a hillside.
+        MarchRoute.Ground terrace = (x, feet, z) -> {
+            int height = x >= 10 ? FEET - 1 : FEET;
+            return Math.abs(x) > 200 || Math.abs(z) > 200 || Math.abs(height - feet) > 1 ? MarchRoute.Ground.NO_FOOTING : height;
+        };
+        Sim sim = new Sim(terrace, 4, 2400);
+        for (int tick = 0; tick < 500; tick++) sim.step();
+        assertFalse(sim.march.over(), "the march goes on");
+        assertTrue(sim.at(0).getX() > 20, "the leader walked down the step and on: " + sim.at(0));
+        assertEquals(FEET - 1, sim.at(0).getY(), 1.0E-9);
+        assertEquals(HOME.getZ(), sim.at(0).getZ(), 0.05, "straight on, with no turn at the step");
+        for (int rank = 1; rank <= 4; rank++)
+            assertTrue(sim.at(rank).getX() > 10, "rank " + rank + " came down the step behind it: " + sim.at(rank));
     }
 
     @Test
@@ -287,6 +311,10 @@ class MarchTest {
                 Vector spot = march.spot(id, position, now, ground);
                 if (march.over()) break;
                 if (spot != null) walk(position, spot, speeds.get(id));
+                // A body stands on the ground under it.
+                int feet = ground.standing((int) Math.floor(position.getX()), (int) Math.floor(position.getY()),
+                        (int) Math.floor(position.getZ()));
+                if (feet != MarchRoute.Ground.NO_FOOTING) position.setY(feet);
             }
             march.sweep(now);
             now++;
@@ -296,9 +324,16 @@ class MarchTest {
         private static void walk(Vector position, Vector spot, double speed) {
             double dx = spot.getX() - position.getX(), dz = spot.getZ() - position.getZ();
             double distance = Math.sqrt(dx * dx + dz * dz);
-            position.setY(spot.getY());
-            if (distance <= CLOSE) return;
             double hurry = distance > BEHIND ? CATCH_UP : 1;
+            if (Math.abs(spot.getY() - position.getY()) > RISE) {
+                // Off its level: the pathfinder's walk, at its pace with no easing, which ends a block short.
+                if (distance <= PATH_SHORT) return;
+                double step = Math.min(PACE * speed * hurry, distance - PATH_SHORT);
+                position.setX(position.getX() + dx / distance * step);
+                position.setZ(position.getZ() + dz / distance * step);
+                return;
+            }
+            if (distance <= CLOSE) return;
             double pace = Math.max(FLOOR, PACE * speed * hurry * Math.max(SLOWEST_SHARE, Math.min(1, distance)));
             double step = Math.min(pace, distance);
             position.setX(position.getX() + dx / distance * step);

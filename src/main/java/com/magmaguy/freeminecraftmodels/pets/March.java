@@ -38,6 +38,14 @@ final class March {
     static final double MIN_LOOKAHEAD = 0.5D;
     /** A straight leg goes on from this far before its end, beyond any walking point, so the leader keeps its pace. */
     static final double LEG_MARGIN = 2.25D;
+    /**
+     * How far ahead the leader's walking point lies when a step up or down is between them. steer_onto walks a body
+     * straight at a point on its own level, and hands one a level off to the body's pathfinder, which takes a point
+     * within about a block as reached: with its point a block ahead, down a step, the leader stood at the top until
+     * it counted as stuck. This far, the pathfinder walks it over the step. No farther than a straight leg's margin,
+     * so the point never passes the end of the leg.
+     */
+    static final double STEP_REACH = LEG_MARGIN;
     /** The hairpin's walk to the side, so the way back passes beside the way out. */
     static final double LANE = 4D;
     /** A leader this near where the march was called, on the way back, ends it. */
@@ -251,7 +259,16 @@ final class March {
         double along = along(at) + lookahead();
         if (phase != Phase.HAIRPIN) along = Math.min(along, legLength);
         double x = legOrigin.getX() + headingX * along, z = legOrigin.getZ() + headingZ * along;
-        int feet = ground.standing((int) Math.floor(x), (int) Math.floor(at.getY()), (int) Math.floor(z));
+        int level = (int) Math.floor(at.getY());
+        int feet = ground.standing((int) Math.floor(x), level, (int) Math.floor(z));
+        if (feet != MarchRoute.Ground.NO_FOOTING && feet != level) {
+            // A step lies between the leader and its point: the point goes on past the step (see STEP_REACH).
+            double far = along(at) + STEP_REACH;
+            if (phase != Phase.HAIRPIN) far = Math.min(far, legLength);
+            double farX = legOrigin.getX() + headingX * far, farZ = legOrigin.getZ() + headingZ * far;
+            int farFeet = ground.standing((int) Math.floor(farX), feet, (int) Math.floor(farZ));
+            if (far > along && farFeet != MarchRoute.Ground.NO_FOOTING) return new Vector(farX, farFeet, farZ);
+        }
         return new Vector(x, feet == MarchRoute.Ground.NO_FOOTING ? at.getY() : feet, z);
     }
 
