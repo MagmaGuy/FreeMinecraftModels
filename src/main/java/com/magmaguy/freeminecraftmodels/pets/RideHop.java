@@ -31,13 +31,35 @@ final class RideHop {
     }
 
     /**
-     * The pace a diving pet carries after a step of ({@code stepX}, {@code stepZ}) blocks, given the pace it carried
-     * before: the step's length, or what a tick of coasting through water leaves of the earlier pace when that is
-     * more. A beach's steps stop a swimming body block by block, so by the tick it surfaces its last step is a tenth
-     * of a block however fast it came in (0.11 measured, from 0.6); the pace remembers the swim for about a second.
+     * The pace a diving pet came in at: its longest step of the last second. A beach's steps stop a swimming body
+     * block by block, so by the tick it surfaces its last step is a tenth of a block however fast it came in (0.11
+     * measured in four runs, from 0.6), and it has been climbing them for about half a second. Letting the pace fade
+     * as coasting through water would left 0.2 to 0.4 of it by then and a hop of a quarter block (jobs 8a8f32aa,
+     * 26801896), so the swim it came in from is remembered whole for a second and then not at all.
      */
-    static double pace(double before, double stepX, double stepZ) {
-        return Math.max(Math.sqrt(stepX * stepX + stepZ * stepZ), before * RideCeiling.WATER_DRAG);
+    static final class Pace {
+        /** Ticks a step is remembered for: a second. */
+        static final int TICKS = 20;
+        private final double[] steps = new double[TICKS];
+        private int next;
+
+        /** Notes this tick's step, of ({@code stepX}, {@code stepZ}) blocks. */
+        void step(double stepX, double stepZ) {
+            steps[next] = Math.sqrt(stepX * stepX + stepZ * stepZ);
+            next = (next + 1) % TICKS;
+        }
+
+        /** Forgets every step, as when the pet is not swimming. */
+        void clear() {
+            java.util.Arrays.fill(steps, 0D);
+        }
+
+        /** The longest step of the last {@link #TICKS} ticks, in blocks. */
+        double blocks() {
+            double longest = 0D;
+            for (double step : steps) longest = Math.max(longest, step);
+            return longest;
+        }
     }
 
     /**

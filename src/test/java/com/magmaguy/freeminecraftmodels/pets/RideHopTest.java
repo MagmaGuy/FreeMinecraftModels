@@ -76,15 +76,17 @@ class RideHopTest {
 
     @Test
     void thePaceOutlastsTheBeachsSteps() {
-        // Swimming in at 0.6 a tick, then stopped by the beach's steps for 5 ticks at a tenth of a block.
-        double pace = 0D;
-        for (int tick = 0; tick < 10; tick++) pace = RideHop.pace(pace, 0.6D, 0D);
-        assertEquals(0.6D, pace, 1.0E-9D);
-        for (int tick = 0; tick < 5; tick++) pace = RideHop.pace(pace, 0.1D, 0D);
-        assertEquals(0.6D * Math.pow(0.9D, 5D), pace, 1.0E-9D);
-        // Held still for three seconds it is gone, down to the step it still makes.
-        for (int tick = 0; tick < 60; tick++) pace = RideHop.pace(pace, 0.01D, 0D);
-        assertEquals(0.01D, pace, 1.0E-9D);
+        // Swimming in at 0.6 a tick, then stopped by the beach's steps for 15 ticks at a tenth of a block.
+        RideHop.Pace pace = new RideHop.Pace();
+        for (int tick = 0; tick < 10; tick++) pace.step(0.6D, 0D);
+        assertEquals(0.6D, pace.blocks(), 1.0E-9D);
+        for (int tick = 0; tick < 15; tick++) pace.step(0D, 0.1D);
+        assertEquals(0.6D, pace.blocks(), 1.0E-9D);
+        // A second after its last fast step it is gone, down to the step it still makes.
+        for (int tick = 0; tick < 5; tick++) pace.step(0.1D, 0D);
+        assertEquals(0.1D, pace.blocks(), 1.0E-9D);
+        pace.clear();
+        assertEquals(0D, pace.blocks());
     }
 
     @Test

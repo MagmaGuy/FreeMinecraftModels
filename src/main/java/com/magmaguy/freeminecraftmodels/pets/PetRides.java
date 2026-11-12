@@ -105,8 +105,8 @@ final class PetRides {
         private long swapAgainAt = Long.MIN_VALUE;
         // The pet tick from which its rider's client may be sent another correction (see CORRECTION_TICKS).
         private long correctAgainAt = Long.MIN_VALUE;
-        // The pace it dives at, in blocks a tick: its last step, or what coasting would have left of a faster one.
-        private double pace;
+        // The pace it dives at: its steps of the last second.
+        private final RideHop.Pace pace = new RideHop.Pace();
 
         private Ride(Unridden before, UUID rider) {
             this.before = before;
@@ -256,12 +256,12 @@ final class PetRides {
                 boolean airborne = depth == 0 && !body.isOnGround();
                 boolean diving = diving(ride.diving, depth, eyes, isWater(rider.getEyeLocation().getBlock()), airborne);
                 Location swam = body.getLocation();
-                ride.pace = !ride.diving || Double.isNaN(ride.lastX) ? 0D
-                        : RideHop.pace(ride.pace, swam.getX() - ride.lastX, swam.getZ() - ride.lastZ);
+                if (!ride.diving || Double.isNaN(ride.lastX)) ride.pace.clear();
+                else ride.pace.step(swam.getX() - ride.lastX, swam.getZ() - ride.lastZ);
                 if (diving != ride.diving && PetManager.ticks() >= ride.swapAgainAt) {
                     // Leaving the water: surfacing with its feet still in it, not landing from a leap.
                     boolean leavesWater = !diving && depth > 0;
-                    double pace = ride.pace;
+                    double pace = ride.pace.blocks();
                     LivingEntity next = swap(control, rider, diving);
                     if (next == null) {
                         ride.swapAgainAt = PetManager.ticks() + SWAP_RETRY_TICKS;
