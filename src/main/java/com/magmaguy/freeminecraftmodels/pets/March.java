@@ -255,7 +255,19 @@ final class March {
         double x = legOrigin.getX() + headingX * along, z = legOrigin.getZ() + headingZ * along;
         // The point is at most a block ahead, at the height of the ground there: a step up or down from the leader's
         // own when a step lies between them. steer_onto walks the leader straight at it either way.
-        int feet = ground.standing((int) Math.floor(x), (int) Math.floor(at.getY()), (int) Math.floor(z));
+        int level = (int) Math.floor(at.getY());
+        int feet = ground.standing((int) Math.floor(x), level, (int) Math.floor(z));
+        if (feet == MarchRoute.Ground.NO_FOOTING) {
+            // The leg was found by standing on it every half block from its start, and a slanting leg crosses the
+            // corners of blocks between those: the point is over one that is no ground, a hole beside the line. With
+            // its point in the air there the leader had nowhere to walk and stood until it counted as stuck. Its
+            // point is the next place the leg's run stood on.
+            double stood = Math.ceil(along / MarchRoute.STEP - 1.0E-9D) * MarchRoute.STEP;
+            if (phase != Phase.HAIRPIN) stood = Math.min(stood, legLength);
+            double stoodX = legOrigin.getX() + headingX * stood, stoodZ = legOrigin.getZ() + headingZ * stood;
+            int stoodFeet = ground.standing((int) Math.floor(stoodX), level, (int) Math.floor(stoodZ));
+            if (stoodFeet != MarchRoute.Ground.NO_FOOTING) return new Vector(stoodX, stoodFeet, stoodZ);
+        }
         return new Vector(x, feet == MarchRoute.Ground.NO_FOOTING ? at.getY() : feet, z);
     }
 

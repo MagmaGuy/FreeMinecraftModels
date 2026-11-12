@@ -202,6 +202,41 @@ class MarchTest {
     }
 
     @Test
+    void theLeadersWalkingPointIsNeverOverAHoleItsLegSteppedOver() {
+        // A leg slanting across the blocks, 0.8 along x for 0.6 along z. Standing on it every half block from its
+        // start misses the corners of some blocks it crosses: the first such block past 3 blocks out is a hole.
+        double dx = 0.8, dz = 0.6;
+        Set<Long> stoodOn = new HashSet<>();
+        for (int half = 0; half <= 48; half++)
+            stoodOn.add(column(HOME.getX() + dx * half * 0.5, HOME.getZ() + dz * half * 0.5));
+        long hole = Long.MIN_VALUE;
+        for (double along = 3; along < 20 && hole == Long.MIN_VALUE; along += 0.01) {
+            long crossed = column(HOME.getX() + dx * along, HOME.getZ() + dz * along);
+            if (!stoodOn.contains(crossed)) hole = crossed;
+        }
+        assertTrue(hole != Long.MIN_VALUE, "the leg crosses a block its run never stood on");
+        long pit = hole;
+        MarchRoute.Ground holed = (x, feet, z) -> Math.abs(x) > 200 || Math.abs(z) > 200 || column(x, z) == pit
+                || Math.abs(feet - FEET) > 1 ? MarchRoute.Ground.NO_FOOTING : FEET;
+        assertEquals(24.0, MarchRoute.run(holed, HOME, dx, dz, 24).length(), 1.0E-9, "the run steps over the hole");
+        Sim sim = new Sim(holed, 2400, new double[]{dx, dz}, 1D, 1D, 1D, 1D, 1D);
+        while (sim.march.phase() == March.Phase.FORMING) sim.step();
+        Vector before = sim.at(0).clone();
+        for (int tick = 0; tick < 400; tick++) {
+            sim.step();
+            Vector point = sim.leaderPoint;
+            assertTrue(holed.standing((int) Math.floor(point.getX()), FEET, (int) Math.floor(point.getZ())) == FEET,
+                    "the leader's point is on ground at tick " + tick + ": " + point);
+        }
+        assertFalse(sim.march.over(), "the march goes on");
+        assertTrue(sim.at(0).distance(before) > 12, "the leader walked on past the hole: " + sim.at(0));
+    }
+
+    private static long column(double x, double z) {
+        return ((long) Math.floor(x) << 32) ^ ((long) Math.floor(z) & 0xFFFFFFFFL);
+    }
+
+    @Test
     void aMarchingLineStaysStraightAndEvenlySpaced() {
         Sim sim = new Sim(OPEN, 6, 2400);
         while (sim.at(0).getX() < 25) {
@@ -331,6 +366,8 @@ class MarchTest {
         long now = START;
 
         final Map<UUID, Double> speeds = new LinkedHashMap<>();
+        /** The spot the march last gave its leader. */
+        Vector leaderPoint;
 
         Sim(MarchRoute.Ground ground, int followers, long durationTicks) {
             this(ground, durationTicks, 1D, ones(followers));
@@ -338,6 +375,12 @@ class MarchTest {
 
         /** As above, with the leader's speed stat and each follower's. */
         Sim(MarchRoute.Ground ground, long durationTicks, double leaderSpeed, double... followerSpeeds) {
+            this(ground, durationTicks, new double[]{1D, 0D}, leaderSpeed, followerSpeeds);
+        }
+
+        /** As above, setting off along the unit heading {dx, dz}. */
+        Sim(MarchRoute.Ground ground, long durationTicks, double[] heading, double leaderSpeed,
+            double... followerSpeeds) {
             this.ground = ground;
             int followers = followerSpeeds.length;
             UUID leader = new UUID(0, 0);
@@ -358,7 +401,7 @@ class MarchTest {
                 speeds.put(id, followerSpeeds[index]);
                 all[index + 1] = followerSpeeds[index];
             }
-            march = new March(leader, HOME, marchers, at, all, 1, 0, SPACING, now, durationTicks);
+            march = new March(leader, HOME, marchers, at, all, heading[0], heading[1], SPACING, now, durationTicks);
         }
 
         private static double[] ones(int count) {
@@ -377,6 +420,7 @@ class MarchTest {
                 Vector position = positions.get(id);
                 Vector spot = march.spot(id, position, now, ground);
                 if (march.over()) break;
+                if (spot != null && id.equals(march.leader())) leaderPoint = spot.clone();
                 if (spot != null) walk(position, spot, speeds.get(id));
                 // A body stands on the ground under it.
                 int feet = ground.standing((int) Math.floor(position.getX()), (int) Math.floor(position.getY()),
