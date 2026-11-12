@@ -33,6 +33,7 @@ permissions:
       freeminecraftmodels.bypassregionprotection: true
       freeminecraftmodels.pets.admin: true
       freeminecraftmodels.pets.give: true
+      freeminecraftmodels.mobbehaviors.admin: true
   freeminecraftmodels.admin:
     description: Allows access to the admin content browser
     default: op
@@ -62,4 +63,7 @@ permissions:
     default: op
   freeminecraftmodels.pets.give:
     description: Allows /fmm givepet, which gives a player a pet (for shops and rewards; works from the console)
+    default: op
+  freeminecraftmodels.mobbehaviors.admin:
+    description: Allows /fmm mobbehavior, which overrides a mob's AI with Lua mob behaviors and gives it back
     default: op

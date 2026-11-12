@@ -151,6 +151,11 @@ public final class PetManager {
         return bodyKey != null && entity.getPersistentDataContainer().has(bodyKey, PersistentDataType.BYTE);
     }
 
+    /** The Mind host the pets run on, which mob behaviors share; null before {@link #start} and when pets are off. */
+    public static MindHost mindHost() {
+        return host;
+    }
+
     /** Creates the Mind host and the pet clock, then loads the species. Once per plugin enable, after the NMS adapter. */
     public static void start(Plugin plugin) {
         bodyKey = new NamespacedKey(plugin, "pet_body");
@@ -161,7 +166,14 @@ public final class PetManager {
             return;
         }
         try {
-            host = adapter.createMindHost(new NamespacedKey(plugin, "pet_mind"), FAILURES::report);
+            // Mob behaviors run on this host too, and say their own failures.
+            host = adapter.createMindHost(new NamespacedKey(plugin, "pet_mind"), failure -> {
+                if (com.magmaguy.freeminecraftmodels.mobbehaviors.MobBehaviors.owns(failure)) {
+                    com.magmaguy.freeminecraftmodels.mobbehaviors.MobBehaviors.report(failure);
+                } else {
+                    FAILURES.report(failure);
+                }
+            });
         } catch (UnsupportedOperationException | IllegalStateException unavailable) {
             Logger.info("Pets are off: they need Minecraft 1.21.4 or newer (" + unavailable.getMessage() + ").");
             host = null;

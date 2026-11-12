@@ -164,6 +164,8 @@ public final class FreeMinecraftModels extends JavaPlugin {
         magicWeaponRuntime = null;
         if (magicEnchantmentCatalog != null) magicEnchantmentCatalog.close();
         magicEnchantmentCatalog = null;
+        // Before the pets stop: the Mind host they share still runs, so each mob gets its own AI back cleanly.
+        com.magmaguy.freeminecraftmodels.mobbehaviors.MobBehaviors.stop();
         com.magmaguy.freeminecraftmodels.pets.PetManager.stop();
         com.magmaguy.freeminecraftmodels.pets.PetsMenu.shutdown();
         com.magmaguy.freeminecraftmodels.pets.PetVariantMenu.shutdown();
@@ -298,6 +300,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         manager.registerCommand(new com.magmaguy.freeminecraftmodels.commands.PetAdminCommand());
         manager.registerCommand(new com.magmaguy.freeminecraftmodels.commands.PetMigrateCommand());
         manager.registerCommand(new com.magmaguy.freeminecraftmodels.commands.GivePetCommand());
+        manager.registerCommand(new com.magmaguy.freeminecraftmodels.commands.MobBehaviorCommand());
 
         VaultEconomyHook.initialize();
         if (ShopConfig.isEnabled() && VaultEconomyHook.isEnabled()) {
@@ -341,6 +344,9 @@ public final class FreeMinecraftModels extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(new com.magmaguy.freeminecraftmodels.pets.PetsMenu.Events(), this);
         Bukkit.getPluginManager().registerEvents(new com.magmaguy.freeminecraftmodels.pets.PetVariantMenu.Events(), this);
         com.magmaguy.freeminecraftmodels.pets.PetManager.start(this);
+
+        initializationContext.step("Mob Behaviors");
+        com.magmaguy.freeminecraftmodels.mobbehaviors.MobBehaviors.start(this);
 
         initializationContext.step("Metrics");
         metrics = new Metrics(this, 19337);
