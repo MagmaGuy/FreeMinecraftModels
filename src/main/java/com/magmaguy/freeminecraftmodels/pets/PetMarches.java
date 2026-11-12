@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.pets;
 import com.magmaguy.magmacore.ai.MindHandle;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.util.Vector;
@@ -241,9 +242,18 @@ final class PetMarches {
             for (int y = feet + 1; y >= feet - 1; y--) {
                 if (y - 1 < world.getMinHeight() || y + 1 >= world.getMaxHeight()) continue;
                 if (PetLuaTable.room(world.getBlockAt(x, y, z)) && PetLuaTable.room(world.getBlockAt(x, y + 1, z))
-                        && PetLuaTable.firm(world.getBlockAt(x, y - 1, z))) return y;
+                        && footing(world.getBlockAt(x, y - 1, z))) return y;
             }
             return MarchRoute.Ground.NO_FOOTING;
         };
+    }
+
+    /**
+     * Ground a march walks on: firm, and not a tree's leaves. On a hillside the top of a tree lower down is level
+     * with the ground, and a leg that ran over it took the line onto the treetop, from where it came down in drops
+     * it could not climb back.
+     */
+    static boolean footing(Block block) {
+        return PetLuaTable.firm(block) && !PetMotion.isLeaves(block.getType());
     }
 }

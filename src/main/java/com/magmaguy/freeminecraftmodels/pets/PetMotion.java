@@ -111,6 +111,14 @@ public final class PetMotion {
         return location.getWorld() != null && location.getWorld().isChunkLoaded(location.getBlockX() >> 4, location.getBlockZ() >> 4);
     }
 
+    /**
+     * Whether this is a tree's leaves. Leaves are solid, but no wild pet is put on them and no march walks over them:
+     * they are the top of a tree, not ground.
+     */
+    public static boolean isLeaves(Material type) {
+        return type.name().endsWith("_LEAVES");
+    }
+
     /** Free to wander: not told to stay, and wild or within the follow range of its owner. */
     public static boolean settled(PetControl control, LivingEntity body) {
         if (control.isStaying()) return false;

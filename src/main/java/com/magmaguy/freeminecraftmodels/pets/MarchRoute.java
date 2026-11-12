@@ -29,7 +29,8 @@ final class MarchRoute {
 
         /**
          * The block a body stands in at this column, a step up from feet, level with it or a step down: room for its
-         * feet and head over firm ground, not in liquid. NO_FOOTING when none of the three fits.
+         * feet and head over firm ground, not in liquid and not on a tree's leaves. NO_FOOTING when none of the three
+         * fits.
          */
         int standing(int x, int feet, int z);
     }
