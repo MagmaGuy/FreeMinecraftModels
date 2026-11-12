@@ -438,13 +438,32 @@ public final class PetManager {
 
     /**
      * Asks this wild pet to call a march as soon as it is free, for filming: its march module skips its dice and its
-     * time of day, though it still needs another of its kind within reach. False when the pet has no body.
+     * time of day, though it still needs enough of its kind within reach and room to set off. False when the pet has
+     * no body. Nobody is told what comes of it.
      */
     public boolean requestMarch(PetControl pet) {
+        return requestMarch(pet, null);
+    }
+
+    /**
+     * {@link #requestMarch(PetControl)} for an admin, who is told once what came of it: that the march started, or,
+     * when the request runs out, why there was none (see {@link MarchRequests}).
+     */
+    public boolean requestMarch(PetControl pet, Player sender) {
         LivingEntity body = pet == null ? null : pet.body();
         if (body == null || !body.isValid()) return false;
-        PetMarches.request(body, ticks);
+        PetMarches.request(pet, body, sender == null ? null : sender.getUniqueId(), ticks);
         return true;
+    }
+
+    /**
+     * The settings this pet's march module runs with, the module's own with its pet file's on top, or null when its
+     * program runs no march: its behaviors do not list it, or switch it off for wild or for owned pets.
+     */
+    public Map<String, Object> marchSettings(PetControl pet) {
+        return program(pet.species(), pet.model(),
+                pet.isWild() ? PetPrograms.Ownership.WILD : PetPrograms.Ownership.OWNED)
+                .settings().get(PetBehaviorCatalog.ID_PREFIX + "march");
     }
 
     public Collection<PetControl> pets() {

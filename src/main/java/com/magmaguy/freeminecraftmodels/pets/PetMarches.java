@@ -1,11 +1,14 @@
 package com.magmaguy.freeminecraftmodels.pets;
 
 import com.magmaguy.magmacore.ai.MindHandle;
+import com.magmaguy.magmacore.util.Logger;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
@@ -19,16 +22,15 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * The marches under way, for the march module: a call gathers the free kin round the caller into a {@link March}, and
  * each marcher asks for its spot every tick it marches. A sweep each pet tick plays the call's second toot and drops
- * marchers that died, were tamed or carry a rider, and ends marches. Admins can ask a pet to call one. A pet on a
- * migration neither calls a march nor is gathered into one. Server thread only.
+ * marchers that died, were tamed or carry a rider, and ends marches. Admins can ask a pet to call one, and are told
+ * what came of it (see {@link MarchRequests}). A pet on a migration neither calls a march nor is gathered into one.
+ * Server thread only.
  */
 final class PetMarches {
     /** The most pets in one march, its leader included. */
     static final int MAX_MARCHERS = 64;
     /** The call's second toot comes this many ticks after the first. */
     static final long SECOND_TOOT_TICKS = 6L;
-    /** An admin's request waits this long for the pet to be free to call. */
-    static final long REQUEST_TICKS = 400L;
 
     /** One march in a world, with its call's sound and the species, wildness and owner its marchers share. */
     private static final class Walk {
@@ -59,8 +61,8 @@ final class PetMarches {
     private static final Map<UUID, Walk> byBody = new HashMap<>();
     // The marches under way, each once: those byBody holds, kept so the tick's sweep need not gather them.
     private static final List<Walk> walks = new ArrayList<>();
-    // The pets an admin asked to call a march, with the tick each request ends.
-    private static final Map<UUID, Long> requests = new HashMap<>();
+    // The pets an admin asked to call a march, and what each admin is told.
+    private static final MarchRequests requests = new MarchRequests();
 
     private PetMarches() {
     }
@@ -82,29 +84,41 @@ final class PetMarches {
         PetManager manager = PetManager.get();
         // A migrant flies its flock's route and leaves with it, so it calls no march in the ticks before it sets off.
         if (manager == null || caller.route() != null || byBody.containsKey(body.getUniqueId())) return false;
-        Long requestEnd = requests.get(body.getUniqueId());
-        boolean asked = requestEnd != null && now < requestEnd;
+        boolean asked = requests.waits(body.getUniqueId(), now);
         // chance, then one in the group's size: the group's chance shared out, with no search on most checks.
         ThreadLocalRandom random = ThreadLocalRandom.current();
         if (!asked && random.nextDouble() >= chance) return false;
         Location here = body.getLocation();
         List<LivingEntity> kin = new ArrayList<>();
+        // Its kin within radius, free or not, itself included: what an admin who asked is told when too few are free.
+        int near = 1;
         for (Entity entity : body.getWorld().getNearbyEntities(here, radius, radius, radius,
                 candidate -> candidate instanceof LivingEntity && candidate != body)) {
-            if (entity.getLocation().distanceSquared(here) > radius * radius || byBody.containsKey(entity.getUniqueId()))
-                continue;
+            if (entity.getLocation().distanceSquared(here) > radius * radius) continue;
             PetControl other = manager.pet(entity);
-            if (!caller.isKin(other) || other.isStaying() || !PetMotion.settled(other, (LivingEntity) entity)) continue;
+            if (!caller.isKin(other)) continue;
+            near++;
+            if (byBody.containsKey(entity.getUniqueId()) || other.isStaying()
+                    || !PetMotion.settled(other, (LivingEntity) entity)) continue;
             MindHandle mind = other.mind();
             if (mind != null && mind.isBlocked(module)) continue;
             kin.add((LivingEntity) entity);
         }
-        if (kin.size() + 1 < Math.max(2, minGroup)) return false;
+        String species = caller.species().id();
+        int needed = Math.max(2, minGroup);
+        if (kin.size() + 1 < needed) {
+            if (asked) requests.refused(body.getUniqueId(),
+                    MarchRequests.tooFew(species, kin.size() + 1, near, needed, radius));
+            return false;
+        }
         if (!asked && random.nextDouble() >= 1D / (kin.size() + 1)) return false;
         MarchRoute.Ground ground = ground(body.getWorld());
         Vector start = here.toVector();
         double[] heading = MarchRoute.widest(ground, start, random.nextDouble(2D * Math.PI / MarchRoute.HEADINGS));
-        if (heading == null) return false;
+        if (heading == null) {
+            if (asked) requests.refused(body.getUniqueId(), MarchRequests.noGround(species, MarchRoute.MIN_LEG));
+            return false;
+        }
         kin.sort(Comparator.comparingDouble(entity -> entity.getLocation().distanceSquared(here)));
         if (kin.size() > MAX_MARCHERS - 1) kin = kin.subList(0, MAX_MARCHERS - 1);
         List<UUID> ids = new ArrayList<>(kin.size());
@@ -125,7 +139,7 @@ final class PetMarches {
         for (LivingEntity marcher : kin) walk.bodies.put(marcher.getUniqueId(), marcher);
         for (UUID id : walk.bodies.keySet()) byBody.put(id, walk);
         walks.add(walk);
-        requests.remove(body.getUniqueId());
+        tell(requests.started(body.getUniqueId(), MarchRequests.started(species, walk.bodies.size())));
         toot(walk, here);
         return true;
     }
@@ -160,13 +174,16 @@ final class PetMarches {
 
     /** Whether an admin asked this pet to call a march, and the request still waits. */
     static boolean requested(LivingEntity body, long now) {
-        Long end = requests.get(body.getUniqueId());
-        return end != null && now < end;
+        return requests.waits(body.getUniqueId(), now);
     }
 
-    /** Asks this pet to call a march as soon as it is free, skipping the dice and the module's time of day. */
-    static void request(LivingEntity body, long now) {
-        requests.put(body.getUniqueId(), now + REQUEST_TICKS);
+    /**
+     * Asks this pet to call a march as soon as it is free, skipping the dice and the module's time of day. The
+     * request waits {@link MarchRequests#WAIT_TICKS}. {@code sender}, when there is one, is told once what came of it:
+     * the march, on the tick it starts, or why there was none, when the request runs out.
+     */
+    static void request(PetControl pet, LivingEntity body, UUID sender, long now) {
+        requests.ask(body.getUniqueId(), sender, pet.species().id(), now);
     }
 
     /**
@@ -174,7 +191,7 @@ final class PetMarches {
      * rider, each march's own rules, and the marches that ended.
      */
     static void tick(long now) {
-        if (!requests.isEmpty()) requests.values().removeIf(end -> now >= end);
+        for (MarchRequests.Answer answer : requests.runOut(now, PetMarches::idle)) tell(answer);
         if (walks.isEmpty()) return;
         PetManager manager = PetManager.get();
         // From the back, so a march that ends and leaves the list skips none, and the same inside each line: a
@@ -218,6 +235,22 @@ final class PetMarches {
         byBody.clear();
         walks.clear();
         requests.clear();
+    }
+
+    /** Why a pet that was asked for a march never called one in its request's time, for the admin who asked. */
+    private static String idle(UUID pet, String species) {
+        PetManager manager = PetManager.get();
+        Entity entity = Bukkit.getEntity(pet);
+        PetControl control = manager == null || entity == null ? null : manager.pet(entity);
+        if (control == null || !entity.isValid() || !control.isWild()) return MarchRequests.gone(species);
+        if (byBody.containsKey(pet)) return MarchRequests.onAMarch(species);
+        return MarchRequests.notFree(species);
+    }
+
+    /** Tells an admin what came of the march they asked for, when they are still online. */
+    private static void tell(MarchRequests.Answer answer) {
+        Player sender = answer == null ? null : Bukkit.getPlayer(answer.sender());
+        if (sender != null) Logger.sendMessage(sender, answer.message());
     }
 
     private static boolean belongs(Walk walk, PetControl control) {

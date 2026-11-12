@@ -129,7 +129,9 @@ public final class PetLuaTable {
     static final String FREEZE = "FREEZE";
     private static final int MAX_DRIZZLE_DEPTH = 8;
     // A huddle or a march counts kin this far off at most; a gift, an eaten item and a slide stay within these.
-    private static final double MAX_KIN_RADIUS = 32D, MAX_GIFT_RANGE = 8D, MAX_ITEM_RADIUS = 16D, MAX_SLIDE_LENGTH = 24D;
+    /** The farthest a module may look for kin, in blocks. */
+    static final double MAX_KIN_RADIUS = 32D;
+    private static final double MAX_GIFT_RANGE = 8D, MAX_ITEM_RADIUS = 16D, MAX_SLIDE_LENGTH = 24D;
     // A march lasts 10 seconds to half an hour, its marchers 0.5 to 8 blocks apart.
     private static final double MIN_MARCH_SECONDS = 10D, MAX_MARCH_SECONDS = 1800D, MIN_SPACING = 0.5D, MAX_SPACING = 8D;
     // Half hearts one eaten item heals at most: a full health bar of 20 twice over.
