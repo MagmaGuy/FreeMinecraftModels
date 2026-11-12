@@ -18,7 +18,6 @@ import org.bukkit.util.Vector;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -26,8 +25,10 @@ import java.util.concurrent.ThreadLocalRandom;
  * One migrating flock: wild pets of a species crossing the sky along a straight path that passes over a player halfway
  * through its flight. Each member is an ordinary wild pet, full model and animations, flying this route at the top of
  * its Mind program: a slot in a loose formation around an anchor that moves along the path, nudged apart from its
- * neighbours and bobbing gently. A player who reaches one can tame it, which takes it out of the flock. When the
- * crossing ends, the members still flying go.
+ * neighbours and bobbing gently. A player who reaches one can tame it, which takes it out of the flock. A member that
+ * flies out of the chunks the server ticks would hang still in the air there, so it goes then (see
+ * {@link StoppedMembers}). When the crossing ends, the members still flying go; a flock with no member left ends at
+ * once.
  */
 public final class MigrationFlock implements MigrationRoute {
     // Formation radius grows with the flock; members keep this far apart at least.
@@ -38,6 +39,8 @@ public final class MigrationFlock implements MigrationRoute {
     // The ground under the route is read every SAMPLE_STEP blocks; the lowest member, at the bottom of its bob, still
     // clears the highest of it by MIN_CLEARANCE.
     private static final double SAMPLE_STEP = 4D, MIN_CLEARANCE = 2D;
+    // A chunk's width in blocks.
+    private static final double CHUNK = 16D;
 
     private record Slot(double x, double y, double z, double phase) {
     }
@@ -55,9 +58,12 @@ public final class MigrationFlock implements MigrationRoute {
     private final double altitude;
     private final int durationTicks;
     private final Map<PetControl, Slot> members = new IdentityHashMap<>();
+    private final StoppedMembers<PetControl> stopped;
     private BukkitTask task;
     private int age;
     private boolean done;
+    // Whether this flock has said that a member could not be removed: once is enough.
+    private boolean warned;
 
     private MigrationFlock(World world, Vector heading, Vector anchorStart, double speed, double altitude, int durationTicks) {
         this.world = world;
@@ -66,6 +72,7 @@ public final class MigrationFlock implements MigrationRoute {
         this.speed = speed;
         this.altitude = altitude;
         this.durationTicks = durationTicks;
+        this.stopped = new StoppedMembers<>(patience(speed));
     }
 
     /** Puts a flock of the species in the air on a path over the player, or returns null when none could spawn. */
@@ -138,6 +145,17 @@ public final class MigrationFlock implements MigrationRoute {
         return highest;
     }
 
+    /**
+     * How many ticks in a row a member's body may go without ticking before the flock takes it out: the time a player
+     * keeping pace with the flock takes to cross one chunk. A member that stops at the edge of the ticking chunks
+     * waits there for a player to open the next ones, and a player moving with the flock opens them one chunk's
+     * crossing apart, sooner on foot or faster. A member that has waited longer has nobody keeping up with it. At the
+     * default 0.15 blocks a tick that is 107 ticks, a little over five seconds.
+     */
+    static int patience(double speed) {
+        return Math.max(1, (int) Math.ceil(CHUNK / speed));
+    }
+
     private void tick() {
         if (done) return;
         age++;
@@ -145,14 +163,35 @@ public final class MigrationFlock implements MigrationRoute {
             remove();
             return;
         }
-        // Tamed, killed or lost members leave the flock.
         PetManager manager = PetManager.get();
         if (manager == null) {
             remove();
             return;
         }
-        members.keySet().removeIf(member -> member.body() == null || manager.pet(member.body()) != member);
+        // Tamed, killed or lost members leave the flock. One whose body has stopped ticking goes out of the world, as
+        // the members still flying do when the crossing ends.
+        for (PetControl member : stopped.sweep(members.keySet(), gone -> !flies(manager, gone), manager::bodyTicks))
+            dismiss(manager, member);
         if (members.isEmpty()) remove();
+    }
+
+    /** Whether this pet is still the wild pet behind its body: not tamed, killed or lost. */
+    private static boolean flies(PetManager manager, PetControl member) {
+        return member.body() != null && manager.pet(member.body()) == member;
+    }
+
+    /** Takes a member that still flies out of the world: its body, its model and its wild pet. */
+    private void dismiss(PetManager manager, PetControl member) {
+        if (!flies(manager, member)) return;
+        // One member that cannot go must not keep the rest of the flock in the sky.
+        try {
+            manager.despawn(member);
+        } catch (RuntimeException failure) {
+            if (warned) return;
+            warned = true;
+            Logger.warn("A " + member.species().id() + " migration could not remove a member of its flock: " + failure);
+            failure.printStackTrace();
+        }
     }
 
     @Override
@@ -199,23 +238,7 @@ public final class MigrationFlock implements MigrationRoute {
         done = true;
         if (task != null) task.cancel();
         PetManager manager = PetManager.get();
-        if (manager != null) {
-            List<PetControl> flying = new ArrayList<>(members.keySet());
-            boolean said = false;
-            for (PetControl member : flying) {
-                if (member.body() == null || manager.pet(member.body()) != member) continue;
-                // One member that cannot go must not keep the rest of the flock in the sky.
-                try {
-                    manager.despawn(member);
-                } catch (RuntimeException failure) {
-                    if (said) continue;
-                    said = true;
-                    Logger.warn("A " + member.species().id() + " migration could not remove a member of its flock: "
-                            + failure);
-                    failure.printStackTrace();
-                }
-            }
-        }
+        if (manager != null) for (PetControl member : new ArrayList<>(members.keySet())) dismiss(manager, member);
         members.clear();
     }
 }

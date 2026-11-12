@@ -40,6 +40,18 @@ class MigrationFlockTest {
     }
 
     @Test
+    void aStoppedMemberWaitsAsLongAsAPlayerKeepingPaceTakesToCrossAChunk() {
+        // 16 blocks at the default 0.15 blocks a tick, rounded up.
+        assertEquals(107, MigrationFlock.patience(0.15D));
+        assertEquals(54, MigrationFlock.patience(0.3D));
+        // The slowest flock pets.yml allows.
+        assertEquals(800, MigrationFlock.patience(0.02D));
+        // A flock that crosses a chunk within a tick still gets one look.
+        assertEquals(1, MigrationFlock.patience(16D));
+        assertEquals(1, MigrationFlock.patience(40D));
+    }
+
+    @Test
     void aDiagonalRouteFollowsItsHeading() {
         Vector northEast = new Vector(1, 0, -1).normalize();
         // 100 blocks along a north-east heading from the origin.

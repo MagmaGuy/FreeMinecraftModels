@@ -120,6 +120,8 @@ public final class PetManager {
      * whenever they change while it is loaded, as it unloads, and at shutdown, so Minecraft saves them with the chunk.
      */
     private final WildPetStore wildStore = new WildPetStore();
+    // One Location for bodyTicks, asked for every member of every flock each tick.
+    private final Location tickingProbe = new Location(null, 0D, 0D, 0D);
     private final PetRides rides = new PetRides(this);
     /** Where wild pets waited before they moved into chunk data; read once, deleted once they are all moved. */
     private final File legacyWildFile = new File(MetadataHandler.PLUGIN.getDataFolder(), "data/wild_pets.yml");
@@ -971,6 +973,18 @@ public final class PetManager {
         LivingEntity body = control.body();
         // A body whose chunk is on its way out may no longer be valid but still be there; it goes too.
         if (body != null && !body.isDead()) body.remove();
+    }
+
+    /**
+     * Whether the server ticks entities where this pet's body is: the test its Mind makes before every tick of the
+     * body. A body past the chunks players keep ticking stays loaded and valid, but neither it nor its Mind runs, so
+     * it stands, or hangs, where it stopped. True for a pet without a body.
+     */
+    public boolean bodyTicks(PetControl control) {
+        LivingEntity body = control.body();
+        NMSAdapter adapter = NMSManager.getAdapter();
+        if (body == null || adapter == null) return true;
+        return adapter.isPositionEntityTicking(body.getLocation(tickingProbe));
     }
 
     private void forget(PetControl control) {
