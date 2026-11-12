@@ -47,7 +47,7 @@ public final class PetBehaviorCatalog implements AutoCloseable {
     public static final String NAMESPACE = "fmm";
     public static final String ID_PREFIX = NAMESPACE + ":pet/";
     /** The shipped modules by file name, each a resource under pet_behaviors/ in the jar. */
-    public static final List<String> DEFAULTS = List.of("stay", "defend_owner", "follow_owner", "drift", "hover",
+    public static final List<String> DEFAULTS = List.of("migrate", "stay", "defend_owner", "follow_owner", "drift", "hover",
             "campfire", "day_perch", "rain_bloom", "night_glow", "sting", "retaliate", "strike_back", "crop_drizzle",
             "owner_effect", "wander", "idle_look", "swim", "huddle", "fishing_trip", "toboggan", "march",
             "pebble_gift", "fish_thief");

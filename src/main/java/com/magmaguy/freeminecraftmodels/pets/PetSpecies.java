@@ -4,6 +4,7 @@ import com.magmaguy.freeminecraftmodels.customentity.core.TravelOrientation;
 import com.magmaguy.freeminecraftmodels.pets.behavior.PetBehaviorEntry;
 import com.magmaguy.freeminecraftmodels.pets.behavior.PetBehaviorYaml;
 import com.magmaguy.freeminecraftmodels.pets.behavior.PetPrograms;
+import com.magmaguy.freeminecraftmodels.pets.interactions.PetInteractions;
 import com.magmaguy.freeminecraftmodels.utils.StringToResourcePackFilename;
 import com.magmaguy.magmacore.ai.MindBodyLocomotion;
 import com.magmaguy.magmacore.thirdparty.CustomBiomeCompatibility;
@@ -189,6 +190,7 @@ public final class PetSpecies {
     private final boolean breathesUnderwater;
     private final boolean footsteps;
     private final List<String> hiddenBones;
+    private final PetInteractions interactions;
     private final PetRiding riding; // null: cannot be ridden
     private final PetSwimming swimming; // null: swims as it walks
 
@@ -257,7 +259,7 @@ public final class PetSpecies {
         this.breathesUnderwater = breathesUnderwater(config);
         this.footsteps = footsteps(config, movement);
         this.hiddenBones = hiddenBones(config);
-        warnMigration(config, filename, Logger::warn);
+        this.interactions = PetInteractions.read(config, filename, model);
         PetRiding readRiding = PetRiding.read(config.getConfigurationSection("riding"), filename, Logger::warn);
         this.riding = readRiding != null && PetRiding.supports(bodyType, movement, filename, Logger::warn)
                 ? readRiding : null;
@@ -549,16 +551,6 @@ public final class PetSpecies {
             else warn.accept(ignored + "; list the " + module + " module under behaviors: instead (see"
                         + " plugins/FreeMinecraftModels/pet_behaviors/" + module + ".lua for its settings).");
         });
-    }
-
-    /**
-     * Warns, once per load of the file, that its migration section does nothing now that night migrations are gone,
-     * and points at the wild clusters that took their place.
-     */
-    static void warnMigration(ConfigurationSection config, String filename, Consumer<String> warn) {
-        if (config.contains("migration"))
-            warn.accept(filename + ": the migration section is ignored now that night migrations are gone; remove it."
-                    + " To show this species in big groups, add a cluster section under wildSpawn: instead.");
     }
 
     /**
@@ -1121,6 +1113,11 @@ public final class PetSpecies {
 
     public WildSpawn wildSpawn() {
         return wildSpawn;
+    }
+
+    /** The species' look in night migrations; its migration() is null when off. */
+    public PetInteractions interactions() {
+        return interactions;
     }
 
     public MindBodyLocomotion locomotion() {

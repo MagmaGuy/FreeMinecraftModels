@@ -106,7 +106,8 @@ class ShippedPetModulesTest {
     /**
      * Every distinct call the shipped modules make at their default settings (L is a location), with the arguments
      * today's Java behaviors used: each cruise is the Java constant times SPEED (drift, campfire and a far perch 0.06;
-     * a near perch, stay and hover 0.03; follow 0.25, x1.6 past the leash; rain bloom 0.06 x1.4). The glow is light 15 on the lantern bone's glow animation at night and none by day; a sting is
+     * a near perch, stay and hover 0.03; follow 0.25, x1.6 past the leash; rain bloom 0.06 x1.4), except the flock's
+     * own route cruise. The glow is light 15 on the lantern bone's glow animation at night and none by day; a sting is
      * slowness for 60 ticks at amplifier 0, no damage, a 60-tick cooldown and mobs within 0.5 blocks, players only for
      * a wild pet; a drizzle looks 4 blocks down at chance 0.1. owner_effect is new: night vision for 300 ticks within 16
      * blocks. So are the walking and swimming modules: a walk and a swim at 0.15 to a spot within the roam
@@ -122,6 +123,7 @@ class ShippedPetModulesTest {
      * for the owner from 2 blocks off (SURE); and fish within 8 blocks, eaten within 0.5 for 2 half hearts at 0.2.
      */
     private static final Set<String> DEFAULT_CALLS = Set.of(
+            "fmm:pet/migrate route_target()", "fmm:pet/migrate steer_to(L, 0.3)", "fmm:pet/migrate stop()",
             "fmm:pet/stay rest_point(L, 0.5)", "fmm:pet/stay steer_to(L, 0.045)", "fmm:pet/stay stop()",
             "fmm:pet/follow_owner trail_point(1.5, 2)", "fmm:pet/follow_owner distance_to(L)",
             "fmm:pet/follow_owner teleport_near_owner(2)", "fmm:pet/defend_owner steer_to(L, 0.45)",
@@ -320,7 +322,7 @@ class ShippedPetModulesTest {
             Map.entry("fmm:pet/stay", 4), Map.entry("fmm:pet/follow_owner", 4), Map.entry("fmm:pet/hover", 4),
             Map.entry("fmm:pet/defend_owner", 4), Map.entry("fmm:pet/retaliate_flee", 2),
             Map.entry("fmm:pet/retaliate_charge", 2),
-            Map.entry("fmm:pet/campfire", 10), Map.entry("fmm:pet/day_perch", 10),
+            Map.entry("fmm:pet/migrate", 10), Map.entry("fmm:pet/campfire", 10), Map.entry("fmm:pet/day_perch", 10),
             Map.entry("fmm:pet/rain_bloom", 10), Map.entry("fmm:pet/drift", 10), Map.entry("fmm:pet/wander", 10),
             Map.entry("fmm:pet/swim", 10), Map.entry("fmm:pet/idle_look", 10), Map.entry("fmm:pet/huddle", 10),
             Map.entry("fmm:pet/fishing_trip", 10), Map.entry("fmm:pet/toboggan", 10),
@@ -936,6 +938,7 @@ class ShippedPetModulesTest {
             properties.put("staying", () -> LuaValue.valueOf(staying));
             properties.put("settled", () -> LuaValue.valueOf(!staying && (owner == Owner.WILD || owner.distance <= FOLLOW)));
             properties.put("baby", () -> LuaValue.FALSE);
+            properties.put("migrating", () -> LuaValue.valueOf(owner == Owner.WILD));
             properties.put("model", () -> LuaValue.valueOf("em_pet_jellyfish"));
             properties.put("species", () -> speciesTable);
             properties.put("position", () -> place(x(), 70, 0.5));
@@ -956,6 +959,7 @@ class ShippedPetModulesTest {
             properties.put("raining", () -> LuaValue.valueOf(night));
             properties.put("snowing", () -> LuaValue.valueOf(night));
             properties.put("speed", () -> LuaValue.valueOf(answers == Answers.SOMETHING ? 0.05 : 0));
+            properties.put("route_cruise", () -> LuaValue.valueOf(owner == Owner.WILD ? 0.3 : 0));
             // Someone to defend the owner against, 2 blocks off, whenever the owner is there and the answers are not nothing.
             properties.put("threat", () -> owner.present() && !answersNothing("threat") ? place(x() + 2, 70, 0.5) : LuaValue.NIL);
             // The player who hurt a wild pet, by turns within reach and 4 blocks off, so it both charges and flees.
@@ -987,6 +991,8 @@ class ShippedPetModulesTest {
             methods.put("teleport_near_owner", new Method("N", args -> LuaValue.valueOf(owner.present()), LuaValue.FALSE));
             methods.put("distance_to", new Method("L", args -> LuaValue.valueOf(distance(args.arg1())),
                     LuaValue.valueOf(Double.POSITIVE_INFINITY)));
+            methods.put("route_target", new Method("", args -> owner == Owner.WILD ? place(100, 80, 100) : LuaValue.NIL,
+                    LuaValue.NIL));
             methods.put("find_perch", new Method("NN", args -> place(x(), 69.9, 0.5), LuaValue.NIL));
             methods.put("nearest_campfire", new Method("NNTTN", args -> place(5, 68, 5), LuaValue.NIL));
             methods.put("campfire_usable", new Method("LTTN", args -> LuaValue.TRUE, LuaValue.FALSE));

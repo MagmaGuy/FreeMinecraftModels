@@ -60,6 +60,8 @@ public final class PetControl {
     // A wild pet's stats; an owned pet's are on its record.
     private PetStats wildStats;
     private long lastInteractionTick = Long.MIN_VALUE / 2;
+    // Set on a wild pet flying a migration; null for every other pet.
+    private MigrationRoute route;
     // Its place among the pets its owner has out: which spot around the trail point it follows to. 0 for a wild pet.
     private int slot;
     // The player whose hit on this pet last went through, the pet clock tick of that hit, and how many such hits it
@@ -231,15 +233,15 @@ public final class PetControl {
     }
 
     /**
-     * Kin: a pet of this species, wild like this one or of the same owner, alive and carrying no rider. A pet is not its
-     * own kin. Huddles and marches gather kin.
+     * Kin: a pet of this species, wild like this one or of the same owner, alive, neither migrating nor carrying a
+     * rider. A pet is not its own kin. Huddles and marches gather kin.
      */
     boolean isKin(PetControl other) {
         if (other == null || other == this || !other.species().id().equals(species().id())) return false;
         if (other.isWild() != isWild()) return false;
         if (!isWild() && !ownerId().equals(other.ownerId())) return false;
         LivingEntity otherBody = other.body();
-        return otherBody != null && otherBody.isValid() && otherBody.isEmpty();
+        return other.route() == null && otherBody != null && otherBody.isValid() && otherBody.isEmpty();
     }
 
     public DynamicEntity modeled() {
@@ -254,6 +256,15 @@ public final class PetControl {
         this.body = body;
         this.modeled = modeled;
         this.mind = mind;
+    }
+
+    /** The migration this wild pet is flying, or null. */
+    public MigrationRoute route() {
+        return route;
+    }
+
+    void setRoute(MigrationRoute route) {
+        this.route = route;
     }
 
     void setModeled(DynamicEntity modeled) {
