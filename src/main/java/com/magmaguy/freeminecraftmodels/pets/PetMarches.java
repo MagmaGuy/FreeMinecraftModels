@@ -294,11 +294,14 @@ final class PetMarches {
 
             @Override
             public boolean walled(int x, int feet, int z) {
-                // A column a body can step onto is no wall, and neither is one that only drops away: there the
-                // blocks its feet and head would be in are free.
-                if (!world.isChunkLoaded(x >> 4, z >> 4) || standing(x, feet, z) != NO_FOOTING) return false;
-                if (feet < world.getMinHeight() || feet + 1 >= world.getMaxHeight()) return false;
-                return !PetLuaTable.room(world.getBlockAt(x, feet, z)) || !PetLuaTable.room(world.getBlockAt(x, feet + 1, z));
+                if (!world.isChunkLoaded(x >> 4, z >> 4)) return false;
+                if (feet < world.getMinHeight() || feet + 2 >= world.getMaxHeight()) return false;
+                // Free where its feet and its head would be: nothing in its way, whatever the ground does below.
+                boolean head = PetLuaTable.room(world.getBlockAt(x, feet + 1, z));
+                if (head && PetLuaTable.room(world.getBlockAt(x, feet, z))) return false;
+                // A block where its feet would be is a step it rises onto when there is room over it. A column it
+                // could stand in a step down, with leaves where its head is at this height, is a wall.
+                return !(head && footing(world.getBlockAt(x, feet, z)) && PetLuaTable.room(world.getBlockAt(x, feet + 2, z)));
             }
         };
     }

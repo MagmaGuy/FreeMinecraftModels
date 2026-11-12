@@ -40,9 +40,10 @@ final class MarchRoute {
         int standing(int x, int feet, int z);
 
         /**
-         * Whether a body with its feet at this height would be in a block of this column that it cannot step onto: a
-         * wall, a tree's trunk, leaves at the height of its head. False where the ground only steps or drops away,
-         * and for ground that knows no walls, as a test's.
+         * Whether a body with its feet at this height cannot have part of itself in this column: a block is where
+         * its feet or its head would be, a wall, a tree's trunk, leaves at the height of its head, and it is not a
+         * step of one block the body rises onto with room over it. False where the ground only drops away, whatever
+         * is further down, and for ground that knows no walls, as a test's.
          */
         default boolean walled(int x, int feet, int z) {
             return false;
@@ -60,7 +61,9 @@ final class MarchRoute {
      * <p>
      * A run is a body wide, not a line: it also stops where a wall stands within {@link #CLEAR} of it on either side
      * (see {@link Ground#walled}). A line passing a tree's trunk a quarter block off was a clear run, and the leader
-     * that walked it stood against the trunk until it counted as stuck.
+     * that walked it stood against the trunk until it counted as stuck. And it stops before a step up the body has
+     * no room to rise onto: a body a little over a block tall needs the block over its head free where it stands,
+     * as it rises, and the same one free in the columns beside the step.
      */
     static Run run(Ground ground, Vector from, double dx, double dz, double max) {
         int feet = (int) Math.floor(from.getY());
@@ -70,6 +73,8 @@ final class MarchRoute {
             double x = from.getX() + dx * along, z = from.getZ() + dz * along;
             int next = ground.standing((int) Math.floor(x), feet, (int) Math.floor(z));
             if (next == Ground.NO_FOOTING) break;
+            // A step up: where it stood half a block back, the body rises a block.
+            if (next > feet && ground.walled((int) Math.floor(x - dx * STEP), next, (int) Math.floor(z - dz * STEP))) break;
             // To the left of the heading and to its right: (-dz, dx) and (dz, -dx).
             if (ground.walled((int) Math.floor(x - dz * CLEAR), next, (int) Math.floor(z + dx * CLEAR))
                     || ground.walled((int) Math.floor(x + dz * CLEAR), next, (int) Math.floor(z - dx * CLEAR))) break;
