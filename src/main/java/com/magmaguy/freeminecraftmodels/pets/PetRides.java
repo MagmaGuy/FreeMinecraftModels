@@ -105,6 +105,8 @@ final class PetRides {
         private long swapAgainAt = Long.MIN_VALUE;
         // The pet tick from which its rider's client may be sent another correction (see CORRECTION_TICKS).
         private long correctAgainAt = Long.MIN_VALUE;
+        // The pace it dives at, in blocks a tick: its last step, or what coasting would have left of a faster one.
+        private double pace;
 
         private Ride(Unridden before, UUID rider) {
             this.before = before;
@@ -253,7 +255,13 @@ final class PetRides {
                 // The rider's client reports whether the body it steers stands on something.
                 boolean airborne = depth == 0 && !body.isOnGround();
                 boolean diving = diving(ride.diving, depth, eyes, isWater(rider.getEyeLocation().getBlock()), airborne);
+                Location swam = body.getLocation();
+                ride.pace = !ride.diving || Double.isNaN(ride.lastX) ? 0D
+                        : RideHop.pace(ride.pace, swam.getX() - ride.lastX, swam.getZ() - ride.lastZ);
                 if (diving != ride.diving && PetManager.ticks() >= ride.swapAgainAt) {
+                    // Leaving the water: surfacing with its feet still in it, not landing from a leap.
+                    boolean leavesWater = !diving && depth > 0;
+                    double pace = ride.pace;
                     LivingEntity next = swap(control, rider, diving);
                     if (next == null) {
                         ride.swapAgainAt = PetManager.ticks() + SWAP_RETRY_TICKS;
@@ -264,6 +272,7 @@ final class PetRides {
                     ride.lastX = Double.NaN;
                     // A body that would not seat its rider is handed back to the Mind next tick, as after any dismount.
                     if (rider(body) == null) continue;
+                    if (leavesWater) hop(control, body, rider, pace);
                 }
             }
             Location at = body.getLocation();
@@ -349,6 +358,32 @@ final class PetRides {
     }
 
     /**
+     * Sends a pet that just surfaced in the shallows off at the pace it swam in with, the way its rider looks, with
+     * its species' lift, where that flight is clear of blocks for it and its rider's head (see {@link RideHop});
+     * elsewhere it surfaces at rest as before.
+     */
+    private static void hop(PetControl control, LivingEntity body, Player rider, double pace) {
+        PetRiding riding = control.species().riding();
+        double lift = RideHop.lift(riding.surfaceHop(), pace, riding.swimStep(control.stats().speed));
+        if (lift <= 0D) return;
+        double yaw = Math.toRadians(rider.getLocation().getYaw());
+        double alongX = -Math.sin(yaw) * pace, alongZ = Math.cos(yaw) * pace;
+        Location at = body.getLocation();
+        if (!RideHop.clear(at.getX(), at.getY(), at.getZ(), alongX, lift, alongZ, riddenShape(body, rider),
+                RideCeiling.of(body.getWorld()))) return;
+        body.setVelocity(new Vector(alongX, lift, alongZ));
+    }
+
+    /** A body's box as its rider's client moves it, and over it the room its rider's head needs. */
+    private static BodyFit.Shape riddenShape(LivingEntity body, Player rider) {
+        BoundingBox box = body.getBoundingBox();
+        Vector seat = NMSManager.getAdapter().getPassengerSeatOffset(body, 0);
+        return seat == null ? BodyFit.Shape.of(box.getWidthX(), box.getHeight())
+                : new BodyFit.Shape(box.getWidthX(), box.getHeight(), HEAD_PROBE * rider.getWidth(), box.getHeight(),
+                seat.getY() - RideCeiling.PLAYER_SEAT + rider.getHeight());
+    }
+
+    /**
      * Where a body about to carry this rider fits, nearest to where it spawned: its own box as its rider's client
      * will move it, and over it the room its rider's head needs. Null when nothing near has that room, such as a
      * crawlspace the smaller body got into: the pet then keeps the body it has and tries again later.
@@ -356,12 +391,7 @@ final class PetRides {
     private static Location riddenSpot(LivingEntity old, LivingEntity next, Player rider) {
         // Steered, a body has the box Minecraft gives its kind and scale, not its model's hitbox bone.
         NMSManager.getAdapter().resetHitbox(next);
-        BoundingBox box = next.getBoundingBox();
-        Vector seat = NMSManager.getAdapter().getPassengerSeatOffset(next, 0);
-        BodyFit.Shape shape = seat == null ? BodyFit.Shape.of(box.getWidthX(), box.getHeight())
-                : new BodyFit.Shape(box.getWidthX(), box.getHeight(), HEAD_PROBE * rider.getWidth(), box.getHeight(),
-                seat.getY() - RideCeiling.PLAYER_SEAT + rider.getHeight());
-        return spot(old, next, shape);
+        return spot(old, next, riddenShape(next, rider));
     }
 
     /**

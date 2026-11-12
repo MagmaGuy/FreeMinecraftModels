@@ -21,16 +21,19 @@ import java.util.function.Consumer;
  * ({@code idle.ride} by default; a model without that animation idles as it does unridden); and {@code surfaces} multiplies the speed on the listed blocks, the block at
  * the pet's feet first (a snow layer), then the one under them. {@code swimSpeed} is how fast, in blocks per second, a
  * ridden adult swims once it dives in deep water, times its speed stat; at 0, the default, it does not dive.
+ * {@code surfaceHop} is the upward speed, in blocks a tick, a diving pet is given as it surfaces in the shallows at
+ * full swim speed, keeping that speed, so it jumps out of the water (see {@link RideHop}); slower, it gets its share.
+ * The default is a player's own jump, 0.42, which rises about 1.2 blocks; 0 turns the hop off.
  */
 public record PetRiding(double speed, double jump, double seatHeight, String animation, String idleAnimation,
-                        Map<Material, Double> surfaces, double swimSpeed) {
+                        Map<Material, Double> surfaces, double swimSpeed, double surfaceHop) {
     /**
      * Blocks per second a ridden vanilla nautilus swims per point of movement speed. Its rider's client adds
      * 0.0325 x speed along the rider's input to its velocity, moves it by that velocity and then keeps 0.9 of it, so
      * each tick it moves 0.0325 / (1 - 0.9) blocks once it has sped up; measured on a real client at 6.5.
      */
     static final double NAUTILUS_BLOCKS_PER_SECOND = 20D * 0.0325D / (1D - 0.9D);
-    private static final double SPEED = 0.2D, JUMP = 0.4D, SEAT_HEIGHT = 10D;
+    private static final double SPEED = 0.2D, JUMP = 0.4D, SEAT_HEIGHT = 10D, SURFACE_HOP = 0.42D;
     private static final String ANIMATION = "ride", IDLE_ANIMATION = "idle.ride";
     /** Snow is quick and ice already slides with vanilla friction, so it needs less help. */
     private static final Map<Material, Double> SURFACES = new LinkedHashMap<>();
@@ -65,7 +68,8 @@ public record PetRiding(double speed, double jump, double seatHeight, String ani
         }
         return new PetRiding(Math.max(0D, section.getDouble("speed", SPEED)), Math.max(0D, section.getDouble("jump", JUMP)),
                 Math.max(0D, section.getDouble("seatHeight", SEAT_HEIGHT)), name(section, "animation", ANIMATION),
-                name(section, "idleAnimation", IDLE_ANIMATION), surfaces, Math.max(0D, section.getDouble("swimSpeed", 0D)));
+                name(section, "idleAnimation", IDLE_ANIMATION), surfaces, Math.max(0D, section.getDouble("swimSpeed", 0D)),
+                Math.max(0D, section.getDouble("surfaceHop", SURFACE_HOP)));
     }
 
     /** An animation name the section sets, or the default for a missing or blank one. */
@@ -96,6 +100,11 @@ public record PetRiding(double speed, double jump, double seatHeight, String ani
     /** Whether a ridden pet of the species dives in deep water: its riding section sets a swim speed. */
     public boolean dives() {
         return swimSpeed > 0D;
+    }
+
+    /** How far a diving pet swims in a tick at full speed, in blocks, for a pet with this speed stat. */
+    public double swimStep(double statSpeed) {
+        return swimSpeed * statSpeed / 20D;
     }
 
     /** The movement speed that swims a diving body at swimSpeed blocks a second times the pet's speed stat. */
