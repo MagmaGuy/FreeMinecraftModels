@@ -142,6 +142,26 @@ class PetOwnershipProgramsTest {
     }
 
     @Test
+    void onlyAWildBodyRunsMigrate() {
+        try (PetBehaviorCatalog catalog = catalog()) {
+            PetPrograms programs = new PetPrograms(catalog, warnings::add);
+            List<PetBehaviorEntry> flyer = PetPrograms.defaults(com.magmaguy.magmacore.ai.MindBodyLocomotion.FLYING);
+            // A migrant is a wild body; taming one spawns an owned body, which is in no flock.
+            PetPrograms.Program wild = programs.program("jelly", "flyer", PetPrograms.Ownership.WILD, flyer, "jelly.pet.yml");
+            PetPrograms.Program owned = programs.program("jelly", "flyer", PetPrograms.Ownership.OWNED, flyer, "jelly.pet.yml");
+            assertTrue(wild.runs("migrate"), "a wild flyer runs migrate");
+            assertFalse(owned.runs("migrate"), "an owned flyer leaves it out");
+            assertTrue(behaviors(wild.instantiate(LuaMindContextExtension.NONE, past -> false)).contains("fmm:pet/migrate"));
+            assertFalse(behaviors(owned.instantiate(LuaMindContextExtension.NONE, past -> false)).contains("fmm:pet/migrate"));
+            // A pet file may still switch it on for owned pets, where it never finds a route.
+            PetPrograms.Program asked = programs.program("jelly", "asked", PetPrograms.Ownership.OWNED,
+                    List.of(new PetBehaviorEntry("migrate", Map.of("pets", true))), "jelly.pet.yml");
+            assertTrue(asked.runs("migrate"));
+        }
+        assertEquals(List.of(), warnings);
+    }
+
+    @Test
     void aGatedBehaviorOrSensorReachesItsModuleOnlyAfterARecentHit() {
         try (PetBehaviorCatalog catalog = catalog()) {
             PetPrograms.Program wild = new PetPrograms(catalog, warnings::add)

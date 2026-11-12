@@ -1,6 +1,9 @@
 -- On a migration: flies the flock's route ahead of everything else, until the route ends or the pet is tamed.
 return ai.module {
     id = 'fmm:pet/migrate', revision = 1,
+    -- pets switches it on for owned pets, which never fly a migration (taming a migrant takes it out of its flock), so
+    -- it is off and their bodies leave it out.
+    settings = { pets = false },
     behaviors = {
         ai.behavior {
             -- Asked to start every 10 ticks: a late starter catches up, as members outfly the flock's anchor.
