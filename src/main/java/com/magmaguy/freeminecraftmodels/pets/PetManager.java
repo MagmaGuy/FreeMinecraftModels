@@ -1370,7 +1370,9 @@ public final class PetManager {
                 if (body == null || !body.isValid() || body.getWorld() != player.getWorld()) {
                     if (live != null) despawn(live);
                     spawnOwned(player, record);
+                    continue;
                 }
+                catchUp(player, record, live, body);
             }
             if (healthChanged) collection.save();
         }
@@ -1393,6 +1395,36 @@ public final class PetManager {
             if (body == null || !body.isValid() || PetsConfig.mode != PetsConfig.Mode.CREATURES) stash(control);
         }
         restoreNearPlayers();
+    }
+
+    /**
+     * Brings a pet that fell behind to its owner (see {@link PetCatchUp}): up behind them, as its own follow_owner
+     * would. With no spot for it there, a wall of water or a ledge too narrow, it gets a new body beside them, as a
+     * pet lost to a chunk unload does, once there is ground or water under them for it to come down on; an owner in
+     * the air is waited for. A pet told to stay never gets here, and one its owner rides is with them.
+     */
+    private void catchUp(Player owner, PetRecord record, PetControl live, LivingEntity body) {
+        int age = body.getTicksLived();
+        boolean frozen = age == live.watchedAge();
+        live.setWatchedAge(age);
+        boolean withOwner = live.owner().isPresent();
+        double distance = withOwner ? owner.getLocation().distance(body.getLocation()) : 0D;
+        PetCatchUp.Verdict verdict = PetCatchUp.verdict(withOwner, distance, live.species().teleportDistance(),
+                rides.isRidden(live), frozen, live.farSince(), ticks);
+        if (verdict == PetCatchUp.Verdict.NEAR) {
+            live.setFarSince(PetCatchUp.NEVER);
+            return;
+        }
+        if (live.farSince() == PetCatchUp.NEVER) live.setFarSince(ticks);
+        if (verdict == PetCatchUp.Verdict.WAIT) return;
+        if (PetMotion.teleportNearOwner(live, body, PetCatchUp.RADIUS)) {
+            live.setFarSince(PetCatchUp.NEVER);
+            live.moved();
+            return;
+        }
+        if (!PetMotion.landsBeside(live, owner.getLocation())) return;
+        despawn(live);
+        spawnOwned(owner, record);
     }
 
     // ---- wild pets that stay -----------------------------------------------------------------------------------

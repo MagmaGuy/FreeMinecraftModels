@@ -41,6 +41,9 @@ public final class PetControl {
     private Location stayAnchor;
     // Where a wild pet drifts around; an owned pet drifts around its owner instead.
     private Location home;
+    private long farSince = PetCatchUp.NEVER;
+    private int watchedAge = -1;
+    private Runnable movedListener;
     private long loveUntilTick;
     // The pet clock tick its health display goes away (0 while none shows), and the health it last showed.
     private long healthBarUntil;
@@ -89,6 +92,37 @@ public final class PetControl {
 
     public boolean isWild() {
         return owner == null;
+    }
+
+    /** The pet tick the watchdog first found it past its teleport distance, or {@link PetCatchUp#NEVER} (see there). */
+    long farSince() {
+        return farSince;
+    }
+
+    void setFarSince(long tick) {
+        this.farSince = tick;
+    }
+
+    /** Its body's age at the watchdog's last look, to tell a body that has stopped ticking; -1 before the first. */
+    int watchedAge() {
+        return watchedAge;
+    }
+
+    void setWatchedAge(int age) {
+        this.watchedAge = age;
+    }
+
+    /** What to run when something other than its own behaviors moves its body: its c.pet table's (see {@link #moved}). */
+    void onMoved(Runnable listener) {
+        this.movedListener = listener;
+    }
+
+    /**
+     * Its body was moved from outside its behaviors, as when the watchdog brings it to its owner: its c.pet table
+     * drops the path it was walking and reads its position afresh, as after its own catch-up teleport.
+     */
+    void moved() {
+        if (movedListener != null) movedListener.run();
     }
 
     public boolean isOwnedBy(Player player) {

@@ -207,6 +207,11 @@ public final class PetLuaTable {
         values.put("scale", LuaValue.valueOf(pet.scale()));
         values.put("baby_scale", LuaValue.valueOf(pet.babyScale()));
         LuaTable species = speciesTable(values);
+        // The watchdog's catch-up moves the body as teleport_near_owner does.
+        control.onMoved(() -> {
+            path.forget();
+            ticks.moved();
+        });
 
         property("species", () -> species);
         property("wild", ticks.perTick(() -> LuaValue.valueOf(control.isWild())));

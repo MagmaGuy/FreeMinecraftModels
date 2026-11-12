@@ -298,6 +298,26 @@ public final class PetMotion {
         return body.teleport(spot);
     }
 
+    /** How far under its owner the ground may be for a pet's new body to be put beside them, in blocks. */
+    static final int LANDING_DEPTH = 4;
+
+    /**
+     * Whether a pet given a new body beside this spot has something to come down on: a pet that flies always has,
+     * and any other needs ground, or a liquid's surface, within {@link #LANDING_DEPTH} blocks under the spot. A new
+     * body appears up to 3 blocks under its owner (see {@link #hoverPoint}), so beside an owner who is falling or
+     * flying high it would drop the rest of the way. False in an unloaded chunk.
+     */
+    static boolean landsBeside(PetControl control, Location spot) {
+        if (control.species().locomotion() == MindBodyLocomotion.FLYING) return true;
+        if (!loaded(spot)) return false;
+        return lands(spot.getY(), groundBelow(spot, LANDING_DEPTH, true), LANDING_DEPTH);
+    }
+
+    /** {@link #landsBeside}'s rule: ground was found within depth blocks under a spot at height y. */
+    static boolean lands(double y, double ground, int depth) {
+        return ground > y - depth;
+    }
+
     /**
      * A spot to rest within radius of center in the body's own medium: in its hover band when it flies, on standing
      * ground when it walks or cannot move, in water when it swims, and on ground or else in water when it is
