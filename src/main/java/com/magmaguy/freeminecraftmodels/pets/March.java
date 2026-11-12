@@ -220,10 +220,15 @@ final class March {
         }
         if (phase == Phase.FORMING) {
             // The leader waits on the spot it called from: the marchers gathering round it shove it, and it walks
-            // back. The spot keeps the height it was called at. Shoved up or down a step, the leader was given the
-            // spot at the height it then stood at, a point in the air or in the ground, could not walk there, and
-            // stood on the other level until the line set off without it.
-            if (now - calledAt < FORM_TICKS && !formed(now)) return home.clone();
+            // back. The spot is at the height of the ground there. Shoved up or down a step, the leader was given
+            // the spot at the height it then stood at, a point in the air or in the ground, could not walk there,
+            // and stood on the other level until the line set off without it. The ground there is not always at the
+            // height the march was called at: a caller on the edge of a block has its middle over lower ground.
+            if (now - calledAt < FORM_TICKS && !formed(now)) {
+                int feet = ground.standing((int) Math.floor(home.getX()), (int) Math.floor(home.getY()),
+                        (int) Math.floor(home.getZ()));
+                return new Vector(home.getX(), feet == MarchRoute.Ground.NO_FOOTING ? home.getY() : feet, home.getZ());
+            }
             phase = Phase.OUT;
             outEnd = now + durationTicks / 2L;
             // The first leg runs from that spot, along the heading that was found clear from there. From wherever

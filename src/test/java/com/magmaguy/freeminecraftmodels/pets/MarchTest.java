@@ -148,6 +148,24 @@ class MarchTest {
     }
 
     @Test
+    void aLeaderShovedOffTheEdgeItCalledFromWalksBackUnderItsSpot() {
+        // The block the march is called over is a block lower than the ground round it: the caller stood on the edge
+        // of the next block, its middle over the lower ground.
+        MarchRoute.Ground lip = (x, feet, z) -> {
+            int height = x == 0 && z == 0 ? FEET - 1 : FEET;
+            return Math.abs(x) > 200 || Math.abs(z) > 200 || Math.abs(height - feet) > 1 ? MarchRoute.Ground.NO_FOOTING : height;
+        };
+        March march = new March(new UUID(0, 0), HOME, List.of(new UUID(0, 1)), new Vector[]{new Vector(-3, FEET, 0.5)},
+                new double[]{1, 1}, 1, 0, SPACING, 1000, 2400);
+        // Shoved a third of a block, it drops off the edge onto the lower ground.
+        Vector spot = march.spot(new UUID(0, 0), new Vector(0.2, FEET - 1, 0.3), 1010, lip);
+        assertEquals(March.Phase.FORMING, march.phase());
+        assertEquals(HOME.getX(), spot.getX(), 1.0E-9);
+        assertEquals(HOME.getZ(), spot.getZ(), 1.0E-9);
+        assertEquals(FEET - 1, spot.getY(), 1.0E-9, "its spot is on the ground under where it called, not in the air over it");
+    }
+
+    @Test
     void theLeaderWalksDownAStepAcrossItsWayAndTheLineFollows() {
         // A step down across the way at x 10, as a terrace on a hillside.
         MarchRoute.Ground terrace = (x, feet, z) -> {
