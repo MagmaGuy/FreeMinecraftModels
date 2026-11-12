@@ -34,6 +34,35 @@ class PetBehaviorDefaultsTest {
         }
     }
 
+    /**
+     * outdated-config-keys.yml archives a server's copy of a module whose text is one of the hashes listed for its
+     * file, and the module is then written again. A shipped module listed there would be archived and rewritten on
+     * every start, so none may be: migrate.lua came back after its earlier versions were listed.
+     */
+    @Test
+    void noShippedModuleIsListedForArchiving() throws Exception {
+        org.bukkit.configuration.file.YamlConfiguration rules = new org.bukkit.configuration.file.YamlConfiguration();
+        try (InputStream in = JAR.apply("outdated-config-keys.yml")) {
+            rules.loadFromString(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+        }
+        java.util.Map<String, java.util.Set<String>> listed = new java.util.HashMap<>();
+        for (java.util.Map<?, ?> rule : rules.getMapList("pet_behaviors"))
+            for (Object file : (List<?>) rule.get("files"))
+                for (Object hash : (List<?>) rule.get("sha256"))
+                    listed.computeIfAbsent(file.toString(), ignored -> new java.util.HashSet<>()).add(hash.toString());
+        assertTrue(listed.containsKey("migrate.lua"), "the earlier migrate.lua versions are still archived");
+        java.security.MessageDigest sha256 = java.security.MessageDigest.getInstance("SHA-256");
+        for (String name : PetBehaviorCatalog.DEFAULTS) {
+            String text = PetBehaviorDefaults.text(name, JAR);
+            assertTrue(text != null, "the jar ships " + name + ".lua");
+            // The rule hashes a file's bytes with its carriage returns removed.
+            String hash = java.util.HexFormat.of().formatHex(sha256.digest(
+                    text.replace("\r", "").getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            assertTrue(!listed.getOrDefault(name + ".lua", java.util.Set.of()).contains(hash),
+                    "the shipped " + name + ".lua is listed for archiving, so it would be replaced on every start");
+        }
+    }
+
     @Test
     void onlyOldLeftoverDefaultsAreRemoved() throws IOException {
         long now = System.currentTimeMillis();
