@@ -577,7 +577,14 @@ public final class PetManager {
         double scale = pet.scale() * (control.isBaby() ? pet.babyScale() : 1D) * PetStats.size(control.stats(), pet.statCap());
         MobBody next;
         try {
-            next = host.spawnBody(old.getLocation(), profile(pet, scale, carrier), prepared -> prepare(prepared.entity(), maxHealth));
+            // Turned to its facing before it is added to the world: the server notes the yaw and head yaw it tells
+            // clients a new entity has when it starts tracking it, which is then. A horse turns its new rider to its
+            // head's yaw on their client too, so one turned only afterwards reached the client facing south, and the
+            // rider's view went there two ticks after they surfaced.
+            next = host.spawnBody(old.getLocation(), profile(pet, scale, carrier), prepared -> {
+                prepare(prepared.entity(), maxHealth);
+                if (facing != null) NMSManager.getAdapter().snapRotation(prepared.entity(), facing.getYaw(), facing.getPitch());
+            });
         } catch (RuntimeException failure) {
             refuse(pet, "its " + carrier + " body could not spawn (" + reason(failure) + ")");
             return null;
@@ -619,9 +626,9 @@ public final class PetManager {
         redrawHealthDisplay(control);
         // Its first frame carries on from the old model's, so the switch of bodies does not show in its animation.
         modeled.getAnimationComponent().continueFrom(oldModel.getAnimationComponent());
-        // Before anyone sees it: a horse turns its new rider to its view, on the server and on their client, and the
-        // view it uses is its head's from the tick before. Bukkit's setRotation leaves that one at 0 on a body
-        // spawned this tick, which turned the rider to face south as they surfaced.
+        // Again now that its Mind and model are on it. A horse turns its new rider to its view, on the server and on
+        // their client, and the view it uses is its head's from the tick before. Bukkit's setRotation leaves that
+        // one at 0 on a body spawned this tick, which turned the rider to face south as they surfaced.
         if (facing != null && !NMSManager.getAdapter().snapRotation(entity, facing.getYaw(), facing.getPitch()))
             entity.setRotation(facing.getYaw(), facing.getPitch());
         // Shown now, in the tick the old model goes, rather than at the next viewer refresh up to 4 ticks later: the pet
