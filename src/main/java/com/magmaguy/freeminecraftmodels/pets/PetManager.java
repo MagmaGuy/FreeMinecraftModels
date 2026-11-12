@@ -588,6 +588,8 @@ public final class PetManager {
         if (control.isWild()) wildLive.add(control);
         control.attach(entity, modeled, mind);
         dress(control, entity, modeled);
+        // Before anyone sees the new model: its nameplate starts as the name alone.
+        redrawHealthDisplay(control);
         // Its first frame carries on from the old model's, so the switch of bodies does not show in its animation.
         modeled.getAnimationComponent().continueFrom(oldModel.getAnimationComponent());
         // Before anyone sees it: a client turns a horse's new rider to the horse's view.
@@ -682,22 +684,40 @@ public final class PetManager {
 
     /** Keeps every shown health display in step with its pet's health, and takes it down once its time is up. */
     private void tickHealthBars() {
-        for (PetControl control : byBody.values()) {
-            if (control.healthBarUntil() == 0L) continue;
-            DynamicEntity modeled = control.modeled();
-            LivingEntity body = control.body();
-            if (modeled == null || modeled.isRemoved() || body == null || !body.isValid()) continue;
-            if (ticks >= control.healthBarUntil() || !PetsConfig.showHealthBar) {
-                control.setHealthBarUntil(0L);
-                modeled.setDisplayName(nameplate(control));
-                continue;
-            }
-            double health = body.getHealth();
-            if (health == control.shownHealth()) continue;
-            control.setShownHealth(health);
-            modeled.setDisplayNameLines(healthLines(nameplate(control), health, maxHealth(body),
-                    control.stats().health * control.babyShare()));
+        for (PetControl control : byBody.values()) refreshHealthDisplay(control);
+    }
+
+    /**
+     * Puts one pet's nameplate in step with its health display: the display's lines while it is up, written again
+     * when the pet's health changes, and the name alone once its time is up. Every pet gets this each tick. Whatever
+     * replaces a pet's nameplate while its display is up, a new model or a new name, forgets the health it showed
+     * with {@link #redrawHealthDisplay}, which draws it again at once.
+     */
+    private void refreshHealthDisplay(PetControl control) {
+        if (control.healthBarUntil() == 0L) return;
+        DynamicEntity modeled = control.modeled();
+        LivingEntity body = control.body();
+        if (modeled == null || modeled.isRemoved() || body == null || !body.isValid()) return;
+        if (ticks >= control.healthBarUntil() || !PetsConfig.showHealthBar) {
+            control.setHealthBarUntil(0L);
+            modeled.setDisplayName(nameplate(control));
+            return;
         }
+        double health = body.getHealth();
+        if (health == control.shownHealth()) return;
+        control.setShownHealth(health);
+        modeled.setDisplayNameLines(healthLines(nameplate(control), health, maxHealth(body),
+                control.stats().health * control.babyShare()));
+    }
+
+    /**
+     * Draws a pet's health display again, if it is up, on a nameplate that was just replaced: the lines are written
+     * only when the health they show changes, so without this a pet that changed body or was renamed with its display
+     * up lost it until it was next hurt or healed.
+     */
+    private void redrawHealthDisplay(PetControl control) {
+        control.setShownHealth(-1D);
+        refreshHealthDisplay(control);
     }
 
     /**
@@ -1028,7 +1048,10 @@ public final class PetManager {
                 control.record().name = tag.getDisplayName();
                 collection(player).save();
                 DynamicEntity modeled = control.modeled();
-                if (modeled != null && !modeled.isRemoved()) modeled.setDisplayName(nameplate(control));
+                if (modeled != null && !modeled.isRemoved()) {
+                    modeled.setDisplayName(nameplate(control));
+                    redrawHealthDisplay(control);
+                }
                 if (player.getGameMode() != GameMode.CREATIVE) held.setAmount(held.getAmount() - 1);
                 particles(control, Particle.HEART, 3);
             } else player.sendMessage(ChatColorConverter.convert(PetsConfig.nameTagBlankMessage));
