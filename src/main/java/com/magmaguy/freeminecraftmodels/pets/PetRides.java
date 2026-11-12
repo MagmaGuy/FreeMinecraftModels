@@ -75,6 +75,11 @@ final class PetRides {
      * the server keeps the head out of the block on its own side.
      */
     static final long CORRECTION_TICKS = 5L;
+    /**
+     * The share of a player's width that vanilla tests round their eyes for suffocation: a box that wide touching a
+     * solid block hurts them. A rider's head needs that much room.
+     */
+    static final double HEAD_PROBE = 0.8D;
     /** The most ticks a rider's client is taken to need to act on a velocity it is sent, however slow its connection. */
     private static final int MAX_DELAY_TICKS = 10;
     private final PetManager manager;
@@ -328,9 +333,12 @@ final class PetRides {
             // Vanilla turns a horse's new rider to the horse's view, on the server and their client, so the new body
             // faces where the rider looks first and their view stays put.
             Location view = rider.getLocation();
-            LivingEntity next = manager.rebody(control, carrier, view, rider::leaveVehicle);
+            LivingEntity next = manager.rebody(control, carrier, view, rider::leaveVehicle,
+                    (old, body, model) -> riddenSpot(old, body, rider));
             DynamicEntity modeled = control.modeled();
-            if (modeled != null) modeled.seatSteeringRider(rider);
+            // Seated, it carries the box its rider's client moves it with from this tick, not from its model's next.
+            if (modeled != null && modeled.seatSteeringRider(rider) && next != null)
+                modeled.getHitboxComponent().syncBodyBox();
             if (next != null) setBase(next, Attribute.JUMP_STRENGTH, control.species().riding().jump());
             return next;
         } finally {
@@ -339,12 +347,65 @@ final class PetRides {
     }
 
     /**
+     * Where a body about to carry this rider fits, nearest to where it spawned: its own box as its rider's client
+     * will move it, and over it the room its rider's head needs. Null when nothing near has that room, such as a
+     * crawlspace the smaller body got into: the pet then keeps the body it has and tries again later.
+     */
+    private static Location riddenSpot(LivingEntity old, LivingEntity next, Player rider) {
+        // Steered, a body has the box Minecraft gives its kind and scale, not its model's hitbox bone.
+        NMSManager.getAdapter().resetHitbox(next);
+        BoundingBox box = next.getBoundingBox();
+        Vector seat = NMSManager.getAdapter().getPassengerSeatOffset(next, 0);
+        BodyFit.Shape shape = seat == null ? BodyFit.Shape.of(box.getWidthX(), box.getHeight())
+                : new BodyFit.Shape(box.getWidthX(), box.getHeight(), HEAD_PROBE * rider.getWidth(), box.getHeight(),
+                seat.getY() - RideCeiling.PLAYER_SEAT + rider.getHeight());
+        return spot(old, next, shape);
+    }
+
+    /**
+     * Where a body nobody rides fits, nearest to where it stands, with the box of its model's hitbox bone. With no
+     * room near it stays where it is: nobody is left on its old body to keep that one for.
+     */
+    private static Location unriddenSpot(LivingEntity old, LivingEntity next, DynamicEntity modeled) {
+        // Its saddle lift rebuilt its box from its kind; its model's box goes back on before it is measured.
+        modeled.getHitboxComponent().syncBodyBox();
+        BoundingBox box = next.getBoundingBox();
+        Location spot = spot(old, next, BodyFit.Shape.of(box.getWidthX(), box.getHeight()));
+        return spot != null ? spot : next.getLocation();
+    }
+
+    private static Location spot(LivingEntity old, LivingEntity next, BodyFit.Shape shape) {
+        Location at = next.getLocation();
+        Vector spot = BodyFit.nearest(at.getX(), at.getY(), at.getZ(), shape, old.getBoundingBox(),
+                RideCeiling.of(next.getWorld()));
+        return spot == null ? null : new Location(at.getWorld(), spot.getX(), spot.getY(), spot.getZ(), at.getYaw(), at.getPitch());
+    }
+
+    /**
+     * A body its rider just left takes the box of its model's hitbox bone back, wider and taller than the one it was
+     * steered with. Beside a wall that box reached into the wall, and the pet's own steps then took it further in.
+     * It gets the box now and is moved to the nearest spot where it fits; with none near it stays.
+     */
+    private static void settle(PetControl control, LivingEntity body) {
+        DynamicEntity modeled = control.modeled();
+        if (modeled == null || modeled.isRemoved() || !body.getPassengers().isEmpty()) return;
+        BoundingBox steered = body.getBoundingBox();
+        modeled.getHitboxComponent().syncBodyBox();
+        BoundingBox box = body.getBoundingBox();
+        Location at = body.getLocation();
+        Vector spot = BodyFit.nearest(at.getX(), at.getY(), at.getZ(), BodyFit.Shape.of(box.getWidthX(), box.getHeight()),
+                steered, RideCeiling.of(body.getWorld()));
+        if (spot != null) PetManager.moveBody(body, spot.getX(), spot.getY(), spot.getZ());
+    }
+
+    /**
      * The rider got off a body that is still there: a diving pet gets a body of its own kind back first, so it swims
      * on its own as it always does.
      */
     private void dismount(PetControl control) {
         Ride ride = ridden.get(control);
-        if (ride != null && ride.diving) manager.rebody(control, control.species().body().getKey().toString(), null);
+        if (ride != null && ride.diving)
+            manager.rebody(control, control.species().body().getKey().toString(), null, null, PetRides::unriddenSpot);
         getOff(control);
     }
 
@@ -449,7 +510,10 @@ final class PetRides {
         Ride ride = ridden.remove(control);
         if (ride == null) return;
         LivingEntity body = control.body();
-        if (body != null && body.isValid()) restore(body, ride.before);
+        if (body != null && body.isValid()) {
+            restore(body, ride.before);
+            settle(control, body);
+        }
         // Its nameplate is theirs to see again.
         manager.hideNameplateFromRider(control);
         MindHandle mind = control.mind();

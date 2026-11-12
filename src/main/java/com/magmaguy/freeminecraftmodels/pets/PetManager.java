@@ -541,15 +541,30 @@ public final class PetManager {
      * spawn.
      */
     LivingEntity rebody(PetControl control, String carrier, Location facing) {
-        return rebody(control, carrier, facing, null);
+        return rebody(control, carrier, facing, null, null);
+    }
+
+    /** Where a pet's new body goes, once it has the size it will have. */
+    @FunctionalInterface
+    interface Placement {
+        /**
+         * Where {@code next} stands, given the body it replaces and its own model; null when it fits nowhere near,
+         * and then the pet keeps the body it has.
+         */
+        Location place(LivingEntity old, LivingEntity next, DynamicEntity modeled);
     }
 
     /**
      * {@link #rebody(PetControl, String, Location)}, running {@code ready} once the new body and its model exist and
      * before the pet moves to them: what must leave the old body first, such as its rider, leaves only when there is
      * a body to go to. It does not run when the new body could not spawn.
+     * <p>
+     * The new body spawns where the old one stands, and bodies differ in size: a horse body is wider and taller than
+     * the nautilus a diving pet swims as. {@code placement} says where the new body goes once it is dressed, which
+     * sizes it; with none it stays where it spawned. A placement that finds no room ends the change like a body that
+     * could not spawn: null, the pet as it was, and {@code ready} not run.
      */
-    LivingEntity rebody(PetControl control, String carrier, Location facing, Runnable ready) {
+    LivingEntity rebody(PetControl control, String carrier, Location facing, Runnable ready, Placement placement) {
         LivingEntity old = control.body();
         DynamicEntity oldModel = control.modeled();
         MindHandle mind = control.mind();
@@ -573,6 +588,17 @@ public final class PetManager {
             entity.remove();
             return null;
         }
+        // Dressed before it is placed: its saddle lift and its model's hitbox bone give it its size.
+        dress(control, entity, modeled);
+        if (placement != null) {
+            Location spot = placement.place(old, entity, modeled);
+            if (spot == null) {
+                modeled.remove();
+                entity.remove();
+                return null;
+            }
+            moveBody(entity, spot.getX(), spot.getY(), spot.getZ());
+        }
         if (ready != null) ready.run();
         try {
             mind.detachBody();
@@ -589,7 +615,6 @@ public final class PetManager {
         byBody.put(entity.getUniqueId(), control);
         if (control.isWild()) wildLive.add(control);
         control.attach(entity, modeled, mind);
-        dress(control, entity, modeled);
         // Before anyone sees the new model: its nameplate starts as the name alone.
         redrawHealthDisplay(control);
         // Its first frame carries on from the old model's, so the switch of bodies does not show in its animation.
@@ -603,6 +628,21 @@ public final class PetManager {
         oldModel.remove();
         if (old.isValid()) old.remove();
         return entity;
+    }
+
+    /**
+     * Moves a body nobody rides to these coordinates, facing as it does. Not Bukkit's teleport where the server can
+     * do without: that is an event another plugin may cancel, and this move is a few hundredths of a block, to take
+     * the body's box out of a wall.
+     */
+    static void moveBody(LivingEntity body, double x, double y, double z) {
+        Location at = body.getLocation();
+        if (at.getX() == x && at.getY() == y && at.getZ() == z) return;
+        if (NMSManager.getAdapter().moveSteeredVehicle(body, x, y, z, false)) return;
+        at.setX(x);
+        at.setY(y);
+        at.setZ(z);
+        body.teleport(at);
     }
 
     /**

@@ -208,8 +208,11 @@ public class HitboxComponent {
      * box from the mob's type whenever its scale or pose changes, a rideable pet's saddle lift included, so this puts
      * it back. While a player steers the mob it has the box Minecraft gives it: the rider's client moves the mob with
      * that box, and the server turns back any move its own box disagrees with. Primary thread.
+     * <p>
+     * Every model tick does this. A caller that needs the box right now, to see where the body fits before a rider
+     * gets on or after one got off, calls it too.
      */
-    private void syncBodyBox() {
+    public void syncBodyBox() {
         HitboxBlueprint hitbox = modeledEntity.getSkeletonBlueprint().getHitbox();
         Entity body = modeledEntity.getUnderlyingEntity();
         if (hitbox == null || body == null || body.isDead()) return;
