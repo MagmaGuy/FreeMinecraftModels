@@ -353,9 +353,11 @@ final class PetRides {
                 y -= down;
             }
         }
-        // Deep in a block all the same: out to the nearest spot where the body and its rider fit. Looked for only as
-        // often as the rider's client is told, since it snaps the pet to each such move.
-        if (tell && !BodyFit.fits(at.getX(), y, at.getZ(), headShape(box, 2D * (half - RideColumn.DEEP), head - y), blocks)) {
+        // Deep in a block all the same: out to the nearest spot where the body and its rider's head fit. The head
+        // alone is asked: the body's own box is the client's to keep out of blocks, and the server's copy of it
+        // may sit a hair inside one the client has it pressed to. Looked for only as often as the rider's client
+        // is told, since it snaps the pet to each such move.
+        if (tell && !BodyFit.colliders(RideColumn.head(box, half - RideColumn.DEEP, head), blocks).isEmpty()) {
             Vector spot = BodyFit.nearest(at.getX(), y, at.getZ(), headShape(box, 2D * (half + BodyFit.CLEAR), head - y), box, blocks);
             if (spot != null && NMSManager.getAdapter().moveSteeredVehicle(body, spot.getX(), spot.getY(), spot.getZ(), true)) {
                 ride.correctAgainAt = PetManager.ticks() + CORRECTION_TICKS;
