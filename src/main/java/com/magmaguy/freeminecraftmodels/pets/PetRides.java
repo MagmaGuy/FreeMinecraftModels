@@ -319,10 +319,10 @@ final class PetRides {
      * <p>
      * Over them (see {@link RideCeiling}): a head already in a block has the body moved down, as far as the floor
      * allows; a head nearing one, over the rider or over where they are heading, has the body's climb slowed.
-     * Beside them (see {@link RideColumn}): the rider's column, from the body's top to the top of their head, is
-     * slowed toward a block it is heading for and comes to rest just short of it, so a wall the body swims against
-     * and a gap that fits the body but not its rider both stop them. A column that is deep in a block all the
-     * same, as after a dash, has the body moved to the nearest spot where both fit.
+     * Beside them (see {@link RideColumn}): the rider's head is stopped just short of a block it reaches, so a
+     * wall the body swims against and a gap that fits the body but not its rider's head both stop them. A head
+     * that is deep in a block all the same, as after a dash, has the body moved to the nearest spot where both
+     * fit.
      * <p>
      * Every slowing is one velocity the rider's client takes as its own, so the pet keeps the rest of its travel:
      * it slides along a wall and under a ceiling.
@@ -355,8 +355,8 @@ final class PetRides {
         }
         // Deep in a block all the same: out to the nearest spot where the body and its rider fit. Looked for only as
         // often as the rider's client is told, since it snaps the pet to each such move.
-        if (tell && !BodyFit.fits(at.getX(), y, at.getZ(), riderShape(box, 2D * (half - RideColumn.DEEP), head - y), blocks)) {
-            Vector spot = BodyFit.nearest(at.getX(), y, at.getZ(), riderShape(box, 2D * (half + BodyFit.CLEAR), head - y), box, blocks);
+        if (tell && !BodyFit.fits(at.getX(), y, at.getZ(), headShape(box, 2D * (half - RideColumn.DEEP), head - y), blocks)) {
+            Vector spot = BodyFit.nearest(at.getX(), y, at.getZ(), headShape(box, 2D * (half + BodyFit.CLEAR), head - y), box, blocks);
             if (spot != null && NMSManager.getAdapter().moveSteeredVehicle(body, spot.getX(), spot.getY(), spot.getZ(), true)) {
                 ride.correctAgainAt = PetManager.ticks() + CORRECTION_TICKS;
                 // It has no step to speak of this tick: it was moved.
@@ -369,8 +369,8 @@ final class PetRides {
         double climbed = moved ? at.getY() - ride.lastY : 0D;
         // A server tick, and the trip to the rider's client and back.
         int delay = Math.min(MAX_DELAY_TICKS, 1 + (Math.max(0, rider.getPing()) + 49) / 50);
-        // As far ahead as the brake beside the rider starts to bite, so a body heading for a tunnel's mouth with
-        // its rider's head over the tunnel's ceiling is on its way down before the column gets there.
+        // Further ahead than its next step: a body heading for a tunnel's mouth with its rider's head over the
+        // tunnel's ceiling is on its way down before the head gets there.
         int look = delay + 1 + RideColumn.LOOK_TICKS;
         double over = Math.min(RideCeiling.above(box, stepX * look, stepZ * look, upTo, blocks),
                 RideCeiling.above(box, RideColumn.footprint(box, half, head), stepX * look, stepZ * look, upTo, blocks));
@@ -378,9 +378,9 @@ final class PetRides {
         Location view = rider.getLocation();
         Vector thrust = RideColumn.thrust(speed, view.getYaw(), view.getPitch(), forward(rider), strafe(rider));
         double up = RideCeiling.brake(over - head, climbed, thrust.getY(), delay);
-        BoundingBox column = RideColumn.over(box, half, head);
-        double alongX = RideColumn.brake(column, true, stepX, thrust.getX(), stepZ, delay, blocks);
-        double alongZ = RideColumn.brake(column, false, stepZ, thrust.getZ(), stepX, delay, blocks);
+        BoundingBox headBox = RideColumn.head(box, half, head);
+        double alongX = RideColumn.brake(headBox, true, stepX, thrust.getX(), stepZ, delay, blocks);
+        double alongZ = RideColumn.brake(headBox, false, stepZ, thrust.getZ(), stepX, delay, blocks);
         if (Double.isNaN(up) && Double.isNaN(alongX) && Double.isNaN(alongZ)) return;
         // What is not slowed is what the client would have next tick by itself.
         body.setVelocity(new Vector(Double.isNaN(alongX) ? RideCeiling.WATER_DRAG * stepX : alongX,
@@ -388,9 +388,10 @@ final class PetRides {
                 Double.isNaN(alongZ) ? RideCeiling.WATER_DRAG * stepZ : alongZ));
     }
 
-    /** A body's box and, over it, a rider's column this wide up to this far above the body's feet. */
-    private static BodyFit.Shape riderShape(BoundingBox box, double width, double headAboveFeet) {
-        return new BodyFit.Shape(box.getWidthX(), box.getHeight(), width, box.getHeight(), headAboveFeet);
+    /** A body's box and, over it, its rider's head this wide, its top this far above the body's feet. */
+    private static BodyFit.Shape headShape(BoundingBox box, double width, double headAboveFeet) {
+        return new BodyFit.Shape(box.getWidthX(), box.getHeight(), width,
+                Math.max(box.getHeight(), headAboveFeet - RideColumn.HEAD), headAboveFeet);
     }
 
     /** The rider's forward key as the nautilus they steer reads it: 1, -1 for backward, 0 for neither or both. */

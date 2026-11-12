@@ -4,7 +4,7 @@ import org.bukkit.util.BoundingBox;
 import org.bukkit.util.Vector;
 
 /**
- * The room a diving pet's rider takes up over its body, and how far that room is from the blocks beside it.
+ * The room a diving pet's rider's head takes up over its body, and how far that room is from the blocks beside it.
  * <p>
  * The rider's client steers the pet's nautilus body and stops only that body at a block. The body is 0.44 blocks
  * wide and half a block tall; its rider sits in its middle with their head 1.3 blocks over its top. Two things
@@ -14,23 +14,35 @@ import org.bukkit.util.Vector;
  * finds one of the eight points it tests round the rider's eyes (0.24 blocks either side, 0.05 above and below)
  * inside a block, and draws that block over the whole screen.
  * <p>
- * So the rider's column, from the body's top to the top of their head and as wide as the client's test, is kept
- * out of blocks as the body is: a gap that fits the pet but not its rider is closed to them both.
- * {@link PetRides} slows the body toward a block the column is heading for, with the brake that keeps the rider's
- * head under a ceiling ({@link RideCeiling#brake}), so the column comes to rest {@link #MARGIN} short of the block
- * and the pet keeps moving along it.
+ * So the rider's head, the top {@link #HEAD} blocks of them and as wide as the client's test, is kept out of blocks
+ * as the body is: a gap that fits the pet but not its rider's head is closed to them both. {@link PetRides} stops
+ * the body along one axis as the head reaches a block ({@link #brake}), {@link #MARGIN} short of it, and the pet
+ * keeps the rest of its travel, sliding on along the block.
+ * <p>
+ * The head alone, not the whole rider: what is lower than the rider's head is no taller than a bank or a beach's
+ * step, which the body meets itself, and a pet slowed toward every such block lost the pace it leaps out of the
+ * water with. And only at the last moment: a pet slowed from blocks away fell short of the bank it dashed at.
  */
 final class RideColumn {
-    /** Blocks kept between the rider's column and a block beside it: the client's test must stay clear of the block. */
+    /** Blocks kept between the rider's head and a block beside it: the client's test must stay clear of the block. */
     static final double MARGIN = RideCeiling.MARGIN;
+    /** How much of the rider counts as their head, from the top of it down, in blocks: a player's head is half a block. */
+    static final double HEAD = 0.5D;
+    /**
+     * How far short of the margin a body may still be heading at full speed, in blocks: closer, it settles onto the
+     * margin a share of the room left each tick ({@link RideCeiling#GAIN}), so it neither bounces nor creeps in
+     * from blocks away.
+     */
+    static final double SETTLE = 0.15D;
     /**
      * How far in from its sides a column counts as deep in a block: further in than the brake gets it out of by
      * itself within a tick or two, so the body is moved out.
      */
     static final double DEEP = 0.1D;
     /**
-     * Ticks of travel ahead at which the brake starts to bite: it lets the body cover {@link RideCeiling#GAIN} of
-     * the room left each tick, so a body closes on a block over 1 / GAIN ticks of its speed.
+     * Ticks of travel further ahead than before that a ceiling is looked for over where the body is heading: the
+     * brake under a ceiling lets the body cover {@link RideCeiling#GAIN} of the room left each tick, so it needs
+     * 1 / GAIN ticks to take a body down under a tunnel's mouth before its rider's head gets there.
      */
     static final int LOOK_TICKS = (int) Math.round(1D / RideCeiling.GAIN);
     /** The share of a movement key's push a rider's client hands the body it steers, as vanilla scales it. */
@@ -40,10 +52,14 @@ final class RideColumn {
     private RideColumn() {
     }
 
-    /** The column over a body: {@code half} blocks either side of its middle, from its top up to {@code headTop}. */
-    static BoundingBox over(BoundingBox body, double half, double headTop) {
+    /**
+     * The rider's head over a body: {@code half} blocks either side of the body's middle, the top {@link #HEAD}
+     * blocks under {@code headTop}, and never lower than the body's own top.
+     */
+    static BoundingBox head(BoundingBox body, double half, double headTop) {
         double x = body.getCenterX(), z = body.getCenterZ();
-        return new BoundingBox(x - half, body.getMaxY(), z - half, x + half, Math.max(body.getMaxY(), headTop), z + half);
+        double top = Math.max(body.getMaxY(), headTop);
+        return new BoundingBox(x - half, Math.max(body.getMaxY(), top - HEAD), z - half, x + half, top, z + half);
     }
 
     /**
@@ -59,7 +75,7 @@ final class RideColumn {
     }
 
     /**
-     * How far a column can travel along one horizontal axis before it reaches a block: along x or else z, the way
+     * How far a rider's head can travel along one horizontal axis before it reaches a block: along x or else z, the way
      * {@code sign} points (1 or -1). Negative when it already reaches into a block ahead of its middle; positive
      * infinity with nothing within {@code reach} blocks. {@code sideways} is how far it travels along the other
      * horizontal axis meanwhile, signed: the blocks in the way of that travel count too, so a block it nears
@@ -112,26 +128,40 @@ final class RideColumn {
     }
 
     /**
-     * The velocity to send a body along one horizontal axis so its rider's column stops {@link #MARGIN} short of
-     * the block it is heading for, or NaN when it needs none: {@link RideCeiling#brake} turned sideways.
-     * {@code step} is how far the body moved along the axis in the last tick, {@code thrust} what its rider's
-     * steering adds along it each tick, {@code sideways} how far it moved along the other horizontal axis, and
-     * {@code delay} the ticks until the rider's client acts on what is sent. A column at rest closer to a block
-     * than the margin is eased back out to it.
+     * The velocity to send a body along one horizontal axis so its rider's head stops {@link #MARGIN} short of the
+     * block it is heading for, or NaN when it needs none. {@code step} is how far the body moved along the axis in
+     * the last tick, {@code thrust} what its rider's steering adds along it each tick, {@code sideways} how far it
+     * moved along the other horizontal axis, and {@code delay} the ticks until the rider's client acts on what is
+     * sent. A head at rest closer to a block than the margin is eased back out to it.
      */
-    static double brake(BoundingBox column, boolean alongX, double step, double thrust, double sideways, int delay,
+    static double brake(BoundingBox head, boolean alongX, double step, double thrust, double sideways, int delay,
                         RideCeiling.Blocks blocks) {
         double heading = RideCeiling.WATER_DRAG * step + thrust;
+        int wait = Math.max(0, delay);
         for (int sign = 1; sign >= -1; sign -= 2) {
             double toward = sign * heading;
             // Heading the other way, it is leaving whatever is on this side.
             if (toward < -EDGE) continue;
-            double reach = MARGIN + Math.max(0D, toward) * (LOOK_TICKS + Math.max(0, delay) + 1);
-            double room = room(column, alongX, sign, sideways * (Math.max(0, delay) + 1), reach, blocks);
-            double sent = RideCeiling.brake(room, sign * step, sign * thrust, delay);
-            if (!Double.isNaN(sent)) return sign * sent;
+            double reach = MARGIN + SETTLE + Math.max(0D, toward) * (wait + 1);
+            double room = room(head, alongX, sign, sideways * (wait + 1), reach, blocks);
+            double allowed = allowed(room, toward, wait);
+            if (toward > allowed) return sign * (allowed - sign * thrust);
         }
         return Double.NaN;
+    }
+
+    /**
+     * How far a body may move toward a block in its next tick with {@code room} blocks between its rider's head
+     * and the block, heading for it at {@code toward} blocks a tick, when what it is sent takes {@code delay}
+     * ticks to act on. Never further than the room left short of the margin once that delay's travel is taken
+     * off, so it does not reach the block; all of that room but {@link #SETTLE} while it is far, so it keeps its
+     * speed to the last tick; and {@link RideCeiling#GAIN} of it once it is close, so it settles. With no room
+     * left it is sent back, at most {@link RideCeiling#MAX_PUSH} a tick. Positive infinity with no block there.
+     */
+    static double allowed(double room, double toward, int delay) {
+        if (room == Double.POSITIVE_INFINITY) return Double.POSITIVE_INFINITY;
+        double left = room - MARGIN - Math.max(0D, toward) * Math.max(0, delay);
+        return Math.max(-RideCeiling.MAX_PUSH, Math.max(RideCeiling.GAIN * left, left - SETTLE));
     }
 
     private static int floor(double value) {
