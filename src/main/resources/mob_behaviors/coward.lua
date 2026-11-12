@@ -4,7 +4,7 @@
 -- slime, stays where it is.
 --
 -- Put it on a mob from a script with mob:override_ai('coward', { duration = 200 }), or in game with
--- /fmm mobbehavior apply coward.
+-- /fmm mobbehavior applywild coward. /fmm mobbehavior apply makes you its owner, whom it does not fear.
 
 local function distance(a, b)
     local dx, dy, dz = a.x - b.x, a.y - b.y, a.z - b.z

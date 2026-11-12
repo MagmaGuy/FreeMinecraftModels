@@ -1,9 +1,10 @@
 -- Turns a mob on whatever its targets setting names: by default the nearest player, which makes a chicken, a cow or a
 -- villager attack on sight. It also goes for whoever hurts it. It fights the way its kind fights: a creeper blows
--- itself up, a skeleton or pillager shoots, anything else hits; a kind with no attack of its own, like a chicken,
--- deals the damage setting. With an owner it spares them and the other mobs that serve them.
+-- itself up, a skeleton or pillager shoots, anything else hits. A kind with no attack of its own, like a chicken,
+-- deals 2, or the damage setting when that is above 0. With an owner it spares them and the other mobs that serve them.
 --
--- Put it on a mob from a script with mob:override_ai('hostile'), or in game with /fmm mobbehavior apply hostile.
+-- Put it on a mob from a script with mob:override_ai('hostile'), or in game with /fmm mobbehavior applywild hostile.
+-- /fmm mobbehavior apply makes you its owner, whom it spares.
 
 -- How often it plans a new path to someone who keeps moving, in ticks.
 local REPATH_TICKS = 10

@@ -94,7 +94,7 @@ public final class MobBehaviors {
         String reason = cause == null ? "no reason was given"
                 : cause.getMessage() != null ? cause.getMessage() : cause.toString();
         Logger.warn("Mob behavior callback " + failure.callbackIdentifier() + " failed: " + reason
-                + ". MagmaCore stops that behavior, or does not start it, and tries it again from the next tick;"
+                + ". MagmaCore stops that behavior, or does not start it, and asks it again at its next check;"
                 + " the mob's other behaviors keep running. Fix the file in plugins/FreeMinecraftModels/mob_behaviors"
                 + " and run /fmm reload. This is said once per callback until then.");
     }
