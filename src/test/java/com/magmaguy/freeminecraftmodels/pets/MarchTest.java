@@ -121,6 +121,33 @@ class MarchTest {
     }
 
     @Test
+    void aLeaderShovedUpAStepWhileTheLineFormsWalksBackDownToItsSpot() {
+        // A terrace one block higher beside the spot the march is called from, from z -1 on.
+        MarchRoute.Ground terrace = (x, feet, z) -> {
+            int height = z <= -1 ? FEET + 1 : FEET;
+            return Math.abs(x) > 200 || Math.abs(z) > 200 || Math.abs(height - feet) > 1 ? MarchRoute.Ground.NO_FOOTING : height;
+        };
+        Sim sim = new Sim(terrace, 4, 2400);
+        for (int tick = 0; tick < 5; tick++) sim.step();
+        assertEquals(March.Phase.FORMING, sim.march.phase(), "the line is still forming");
+        // The marchers gathering round the leader shove it 1.2 blocks, up onto the terrace.
+        sim.at(0).setZ(HOME.getZ() - 1.2);
+        sim.at(0).setY(FEET + 1);
+        Vector spot = sim.march.spot(sim.ids.get(0), sim.at(0), sim.now, terrace);
+        assertEquals(HOME.getY(), spot.getY(), 1.0E-9, "its spot is where it called from, at the height it called at");
+        for (int tick = 0; tick < 25 && sim.march.phase() == March.Phase.FORMING; tick++) sim.step();
+        assertEquals(HOME.getZ(), sim.at(0).getZ(), 0.35, "the leader is back on the spot it called from");
+        assertEquals(FEET, sim.at(0).getY(), 1.0E-9, "down off the terrace");
+        while (sim.march.phase() == March.Phase.FORMING) {
+            sim.step();
+            assertTrue(sim.now < Sim.START + 400, "the line sets off");
+        }
+        Vector from = sim.at(0).clone();
+        for (int tick = 0; tick < 40; tick++) sim.step();
+        assertTrue(sim.at(0).getX() > from.getX() + 0.5, "and it walks out at once: " + sim.at(0));
+    }
+
+    @Test
     void theLeaderWalksDownAStepAcrossItsWayAndTheLineFollows() {
         // A step down across the way at x 10, as a terrace on a hillside.
         MarchRoute.Ground terrace = (x, feet, z) -> {
@@ -366,9 +393,9 @@ class MarchTest {
             double distance = Math.sqrt(dx * dx + dz * dz);
             double hurry = distance > BEHIND ? CATCH_UP : 1;
             boolean offItsLevel = Math.abs(spot.getY() - position.getY()) > RISE;
-            if (offItsLevel && !stepped(position, spot, distance)) {
-                // Off its level and no single step away: the pathfinder's walk, at its pace with no easing, which
-                // ends a block short.
+            if (offItsLevel ? !stepped(position, spot, distance) : distance > CLOSE && !level(position, spot, distance)) {
+                // Off its level and no single step away, or on its level with ground between that is not: the
+                // pathfinder's walk, at its pace with no easing, which ends a block short.
                 if (distance <= PATH_SHORT) return;
                 double step = Math.min(PACE * speed * hurry, distance - PATH_SHORT);
                 position.setX(position.getX() + dx / distance * step);
@@ -382,6 +409,19 @@ class MarchTest {
             double step = Math.min(pace, distance);
             position.setX(position.getX() + dx / distance * step);
             position.setZ(position.getZ() + dz / distance * step);
+        }
+
+        /** steer_onto's rule for a straight walk on the body's level, on this ground: see PetLuaTable.WalkPath.level. */
+        private boolean level(Vector from, Vector to, double distance) {
+            if (distance > REACH) return false;
+            int feet = (int) Math.floor(from.getY());
+            int steps = Math.max(1, (int) Math.ceil(distance / 0.25));
+            for (int step = 1; step <= steps; step++) {
+                double share = (double) step / steps;
+                if (ground.standing((int) Math.floor(from.getX() + (to.getX() - from.getX()) * share), feet,
+                        (int) Math.floor(from.getZ() + (to.getZ() - from.getZ()) * share)) != feet) return false;
+            }
+            return true;
         }
 
         /** steer_onto's rule for a straight walk across a step, on this ground: see PetLuaTable.WalkPath.stepped. */

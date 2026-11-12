@@ -219,9 +219,11 @@ final class March {
             progressAt = null;
         }
         if (phase == Phase.FORMING) {
-            // The leader waits on the spot it called from, at its own height: the marchers gathering round it shove
-            // it, and it walks back.
-            if (now - calledAt < FORM_TICKS && !formed(now)) return new Vector(home.getX(), at.getY(), home.getZ());
+            // The leader waits on the spot it called from: the marchers gathering round it shove it, and it walks
+            // back. The spot keeps the height it was called at. Shoved up or down a step, the leader was given the
+            // spot at the height it then stood at, a point in the air or in the ground, could not walk there, and
+            // stood on the other level until the line set off without it.
+            if (now - calledAt < FORM_TICKS && !formed(now)) return home.clone();
             phase = Phase.OUT;
             outEnd = now + durationTicks / 2L;
             // The first leg runs from that spot, along the heading that was found clear from there. From wherever
