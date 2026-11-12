@@ -153,7 +153,9 @@ public class PetAdminCommand extends AdvancedCommand {
         double best = Double.MAX_VALUE;
         for (Entity entity : player.getNearbyEntities(MARCH_SEARCH, MARCH_SEARCH, MARCH_SEARCH)) {
             PetControl pet = manager.pet(entity);
-            if (pet == null || !pet.isWild() || pet.isBaby() || only != null && pet.species() != only) continue;
+            // A migrant is passing through and calls no march.
+            if (pet == null || !pet.isWild() || pet.route() != null || pet.isBaby()
+                    || only != null && pet.species() != only) continue;
             if (pet.species().behaviors(pet.model()).stream().noneMatch(entry -> entry.module().equals("march")))
                 continue;
             double distance = entity.getLocation().distanceSquared(player.getLocation());

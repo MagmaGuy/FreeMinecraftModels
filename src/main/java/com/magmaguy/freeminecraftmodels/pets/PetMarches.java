@@ -18,8 +18,8 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * The marches under way, for the march module: a call gathers the free kin round the caller into a {@link March}, and
  * each marcher asks for its spot every tick it marches. A sweep each pet tick plays the call's second toot and drops
- * marchers that died, were tamed or carry a rider, and ends marches. Admins can ask a pet to call one. Server thread
- * only.
+ * marchers that died, were tamed or carry a rider, and ends marches. Admins can ask a pet to call one. A pet on a
+ * migration neither calls a march nor is gathered into one. Server thread only.
  */
 final class PetMarches {
     /** The most pets in one march, its leader included. */
@@ -79,7 +79,8 @@ final class PetMarches {
                         double chance, double minSeconds, double maxSeconds, double spacing, String sound, float volume,
                         float pitch, long now) {
         PetManager manager = PetManager.get();
-        if (manager == null || byBody.containsKey(body.getUniqueId())) return false;
+        // A migrant flies its flock's route and leaves with it, so it calls no march in the ticks before it sets off.
+        if (manager == null || caller.route() != null || byBody.containsKey(body.getUniqueId())) return false;
         Long requestEnd = requests.get(body.getUniqueId());
         boolean asked = requestEnd != null && now < requestEnd;
         // chance, then one in the group's size: the group's chance shared out, with no search on most checks.
