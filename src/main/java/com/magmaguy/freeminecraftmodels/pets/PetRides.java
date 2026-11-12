@@ -392,10 +392,10 @@ final class PetRides {
             alongZ = RideColumn.brake(headBox, box, false, stepZ, thrust.getZ(), stepX, delay, swim, blocks);
         }
         if (Double.isNaN(up) && Double.isNaN(alongX) && Double.isNaN(alongZ)) return;
-        // What is not slowed is what the client would have next tick by itself.
-        push(body, new Vector(Double.isNaN(alongX) ? RideCeiling.WATER_DRAG * stepX : alongX,
-                Double.isNaN(up) ? RideCeiling.WATER_DRAG * climbed : up,
-                Double.isNaN(alongZ) ? RideCeiling.WATER_DRAG * stepZ : alongZ));
+        // What is not slowed is what the client will have by itself when this reaches it.
+        push(body, new Vector(Double.isNaN(alongX) ? RideColumn.carried(stepX, thrust.getX(), delay) : alongX,
+                Double.isNaN(up) ? RideColumn.carried(climbed, thrust.getY(), delay) : up,
+                Double.isNaN(alongZ) ? RideColumn.carried(stepZ, thrust.getZ(), delay) : alongZ));
     }
 
     /**

@@ -126,6 +126,17 @@ class RideColumnTest {
     }
 
     @Test
+    void anAxisThatIsNotSlowedIsHandedBackAsTheClientWillHaveIt() {
+        // No delay: nine tenths of the last step, as the water leaves it.
+        assertEquals(0.45D, RideColumn.carried(0.5D, 0.065D, 0), 1.0E-9D);
+        // Two ticks on, the client has added its thrust and lost a tenth twice more.
+        assertEquals(0.9D * (0.9D * (0.45D + 0.065D) + 0.065D), RideColumn.carried(0.5D, 0.065D, 2), 1.0E-9D);
+        // At its top speed it is handed back that speed's own leftover, whatever the delay: nothing changes.
+        double top = RideColumn.swim(2D);
+        assertEquals(0.9D * top, RideColumn.carried(top, 0.065D, 3), 1.0E-9D);
+    }
+
+    @Test
     void inOpenWaterNothingIsSent() {
         assertTrue(Double.isNaN(RideColumn.brake(column(2D, 60D, 0.5D), body(2D, 60D, 0.5D), true, 0.6D, 0.065D, 0D, 1, SWIM, blocks())));
     }

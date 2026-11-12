@@ -197,6 +197,22 @@ final class RideColumn {
         return bodyRoom - headRoom <= DEEP;
     }
 
+    /**
+     * The velocity a swimming body will have along an axis it is not being slowed on, by the time a velocity sent
+     * now reaches its rider's client: it moved {@code step} along the axis in the last tick the server saw, its
+     * rider's steering adds {@code thrust} each tick, and the client acts {@code delay} ticks on. Each tick the
+     * client adds the thrust, moves, and keeps {@link RideCeiling#WATER_DRAG} of its speed.
+     * <p>
+     * A velocity sent to slow one axis replaces all three. Handed back as it was when the server last saw the
+     * body, the others were set back by those ticks every time, and a pet sliding along a wall its rider pushed
+     * at covered a third of the distance it had.
+     */
+    static double carried(double step, double thrust, int delay) {
+        double velocity = RideCeiling.WATER_DRAG * step;
+        for (int tick = 0; tick < Math.max(0, delay); tick++) velocity = RideCeiling.WATER_DRAG * (velocity + thrust);
+        return velocity;
+    }
+
     /** A ridden nautilus's top swimming speed in blocks a tick: its thrust each tick against the water's drag. */
     static double swim(double speed) {
         return RideCeiling.THRUST * speed / (1D - RideCeiling.WATER_DRAG);
