@@ -25,6 +25,7 @@ import java.util.Locale;
  * Puts mob behaviors on mobs and takes them off, for trying a behavior out and for admins:
  * {@code apply <behaviors> [seconds] [radius]} lays the named behaviors, separated by commas, over the AI of the mob
  * you look at, or of every mob within the radius, with you as their owner, for that many seconds or until cleared;
+ * {@code applywild} does the same with no owner, so a hostile or cowardly mob treats you like any other player;
  * {@code clear} gives the mob you look at its own AI back, and {@code clear all} every mob; {@code list} shows the
  * behaviors that loaded and how many mobs run one.
  */
@@ -34,11 +35,12 @@ public class MobBehaviorCommand extends AdvancedCommand {
 
     public MobBehaviorCommand() {
         super(List.of("mobbehavior"));
-        addArgument("action", new ListStringCommandArgument(List.of("apply", "clear", "list"), "<action>"));
+        addArgument("action",
+                new ListStringCommandArgument(List.of("apply", "applywild", "clear", "list"), "<action>"));
         addOptionalArgument("behaviors", new BehaviorsArgument());
         addOptionalArgument("seconds", new IntegerCommandArgument("[seconds]"));
         addOptionalArgument("radius", new DoubleCommandArgument("[radius]"));
-        setUsage("/fmm mobbehavior <apply|clear|list> [behaviors|all] [seconds] [radius]");
+        setUsage("/fmm mobbehavior <apply|applywild|clear|list> [behaviors|all] [seconds] [radius]");
         setPermission("freeminecraftmodels.mobbehaviors.admin");
         setSenderType(SenderType.PLAYER);
         setDescription("Overrides the AI of the mob you look at with Lua mob behaviors, or gives it back.");
@@ -56,7 +58,9 @@ public class MobBehaviorCommand extends AdvancedCommand {
         String named = commandData.getStringArgument("behaviors");
         switch (commandData.getStringArgument("action").toLowerCase(Locale.ROOT)) {
             case "apply" -> apply(player, overlays, named,
-                    commandData.getIntegerArgument("seconds"), commandData.getDoubleArgument("radius"));
+                    commandData.getIntegerArgument("seconds"), commandData.getDoubleArgument("radius"), true);
+            case "applywild" -> apply(player, overlays, named,
+                    commandData.getIntegerArgument("seconds"), commandData.getDoubleArgument("radius"), false);
             case "clear" -> clear(player, overlays, named);
             default -> Logger.sendMessage(player, "&7Mob behaviors: &f"
                     + (overlays.behaviors().isEmpty() ? "none" : String.join("&7, &f", overlays.behaviors()))
@@ -64,7 +68,9 @@ public class MobBehaviorCommand extends AdvancedCommand {
         }
     }
 
-    private static void apply(Player player, MindOverlays overlays, String named, Integer seconds, Double radius) {
+    /** @param owned whether the player becomes the mobs' owner, whom they serve and never hurt */
+    private static void apply(Player player, MindOverlays overlays, String named, Integer seconds, Double radius,
+                              boolean owned) {
         if (named == null) {
             Logger.sendMessage(player, "&cName the behaviors to put on the mob, separated by commas: &f"
                     + String.join(", ", overlays.behaviors()));
@@ -73,7 +79,7 @@ public class MobBehaviorCommand extends AdvancedCommand {
         MindOverlayRequest request;
         try {
             request = MindOverlayRequest.of(Arrays.asList(named.split(",")))
-                    .ownedBy(player.getUniqueId())
+                    .ownedBy(owned ? player.getUniqueId() : null)
                     .lasting(seconds == null ? 0L : Math.max(0L, seconds) * 20L);
         } catch (IllegalArgumentException exception) {
             Logger.sendMessage(player, "&c" + exception.getMessage());
