@@ -220,6 +220,39 @@ class MarchTest {
     }
 
     @Test
+    void onlyTheLeaderOfALineThatHasSetOffWalksItsLeg() {
+        Sim sim = new Sim(OPEN, 3, 2400);
+        UUID leader = sim.ids.get(0), follower = sim.ids.get(1);
+        sim.step();
+        assertFalse(sim.march.walksLeg(leader, sim.at(0)), "while the line forms the leader has no leg");
+        while (sim.march.phase() == March.Phase.FORMING) sim.step();
+        for (int tick = 0; tick < 40; tick++) sim.step();
+        assertTrue(sim.march.walksLeg(leader, sim.at(0)), "once it has set off the leader walks its leg");
+        assertFalse(sim.march.walksLeg(follower, sim.at(1)), "a follower walks in footprints, not on a leg");
+        assertTrue(sim.march.walksLeg(leader, sim.at(0).clone().setZ(HOME.getZ() + 0.4)), "shoved a little aside, it still does");
+        assertFalse(sim.march.walksLeg(leader, sim.at(0).clone().setZ(HOME.getZ() + 0.8)),
+                "shoved most of a block off its leg's line, it looks at the ground again");
+    }
+
+    @Test
+    void aLeaderOnTheEdgeOfAStepGetsItsPointAtTheFootOfTheNextStep() {
+        // Steps down across the way: a block lower at x 10, another from x 11 on.
+        MarchRoute.Ground stairs = (x, feet, z) -> {
+            int height = x >= 11 ? FEET - 2 : x == 10 ? FEET - 1 : FEET;
+            return Math.abs(x) > 200 || Math.abs(z) > 200 || Math.abs(height - feet) > 1 ? MarchRoute.Ground.NO_FOOTING : height;
+        };
+        Sim sim = new Sim(stairs, 3, 2400);
+        while (sim.march.phase() == March.Phase.FORMING) sim.step();
+        // The leader rests on the edge of the upper block, its feet at that block's height and its middle over the
+        // first step down. Its point, 0.85 blocks on, is over the second.
+        Vector onTheEdge = new Vector(10.3, FEET, HOME.getZ());
+        Vector point = sim.march.spot(sim.ids.get(0), onTheEdge, sim.now, stairs);
+        assertTrue(point.getX() >= 11, "its point is over the second step: " + point);
+        assertEquals(FEET - 2, point.getY(), 1.0E-9, "at the height of the ground there, two steps under its feet");
+        assertTrue(sim.march.walksLeg(sim.ids.get(0), onTheEdge), "and it walks straight at it");
+    }
+
+    @Test
     void theLeadersWalkingPointIsNeverOverAHoleItsLegSteppedOver() {
         // A leg slanting across the blocks, 0.8 along x for 0.6 along z. Standing on it every half block from its
         // start misses the corners of some blocks it crosses: the first such block past 3 blocks out is a hole.
@@ -439,7 +472,7 @@ class MarchTest {
                 Vector spot = march.spot(id, position, now, ground);
                 if (march.over()) break;
                 if (spot != null && id.equals(march.leader())) leaderPoint = spot.clone();
-                if (spot != null) walk(position, spot, speeds.get(id));
+                if (spot != null) walk(position, spot, speeds.get(id), march.walksLeg(id, position));
                 // A body stands on the ground under it.
                 int feet = ground.standing((int) Math.floor(position.getX()), (int) Math.floor(position.getY()),
                         (int) Math.floor(position.getZ()));
@@ -449,12 +482,23 @@ class MarchTest {
             now++;
         }
 
-        /** One tick of march.lua's walk to a spot through steer_onto, for a marcher of this speed stat. */
-        private void walk(Vector position, Vector spot, double speed) {
+        /**
+         * One tick of march.lua's walk to a spot through steer_onto, for a marcher of this speed stat. A leader on
+         * its leg walks straight at its point with no look at the ground, as steer_onto walks it.
+         */
+        private void walk(Vector position, Vector spot, double speed, boolean onItsLeg) {
             double dx = spot.getX() - position.getX(), dz = spot.getZ() - position.getZ();
             double distance = Math.sqrt(dx * dx + dz * dz);
             double hurry = distance > BEHIND ? CATCH_UP : 1;
             boolean offItsLevel = Math.abs(spot.getY() - position.getY()) > RISE;
+            if (onItsLeg && distance <= REACH) {
+                if (distance < 1.0E-9) return;
+                double pace = Math.max(FLOOR, PACE * speed * hurry * Math.max(SLOWEST_SHARE, Math.min(1, distance)));
+                double step = Math.min(pace, distance);
+                position.setX(position.getX() + dx / distance * step);
+                position.setZ(position.getZ() + dz / distance * step);
+                return;
+            }
             if (offItsLevel ? !stepped(position, spot, distance) : distance > CLOSE && !level(position, spot, distance)) {
                 // Off its level and no single step away, or on its level with ground between that is not: the
                 // pathfinder's walk, at its pace with no easing, which ends a block short.

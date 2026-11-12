@@ -48,6 +48,8 @@ final class March {
     static final long STUCK_TICKS = 100L;
     /** A leader stuck this many times on one march gives up, and the march ends. */
     static final int MAX_REPLANS = 3;
+    /** A leader this near the line of its leg, across it, walks the leg: see {@link #walksLeg}. */
+    static final double ON_LEG = 0.5D;
 
     enum Phase {FORMING, OUT, HAIRPIN, HOME}
 
@@ -142,6 +144,19 @@ final class March {
     /** Whether this marcher is still in the line of a march that is not over. Changes nothing, unlike spot. */
     boolean includes(UUID id) {
         return !over && indexOf(id) >= 0;
+    }
+
+    /**
+     * Whether this marcher, now at {@code at}, is the leader walking a leg of its march: the line has set off, it is
+     * not a new leader still walking up to the head of the line, and it is within {@link #ON_LEG} of the leg's line.
+     * The march found that leg's ground walkable a body wide, every half block of it, so the leader can walk straight
+     * at the point {@link #spot} gives it with no further look at the ground between.
+     */
+    boolean walksLeg(UUID id, Vector at) {
+        if (over || phase == Phase.FORMING || catchingUp || legOrigin == null || line.isEmpty()
+                || !line.get(0).id.equals(id)) return false;
+        double offX = at.getX() - legOrigin.getX(), offZ = at.getZ() - legOrigin.getZ();
+        return Math.abs(offX * headingZ - offZ * headingX) <= ON_LEG;
     }
 
     /**
@@ -259,9 +274,19 @@ final class March {
         if (phase != Phase.HAIRPIN) along = Math.min(along, legLength);
         double x = legOrigin.getX() + headingX * along, z = legOrigin.getZ() + headingZ * along;
         // The point is at most a block ahead, at the height of the ground there: a step up or down from the leader's
-        // own when a step lies between them. steer_onto walks the leader straight at it either way.
+        // own when a step lies between them. The leader walks straight at it either way (see walksLeg).
         int level = (int) Math.floor(at.getY());
         int feet = ground.standing((int) Math.floor(x), level, (int) Math.floor(z));
+        if (feet == MarchRoute.Ground.NO_FOOTING) {
+            // A leader on the edge of a block rests on it with its middle over ground a step down. Where the ground
+            // steps down again within its reach, the point is two steps under its feet and one under the ground it
+            // is over: the height is counted from that ground, as the leg's run counted it.
+            int under = ground.standing((int) Math.floor(at.getX()), level, (int) Math.floor(at.getZ()));
+            if (under != MarchRoute.Ground.NO_FOOTING && under != level) {
+                level = under;
+                feet = ground.standing((int) Math.floor(x), level, (int) Math.floor(z));
+            }
+        }
         if (feet == MarchRoute.Ground.NO_FOOTING) {
             // The leg was found by standing on it every half block from its start, and a slanting leg crosses the
             // corners of blocks between those: the point is over one that is no ground, a hole beside the line. With

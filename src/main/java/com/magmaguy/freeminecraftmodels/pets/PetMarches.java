@@ -163,6 +163,13 @@ final class PetMarches {
         return spot == null ? null : spot.toLocation(walk.world);
     }
 
+    /** Whether this pet is the leader of a march, walking one of its legs: see {@link March#walksLeg}. */
+    static boolean walksLeg(LivingEntity body) {
+        Walk walk = byBody.get(body.getUniqueId());
+        return walk != null && body.getWorld() == walk.world
+                && walk.march.walksLeg(body.getUniqueId(), body.getLocation().toVector());
+    }
+
     /**
      * Whether this pet is in a march that is not over, in its world. Unlike {@link #spot} it keeps nothing: a marcher
      * that only asks this is not seen, so one another behavior took away counts as away after a while, as it should.

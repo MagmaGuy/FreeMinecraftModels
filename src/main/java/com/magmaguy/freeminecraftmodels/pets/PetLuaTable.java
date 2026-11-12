@@ -182,6 +182,8 @@ public final class PetLuaTable {
     private long trailStamp = Ticks.UNBOUND, marchStamp = Ticks.UNBOUND;
     private double trailBack, trailHeight;
     private Location trail, march;
+    // Whether march is the point of a march's leader on one of its legs, which steer_onto walks straight at.
+    private boolean marchLeg;
     // A flying body's stuck count; MagmaCore's navigation tracker keeps a walking or swimming body's.
     private final FlightTrack flight = new FlightTrack();
     // The item, block and campfire kinds the lists a module passes name, kept while a list's entries stay the same.
@@ -546,12 +548,15 @@ public final class PetLuaTable {
         // march_spot(): where this marcher walks to now, which also keeps its place in line for 10 more ticks: the
         // leader's next step along its straight leg, its own spot while the line forms behind it, or a follower's
         // place on the leader's footprints. A follower back after being away goes to the back of the line. nil when it
-        // is in no march, or the march ended: back where it was called, too few left, or out of time.
+        // is in no march, or the march ended: back where it was called, too few left, or out of time. steer_onto
+        // walks a leader straight at the step this gave it for one of its legs, with no look at the ground between:
+        // the march found the leg walkable when it chose it.
         // Worked out once per tick: a second ask in the same tick would find the same spot.
         method("march_spot", args -> {
             long stamp = ticks.stamp();
             if (stamp == Ticks.UNBOUND || stamp != marchStamp) {
                 march = PetMarches.spot(body(), PetManager.ticks());
+                marchLeg = march != null && PetMarches.walksLeg(body());
                 marchStamp = stamp;
             }
             return location(march);
@@ -956,11 +961,17 @@ public final class PetLuaTable {
         return context.perception().navigation().consecutiveStuckTicks();
     }
 
-    /** steer_onto's tick: as {@link #steerTo}, ending on the target (see {@link WalkPath#steerOnto}). */
+    /**
+     * steer_onto's tick: as {@link #steerTo}, ending on the target (see {@link WalkPath#steerOnto}). At the point
+     * march_spot gave a march's leader on one of its legs this tick, it walks straight (see
+     * {@link WalkPath#walkStraight}).
+     */
     private boolean steerOnto(Location target, double cruise) {
         if (control.route() == null) cruise *= control.stats().speed;
         if (control.species().locomotion() == MindBodyLocomotion.FLYING) return steerFlight(target, cruise);
-        boolean steered = path.steerOnto(context, target, cruise);
+        boolean leg = marchLeg && march != null && ticks.stamp() == marchStamp && target.getWorld() == march.getWorld()
+                && target.getX() == march.getX() && target.getY() == march.getY() && target.getZ() == march.getZ();
+        boolean steered = leg ? path.walkStraight(context, target, cruise) : path.steerOnto(context, target, cruise);
         if (path.stoppedNow()) ticks.moved();
         return steered;
     }
@@ -1080,6 +1091,30 @@ public final class PetLuaTable {
                 return true;
             }
             stoppedOn = null;
+            double eased = speed(cruise) * Math.max(ONTO_SLOWEST, Math.min(1D, across));
+            return context.actuator().moveDirect(to, Math.max(MIN_SPEED, eased));
+        }
+
+        /**
+         * A walk straight at a point whoever asks vouches for: the ground between is not looked at. A march's leader
+         * walks its leg this way. The march found the leg by standing on it every half block, a body wide, so the
+         * leader can walk it: off the edge of a step, down a second one right after, past the corner of a hole its
+         * width carries it over. steer_onto looked at the ground itself each tick, from the leader's feet, and each
+         * time it could not tell (a point two steps under a leader still resting on the edge above, a hole's corner
+         * under its line) it handed the point to the body's path, which starts at the middle of the block the body
+         * rests on, behind it. One tick straight, the next few back: the leader stood on the edge until it counted
+         * as stuck. Farther off than {@link #ONTO_REACH}, in water or in another world it steers as steer_onto does.
+         */
+        boolean walkStraight(MindContext context, Location to, double cruise) {
+            LivingEntity body = context.entity();
+            Location here = body.getLocation();
+            double dx = to.getX() - here.getX(), dz = to.getZ() - here.getZ();
+            double across = Math.sqrt(dx * dx + dz * dz);
+            if (cruise <= 0D || to.getWorld() != here.getWorld() || body.isInWater() || across > ONTO_REACH)
+                return steerOnto(context, to, cruise);
+            stoppedNow = false;
+            stoppedOn = null;
+            forget();
             double eased = speed(cruise) * Math.max(ONTO_SLOWEST, Math.min(1D, across));
             return context.actuator().moveDirect(to, Math.max(MIN_SPEED, eased));
         }

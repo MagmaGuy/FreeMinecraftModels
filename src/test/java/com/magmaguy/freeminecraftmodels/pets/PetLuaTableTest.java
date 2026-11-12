@@ -862,6 +862,27 @@ class PetLuaTableTest {
     }
 
     @Test
+    void aStraightWalkDoesNotLookAtTheGroundBetween() {
+        // From x 1 on the ground is two blocks lower: a drop steer_onto leaves to the path.
+        World cliff = terrain(x -> x >= 1 ? 61 : 63);
+        Location point = new Location(cliff, 1.4, 64, 0.5);
+        assertEquals(List.of("moveTo 1.40 0.60"), steerOnto(cliff, false, point, 0.15D),
+                "steer_onto looks at the ground and paths");
+        assertEquals(List.of("moveDirect 1.40 0.54"),
+                walk(cliff, false, (path, context) -> path.walkStraight(context, point, 0.15D)),
+                "a straight walk goes at its point, easing off as steer_onto does");
+        Location far = new Location(cliff, 2.6, 64, 0.5);
+        assertEquals(List.of("moveTo 2.60 0.60"),
+                walk(cliff, false, (path, context) -> path.walkStraight(context, far, 0.15D)),
+                "past steer_onto's reach it paths");
+        assertEquals(List.of("moveTo 1.40 0.60"),
+                walk(cliff, true, (path, context) -> path.walkStraight(context, point, 0.15D)),
+                "a body in water keeps to its path");
+        assertEquals(List.of("stopMoving"),
+                walk(cliff, false, (path, context) -> path.walkStraight(context, point, 0D)), "a cruise of 0 stops it");
+    }
+
+    @Test
     void steerOntoStopsOnItsPointOnce() {
         World ground = ground(false);
         List<String> calls = new ArrayList<>();
