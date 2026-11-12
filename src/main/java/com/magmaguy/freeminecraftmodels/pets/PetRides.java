@@ -386,9 +386,19 @@ final class PetRides {
         double alongZ = RideColumn.brake(headBox, box, false, stepZ, thrust.getZ(), stepX, delay, swim, blocks);
         if (Double.isNaN(up) && Double.isNaN(alongX) && Double.isNaN(alongZ)) return;
         // What is not slowed is what the client would have next tick by itself.
-        body.setVelocity(new Vector(Double.isNaN(alongX) ? RideCeiling.WATER_DRAG * stepX : alongX,
+        push(body, new Vector(Double.isNaN(alongX) ? RideCeiling.WATER_DRAG * stepX : alongX,
                 Double.isNaN(up) ? RideCeiling.WATER_DRAG * climbed : up,
                 Double.isNaN(alongZ) ? RideCeiling.WATER_DRAG * stepZ : alongZ));
+    }
+
+    /**
+     * Gives a body its rider's client steers a velocity: told to that client alone, where the server can (see
+     * NMSAdapter#pushSteeredVehicle). Set through Bukkit, the velocity was followed 1 to 3 ticks later by a zero
+     * from the server's own tracker, which stopped a hop out of the water in mid-air and took a swimming pet's
+     * speed each time a slowing ended.
+     */
+    private static void push(LivingEntity body, Vector velocity) {
+        if (!NMSManager.getAdapter().pushSteeredVehicle(body, velocity)) body.setVelocity(velocity);
     }
 
     /** A body's box and, over it, its rider's head this wide, its top this far above the body's feet. */
@@ -449,7 +459,7 @@ final class PetRides {
         Location at = body.getLocation();
         if (!RideHop.clear(at.getX(), at.getY(), at.getZ(), alongX, lift, alongZ, riddenShape(body, rider),
                 RideCeiling.of(body.getWorld()))) return;
-        body.setVelocity(new Vector(alongX, lift, alongZ));
+        push(body, new Vector(alongX, lift, alongZ));
         playJump(control, body);
     }
 
