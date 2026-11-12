@@ -47,6 +47,8 @@ public final class PetControl {
     private double shownHealth = -1D;
     // The rider its nameplate is kept from now, who is shown none of its lines; else null.
     private UUID nameplateSpared;
+    // Where it last stood and how far it has walked since its last footstep.
+    private final PetSteps.Walk walk = new PetSteps.Walk();
     // The pet clock tick it next regains a point of health on its own.
     private long nextRegenTick;
     // Epoch milliseconds a wild baby was born (one set free keeps its own); an owned pet's is on its record.
@@ -127,6 +129,10 @@ public final class PetControl {
 
     void setShownHealth(double health) {
         this.shownHealth = health;
+    }
+
+    PetSteps.Walk walk() {
+        return walk;
     }
 
     UUID nameplateSpared() {

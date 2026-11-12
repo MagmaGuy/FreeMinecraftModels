@@ -24,9 +24,12 @@ import java.util.function.Consumer;
  * {@code surfaceHop} is the upward speed, in blocks a tick, a diving pet is given as it surfaces in the shallows at
  * full swim speed, keeping that speed, so it jumps out of the water (see {@link RideHop}); slower, it gets its share.
  * The default is a player's own jump, 0.42, which rises about 1.2 blocks; 0 turns the hop off.
+ * {@code stepSounds} names, by block, the sound a ridden pet's footstep makes on that block in place of the block's
+ * own step sound (see {@link PetSteps}): a Minecraft sound or a resource pack's own. Blocks it leaves out keep theirs.
  */
 public record PetRiding(double speed, double jump, double seatHeight, String animation, String idleAnimation,
-                        Map<Material, Double> surfaces, double swimSpeed, double surfaceHop) {
+                        Map<Material, Double> surfaces, double swimSpeed, double surfaceHop,
+                        Map<Material, String> stepSounds) {
     /**
      * Blocks per second a ridden vanilla nautilus swims per point of movement speed. Its rider's client adds
      * 0.0325 x speed along the rider's input to its velocity, moves it by that velocity and then keeps 0.9 of it, so
@@ -47,6 +50,7 @@ public record PetRiding(double speed, double jump, double seatHeight, String ani
 
     public PetRiding {
         surfaces = Map.copyOf(surfaces);
+        stepSounds = Map.copyOf(stepSounds);
     }
 
     /** The riding section's settings, defaults for those it leaves out, or null without a section. */
@@ -66,10 +70,27 @@ public record PetRiding(double speed, double jump, double seatHeight, String ani
                 surfaces.put(material, Math.max(0D, written.getDouble(key, 1D)));
             }
         }
+        Map<Material, String> stepSounds = new LinkedHashMap<>();
+        ConfigurationSection sounds = section.getConfigurationSection("stepSounds");
+        if (sounds != null)
+            for (String key : sounds.getKeys(false)) {
+                String name = key.startsWith("minecraft:") ? key.substring("minecraft:".length()) : key;
+                Material material = Material.getMaterial(name.toUpperCase(Locale.ROOT));
+                String sound = sounds.getString(key);
+                if (material == null) {
+                    warn.accept(filename + ": riding.stepSounds names " + key + ", which is not a material; skipped.");
+                    continue;
+                }
+                if (sound == null || sound.isBlank()) {
+                    warn.accept(filename + ": riding.stepSounds gives " + key + " no sound; skipped.");
+                    continue;
+                }
+                stepSounds.put(material, sound.trim());
+            }
         return new PetRiding(Math.max(0D, section.getDouble("speed", SPEED)), Math.max(0D, section.getDouble("jump", JUMP)),
                 Math.max(0D, section.getDouble("seatHeight", SEAT_HEIGHT)), name(section, "animation", ANIMATION),
                 name(section, "idleAnimation", IDLE_ANIMATION), surfaces, Math.max(0D, section.getDouble("swimSpeed", 0D)),
-                Math.max(0D, section.getDouble("surfaceHop", SURFACE_HOP)));
+                Math.max(0D, section.getDouble("surfaceHop", SURFACE_HOP)), stepSounds);
     }
 
     /** An animation name the section sets, or the default for a missing or blank one. */

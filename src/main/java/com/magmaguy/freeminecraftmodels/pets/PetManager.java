@@ -225,6 +225,7 @@ public final class PetManager {
         if (ticks % WATCH_TICKS == 0) manager.regenerate();
         manager.tickHealthBars();
         manager.rides.tick();
+        manager.tickFootsteps();
         PetMarches.tick(ticks);
         manager.workChunks();
         if (ticks >= manager.nextWildSpawnTick) {
@@ -732,6 +733,21 @@ public final class PetManager {
     public void hurt(PetControl control) {
         control.setNextRegenTick(ticks + Math.max(0, PetsConfig.regenSeconds) * 20L);
         showHealth(control);
+    }
+
+    /**
+     * Plays each walking pet's footsteps (see {@link PetSteps}), ridden or not: a ridden one's with the sounds its
+     * species names for the block it is on. After the rides have ticked, so a pet that just changed body is counted
+     * on the body it has now; on its diving body it is in water and makes none.
+     */
+    private void tickFootsteps() {
+        for (PetControl control : byBody.values()) {
+            if (!control.species().footsteps()) continue;
+            LivingEntity body = control.body();
+            if (body == null || !body.isValid()) continue;
+            PetRiding riding = control.species().riding();
+            PetSteps.tick(control.walk(), body, riding != null && rides.isRidden(control) ? riding.stepSounds() : null);
+        }
     }
 
     /** Keeps every shown health display in step with its pet's health, and takes it down once its time is up. */

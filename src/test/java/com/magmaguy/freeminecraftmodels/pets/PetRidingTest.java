@@ -111,6 +111,29 @@ class PetRidingTest {
     }
 
     @Test
+    void aRiddenPetsStepSoundsAreReadByBlock() throws InvalidConfigurationException {
+        List<String> warnings = new ArrayList<>();
+        assertEquals(Map.of(), read("riding: {}\n", warnings).stepSounds());
+        PetRiding riding = read("riding:\n  stepSounds:\n    ice: block.powder_snow.step\n    minecraft:packed_ice: my_pack:slide\n"
+                + "    glacier: block.snow.step\n    blue_ice: ''\n", warnings);
+        assertEquals(Map.of(Material.ICE, "block.powder_snow.step", Material.PACKED_ICE, "my_pack:slide"), riding.stepSounds());
+        assertEquals(List.of(FILE + ": riding.stepSounds names glacier, which is not a material; skipped.",
+                FILE + ": riding.stepSounds gives blue_ice no sound; skipped."), warnings);
+    }
+
+    @Test
+    void theHopOutOfTheWaterIsAPlayersJumpUnlessTheFileSaysOtherwise() throws InvalidConfigurationException {
+        List<String> warnings = new ArrayList<>();
+        assertEquals(0.42D, read("riding: {}\n", warnings).surfaceHop());
+        assertEquals(0D, read("riding:\n  surfaceHop: 0\n", warnings).surfaceHop());
+        assertEquals(0D, read("riding:\n  surfaceHop: -1\n", warnings).surfaceHop());
+        assertEquals(0.3D, read("riding:\n  surfaceHop: 0.3\n", warnings).surfaceHop());
+        // 14 blocks a second at a speed stat of 1 is 0.7 blocks a tick.
+        assertEquals(0.7D, read("riding:\n  swimSpeed: 14\n", warnings).swimStep(1D), 1.0E-9D);
+        assertEquals(List.of(), warnings);
+    }
+
+    @Test
     void onlyAWalkingHorseBodyCanBeRidden() {
         List<String> warnings = new ArrayList<>();
         assertTrue(PetRiding.supports(EntityType.HORSE, MindBodyLocomotion.AMPHIBIOUS, FILE, warnings::add));

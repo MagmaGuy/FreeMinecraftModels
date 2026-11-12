@@ -187,6 +187,7 @@ public final class PetSpecies {
     private final TravelOrientation orientation;
     private final boolean centerOnBody;
     private final boolean breathesUnderwater;
+    private final boolean footsteps;
     private final List<String> hiddenBones;
     private final PetRiding riding; // null: cannot be ridden
     private final PetSwimming swimming; // null: swims as it walks
@@ -254,6 +255,7 @@ public final class PetSpecies {
         this.orientation = orientation(section(config, "orientation"), filename);
         this.centerOnBody = centerOnBody(config, movement);
         this.breathesUnderwater = breathesUnderwater(config);
+        this.footsteps = footsteps(config, movement);
         this.hiddenBones = hiddenBones(config);
         warnMigration(config, filename, Logger::warn);
         PetRiding readRiding = PetRiding.read(config.getConfigurationSection("riding"), filename, Logger::warn);
@@ -296,6 +298,16 @@ public final class PetSpecies {
      * moves as a flyer or walker, such as a jellyfish on a flying body. AQUATIC and AMPHIBIOUS species breathe under
      * water whatever it says.
      */
+    /**
+     * Whether the pet makes footsteps (see {@link PetSteps}): a pet file's {@code footsteps}, on unless the file turns
+     * it off, for a species that walks. One that flies or swims has no feet on the ground and makes none, whatever
+     * its file says.
+     */
+    static boolean footsteps(ConfigurationSection config, MindBodyLocomotion locomotion) {
+        return (locomotion == MindBodyLocomotion.GROUNDED || locomotion == MindBodyLocomotion.AMPHIBIOUS)
+                && config.getBoolean("footsteps", true);
+    }
+
     static boolean breathesUnderwater(ConfigurationSection config) {
         return config.getBoolean("breathesUnderwater", false);
     }
@@ -1179,6 +1191,11 @@ public final class PetSpecies {
     /** Whether the model is drawn centred on its hidden body rather than standing on its feet. */
     public boolean centerOnBody() {
         return centerOnBody;
+    }
+
+    /** Whether the pet makes footsteps: see {@link #footsteps(ConfigurationSection, MindBodyLocomotion)}. */
+    public boolean footsteps() {
+        return footsteps;
     }
 
     /** Whether the pet keeps its air under water: see {@link #breathesUnderwater(ConfigurationSection)}. */
