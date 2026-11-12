@@ -526,6 +526,8 @@ public final class PetManager {
         }
         modeled.setCenteredOnBody(pet.centerOnBody());
         modeled.setDisplayName(nameplate(control));
+        // A new model has a new nameplate; whoever rides the pet through a change of body never sees it.
+        hideNameplateFromRider(control, modeled);
         // Before riding, which shows or hides the saddle itself.
         for (String bone : pet.hiddenBones()) modeled.setBoneHidden(bone, true);
         PetRides.prepare(control, entity, modeled);
@@ -693,11 +695,7 @@ public final class PetManager {
      * replaces a pet's nameplate while its display is up, a new model or a new name, forgets the health it showed
      * with {@link #redrawHealthDisplay}, which draws it again at once.
      * <p>
-     * Whoever rides the pet is kept out of the display. The nameplate is drawn over the pet, which is where its
-     * rider's head is: the rows the display adds stack up through their eyes and cover what they look at. So the
-     * rider keeps the nameplate as it is without the display, the name or nothing, from the moment they get on,
-     * through a dive and a surfacing, until they get off; then a display still up is theirs again. Everyone else
-     * sees the display as before. {@link PetRides} calls this as a rider gets on and off, so neither waits a tick.
+     * Whoever rides the pet sees none of it (see {@link #hideNameplateFromRider}); everyone else sees the display.
      */
     void refreshHealthDisplay(PetControl control) {
         if (control.healthBarUntil() == 0L) return;
@@ -705,20 +703,11 @@ public final class PetManager {
         LivingEntity body = control.body();
         if (modeled == null || modeled.isRemoved() || body == null || !body.isValid()) return;
         String name = nameplate(control);
-        UUID spared = control.healthDisplaySpared();
         if (ticks >= control.healthBarUntil() || !PetsConfig.showHealthBar) {
             control.setHealthBarUntil(0L);
             modeled.setDisplayName(name);
-            if (spared != null) modeled.setDisplayNameLinesFor(spared, null);
-            control.setHealthDisplaySpared(null);
             return;
         }
-        // Before the display's lines are written: the rider's own lines are in place when the others' change. They
-        // are set again each time, since a new body brings a new nameplate and a name tag a new name.
-        UUID rider = rides.rider(control);
-        if (spared != null && !spared.equals(rider)) modeled.setDisplayNameLinesFor(spared, null);
-        if (rider != null) modeled.setDisplayNameLinesFor(rider, riderLines(name));
-        control.setHealthDisplaySpared(rider);
         double health = body.getHealth();
         if (health == control.shownHealth()) return;
         control.setShownHealth(health);
@@ -748,9 +737,26 @@ public final class PetManager {
         return lines;
     }
 
-    /** The nameplate a pet's rider keeps while its health display is up: its name, if it has one, and no more. */
-    static List<String> riderLines(String name) {
-        return name == null ? List.of() : List.of(name);
+    /**
+     * Keeps a pet's nameplate, its name and its health display, from whoever rides it, as vanilla hides a ridden
+     * mob's name from its rider. The nameplate is drawn over the pet, which is where its rider's head is: its bottom
+     * row sits about a quarter of a block under their eyes and the health display's rows stack up through them, so
+     * looking down they saw the name fill the top of the screen and the bars cover the rest. The rider is shown no
+     * line from the moment they get on, through a dive and a surfacing, until they get off, when they see what
+     * everyone else does again. Everyone else is unaffected. {@link PetRides} calls this as a rider gets on and
+     * off, and a pet's new model calls it as it is dressed, so no nameplate is ever shown to its rider first.
+     */
+    void hideNameplateFromRider(PetControl control) {
+        DynamicEntity modeled = control.modeled();
+        if (modeled != null && !modeled.isRemoved()) hideNameplateFromRider(control, modeled);
+    }
+
+    private void hideNameplateFromRider(PetControl control, DynamicEntity modeled) {
+        UUID rider = rides.rider(control), spared = control.nameplateSpared();
+        // The lines a viewer is given stay theirs while the name and the display change, until they are taken back.
+        if (spared != null && !spared.equals(rider)) modeled.setDisplayNameLinesFor(spared, null);
+        if (rider != null) modeled.setDisplayNameLinesFor(rider, List.of());
+        control.setNameplateSpared(rider);
     }
 
     /**

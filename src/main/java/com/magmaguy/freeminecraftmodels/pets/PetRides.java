@@ -212,8 +212,8 @@ final class PetRides {
             return false;
         }
         ridden.put(control, new Ride(before, player.getUniqueId()));
-        // A health display already up leaves its new rider's view now, not a tick later.
-        manager.refreshHealthDisplay(control);
+        // Its nameplate leaves its new rider's view now.
+        manager.hideNameplateFromRider(control);
         // A staying pet the owner rides away follows again afterwards rather than walking back to its spot.
         if (control.isStaying()) manager.follow(player, control);
         return true;
@@ -450,8 +450,8 @@ final class PetRides {
         if (ride == null) return;
         LivingEntity body = control.body();
         if (body != null && body.isValid()) restore(body, ride.before);
-        // A health display still up is theirs to see again.
-        manager.refreshHealthDisplay(control);
+        // Its nameplate is theirs to see again.
+        manager.hideNameplateFromRider(control);
         MindHandle mind = control.mind();
         if (mind == null) return;
         try {
