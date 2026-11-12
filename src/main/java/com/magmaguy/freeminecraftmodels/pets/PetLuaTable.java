@@ -459,11 +459,14 @@ public final class PetLuaTable {
             return LuaValue.valueOf(player != null && touches(player, reach)
                     && sting(player, sting, look, "c.pet:strike_attacker"));
         });
-        // touching_attacker(): whether a wild pet's model, or else its body, touches the player c.pet.attacker gives;
-        // the touch that sting_contacts and strike_attacker(0, ...) act on. false for an owned pet or without one.
+        // touching_attacker(reach): whether a wild pet's model, or else its body, touches the player c.pet.attacker
+        // gives, reach blocks past the player's box (0 to 4; 0 when left out): the touch that sting_contacts and
+        // strike_attacker(reach, ...) act on, so a module can tell that a strike would land without dealing it. false
+        // for an owned pet or without an attacker.
         method("touching_attacker", args -> {
             Player player = attackerPlayer();
-            return LuaValue.valueOf(player != null && touches(player, 0D));
+            double reach = args.narg() >= 1 && !args.isnil(1) ? number(args, 1, 0D, MAX_STING_REACH) : 0D;
+            return LuaValue.valueOf(player != null && touches(player, reach));
         });
         // drizzle(depth, chance): depth 1 to 8, chance 0 to 1.
         method("drizzle", args -> LuaValue.valueOf(drizzle(whole(args, 1, 1, MAX_DRIZZLE_DEPTH), number(args, 2, 0D, 1D))));

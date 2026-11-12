@@ -997,7 +997,7 @@ class ShippedPetModulesTest {
             methods.put("sting_enemies", new Method("NsNNNN", args -> LuaValue.valueOf(1), LuaValue.valueOf(0)));
             methods.put("strike_attacker", new Method("NsNNNNsNNss", args -> LuaValue.TRUE, LuaValue.FALSE));
             // Touching while the attacker stands within reach, as the real touch comes and goes with the distance.
-            methods.put("touching_attacker", new Method("", args -> LuaValue.valueOf(tick % 40 < 20), LuaValue.FALSE));
+            methods.put("touching_attacker", new Method("n", args -> LuaValue.valueOf(tick % 40 < 20), LuaValue.FALSE));
             methods.put("drizzle", new Method("NN", args -> LuaValue.TRUE, LuaValue.FALSE));
             methods.put("owner_effect", new Method("SNNN", args -> LuaValue.valueOf(owner.present()), LuaValue.FALSE));
             methods.put("play_animation", new Method("S", args -> LuaValue.TRUE, LuaValue.FALSE));
@@ -1119,9 +1119,11 @@ class ShippedPetModulesTest {
             List<String> shown = new ArrayList<>();
             for (int index = 0; index < shape.length(); index++) {
                 LuaValue value = args.arg(index + 1);
+                // An optional number left out is not shown, so touching_attacker() stays as it was recorded.
+                if (shape.charAt(index) == 'n' && value.isnil()) continue;
                 shown.add(switch (shape.charAt(index)) {
                     case 'L' -> "L";
-                    case 'N', 'C' -> shown(value);
+                    case 'N', 'C', 'n' -> shown(value);
                     case 'T' -> {
                         List<String> entries = new ArrayList<>();
                         for (int entry = 1; entry <= value.checktable().rawlen(); entry++)
@@ -1150,6 +1152,7 @@ class ShippedPetModulesTest {
                 boolean fits = switch (kind) {
                     case 'L' -> isLocation(value);
                     case 'N' -> value.type() == LuaValue.TNUMBER && Double.isFinite(value.todouble());
+                    case 'n' -> value.isnil() || value.type() == LuaValue.TNUMBER && Double.isFinite(value.todouble());
                     case 'C' -> value.type() == LuaValue.TNUMBER && !Double.isNaN(value.todouble());
                     case 'T' -> isTextList(value);
                     case 'S' -> value.type() == LuaValue.TSTRING;
@@ -1188,6 +1191,7 @@ class ShippedPetModulesTest {
                 case 'T' -> "a list of text";
                 case 'S' -> "text";
                 case 's' -> "text or nil";
+                case 'n' -> "a finite number or nil";
                 default -> "true or false";
             };
         }

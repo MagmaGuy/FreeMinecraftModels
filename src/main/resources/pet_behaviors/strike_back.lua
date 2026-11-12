@@ -12,7 +12,8 @@ return ai.module {
     -- plays as it strikes, or NONE; a model without it plays none. delay_ticks is how long after the animation starts
     -- the strike lands, for an animation that winds up before it connects: at 0 the hit, the sound and the particle
     -- come with the animation's first tick. With a delay the animation starts when the pet's touch first reaches the
-    -- player, and the strike lands delay_ticks later on a player still within reach. One who stepped out of reach in
+    -- player, within reach as the strike itself counts it, and the strike lands delay_ticks later on a player still
+    -- within reach. One who stepped out of reach in
     -- that time has dodged it: the swing was thrown and missed, and the pet does not swing again for that hit. pets
     -- switches it on for owned pets, which never strike back, so it is off and their bodies leave it out.
     settings = { reach = 1.0, damage = 2.0, effect = 'NONE', duration_ticks = 60, amplifier = 0,
@@ -41,7 +42,7 @@ return ai.module {
                 end
                 if c.memory:get('strike_back_swing') ~= c.pet.hurt_count then
                     -- No swing for this hit yet: it starts as the touch arrives, and the animation plays once.
-                    if c.pet:touching_attacker() then
+                    if c.pet:touching_attacker(s.reach) then
                         c.pet:play_animation(s.animation)
                         c.memory:set('strike_back_swing', c.pet.hurt_count)
                         c.memory:set('strike_back_lands', c.tick + s.delay_ticks)
