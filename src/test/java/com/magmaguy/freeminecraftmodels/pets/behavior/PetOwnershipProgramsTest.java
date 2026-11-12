@@ -185,6 +185,36 @@ class PetOwnershipProgramsTest {
     }
 
     @Test
+    void strikeBackWithItsDelayIsTheShippedDefaultAndTheCopyBeforeItAnOlderOne() throws IOException {
+        // The text this build ships, delay_ticks and all, is the shipped default: its sensor waits behind the hit gate.
+        assertTrue(bundled("strike_back").contains("delay_ticks = 0"), "the shipped strike_back has delay_ticks");
+        try (PetBehaviorCatalog catalog = catalog()) {
+            PetPrograms.Program wild = new PetPrograms(catalog, warnings::add)
+                    .program("penguin", "penguin", PetPrograms.Ownership.WILD, PENGUIN, "penguin.pet.yml");
+            assertTrue(wild.gated().contains(STRIKE));
+            MindProgram mind = wild.instantiate(LuaMindContextExtension.NONE, past -> false);
+            assertTrue(mind.sensors().stream().anyMatch(sensor -> sensor.identifier().equals(STRIKE) && gated(sensor)));
+        }
+        // The copy a server that ran 141716d to d2a5b49 has in its folder is not this build's text, so it is not
+        // taken for the shipped default: it loads, runs as it declares, and nothing gates it. It strikes as it did.
+        String before;
+        try (InputStream in = PetOwnershipProgramsTest.class.getResourceAsStream("/pet_behaviors_before/strike_back.lua")) {
+            before = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        assertFalse(before.contains("delay_ticks"));
+        Files.writeString(folder.resolve("strike_back.lua"), before);
+        try (PetBehaviorCatalog catalog = catalog()) {
+            PetPrograms.Program wild = new PetPrograms(catalog, warnings::add)
+                    .program("penguin", "penguin", PetPrograms.Ownership.WILD, PENGUIN, "penguin.pet.yml");
+            assertTrue(wild.runs("strike_back"));
+            assertEquals(Set.of("fmm:pet/retaliate"), wild.gated());
+            MindProgram mind = wild.instantiate(LuaMindContextExtension.NONE, past -> false);
+            assertTrue(mind.sensors().stream().anyMatch(sensor -> sensor.identifier().equals(STRIKE) && !gated(sensor)));
+        }
+        assertEquals(List.of(), warnings);
+    }
+
+    @Test
     void onlyTheShippedTextOfAModuleIsGated() throws IOException {
         catalog().close();
         // An owner's edit: the flee may now start on something other than a hit, so nothing may gate it.

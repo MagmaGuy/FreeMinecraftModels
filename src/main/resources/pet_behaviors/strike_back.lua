@@ -9,12 +9,17 @@ return ai.module {
     -- duration_ticks at amplifier (0 is level I); a freeze past 140 ticks holds them fully frozen for half the rest.
     -- sound plays from the pet at volume and pitch: a Minecraft sound or a resource pack's own, or NONE. particle shows
     -- on the player: a Minecraft particle that needs no colour or item, or NONE. animation is the model animation it
-    -- plays as it strikes, or NONE; a model without it plays none. pets switches it on for owned pets, which never
-    -- strike back, so it is off and their bodies leave it out.
+    -- plays as it strikes, or NONE; a model without it plays none. delay_ticks is how long after the animation starts
+    -- the strike lands, for an animation that winds up before it connects: at 0 the hit, the sound and the particle
+    -- come with the animation's first tick. With a delay the animation starts when the pet's touch first reaches the
+    -- player, and the strike lands delay_ticks later on a player still within reach. One who stepped out of reach in
+    -- that time has dodged it: the swing was thrown and missed, and the pet does not swing again for that hit. pets
+    -- switches it on for owned pets, which never strike back, so it is off and their bodies leave it out.
     settings = { reach = 1.0, damage = 2.0, effect = 'NONE', duration_ticks = 60, amplifier = 0,
                  sound = 'entity.goat.ram_impact', volume = 1.0, pitch = 1.0, particle = 'crit', animation = 'attack',
-                 pets = false },
-    memories = { strike_back_answered = 'integer' },
+                 delay_ticks = 0, pets = false },
+    -- strike_back_swing is the hit a swing in the air answers, and strike_back_lands the tick it lands.
+    memories = { strike_back_answered = 'integer', strike_back_swing = 'integer', strike_back_lands = 'integer' },
     sensors = {
         ai.sensor {
             -- Every tick while a hit is unanswered, so a charge that arrives and turns away is still caught.
@@ -27,10 +32,28 @@ return ai.module {
                     return
                 end
                 local s = c.settings
-                if c.pet:strike_attacker(s.reach, s.effect, s.duration_ticks, s.amplifier, s.damage, 1, s.sound,
-                        s.volume, s.pitch, s.particle, s.animation) then
-                    c.memory:set('strike_back_answered', c.pet.hurt_count)
+                if s.delay_ticks <= 0 then
+                    if c.pet:strike_attacker(s.reach, s.effect, s.duration_ticks, s.amplifier, s.damage, 1, s.sound,
+                            s.volume, s.pitch, s.particle, s.animation) then
+                        c.memory:set('strike_back_answered', c.pet.hurt_count)
+                    end
+                    return
                 end
+                if c.memory:get('strike_back_swing') ~= c.pet.hurt_count then
+                    -- No swing for this hit yet: it starts as the touch arrives, and the animation plays once.
+                    if c.pet:touching_attacker() then
+                        c.pet:play_animation(s.animation)
+                        c.memory:set('strike_back_swing', c.pet.hurt_count)
+                        c.memory:set('strike_back_lands', c.tick + s.delay_ticks)
+                    end
+                    return
+                end
+                if c.tick < (c.memory:get('strike_back_lands') or 0) then return end
+                -- The swing comes down. It lands only on a touch, so a player out of reach now has dodged it, and
+                -- either way this hit is answered.
+                c.pet:strike_attacker(s.reach, s.effect, s.duration_ticks, s.amplifier, s.damage, 1, s.sound, s.volume,
+                        s.pitch, s.particle, 'NONE')
+                c.memory:set('strike_back_answered', c.pet.hurt_count)
             end
         }
     }
