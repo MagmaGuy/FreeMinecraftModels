@@ -70,14 +70,24 @@ final class RideCeiling {
      * pet was sent down at {@link #MAX_PUSH} a tick, into the foot of the bank it would have leapt onto.
      */
     static double above(BoundingBox body, double aheadX, double aheadZ, double upTo, Blocks blocks) {
-        double lowest = over(body, upTo, blocks);
+        return above(body, body, aheadX, aheadZ, upTo, blocks);
+    }
+
+    /**
+     * {@link #above(BoundingBox, double, double, double, Blocks)} with the blocks looked for over {@code footprint}
+     * in place of the body's own box: its rider's head is a little wider than a diving body (see
+     * {@link RideColumn#footprint}), so a block can hang over the rider's head beside the body. The footprint
+     * travels with the body; the way ahead still ends where the body's own box does not fit.
+     */
+    static double above(BoundingBox body, BoundingBox footprint, double aheadX, double aheadZ, double upTo, Blocks blocks) {
+        double lowest = over(footprint, upTo, blocks);
         double far = Math.sqrt(aheadX * aheadX + aheadZ * aheadZ);
         int strides = (int) Math.ceil(far / STRIDE);
         for (int stride = 1; stride <= strides; stride++) {
             double share = (double) stride / strides;
             BoundingBox there = body.clone().shift(aheadX * share, 0D, aheadZ * share);
             if (!BodyFit.colliders(there, blocks).isEmpty()) break;
-            lowest = Math.min(lowest, over(there, upTo, blocks));
+            lowest = Math.min(lowest, over(footprint.clone().shift(aheadX * share, 0D, aheadZ * share), upTo, blocks));
         }
         return lowest;
     }

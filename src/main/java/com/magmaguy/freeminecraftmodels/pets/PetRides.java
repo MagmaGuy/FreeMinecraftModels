@@ -10,6 +10,7 @@ import com.magmaguy.easyminecraftgoals.NMSManager;
 import com.magmaguy.magmacore.ai.MindHandle;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import org.bukkit.GameMode;
+import org.bukkit.Input;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -303,7 +304,7 @@ final class PetRides {
                 playJump(control, body);
             }
             ride.wasOnGround = onGround;
-            if (ride.diving) holdUnderCeiling(ride, body, rider, at, speed);
+            if (ride.diving) holdRiderClear(ride, body, rider, at, speed);
             if (!Double.isNaN(ride.lastX)) pushAside(control, body, at, at.getX() - ride.lastX, at.getZ() - ride.lastZ);
             ride.lastX = at.getX();
             ride.lastY = at.getY();
@@ -312,29 +313,55 @@ final class PetRides {
     }
 
     /**
-     * Keeps a diving pet's rider under the blocks over them (see {@link RideCeiling}): {@code at} is where the rider's
-     * client last put the body, and {@code speed} the movement speed it swims with. A head already in a block has
-     * the body moved down, as far as the floor allows; a head nearing one, over the body or over where it is
-     * heading, has the body's climb slowed with a velocity that keeps its sideways travel.
+     * Keeps a diving pet's rider out of the blocks round them: {@code at} is where the rider's client last put the
+     * body, and {@code speed} the movement speed it swims with. The client stops only the body at a block, and the
+     * rider is taller and a little wider than it.
+     * <p>
+     * Over them (see {@link RideCeiling}): a head already in a block has the body moved down, as far as the floor
+     * allows; a head nearing one, over the rider or over where they are heading, has the body's climb slowed.
+     * Beside them (see {@link RideColumn}): the rider's column, from the body's top to the top of their head, is
+     * slowed toward a block it is heading for and comes to rest just short of it, so a wall the body swims against
+     * and a gap that fits the body but not its rider both stop them. A column that is deep in a block all the
+     * same, as after a dash, has the body moved to the nearest spot where both fit.
+     * <p>
+     * Every slowing is one velocity the rider's client takes as its own, so the pet keeps the rest of its travel:
+     * it slides along a wall and under a ceiling.
      */
-    private static void holdUnderCeiling(Ride ride, LivingEntity body, Player rider, Location at, double speed) {
+    private static void holdRiderClear(Ride ride, LivingEntity body, Player rider, Location at, double speed) {
         Vector seat = NMSManager.getAdapter().getPassengerSeatOffset(body, 0);
         // The rider's own position is only put on the seat when the body next ticks, so it is worked out from the body.
         double head = seat == null ? rider.getBoundingBox().getMaxY()
                 : at.getY() + seat.getY() - RideCeiling.PLAYER_SEAT + rider.getHeight();
         RideCeiling.Blocks blocks = RideCeiling.of(body.getWorld());
         BoundingBox box = body.getBoundingBox();
+        double half = HEAD_PROBE * rider.getWidth() / 2D;
         double upTo = head + RideCeiling.REACH;
-        double room = RideCeiling.above(box, 0D, 0D, upTo, blocks) - head;
+        double y = at.getY();
+        // Over the body from its top, as ever, and over what of its rider's head is beside the body from the head up.
+        double room = Math.min(RideCeiling.over(box, upTo, blocks),
+                RideCeiling.over(RideColumn.footprint(box, half, head), upTo, blocks)) - head;
+        boolean tell = PetManager.ticks() >= ride.correctAgainAt;
         if (room < 0D) {
             double floor = RideCeiling.below(box, RideCeiling.MARGIN - room, blocks);
             double down = RideCeiling.duck(room, box.getMinY() - floor);
-            boolean tell = PetManager.ticks() >= ride.correctAgainAt;
-            if (down > 0D && NMSManager.getAdapter().moveSteeredVehicle(body, at.getX(), at.getY() - down, at.getZ(), tell)) {
+            if (down > 0D && NMSManager.getAdapter().moveSteeredVehicle(body, at.getX(), y - down, at.getZ(), tell)) {
                 if (tell) ride.correctAgainAt = PetManager.ticks() + CORRECTION_TICKS;
+                tell = false;
                 box = body.getBoundingBox();
                 head -= down;
                 upTo -= down;
+                y -= down;
+            }
+        }
+        // Deep in a block all the same: out to the nearest spot where the body and its rider fit. Looked for only as
+        // often as the rider's client is told, since it snaps the pet to each such move.
+        if (tell && !BodyFit.fits(at.getX(), y, at.getZ(), riderShape(box, 2D * (half - RideColumn.DEEP), head - y), blocks)) {
+            Vector spot = BodyFit.nearest(at.getX(), y, at.getZ(), riderShape(box, 2D * (half + BodyFit.CLEAR), head - y), box, blocks);
+            if (spot != null && NMSManager.getAdapter().moveSteeredVehicle(body, spot.getX(), spot.getY(), spot.getZ(), true)) {
+                ride.correctAgainAt = PetManager.ticks() + CORRECTION_TICKS;
+                // It has no step to speak of this tick: it was moved.
+                ride.lastX = Double.NaN;
+                return;
             }
         }
         boolean moved = !Double.isNaN(ride.lastX);
@@ -342,12 +369,40 @@ final class PetRides {
         double climbed = moved ? at.getY() - ride.lastY : 0D;
         // A server tick, and the trip to the rider's client and back.
         int delay = Math.min(MAX_DELAY_TICKS, 1 + (Math.max(0, rider.getPing()) + 49) / 50);
-        double over = RideCeiling.above(box, stepX * (delay + 1), stepZ * (delay + 1), upTo, blocks);
+        // As far ahead as the brake beside the rider starts to bite, so a body heading for a tunnel's mouth with
+        // its rider's head over the tunnel's ceiling is on its way down before the column gets there.
+        int look = delay + 1 + RideColumn.LOOK_TICKS;
+        double over = Math.min(RideCeiling.above(box, stepX * look, stepZ * look, upTo, blocks),
+                RideCeiling.above(box, RideColumn.footprint(box, half, head), stepX * look, stepZ * look, upTo, blocks));
         // Vanilla steers a nautilus along its rider's view: looking up, part of its thrust lifts it.
-        double thrust = RideCeiling.THRUST * speed * Math.max(0D, -Math.sin(Math.toRadians(rider.getLocation().getPitch())));
-        double up = RideCeiling.brake(over - head, climbed, thrust, delay);
-        if (!Double.isNaN(up))
-            body.setVelocity(new Vector(RideCeiling.WATER_DRAG * stepX, up, RideCeiling.WATER_DRAG * stepZ));
+        Location view = rider.getLocation();
+        Vector thrust = RideColumn.thrust(speed, view.getYaw(), view.getPitch(), forward(rider), strafe(rider));
+        double up = RideCeiling.brake(over - head, climbed, thrust.getY(), delay);
+        BoundingBox column = RideColumn.over(box, half, head);
+        double alongX = RideColumn.brake(column, true, stepX, thrust.getX(), stepZ, delay, blocks);
+        double alongZ = RideColumn.brake(column, false, stepZ, thrust.getZ(), stepX, delay, blocks);
+        if (Double.isNaN(up) && Double.isNaN(alongX) && Double.isNaN(alongZ)) return;
+        // What is not slowed is what the client would have next tick by itself.
+        body.setVelocity(new Vector(Double.isNaN(alongX) ? RideCeiling.WATER_DRAG * stepX : alongX,
+                Double.isNaN(up) ? RideCeiling.WATER_DRAG * climbed : up,
+                Double.isNaN(alongZ) ? RideCeiling.WATER_DRAG * stepZ : alongZ));
+    }
+
+    /** A body's box and, over it, a rider's column this wide up to this far above the body's feet. */
+    private static BodyFit.Shape riderShape(BoundingBox box, double width, double headAboveFeet) {
+        return new BodyFit.Shape(box.getWidthX(), box.getHeight(), width, box.getHeight(), headAboveFeet);
+    }
+
+    /** The rider's forward key as the nautilus they steer reads it: 1, -1 for backward, 0 for neither or both. */
+    private static int forward(Player rider) {
+        Input input = rider.getCurrentInput();
+        return (input.isForward() ? 1 : 0) - (input.isBackward() ? 1 : 0);
+    }
+
+    /** The rider's strafe keys as the nautilus they steer reads them: 1 for left, -1 for right, 0 for neither or both. */
+    private static int strafe(Player rider) {
+        Input input = rider.getCurrentInput();
+        return (input.isLeft() ? 1 : 0) - (input.isRight() ? 1 : 0);
     }
 
     /**
