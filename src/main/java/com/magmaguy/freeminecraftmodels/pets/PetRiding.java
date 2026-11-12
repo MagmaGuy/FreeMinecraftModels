@@ -26,10 +26,22 @@ import java.util.function.Consumer;
  * The default is a player's own jump, 0.42, which rises about 1.2 blocks; 0 turns the hop off.
  * {@code stepSounds} names, by block, the sound a ridden pet's footstep makes on that block in place of the block's
  * own step sound (see {@link PetSteps}): a Minecraft sound or a resource pack's own. Blocks it leaves out keep theirs.
+ * {@code jumpSound} is the sound a ridden pet makes as it jumps with its rider on land and as it hops out of the
+ * water (see {@link JumpSound}); null, the default, makes none, since every pet body is silent.
  */
 public record PetRiding(double speed, double jump, double seatHeight, String animation, String idleAnimation,
                         Map<Material, Double> surfaces, double swimSpeed, double surfaceHop,
-                        Map<Material, String> stepSounds) {
+                        Map<Material, String> stepSounds, JumpSound jumpSound) {
+    /**
+     * The sound of a ridden pet's jump: a Minecraft sound or a resource pack's own, at a volume (1 is the sound as
+     * recorded, heard 16 blocks away) and a pitch (0.5 to 2). The pet file gives it as a name alone, at
+     * {@link #VOLUME} and pitch 1, or as a section with {@code sound}, {@code volume} and {@code pitch}.
+     */
+    public record JumpSound(String sound, float volume, float pitch) {
+        /** A jump is one soft accent over the footsteps, which play at 0.15: well under a mob's own voice at 1. */
+        static final float VOLUME = 0.4F;
+    }
+
     /**
      * Blocks per second a ridden vanilla nautilus swims per point of movement speed. Its rider's client adds
      * 0.0325 x speed along the rider's input to its velocity, moves it by that velocity and then keeps 0.9 of it, so
@@ -87,10 +99,25 @@ public record PetRiding(double speed, double jump, double seatHeight, String ani
                 }
                 stepSounds.put(material, sound.trim());
             }
+        JumpSound jumpSound = jumpSound(section, filename, warn);
         return new PetRiding(Math.max(0D, section.getDouble("speed", SPEED)), Math.max(0D, section.getDouble("jump", JUMP)),
                 Math.max(0D, section.getDouble("seatHeight", SEAT_HEIGHT)), name(section, "animation", ANIMATION),
                 name(section, "idleAnimation", IDLE_ANIMATION), surfaces, Math.max(0D, section.getDouble("swimSpeed", 0D)),
-                Math.max(0D, section.getDouble("surfaceHop", SURFACE_HOP)), stepSounds);
+                Math.max(0D, section.getDouble("surfaceHop", SURFACE_HOP)), stepSounds, jumpSound);
+    }
+
+    /** The section's jumpSound: a sound's name, or a section naming one with a volume and a pitch; null without one. */
+    private static JumpSound jumpSound(ConfigurationSection section, String filename, Consumer<String> warn) {
+        ConfigurationSection written = section.getConfigurationSection("jumpSound");
+        String sound = written != null ? written.getString("sound") : section.getString("jumpSound");
+        if (sound == null || sound.isBlank() || sound.trim().equalsIgnoreCase("NONE")) {
+            if (written != null) warn.accept(filename + ": riding.jumpSound names no sound; a jump makes none.");
+            return null;
+        }
+        double volume = written == null ? JumpSound.VOLUME : written.getDouble("volume", JumpSound.VOLUME);
+        double pitch = written == null ? 1D : written.getDouble("pitch", 1D);
+        return new JumpSound(sound.trim().toLowerCase(Locale.ROOT), (float) Math.max(0D, Math.min(4D, volume)),
+                (float) Math.max(0.5D, Math.min(2D, pitch)));
     }
 
     /** An animation name the section sets, or the default for a missing or blank one. */

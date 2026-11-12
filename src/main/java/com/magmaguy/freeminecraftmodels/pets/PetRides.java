@@ -13,6 +13,7 @@ import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.SoundCategory;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.block.Block;
@@ -84,6 +85,13 @@ final class PetRides {
     private static final double PROBE_REACH = 0.01D;
     /** The most ticks a rider's client is taken to need to act on a velocity it is sent, however slow its connection. */
     private static final int MAX_DELAY_TICKS = 10;
+    /**
+     * Ticks a jump its rider asked for may take to lift the pet off the ground: the rider's client jumps on its next
+     * tick on the ground, and one asked for in the air waits for the landing.
+     */
+    static final long JUMP_WINDOW_TICKS = 40L;
+    /** The least a body rises in the tick it leaves the ground for that to be a jump: a walk off an edge sinks. */
+    static final double JUMP_RISE = 0.1D;
     private final PetManager manager;
     /** Each ridden pet with the movement speed and jump strength its body had before, and where it stood last tick. */
     private final Map<PetControl, Ride> ridden = new IdentityHashMap<>();
@@ -107,6 +115,10 @@ final class PetRides {
         private long correctAgainAt = Long.MIN_VALUE;
         // The pace it dives at: its steps of the last second.
         private final RideHop.Pace pace = new RideHop.Pace();
+        // The pet tick its rider last let go of the jump key on land, until that jump has been heard.
+        private long jumpAskedAt = Long.MIN_VALUE;
+        // Whether its body stood on the ground last tick, as its rider's client says.
+        private boolean wasOnGround = true;
 
         private Ride(Unridden before, UUID rider) {
             this.before = before;
@@ -284,6 +296,13 @@ final class PetRides {
                         * riding.multiplier(feet.getType(), feet.getRelative(BlockFace.DOWN).getType());
             }
             setBase(body, Attribute.MOVEMENT_SPEED, speed);
+            boolean onGround = body.isOnGround();
+            if (!ride.diving && !Double.isNaN(ride.lastX) && ride.jumpAskedAt != Long.MIN_VALUE
+                    && leapt(ride.wasOnGround, onGround, at.getY() - ride.lastY, PetManager.ticks() - ride.jumpAskedAt)) {
+                ride.jumpAskedAt = Long.MIN_VALUE;
+                playJump(control, body);
+            }
+            ride.wasOnGround = onGround;
             if (ride.diving) holdUnderCeiling(ride, body, rider, at, speed);
             if (!Double.isNaN(ride.lastX)) pushAside(control, body, at, at.getX() - ride.lastX, at.getZ() - ride.lastZ);
             ride.lastX = at.getX();
@@ -372,6 +391,37 @@ final class PetRides {
         if (!RideHop.clear(at.getX(), at.getY(), at.getZ(), alongX, lift, alongZ, riddenShape(body, rider),
                 RideCeiling.of(body.getWorld()))) return;
         body.setVelocity(new Vector(alongX, lift, alongZ));
+        playJump(control, body);
+    }
+
+    /**
+     * The rider of this pet let go of the jump key. On land that is a jump, which lifts the pet off the ground on
+     * the rider's client within a tick or two, or as it lands when it was in the air; {@link #tick} plays the
+     * species' jump sound as it sees the body leave the ground. On its diving body the key is the dash, which is
+     * no jump and makes no sound.
+     */
+    void jumpAsked(PetControl control) {
+        Ride ride = ridden.get(control);
+        if (ride != null && !ride.diving) ride.jumpAskedAt = PetManager.ticks();
+    }
+
+    /**
+     * Whether a body just left the ground on the jump its rider asked for {@code sinceAsked} ticks ago: it stood on
+     * the ground last tick, is off it now, and rose {@link #JUMP_RISE} or more, within {@link #JUMP_WINDOW_TICKS}
+     * of the asking.
+     */
+    static boolean leapt(boolean wasOnGround, boolean onGround, double rose, long sinceAsked) {
+        return wasOnGround && !onGround && rose >= JUMP_RISE && sinceAsked >= 0L && sinceAsked <= JUMP_WINDOW_TICKS;
+    }
+
+    /**
+     * Plays the species' jump sound at the pet, for everyone near. Its body is silent, as every pet's is, so the
+     * horse's own jump is never heard; this is the pet's.
+     */
+    private static void playJump(PetControl control, LivingEntity body) {
+        PetRiding.JumpSound jump = control.species().riding().jumpSound();
+        if (jump == null || jump.volume() <= 0F) return;
+        body.getWorld().playSound(body.getLocation(), jump.sound(), SoundCategory.NEUTRAL, jump.volume(), jump.pitch());
     }
 
     /** A body's box as its rider's client moves it, and over it the room its rider's head needs. */

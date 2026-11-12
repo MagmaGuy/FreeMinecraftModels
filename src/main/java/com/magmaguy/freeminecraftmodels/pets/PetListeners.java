@@ -21,6 +21,7 @@ import org.bukkit.event.entity.EntityRegainHealthEvent;
 import org.bukkit.event.entity.EntityRemoveEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
+import org.bukkit.event.entity.HorseJumpEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
@@ -243,6 +244,17 @@ public final class PetListeners implements Listener {
         if (manager == null) return;
         PetControl pet = manager.pet(event.getDismounted());
         if (pet != null && manager.rides().keepsUnderwaterRider(pet, player)) event.setCancelled(true);
+    }
+
+    /**
+     * The rider of a horse body let go of the jump key: a ridden pet's jump, heard as its species' jump sound once
+     * the pet leaves the ground (see {@link PetRides#jumpAsked}).
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onRiddenJump(HorseJumpEvent event) {
+        PetManager manager = PetManager.get();
+        PetControl pet = manager == null ? null : manager.pet(event.getEntity());
+        if (pet != null) manager.rides().jumpAsked(pet);
     }
 
     /** A pet's model touched a player: a wild pet remembers it for its sting module; no pet deals FMM's contact attack. */

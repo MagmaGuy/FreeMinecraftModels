@@ -122,6 +122,38 @@ class PetRidingTest {
     }
 
     @Test
+    void aRiddenPetsJumpSoundIsANameOrASectionAndNoneByDefault() throws InvalidConfigurationException {
+        List<String> warnings = new ArrayList<>();
+        assertEquals(null, read("riding: {}\n", warnings).jumpSound());
+        assertEquals(null, read("riding:\n  jumpSound: NONE\n", warnings).jumpSound());
+        assertEquals(new PetRiding.JumpSound("entity.rabbit.jump", 0.4F, 1F),
+                read("riding:\n  jumpSound: Entity.Rabbit.Jump\n", warnings).jumpSound());
+        assertEquals(new PetRiding.JumpSound("my_pack:penguin.jump", 0.6F, 0.8F),
+                read("riding:\n  jumpSound:\n    sound: my_pack:penguin.jump\n    volume: 0.6\n    pitch: 0.8\n", warnings).jumpSound());
+        // Kept within what a sound packet takes.
+        assertEquals(new PetRiding.JumpSound("entity.rabbit.jump", 4F, 0.5F),
+                read("riding:\n  jumpSound:\n    sound: entity.rabbit.jump\n    volume: 9\n    pitch: 0.1\n", warnings).jumpSound());
+        assertEquals(List.of(), warnings);
+        assertEquals(null, read("riding:\n  jumpSound:\n    volume: 0.6\n", warnings).jumpSound());
+        assertEquals(List.of(FILE + ": riding.jumpSound names no sound; a jump makes none."), warnings);
+    }
+
+    @Test
+    void aJumpIsHeardAsTheBodyLeavesTheGroundRisingSoonAfterItsRiderAsked() {
+        // Asked on the ground, the body is off it a tick or two later, 0.4 blocks up.
+        assertTrue(PetRides.leapt(true, false, 0.4D, 1L));
+        assertTrue(PetRides.leapt(true, false, 0.1D, PetRides.JUMP_WINDOW_TICKS));
+        // Still on the ground, or already in the air last tick: not the tick it leaves.
+        assertFalse(PetRides.leapt(true, true, 0D, 1L));
+        assertFalse(PetRides.leapt(false, false, 0.3D, 2L));
+        // Walking off an edge sinks; a step up a block keeps it on the ground.
+        assertFalse(PetRides.leapt(true, false, -0.08D, 1L));
+        assertFalse(PetRides.leapt(true, true, 1D, 1L));
+        // Asked too long ago: that jump never came.
+        assertFalse(PetRides.leapt(true, false, 0.4D, PetRides.JUMP_WINDOW_TICKS + 1L));
+    }
+
+    @Test
     void theHopOutOfTheWaterIsAPlayersJumpUnlessTheFileSaysOtherwise() throws InvalidConfigurationException {
         List<String> warnings = new ArrayList<>();
         assertEquals(0.42D, read("riding: {}\n", warnings).surfaceHop());
