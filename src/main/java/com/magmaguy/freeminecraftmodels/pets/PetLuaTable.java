@@ -184,6 +184,8 @@ public final class PetLuaTable {
     private Location trail, march;
     // Whether march is the point of a march's leader on one of its legs, which steer_onto walks straight at.
     private boolean marchLeg;
+    // The leader's footprint a follower walks at on the way to march, its place in line; null when it has none.
+    private Location marchVia;
     // A flying body's stuck count; MagmaCore's navigation tracker keeps a walking or swimming body's.
     private final FlightTrack flight = new FlightTrack();
     // The item, block and campfire kinds the lists a module passes name, kept while a list's entries stay the same.
@@ -551,13 +553,15 @@ public final class PetLuaTable {
         // place on the leader's footprints. A follower back after being away goes to the back of the line. nil when it
         // is in no march, or the march ended: back where it was called, too few left, or out of time. steer_onto
         // walks a leader straight at the step this gave it for one of its legs, with no look at the ground between:
-        // the march found the leg walkable when it chose it.
+        // the march found the leg walkable when it chose it. A follower on the leader's footprints it walks along
+        // them toward the place this gave it, a block ahead at a time, and not by a path of its own.
         // Worked out once per tick: a second ask in the same tick would find the same spot.
         method("march_spot", args -> {
             long stamp = ticks.stamp();
             if (stamp == Ticks.UNBOUND || stamp != marchStamp) {
                 march = PetMarches.spot(body(), PetManager.ticks());
                 marchLeg = march != null && PetMarches.walksLeg(body());
+                marchVia = march == null || marchLeg ? null : PetMarches.footprint(body(), PetManager.ticks());
                 marchStamp = stamp;
             }
             return location(march);
@@ -965,14 +969,18 @@ public final class PetLuaTable {
     /**
      * steer_onto's tick: as {@link #steerTo}, ending on the target (see {@link WalkPath#steerOnto}). At the point
      * march_spot gave a march's leader on one of its legs this tick, it walks straight (see
-     * {@link WalkPath#walkStraight}).
+     * {@link WalkPath#walkStraight}). Toward the place march_spot gave a follower this tick, it walks straight at
+     * the leader's footprint a block ahead of the follower, when the follower is on the footprints (see
+     * {@link March#footprint}).
      */
     private boolean steerOnto(Location target, double cruise) {
         if (control.route() == null) cruise *= control.stats().speed;
         if (control.species().locomotion() == MindBodyLocomotion.FLYING) return steerFlight(target, cruise);
-        boolean leg = marchLeg && march != null && ticks.stamp() == marchStamp && target.getWorld() == march.getWorld()
+        boolean spot = march != null && ticks.stamp() == marchStamp && target.getWorld() == march.getWorld()
                 && target.getX() == march.getX() && target.getY() == march.getY() && target.getZ() == march.getZ();
-        boolean steered = leg ? path.walkStraight(context, target, cruise) : path.steerOnto(context, target, cruise);
+        boolean steered = spot && marchLeg ? path.walkStraight(context, target, cruise)
+                : spot && marchVia != null ? path.walkStraight(context, marchVia, cruise)
+                : path.steerOnto(context, target, cruise);
         if (path.stoppedNow()) ticks.moved();
         return steered;
     }
@@ -1102,7 +1110,7 @@ public final class PetLuaTable {
 
         /**
          * A walk straight at a point whoever asks vouches for: the ground between is not looked at. A march's leader
-         * walks its leg this way. The march found the leg by standing on it every half block, a body wide, so the
+         * walks its leg this way, and a follower the leader's footprints, which the leader itself walked. The march found the leg by standing on it every half block, a body wide, so the
          * leader can walk it: off the edge of a step, down a second one right after, past the corner of a hole its
          * width carries it over. steer_onto looked at the ground itself each tick, from the leader's feet, and each
          * time it could not tell (a point two steps under a leader still resting on the edge above, a hole's corner
