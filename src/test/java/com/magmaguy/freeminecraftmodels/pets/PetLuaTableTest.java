@@ -824,29 +824,36 @@ class PetLuaTableTest {
     void steerOntoWalksStraightOverASingleStep() {
         // The body stands at x 0.5, y 64 on stone whose top is y 63; from x 1 on the ground is a block lower.
         World down = terrain(x -> x >= 1 ? 62 : 63);
-        assertEquals(List.of("moveDirect 1.40 0.54"), steerOnto(down, false, new Location(down, 1.4, 63, 0.5), 0.15D),
+        assertEquals(List.of("moveDirect 1.40 0.60"), steerOnto(down, false, new Location(down, 1.4, 63, 0.5), 0.15D),
                 "a point down a step is walked at straight, off the edge, with no path");
         assertEquals(List.of("moveDirect 2.40 0.60"), steerOnto(down, false, new Location(down, 2.4, 63, 0.5), 0.15D),
                 "from as far as a point on its own level");
         assertEquals(List.of("moveTo 2.60 0.60"), steerOnto(down, false, new Location(down, 2.6, 63, 0.5), 0.15D),
                 "farther off it paths");
-        assertEquals(List.of("moveDirect 1.90 0.51"),
+        assertEquals(List.of("moveDirect 1.90 0.60"),
                 steerOntoFrom(new Location(down, 1.05, 64, 0.5), new Location(down, 1.9, 63, 0.5), 0.15D),
                 "a body on the edge of the step, its middle over the lower ground already, walks on off it");
+        assertEquals(List.of("moveDirect 1.05 0.60"),
+                steerOntoFrom(new Location(down, 0.75, 64, 0.5), new Location(down, 1.05, 63, 0.5), 0.15D),
+                "a point at the foot of the step, a third of a block off: at its speed still, with no easing off"
+                        + " above the edge, where it would creep over it");
+        assertEquals(List.of("moveDirect 1.05 0.25"),
+                steerOntoFrom(new Location(down, 1.35, 63, 0.5), new Location(down, 1.05, 63, 0.5), 0.15D),
+                "once it stands on the point's level it eases off, as on any level ground");
         assertEquals(List.of("moveTo 1.40 0.60"), steerOnto(down, true, new Location(down, 1.4, 63, 0.5), 0.15D),
                 "a body in water keeps to its path");
 
         World up = terrain(x -> x >= 1 ? 64 : 63);
-        assertEquals(List.of("moveDirect 1.40 0.54"), steerOnto(up, false, new Location(up, 1.4, 65, 0.5), 0.15D),
+        assertEquals(List.of("moveDirect 1.40 0.60"), steerOnto(up, false, new Location(up, 1.4, 65, 0.5), 0.15D),
                 "a point up a step, within a block, is walked at straight: there a body steps or jumps up");
         assertEquals(List.of("moveTo 1.80 0.60"), steerOnto(up, false, new Location(up, 1.8, 65, 0.5), 0.15D),
                 "from farther off a climb is for the path");
 
         // A ditch one block wide and one deep across the way at x 1.
         World ditch = terrain(x -> x == 1 ? 62 : 63);
-        assertEquals(List.of("moveDirect 1.40 0.54"), steerOnto(ditch, false, new Location(ditch, 1.4, 63, 0.5), 0.15D),
+        assertEquals(List.of("moveDirect 1.40 0.60"), steerOnto(ditch, false, new Location(ditch, 1.4, 63, 0.5), 0.15D),
                 "into a ditch");
-        assertEquals(List.of("moveDirect 2.20 0.42"),
+        assertEquals(List.of("moveDirect 2.20 0.60"),
                 steerOntoFrom(new Location(ditch, 1.5, 63, 0.5), new Location(ditch, 2.2, 64, 0.5), 0.15D),
                 "and out of it on the far side");
 
