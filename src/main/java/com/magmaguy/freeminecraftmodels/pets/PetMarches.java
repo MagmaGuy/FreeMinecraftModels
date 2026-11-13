@@ -163,17 +163,6 @@ final class PetMarches {
         return spot == null ? null : spot.toLocation(walk.world);
     }
 
-    /**
-     * Where this pet, a follower in a march, walks at on the way to its place in line: see {@link March#footprint}.
-     * Null when it has no such point. Ask it after {@link #spot} on the same tick.
-     */
-    static Location footprint(LivingEntity body, long now) {
-        Walk walk = byBody.get(body.getUniqueId());
-        if (walk == null || body.getWorld() != walk.world) return null;
-        Vector point = walk.march.footprint(body.getUniqueId(), body.getLocation().toVector(), now);
-        return point == null ? null : point.toLocation(walk.world);
-    }
-
     /** Whether this pet is the leader of a march, walking one of its legs: see {@link March#walksLeg}. */
     static boolean walksLeg(LivingEntity body) {
         Walk walk = byBody.get(body.getUniqueId());

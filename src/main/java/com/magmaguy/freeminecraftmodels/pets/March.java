@@ -56,15 +56,6 @@ final class March {
     static final double WALKING = 0.25D;
     /** A leader this near the line of its leg, across it, walks the leg: see {@link #walksLeg}. */
     static final double ON_LEG = 0.5D;
-    /** A follower this near the leader's footprints across walks them: see {@link #footprint}. */
-    static final double ON_TRAIL = 1D;
-    /** How far ahead of itself along the leader's footprints such a follower walks at, counted across the ground. */
-    static final double FOOTPRINT_AHEAD = 1D;
-    /**
-     * Footprints are kept this much further back than the line needs for its places, for a follower that fell
-     * behind to walk: as far as a march's call reaches by default, which is as far off as a marcher starts.
-     */
-    static final double TRAIL_SPARE = 12D;
     /**
      * A new leg whose heading lies this far round from the last one's, by its cosine, is a turn: a sixteenth of a
      * circle, the least a leader turns on purpose. A leg toward home that only aims again as the leader walks is not.
@@ -210,31 +201,6 @@ final class March {
     }
 
     /**
-     * Where a follower, now at {@code at}, walks at on the way to its place in line: the leader's footprint
-     * {@link #FOOTPRINT_AHEAD} ahead of where it is on them, or its place when that is nearer. Ask it after
-     * {@link #spot} on the same tick. Null for the leader, while the line forms, for a follower whose place lies
-     * behind the oldest footprint, and for one that is not on the footprints, more than {@link #ON_TRAIL} from them
-     * across or more than a step above or below them: those go for their place as steer_onto takes them there.
-     * <p>
-     * A follower used to be sent to its place whatever lay between. Within 2 blocks, over ground steer_onto could
-     * read, it walked straight. Any other time it was handed to its body's pathfinder: when its place was further
-     * off than that, and at every edge the leader had crossed, where a footprint lies at the height of the upper
-     * block over the lower ground, since the leader's box still rested on the edge. On a steep hillside that was 10
-     * to 18 ticks in a hundred for every follower, 25 paths a march each. A path stops a block short of its end and
-     * is asked for again a second later, so a follower 2 to 3 blocks behind fell further behind. And a path is the
-     * pathfinder's own way, down drops of 2 and 3 blocks the leader's legs never take, from where the way back up
-     * to the line is a long one. The footprints are ground the leader itself walked, one step at a time.
-     */
-    Vector footprint(UUID id, Vector at, long now) {
-        if (over || phase == Phase.FORMING) return null;
-        int index = indexOf(id);
-        if (index <= 0) return null;
-        double place = rank(index, now) * spacing;
-        double self = trail.nearest(at, place, ON_TRAIL);
-        return self < 0D ? null : trail.ahead(self, FOOTPRINT_AHEAD, place);
-    }
-
-    /**
      * The rules that need no marcher to ask: the hard cap, marchers that left, a leader away too long handing over to
      * the first marcher there, and a march with nobody left to lead or follow.
      */
@@ -305,7 +271,7 @@ final class March {
             // the leader stood a block to the side, that heading could be shut, and the march turned away or ended.
             if (!nextLeg(home, ground)) return null;
         }
-        trail.step(at, (line.size() + 1) * spacing + 2D + TRAIL_SPARE);
+        trail.step(at, (line.size() + 1) * spacing + 2D);
         // Where it stood WALK_TICKS ago, when it asked then.
         int round = (int) Math.floorMod(now, (long) WALK_TICKS);
         Vector before = latelyTick[round] == now - WALK_TICKS ? lately[round] : null;

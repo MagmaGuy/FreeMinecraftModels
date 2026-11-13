@@ -22,9 +22,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Marches on made-up ground: flat at feet height 64, with walls where a test puts them. Marchers walk toward the spots
  * the march gives them each tick as march.lua and steer_onto walk them: at the module's pace times each one's speed
  * stat, hurrying when more than 3 blocks behind, easing off over the last block, and standing still within 0.3 of the
- * spot. A follower on the leader's footprints walks straight at the footprint the march gives it. Any other marcher
- * walks straight at a spot a level up or down too when it is within 2 blocks over ground that is one step at a time,
- * a climb only from within a block, as steer_onto does. Any other spot off their level goes to the body's
+ * spot. A spot a level up or down they walk straight at too when it is within 2 blocks over ground that is one step
+ * at a time, a climb only from within a block, as steer_onto does. Any other spot off their level goes to the body's
  * pathfinder, as steer_onto hands it over: the marcher walks at its pace until the spot is a block away, which the
  * pathfinder takes as reached. So a whole march plays out without a server.
  */
@@ -476,111 +475,6 @@ class MarchTest {
     }
 
     @Test
-    void theTrailFindsTheFootprintNearestAPlaceAmongThoseBehindAGivenOne() {
-        // Footprints every quarter block from x 0.5 to x 10.5, the newest last.
-        MarchTrail trail = new MarchTrail(HOME, 1, 0);
-        for (double x = 0.75; x <= 10.5; x += 0.25) trail.step(new Vector(x, FEET, 0.5), 30);
-        assertEquals(4.0, trail.nearest(new Vector(6.5, FEET, 0.9), 0, 1), 1.0E-9, "the footprint beside it, 4 blocks back");
-        assertEquals(5.0, trail.nearest(new Vector(6.5, FEET, 0.9), 5, 1.5), 1.0E-9,
-                "of those 5 blocks back or more, the nearest is the one 5 back");
-        assertEquals(-1, trail.nearest(new Vector(6.5, FEET, 0.9), 5, 1), 1.0E-9, "which is more than a block from it");
-        assertEquals(-1, trail.nearest(new Vector(6.5, FEET, 1.7), 0, 1), 1.0E-9, "more than a block to the side is off the trail");
-        assertEquals(4.0, trail.nearest(new Vector(6.5, FEET - 1, 0.5), 0, 1), 1.0E-9, "a step below the footprints is on it");
-        assertEquals(-1, trail.nearest(new Vector(6.5, FEET - 2, 0.5), 0, 1), 1.0E-9, "two below is not");
-        assertEquals(-1, trail.nearest(new Vector(-3, FEET, 0.5), 0, 1), 1.0E-9,
-                "behind the oldest footprint the trail runs on straight, and that run is no footprint");
-        assertEquals(-1, trail.nearest(new Vector(0.5, FEET, 0.5), 12, 1), 1.0E-9, "nor is there one 12 blocks back");
-    }
-
-    @Test
-    void theWayOnAlongTheTrailCountsGroundAndNotTheHeightOfAStep() {
-        // Footprints along +x, and at x 5 the leader rose a block: two footprints there, one over the other.
-        MarchTrail trail = new MarchTrail(HOME, 1, 0);
-        for (double x = 0.75; x <= 5; x += 0.25) trail.step(new Vector(x, FEET, 0.5), 60);
-        trail.step(new Vector(5, FEET + 1, 0.5), 60);
-        for (double x = 5.25; x <= 10; x += 0.25) trail.step(new Vector(x, FEET + 1, 0.5), 60);
-        // A body at the foot of the step, 0.4 short of it: 5 blocks of trail on top, 1 up the step, 0.4 below.
-        double self = trail.nearest(new Vector(4.6, FEET, 0.5), 0, 1);
-        assertEquals(6.4, self, 1.0E-9, "on the trail at the foot of the step");
-        Vector on = trail.ahead(self, 1, 0);
-        assertEquals(5.6, on.getX(), 1.0E-9, "a block on across the ground is past the step, not the top of it");
-        assertEquals(FEET + 1, on.getY(), 1.0E-9, "and up it");
-        assertEquals(new Vector(5, FEET, 0.5), trail.ahead(self, 1, 6), "but no further on than its place, here the step's foot");
-        assertEquals(new Vector(-1, FEET, 0.5), trail.ahead(20, 1, 12),
-                "from behind the oldest footprint, 10.5 blocks back, the way on is its place: 12 back, 1.5 behind it");
-    }
-
-    @Test
-    void whereTheTrailDoublesBackABodyIsOnTheStretchThatLeadsToItsPlaceSoonest() {
-        // Out along +x to x 10 and back along the same line to x 6, where the leader is now.
-        MarchTrail trail = new MarchTrail(HOME, 1, 0);
-        for (double x = 0.75; x <= 10; x += 0.25) trail.step(new Vector(x, FEET, 0.5), 60);
-        for (double x = 9.75; x >= 6; x -= 0.25) trail.step(new Vector(x, FEET, 0.5), 60);
-        Vector body = new Vector(8, FEET, 0.6);
-        assertEquals(2.0, trail.nearest(body, 0, 1), 1.0E-9, "beside both stretches, it is on the way back, 2 blocks behind the leader");
-        assertEquals(2.5, trail.nearest(body, 2.5, 1), 1.0E-9,
-                "with its place half a block further back on the way back, within a block of it: at its place");
-        assertEquals(6.0, trail.nearest(body, 3.5, 1), 1.0E-9,
-                "with its place more than a block off, near the turn: still on the way out, 2 blocks short of the turn");
-    }
-
-    @Test
-    void aFollowerOnTheFootprintsWalksAtTheOneABlockAheadOfItOnItsWayToItsPlace() {
-        Sim forming = new Sim(OPEN, 4, 2400);
-        for (int tick = 0; tick < 5; tick++) forming.step();
-        assertNull(forming.march.footprint(forming.ids.get(2), forming.at(2), forming.now - 1), "not while the line forms");
-
-        Sim sim = new Sim(OPEN, 4, 2400);
-        while (sim.at(0).getX() < 25) sim.step();
-        long asked = sim.now - 1;
-        UUID second = sim.ids.get(2);
-        Vector place = sim.march.spot(second, sim.at(2), asked, OPEN);
-        assertEquals(place, sim.march.footprint(second, sim.at(2), asked), "within a block of its place, its place itself");
-        Vector behind = new Vector(place.getX() - 6, FEET, HOME.getZ());
-        Vector ahead = sim.march.footprint(second, behind, asked);
-        assertNotNull(ahead, "6 blocks behind its place on the footprints");
-        assertEquals(behind.getX() + March.FOOTPRINT_AHEAD, ahead.getX(), 1.0E-6, "the footprint a block ahead of it");
-        assertEquals(HOME.getZ(), ahead.getZ(), 0.05);
-        assertNull(sim.march.footprint(second, behind.clone().setZ(HOME.getZ() + 1.6), asked),
-                "more than a block beside the footprints it goes for its place as before");
-        assertNull(sim.march.footprint(second, behind.clone().setY(FEET - 2), asked), "and so two blocks under them");
-        assertNull(sim.march.footprint(sim.ids.get(0), sim.at(0), asked), "the leader walks its leg, not footprints");
-    }
-
-    @Test
-    void aFollowerThatFellBehindWalksTheLeadersFootprintsAndNotItsOwnWayAcross() {
-        // A wall across the way at x 14 turns the line along it. The last follower is held where it stands until
-        // the leader is well round the turn, 9 blocks and more ahead of it by the way the leader walked.
-        Sim sim = new Sim(ground((x, z) -> x == 14), 4, 6000);
-        List<Vector> walked = new ArrayList<>();
-        UUID last = sim.ids.get(4);
-        while (sim.at(0).getX() < 8) step(sim, walked);
-        sim.held.add(last);
-        while (Math.abs(sim.at(0).getZ() - HOME.getZ()) < 5) step(sim, walked);
-        sim.held.clear();
-        // From there it catches up. It used to be handed to its body's path, which is its own way to its place:
-        // across the inside of the turn, over ground the leader never walked. Now it never leaves the footprints.
-        double farthest = 0;
-        for (int tick = 0; tick < 300; tick++) {
-            step(sim, walked);
-            double off = Double.MAX_VALUE;
-            for (Vector footprint : walked)
-                off = Math.min(off, Math.hypot(footprint.getX() - sim.at(4).getX(), footprint.getZ() - sim.at(4).getZ()));
-            farthest = Math.max(farthest, off);
-        }
-        assertTrue(farthest <= 0.5, "it kept to the way the leader walked: " + farthest + " blocks off it at most");
-        assertTrue(sim.at(3).distance(sim.at(4)) < SPACING + 1, "and caught up with the marcher ahead of it: "
-                + sim.at(3).distance(sim.at(4)));
-    }
-
-    /** One tick of a sim, keeping where its leader walked. */
-    private static void step(Sim sim, List<Vector> walked) {
-        sim.step();
-        assertFalse(sim.march.over(), "the march goes on");
-        walked.add(sim.at(0).clone());
-    }
-
-    @Test
     void aGapClosesAndAMarcherBackFromAwayJoinsAtTheBack() {
         Sim sim = new Sim(OPEN, 4, 2400);
         while (sim.at(0).getX() < 15) sim.step();
@@ -702,11 +596,7 @@ class MarchTest {
                 Vector spot = march.spot(id, position, now, ground);
                 if (march.over()) break;
                 if (spot != null && id.equals(march.leader())) leaderPoint = spot.clone();
-                if (spot != null && !held.contains(id)) {
-                    Vector footprint = march.footprint(id, position, now);
-                    if (footprint != null) follow(position, footprint, spot, speeds.get(id));
-                    else walk(position, spot, speeds.get(id), march.walksLeg(id, position));
-                }
+                if (spot != null && !held.contains(id)) walk(position, spot, speeds.get(id), march.walksLeg(id, position));
                 // A body stands on the ground under it.
                 int feet = ground.standing((int) Math.floor(position.getX()), (int) Math.floor(position.getY()),
                         (int) Math.floor(position.getZ()));
@@ -714,25 +604,6 @@ class MarchTest {
             }
             march.sweep(now);
             now++;
-        }
-
-        /**
-         * One tick of a follower on the leader's footprints: march.lua asks for its place, and steer_onto walks it
-         * straight at the footprint the march gives it on the way there, with no look at the ground. It hurries when
-         * its place is more than 3 blocks off, eases off over the last block to that footprint, and stands still
-         * within 0.3 of its place.
-         */
-        private void follow(Vector position, Vector footprint, Vector spot, double speed) {
-            double away = Math.hypot(spot.getX() - position.getX(), spot.getZ() - position.getZ());
-            if (Math.abs(spot.getY() - position.getY()) <= RISE && away <= CLOSE) return;
-            double dx = footprint.getX() - position.getX(), dz = footprint.getZ() - position.getZ();
-            double distance = Math.sqrt(dx * dx + dz * dz);
-            if (distance < 1.0E-9) return;
-            double hurry = away > BEHIND ? CATCH_UP : 1;
-            double step = Math.min(distance,
-                    Math.max(floor(), pace * speed * hurry * Math.max(SLOWEST_SHARE, Math.min(1, distance))));
-            position.setX(position.getX() + dx / distance * step);
-            position.setZ(position.getZ() + dz / distance * step);
         }
 
         /**
