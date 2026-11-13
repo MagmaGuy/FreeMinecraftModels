@@ -385,6 +385,30 @@ class MarchTest {
     }
 
     @Test
+    void aLeaderHeldUpForAWhileThatWalksAgainTakesNoStuckTurn() {
+        // A penguin's pace, half a block a second. The test keeps the place the march last saw progress at, by the
+        // march's own rule: a block from the one before.
+        Sim sim = new Sim(OPEN, 2, 6000);
+        sim.pace = 0.5 / 20 / 0.85;
+        while (sim.march.phase() == March.Phase.FORMING) sim.step();
+        Vector mark = sim.at(0).clone();
+        while (sim.at(0).getX() < 8 || sim.at(0).distance(mark) < 1) {
+            sim.step();
+            if (sim.at(0).distance(mark) >= 1 && sim.at(0).getX() < 8) mark = sim.at(0).clone();
+        }
+        // Just as it makes progress something holds it, for 62 ticks of the 100 a stuck count runs. Then it walks
+        // on. A block takes it 40 ticks, so its count runs out 38 ticks later, 0.95 blocks from that place, while it
+        // walks.
+        sim.held.add(sim.ids.get(0));
+        for (int tick = 0; tick < 62; tick++) sim.step();
+        assertEquals(0, sim.march.stuckTurns(), "62 ticks is no stuck turn");
+        sim.held.clear();
+        for (int tick = 0; tick < 100; tick++) sim.step();
+        assertEquals(0, sim.march.stuckTurns(), "held up and walking again, it is not stuck when its count runs out");
+        assertEquals(HOME.getZ(), sim.at(0).getZ(), 0.05, "and walks on along its leg");
+    }
+
+    @Test
     void aLeaderHeldInPlaceStillCountsAsStuckOnAStraightLegAfterATurnAndNearHome() {
         // On a straight leg: held where it is, it turns after the 5 seconds a stuck count runs, and not before.
         Sim straight = new Sim(OPEN, 2, 6000);

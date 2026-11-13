@@ -48,6 +48,12 @@ final class March {
     static final long STUCK_TICKS = 100L;
     /** A leader stuck this many times on one march gives up, and the march ends. */
     static final int MAX_REPLANS = 3;
+    /**
+     * A leader that has gone {@link #WALKING} blocks in its last this many ticks is walking, and takes no stuck turn
+     * while it does: the pace a stuck count asks for, a block in {@link #STUCK_TICKS}, and a little over.
+     */
+    static final int WALK_TICKS = 20;
+    static final double WALKING = 0.25D;
     /** A leader this near the line of its leg, across it, walks the leg: see {@link #walksLeg}. */
     static final double ON_LEG = 0.5D;
     /** A follower this near the leader's footprints across walks them: see {@link #footprint}. */
@@ -98,6 +104,9 @@ final class March {
     private boolean catchingUp;
     private Vector progressAt;
     private long progressTick;
+    // Where the leader stood on each of its last WALK_TICKS ticks, and the tick, by the tick's place in the round.
+    private final Vector[] lately = new Vector[WALK_TICKS];
+    private final long[] latelyTick = new long[WALK_TICKS];
     private int replans;
     private boolean over;
 
@@ -119,6 +128,7 @@ final class March {
         trail = new MarchTrail(home, dx, dz);
         headingX = dx;
         headingZ = dz;
+        java.util.Arrays.fill(latelyTick, NEVER);
     }
 
     Phase phase() {
@@ -253,6 +263,7 @@ final class March {
             line.add(old);
             catchingUp = true;
             progressAt = null;
+            java.util.Arrays.fill(latelyTick, NEVER);
         }
         if (line.size() < 2) over = true;
     }
@@ -265,6 +276,7 @@ final class March {
             line.remove(0);
             catchingUp = true;
             progressAt = null;
+            java.util.Arrays.fill(latelyTick, NEVER);
         } else line.remove(index);
         if (line.size() < 2) over = true;
     }
@@ -294,10 +306,19 @@ final class March {
             if (!nextLeg(home, ground)) return null;
         }
         trail.step(at, (line.size() + 1) * spacing + 2D + TRAIL_SPARE);
+        // Where it stood WALK_TICKS ago, when it asked then.
+        int round = (int) Math.floorMod(now, (long) WALK_TICKS);
+        Vector before = latelyTick[round] == now - WALK_TICKS ? lately[round] : null;
+        lately[round] = at.clone();
+        latelyTick[round] = now;
         if (progressAt == null || horizontal(at, progressAt) >= 1D) {
             progressAt = at.clone();
             progressTick = now;
-        } else if (now - progressTick >= STUCK_TICKS) {
+        } else if (now - progressTick >= STUCK_TICKS && (before == null || horizontal(at, before) < WALKING)) {
+            // A leader that walks is not stuck. One held up for a few seconds, by a corner of leaves or by its own
+            // line, and then walking again was still within a block of where it last made progress when its count
+            // ran out, and took a stuck turn while it walked. The count stays run out, so it turns as soon as it
+            // stops walking again.
             progressTick = now;
             if (++replans > MAX_REPLANS || !replan(at, ground, true)) return end();
         }
