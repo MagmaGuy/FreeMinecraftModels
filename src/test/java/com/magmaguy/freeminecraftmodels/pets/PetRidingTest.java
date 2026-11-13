@@ -154,6 +154,52 @@ class PetRidingTest {
     }
 
     @Test
+    void aJumpAskedForOnTheGroundIsHeardAtTheAskingAndNotAgainAsTheBodyLeavesTheGround() {
+        PetRides.Jump jump = new PetRides.Jump();
+        // The penguin's jump strength of 0.4 at the least power a rider's client sends, under open sky.
+        assertTrue(jump.asked(100L, true, 0.16D, Double.POSITIVE_INFINITY));
+        // Its rider's client lifts it a tick or two later: that is the jump already heard.
+        assertFalse(jump.left(102L, true, false, 0.16D));
+    }
+
+    @Test
+    void aJumpAskedForInTheAirIsHeardOnceAsTheBodyLeavesTheGroundAgain() {
+        PetRides.Jump jump = new PetRides.Jump();
+        assertFalse(jump.asked(100L, false, 0.4D, Double.POSITIVE_INFINITY));
+        // Still falling, then landed: no jump yet.
+        assertFalse(jump.left(101L, false, false, -0.3D));
+        assertFalse(jump.left(103L, false, true, -0.2D));
+        // It jumps as it lands.
+        assertTrue(jump.left(104L, true, false, 0.4D));
+        // Leaving the ground again without its rider asking is no jump of theirs.
+        assertFalse(jump.left(120L, true, false, 0.4D));
+    }
+
+    @Test
+    void aJumpThatWouldNotLiftTheBodyIsNotHeardAtTheAsking() {
+        // Too little power for the body's jump strength: it rises less than a jump does in its first tick.
+        assertFalse(new PetRides.Jump().asked(100L, true, 0.08D, Double.POSITIVE_INFINITY));
+        // A block over the body, nearer than a jump's first tick rises.
+        assertFalse(new PetRides.Jump().asked(100L, true, 0.4D, 0.05D));
+        assertTrue(new PetRides.Jump().asked(100L, true, PetRides.JUMP_RISE, PetRides.JUMP_RISE));
+        // Unheard at the asking, it is still heard if the body leaves the ground rising after all.
+        PetRides.Jump jump = new PetRides.Jump();
+        assertFalse(jump.asked(100L, true, 0.4D, 0.05D));
+        assertFalse(jump.left(101L, true, false, 0.05D));
+        assertTrue(jump.left(110L, true, false, 0.4D));
+    }
+
+    @Test
+    void aJumpHeardAtTheAskingEndsTheWaitForAnEarlierOne() {
+        PetRides.Jump jump = new PetRides.Jump();
+        // Asked for in the air and never seen leaving the ground.
+        assertFalse(jump.asked(100L, false, 0.4D, Double.POSITIVE_INFINITY));
+        assertTrue(jump.asked(115L, true, 0.4D, Double.POSITIVE_INFINITY));
+        // One sound for the new jump, not a second for the old.
+        assertFalse(jump.left(116L, true, false, 0.4D));
+    }
+
+    @Test
     void theHopOutOfTheWaterIsAPlayersJumpUnlessTheFileSaysOtherwise() throws InvalidConfigurationException {
         List<String> warnings = new ArrayList<>();
         assertEquals(0.42D, read("riding: {}\n", warnings).surfaceHop());

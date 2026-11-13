@@ -247,14 +247,16 @@ public final class PetListeners implements Listener {
     }
 
     /**
-     * The rider of a horse body let go of the jump key: a ridden pet's jump, heard as its species' jump sound once
-     * the pet leaves the ground (see {@link PetRides#jumpAsked}).
+     * The rider of a horse body let go of the jump key: a ridden pet's jump, heard as its species' jump sound (see
+     * {@link PetRides#jumpAsked}). Vanilla plays a horse's own jump sound straight after this event unless a plugin
+     * cancelled it, so the pet's is played here, last of all, once every plugin has had its say: a jump another
+     * plugin cancelled makes no sound, as on a horse.
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onRiddenJump(HorseJumpEvent event) {
         PetManager manager = PetManager.get();
         PetControl pet = manager == null ? null : manager.pet(event.getEntity());
-        if (pet != null) manager.rides().jumpAsked(pet);
+        if (pet != null) manager.rides().jumpAsked(pet, event.getPower());
     }
 
     /** A pet's model touched a player: a wild pet remembers it for its sting module; no pet deals FMM's contact attack. */

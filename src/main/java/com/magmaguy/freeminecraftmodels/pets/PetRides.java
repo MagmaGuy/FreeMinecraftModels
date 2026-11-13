@@ -116,8 +116,8 @@ final class PetRides {
         private long correctAgainAt = Long.MIN_VALUE;
         // The pace it dives at: its steps of the last second.
         private final RideHop.Pace pace = new RideHop.Pace();
-        // The pet tick its rider last let go of the jump key on land, until that jump has been heard.
-        private long jumpAskedAt = Long.MIN_VALUE;
+        // The jump its rider last asked for on land, until it has been heard.
+        private final Jump jump = new Jump();
         // Whether its body stood on the ground last tick, as its rider's client says.
         private boolean wasOnGround = true;
 
@@ -299,11 +299,9 @@ final class PetRides {
             }
             setBase(body, Attribute.MOVEMENT_SPEED, speed);
             boolean onGround = body.isOnGround();
-            if (!ride.diving && !Double.isNaN(ride.lastX) && ride.jumpAskedAt != Long.MIN_VALUE
-                    && leapt(ride.wasOnGround, onGround, at.getY() - ride.lastY, PetManager.ticks() - ride.jumpAskedAt)) {
-                ride.jumpAskedAt = Long.MIN_VALUE;
+            if (!ride.diving && !Double.isNaN(ride.lastX)
+                    && ride.jump.left(PetManager.ticks(), ride.wasOnGround, onGround, at.getY() - ride.lastY))
                 playJump(control, body);
-            }
             ride.wasOnGround = onGround;
             if (ride.diving) holdRiderClear(ride, body, rider, at, speed);
             if (!Double.isNaN(ride.lastX)) pushAside(control, body, at, at.getX() - ride.lastX, at.getZ() - ride.lastZ);
@@ -471,14 +469,53 @@ final class PetRides {
     }
 
     /**
-     * The rider of this pet let go of the jump key. On land that is a jump, which lifts the pet off the ground on
-     * the rider's client within a tick or two, or as it lands when it was in the air; {@link #tick} plays the
-     * species' jump sound as it sees the body leave the ground. On its diving body the key is the dash, which is
-     * no jump and makes no sound.
+     * The rider of this pet let go of the jump key, with this much of a full jump's power. On land that is a jump,
+     * and the species' jump sound plays once for it (see {@link Jump}): now when the pet jumps from where it
+     * stands, else from {@link #tick} as its body leaves the ground. On its diving body the key is the dash, which
+     * is no jump and makes no sound.
      */
-    void jumpAsked(PetControl control) {
+    void jumpAsked(PetControl control, float power) {
         Ride ride = ridden.get(control);
-        if (ride != null && !ride.diving) ride.jumpAskedAt = PetManager.ticks();
+        LivingEntity body = control.body();
+        if (ride == null || ride.diving || body == null || !body.isValid()) return;
+        AttributeInstance strength = body.getAttribute(Attribute.JUMP_STRENGTH);
+        // The jump's first tick, as the rider's client makes it: honey underfoot and Jump Boost are not counted.
+        double lift = strength == null ? 0D : power * strength.getValue();
+        BoundingBox box = body.getBoundingBox();
+        double room = RideCeiling.over(box, box.getMaxY() + JUMP_RISE, RideCeiling.of(body.getWorld())) - box.getMaxY();
+        if (ride.jump.asked(PetManager.ticks(), body.isOnGround(), lift, room)) playJump(control, body);
+    }
+
+    /**
+     * When a ridden pet's jump is heard: once a jump. The rider's client makes the jump and the server only hears
+     * of it. Asked for with the body on the ground, the jump comes on that client's next tick, so it is heard at
+     * the asking, as vanilla plays a horse's own jump sound; waiting to see the body leave the ground played it a
+     * tick or two late. Asked for in the air, the jump comes as the body lands, and is heard as it leaves the
+     * ground again (see {@link #leapt}). So is a jump that would not lift the body {@link #JUMP_RISE} in its first
+     * tick, for want of power or of room under a block: it is heard only if the body leaves the ground after all,
+     * so no sound is left without its jump.
+     */
+    static final class Jump {
+        // The pet tick of a jump asked for and not yet heard.
+        private long askedAt = Long.MIN_VALUE;
+
+        /**
+         * The rider asked for a jump at this pet tick: the body stands on the ground or not, the jump would lift
+         * it {@code lift} blocks in its first tick, and it has {@code room} blocks free over it. Returns whether
+         * the jump is heard now.
+         */
+        boolean asked(long now, boolean onGround, double lift, double room) {
+            boolean atOnce = onGround && lift >= JUMP_RISE && room >= JUMP_RISE;
+            askedAt = atOnce ? Long.MIN_VALUE : now;
+            return atOnce;
+        }
+
+        /** A tick of the body. Returns whether a jump asked for and not yet heard is heard now: it just left the ground. */
+        boolean left(long now, boolean wasOnGround, boolean onGround, double rose) {
+            if (askedAt == Long.MIN_VALUE || !leapt(wasOnGround, onGround, rose, now - askedAt)) return false;
+            askedAt = Long.MIN_VALUE;
+            return true;
+        }
     }
 
     /**
