@@ -292,8 +292,8 @@ public final class PetLuaTable {
         // a pet that must reach something small, such as an item, or stand on an exact spot. Within 2 blocks of the
         // point, on its level with firm ground all the way, a walking body walks straight at it, easing off over the
         // last block, and stands still on it. A point a step up or down it walks straight at too, over ground that
-        // is one step at a time: down a step or into a ditch from within those 2 blocks, up a step from within 1,
-        // at its speed until it is on the point's level.
+        // is one step at a time: down a step or into a ditch from within those 2 blocks, at its speed until it is on
+        // the point's level, and up a step from within 1, easing off as on level ground.
         // Needs a behavior holding MOVE and LOOK.
         method("steer_onto", args -> {
             Location target = at(args, 1);
@@ -1053,8 +1053,9 @@ public final class PetLuaTable {
          * <p>
          * A point a step up or down within that reach it walks straight at too, when the ground between is a single
          * step at a time (see {@link #stepped}): off the edge of a step down, into a ditch and out of it, up a step
-         * once the point is within {@link #ONTO_CLIMB}. It keeps its speed until it stands on the point's level, and
-         * eases off there. Such a point used to go to the path. A path to a point
+         * once the point is within {@link #ONTO_CLIMB}. Toward a point below it, it keeps its speed until it stands
+         * on the point's level, and eases off there. Toward a point above it, or across a ditch on its own level, it
+         * eases off over the last block as on level ground. Such a point used to go to the path. A path to a point
          * about a block away is done before it starts, and one to a point two blocks away starts at the middle of
          * the block the body rests on: a body already on the edge of a step, its middle over the lower ground,
          * walked back to that middle first, and whoever moves its point as the body moves, as a march does its
@@ -1080,11 +1081,15 @@ public final class PetLuaTable {
                 stoppedOn = null;
                 if (!stepped(here, to)) return steer(context, to, cruise);
                 forget();
-                // At its speed, with no easing off, until it stands on the point's own level. Eased by how near the
-                // point is across, a body going for a point at the foot of the step it stood on slowed to a crawl
-                // on the edge above it, where its box still rested: a second or two creeping over, or standing
-                // there, before it dropped.
-                return context.actuator().moveDirect(to, speed(cruise));
+                // Toward a point below it: at its speed, with no easing off, until it stands on the point's own
+                // level. Eased by how near the point is across, a body going for a point at the foot of the step it
+                // stood on slowed to a crawl on the edge above it, where its box still rested: a second or two
+                // creeping over, or standing there, before it dropped.
+                if (to.getBlockY() < here.getBlockY()) return context.actuator().moveDirect(to, speed(cruise));
+                // Toward a point above it, or across a ditch on its own level, it eases off as on level ground:
+                // nothing holds a body back at the foot of a step, or in a ditch, as an edge under its box does.
+                double eased = speed(cruise) * Math.max(ONTO_SLOWEST, Math.min(1D, across));
+                return context.actuator().moveDirect(to, Math.max(MIN_SPEED, eased));
             }
             forget();
             if (across <= ONTO_DONE) {
