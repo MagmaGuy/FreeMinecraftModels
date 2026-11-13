@@ -42,7 +42,7 @@ final class March {
     static final double LANE = 4D;
     /** A leader this near where the march was called, on the way back, ends it. */
     static final double ARRIVE = 2.5D;
-    /** A leg round something in the way home, before the leader aims for home again. */
+    /** A leg round something in the way home, or after a stuck turn on it, before the leader aims for home again. */
     static final double DETOUR_LEG = 8D;
     /** A leader that has not moved a block in this long is stuck, and turns. */
     static final long STUCK_TICKS = 100L;
@@ -85,7 +85,6 @@ final class March {
     // The leg the leader walks: from its origin along the unit heading for its length.
     private Vector legOrigin;
     private double headingX, headingZ, legLength;
-    private boolean detour;
     // A new leader walking up to the newest footprint before it leads on.
     private boolean catchingUp;
     private Vector progressAt;
@@ -335,7 +334,15 @@ final class March {
         }
     }
 
-    /** A leg toward where the march was called, or round what is in the way; false when the march ended. */
+    /**
+     * A leg toward where the march was called, or round what is in the way; false when the march ended.
+     * <p>
+     * The straight way home comes first every time. After one leg round something the leader used to be kept off
+     * it for good: each further leg had to turn away from home, by the smallest turn that ran 6 blocks. On open
+     * ground that curved it home a sixteenth of a circle off. In a gap between trees or walls, where the only ways
+     * that run 6 blocks are straight home and straight back, it turned right round, away from home and into its own
+     * line, with the way home open.
+     */
     private boolean homeLeg(Vector from, MarchRoute.Ground ground) {
         double distance = horizontal(from, home);
         if (distance <= ARRIVE) {
@@ -343,13 +350,10 @@ final class March {
             return false;
         }
         double dx = (home.getX() - from.getX()) / distance, dz = (home.getZ() - from.getZ()) / distance;
-        if (detour) detour = false;
-        else {
-            MarchRoute.Run run = MarchRoute.run(ground, from, dx, dz, Math.min(distance, MarchRoute.MAX_RUN));
-            if (run.length() >= Math.min(MarchRoute.MIN_LEG, distance - ARRIVE)) {
-                leg(from, dx, dz, run.length());
-                return true;
-            }
+        MarchRoute.Run straight = MarchRoute.run(ground, from, dx, dz, Math.min(distance, MarchRoute.MAX_RUN));
+        if (straight.length() >= Math.min(MarchRoute.MIN_LEG, distance - ARRIVE)) {
+            leg(from, dx, dz, straight.length());
+            return true;
         }
         double[] around = MarchRoute.turn(ground, from, dx, dz, MarchRoute.MIN_LEG, true);
         if (around == null) {
@@ -358,7 +362,6 @@ final class March {
         }
         MarchRoute.Run run = MarchRoute.run(ground, from, around[0], around[1], DETOUR_LEG);
         leg(from, around[0], around[1], run.length());
-        detour = true;
         return true;
     }
 
@@ -381,7 +384,6 @@ final class March {
     /** A new heading from where the leader is: any clear way when stuck, else the smallest turn that clears. */
     private boolean replan(Vector from, MarchRoute.Ground ground, boolean stuck) {
         if (phase == Phase.HOME || phase == Phase.HAIRPIN) {
-            if (stuck) detour = false;
             phase = Phase.HOME;
             if (!stuck) return homeLeg(from, ground);
             double[] around = MarchRoute.turn(ground, from, headingX, headingZ, MarchRoute.MIN_LEG, true);
@@ -390,7 +392,6 @@ final class March {
                 return false;
             }
             leg(from, around[0], around[1], MarchRoute.run(ground, from, around[0], around[1], DETOUR_LEG).length());
-            detour = true;
             return true;
         }
         double[] turned = MarchRoute.turn(ground, from, headingX, headingZ, MarchRoute.MIN_LEG, stuck);

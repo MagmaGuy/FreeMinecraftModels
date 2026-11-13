@@ -417,6 +417,40 @@ class MarchTest {
     }
 
     @Test
+    void aLeaderOnItsWayHomeAimsForHomeAgainAfterALegRoundSomething() {
+        // A gap 3 blocks wide and 58 long, open at the end the march is called from. Half the march's time is up
+        // while the leader is inside it. There is no room for a hairpin, so it turns for home where it is.
+        MarchRoute.Ground gap = ground((x, z) -> x >= 60 || x >= 2 && Math.abs(z) > 1);
+        Sim sim = new Sim(gap, 2, 400);
+        while (sim.march.phase() != March.Phase.HOME) {
+            sim.step();
+            assertFalse(sim.march.over(), "the march goes on");
+        }
+        double turned = sim.at(0).getX();
+        assertTrue(turned > 15 && turned < 40, "it turned for home inside the gap: " + turned);
+        // Something holds it on its way home until it counts as stuck. Its stuck turn finds one way that runs 6
+        // blocks, the way back into the gap: that leg is the last it walks away from home.
+        while (sim.at(0).getX() > turned - 4) sim.step();
+        double heldAt = sim.at(0).getX();
+        sim.held.add(sim.ids.get(0));
+        for (int tick = 0; tick < March.STUCK_TICKS + 5; tick++) sim.step();
+        assertEquals(1, sim.march.stuckTurns(), "held for 5 seconds, it is stuck and turns");
+        sim.held.clear();
+        double deepest = heldAt;
+        for (int tick = 0; tick < 1200 && !sim.march.over(); tick++) {
+            sim.step();
+            deepest = Math.max(deepest, sim.at(0).getX());
+        }
+        assertTrue(deepest > heldAt + 3, "its stuck turn led it back into the gap: " + deepest);
+        assertTrue(deepest <= heldAt + March.DETOUR_LEG + 0.5,
+                "after that one leg it headed home, the way being open, and did not walk on into the gap: held at "
+                        + heldAt + ", went to " + deepest);
+        assertTrue(sim.march.over(), "the march ended");
+        assertTrue(sim.at(0).distance(HOME) <= March.ARRIVE + 0.5, "back where it was called: " + sim.at(0));
+        assertEquals(1, sim.march.stuckTurns(), "with no further stuck turn");
+    }
+
+    @Test
     void aGapClosesAndAMarcherBackFromAwayJoinsAtTheBack() {
         Sim sim = new Sim(OPEN, 4, 2400);
         while (sim.at(0).getX() < 15) sim.step();
