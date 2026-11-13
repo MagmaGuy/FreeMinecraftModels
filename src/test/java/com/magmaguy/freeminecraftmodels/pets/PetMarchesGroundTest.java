@@ -28,7 +28,8 @@ class PetMarchesGroundTest {
      * height, y 65, at x 9, z 1; a step up of one block from x 13 on along z 1; a hole two deep at x 17, z 1. Along
      * z 5 and z 6 the ground steps up a block from x 5 on, and beside that step, at x 5 on z 6 where there is no
      * step, a leaf block hangs at y 66: head height for a body on the step. Along z 9 the ground steps up from x 5
-     * on under a leaf block at y 66 over x 4, the last block before the step.
+     * on under a leaf block at y 66 over x 4, the last block before the step. Along z 13 the ground steps up a block
+     * from x 5 on, and beside it along z 14 it steps up two.
      */
     private static Material wood(int x, int y, int z) {
         if (z == 1 && x == 5 && y >= 64 && y <= 66) return Material.SPRUCE_LOG;
@@ -39,6 +40,8 @@ class PetMarchesGroundTest {
         if (z == 6 && x == 5 && y == 66) return Material.SPRUCE_LEAVES;
         if (z == 9 && x >= 5 && y == 64) return Material.STONE;
         if (z == 9 && x == 4 && y == 66) return Material.SPRUCE_LEAVES;
+        if (z == 13 && x >= 5 && y == 64) return Material.STONE;
+        if (z == 14 && x >= 5 && (y == 64 || y == 65)) return Material.STONE;
         return y <= 63 ? Material.STONE : Material.AIR;
     }
 
@@ -131,6 +134,18 @@ class PetMarchesGroundTest {
         // A step up under leaves over the block before it: no room to rise there.
         assertEquals(4.0, MarchRoute.run(ground, new Vector(0.5, 64, 9.5), 1, 0, 24).length(), 1.0E-9,
                 "a leg stops before a step it cannot rise onto under leaves");
+        // A step up beside a column a block higher than the step. Seen from the step that column is one more step,
+        // which a body walking level would ride up onto. A body rising onto the step cannot rise two.
+        assertEquals(65, ground.standing(5, 64, 13), "the step is ground");
+        assertFalse(ground.walled(5, 65, 14), "the column beside it, a block higher, is a step for a body on the step");
+        assertTrue(ground.filled(5, 65, 14), "and still a block where that body's feet would be");
+        assertFalse(ground.filled(5, 65, 12), "open ground on the other side is not");
+        assertEquals(4.0, MarchRoute.run(ground, new Vector(0.5, 64, 13.7), 1, 0, 24).length(), 1.0E-9,
+                "a leg up the step within a body's width of the higher column stops before it");
+        assertEquals(24.0, MarchRoute.run(ground, new Vector(0.5, 64, 13.3), 1, 0, 24).length(), 1.0E-9,
+                "one with room beside it climbs the step");
+        assertEquals(18.0, MarchRoute.run(ground, new Vector(6.5, 65, 13.7), 1, 0, 18).length(), 1.0E-9,
+                "and a body already up on the step walks on beside the higher column as before");
         // A turn away from the trunk's row is found as for a wall ahead.
         double[] turned = MarchRoute.turn(ground, new Vector(4.4, 64, 0.8), 1, 0, MarchRoute.MIN_LEG, false);
         assertTrue(turned[1] < -1.0E-6, "the smallest turn that clears the trunk leads away from it: " + turned[1]);

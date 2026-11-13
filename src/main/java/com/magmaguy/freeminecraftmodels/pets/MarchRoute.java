@@ -48,6 +48,14 @@ final class MarchRoute {
         default boolean walled(int x, int feet, int z) {
             return false;
         }
+
+        /**
+         * Whether a block is where a body with its feet at this height would have its feet or its head in this
+         * column, a block it could step onto included. False for ground that knows no walls, as a test's.
+         */
+        default boolean filled(int x, int feet, int z) {
+            return false;
+        }
     }
 
     /** A straight run: how long it is and where it ends, at the standing block's feet height. */
@@ -64,6 +72,10 @@ final class MarchRoute {
      * that walked it stood against the trunk until it counted as stuck. And it stops before a step up the body has
      * no room to rise onto: a body a little over a block tall needs the block over its head free where it stands,
      * as it rises, and the same one free in the columns beside the step.
+     * <p>
+     * Beside a step up, a column a block higher than the step is a wall too. On level ground a body rides up onto
+     * such a column, a step of one block. A body that is itself rising a block cannot rise two: part of it would
+     * have to stand on the higher column, and the leader stood at the foot of that step until the march gave up.
      */
     static Run run(Ground ground, Vector from, double dx, double dz, double max) {
         int feet = (int) Math.floor(from.getY());
@@ -76,8 +88,10 @@ final class MarchRoute {
             // A step up: where it stood half a block back, the body rises a block.
             if (next > feet && ground.walled((int) Math.floor(x - dx * STEP), next, (int) Math.floor(z - dz * STEP))) break;
             // To the left of the heading and to its right: (-dz, dx) and (dz, -dx).
-            if (ground.walled((int) Math.floor(x - dz * CLEAR), next, (int) Math.floor(z + dx * CLEAR))
-                    || ground.walled((int) Math.floor(x + dz * CLEAR), next, (int) Math.floor(z - dx * CLEAR))) break;
+            int leftX = (int) Math.floor(x - dz * CLEAR), leftZ = (int) Math.floor(z + dx * CLEAR);
+            int rightX = (int) Math.floor(x + dz * CLEAR), rightZ = (int) Math.floor(z - dx * CLEAR);
+            if (next > feet ? ground.filled(leftX, next, leftZ) || ground.filled(rightX, next, rightZ)
+                    : ground.walled(leftX, next, leftZ) || ground.walled(rightX, next, rightZ)) break;
             feet = next;
             length = along;
             end = new Vector(x, next, z);

@@ -287,8 +287,8 @@ final class PetMarches {
     }
 
     /**
-     * The world's columns as a march sees them: see {@link MarchRoute.Ground#standing} and
-     * {@link MarchRoute.Ground#walled}.
+     * The world's columns as a march sees them: see {@link MarchRoute.Ground#standing},
+     * {@link MarchRoute.Ground#walled} and {@link MarchRoute.Ground#filled}.
      */
     static MarchRoute.Ground ground(World world) {
         return new MarchRoute.Ground() {
@@ -313,6 +313,13 @@ final class PetMarches {
                 // A block where its feet would be is a step it rises onto when there is room over it. A column it
                 // could stand in a step down, with leaves where its head is at this height, is a wall.
                 return !(head && footing(world.getBlockAt(x, feet, z)) && PetLuaTable.room(world.getBlockAt(x, feet + 2, z)));
+            }
+
+            @Override
+            public boolean filled(int x, int feet, int z) {
+                if (!world.isChunkLoaded(x >> 4, z >> 4)) return false;
+                if (feet < world.getMinHeight() || feet + 1 >= world.getMaxHeight()) return false;
+                return !(PetLuaTable.room(world.getBlockAt(x, feet, z)) && PetLuaTable.room(world.getBlockAt(x, feet + 1, z)));
             }
         };
     }
