@@ -50,6 +50,11 @@ final class March {
     static final int MAX_REPLANS = 3;
     /** A leader this near the line of its leg, across it, walks the leg: see {@link #walksLeg}. */
     static final double ON_LEG = 0.5D;
+    /**
+     * A new leg whose heading lies this far round from the last one's, by its cosine, is a turn: a sixteenth of a
+     * circle, the least a leader turns on purpose. A leg toward home that only aims again as the leader walks is not.
+     */
+    static final double TURN_COSINE = Math.cos(2D * Math.PI / MarchRoute.HEADINGS) + 1.0E-9D;
 
     enum Phase {FORMING, OUT, HAIRPIN, HOME}
 
@@ -118,6 +123,11 @@ final class March {
 
     long calledAt() {
         return calledAt;
+    }
+
+    /** How many times its leader has counted as stuck, and turned. */
+    int stuckTurns() {
+        return replans;
     }
 
     /** The marchers, leader first. */
@@ -393,6 +403,10 @@ final class March {
     }
 
     private void leg(Vector from, double dx, double dz, double length) {
+        // A leader that turns starts its stuck count again where it turns. Counted from the place it last made
+        // progress at, a leader that turned right round walked back past that place, was within a block of it out
+        // and back for the whole count, and took a stuck turn while it walked: one of its three, for nothing.
+        if (legOrigin != null && headingX * dx + headingZ * dz <= TURN_COSINE) progressAt = null;
         legOrigin = from.clone();
         headingX = dx;
         headingZ = dz;

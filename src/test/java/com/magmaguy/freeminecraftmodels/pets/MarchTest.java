@@ -355,6 +355,68 @@ class MarchTest {
     }
 
     @Test
+    void aLeaderThatTurnsRightRoundAndWalksOnTakesNoStuckTurn() {
+        // A gap 3 blocks wide with a wall across its far end. The leader's leg ends before the wall, and from there
+        // the only way that runs 6 blocks is the way it came, so it turns right round, with no stuck turn. It then
+        // walks back past the place the march last saw it make progress at, and is within a block of that place, out
+        // and back, for up to 3 blocks of walking. A stuck count asks for a block in 5 seconds, 0.2 blocks a second.
+        // A marching penguin walks 0.5 to 0.7, and slower over steps, so those 3 blocks can take the 5 seconds: it
+        // depends where in a block the turn falls. So the gap is walked at every pace from 0.3 blocks a second, half
+        // as fast again as the count asks for, to 0.6, and at none may a leader that walks count as stuck.
+        MarchRoute.Ground gap = ground((x, z) -> x >= 14 || x >= 2 && Math.abs(z) > 1);
+        for (int step = 0; step <= 20; step++) {
+            // The leader walks at 85% of the sim's pace, toward a point 0.85 blocks ahead.
+            double pace = (0.3 + 0.015 * step) / 20 / 0.85;
+            Sim sim = new Sim(gap, 2, 6000);
+            sim.pace = pace;
+            double farthest = 0;
+            boolean back = false;
+            for (int tick = 0; tick < 2500 && !back; tick++) {
+                sim.step();
+                assertFalse(sim.march.over(), "the march goes on, at pace " + pace);
+                farthest = Math.max(farthest, sim.at(0).getX());
+                back = sim.at(0).getX() < farthest - 6;
+            }
+            assertTrue(back, "the leader turned round in the gap and walked 6 blocks back, at pace " + pace);
+            assertTrue(farthest > 10 && farthest < 14, "it turned at the end of its leg, before the wall: " + farthest);
+            assertEquals(0, sim.march.stuckTurns(), "a leader that walks takes no stuck turn, at pace " + pace);
+        }
+    }
+
+    @Test
+    void aLeaderHeldInPlaceStillCountsAsStuckOnAStraightLegAfterATurnAndNearHome() {
+        // On a straight leg: held where it is, it turns after the 5 seconds a stuck count runs, and not before.
+        Sim straight = new Sim(OPEN, 2, 6000);
+        while (straight.at(0).getX() < 8) straight.step();
+        straight.held.add(straight.ids.get(0));
+        for (int tick = 0; tick < March.STUCK_TICKS - 45; tick++) straight.step();
+        assertEquals(0, straight.march.stuckTurns(), "not stuck yet");
+        for (int tick = 0; tick < 90; tick++) straight.step();
+        assertEquals(1, straight.march.stuckTurns(), "held for 5 seconds on a straight leg, it is stuck");
+
+        // Just after a turn: the count that the turn started again still runs out.
+        Sim turned = new Sim(ground((x, z) -> x >= 14 || x >= 2 && Math.abs(z) > 1), 2, 6000);
+        double farthest = 0;
+        while (turned.at(0).getX() > farthest - 0.5) {
+            turned.step();
+            farthest = Math.max(farthest, turned.at(0).getX());
+        }
+        turned.held.add(turned.ids.get(0));
+        for (int tick = 0; tick < March.STUCK_TICKS + 5; tick++) turned.step();
+        assertEquals(1, turned.march.stuckTurns(), "held for 5 seconds after it turned round, it is stuck");
+
+        // Near home, where each tick's leg is a new one aimed at home again: none of those is a turn.
+        Sim home = new Sim(OPEN, 2, 600);
+        while (home.march.phase() != March.Phase.HOME || home.at(0).distance(HOME) > 4.5) {
+            home.step();
+            assertFalse(home.march.over(), "the leader comes home");
+        }
+        home.held.add(home.ids.get(0));
+        for (int tick = 0; tick < March.STUCK_TICKS + 45; tick++) home.step();
+        assertEquals(1, home.march.stuckTurns(), "held for 5 seconds within reach of home, it is stuck");
+    }
+
+    @Test
     void aGapClosesAndAMarcherBackFromAwayJoinsAtTheBack() {
         Sim sim = new Sim(OPEN, 4, 2400);
         while (sim.at(0).getX() < 15) sim.step();
@@ -413,8 +475,12 @@ class MarchTest {
         final List<UUID> ids = new ArrayList<>();
         final Map<UUID, Vector> positions = new LinkedHashMap<>();
         final Set<UUID> resting = new HashSet<>();
+        /** Marchers that ask for their spot and cannot walk to it: something holds them where they are. */
+        final Set<UUID> held = new HashSet<>();
         static final long START = 1000;
         long now = START;
+        /** Blocks a tick at a speed stat of 1. A test of how long a walk takes sets the pace a penguin has in game. */
+        double pace = PACE;
 
         final Map<UUID, Double> speeds = new LinkedHashMap<>();
         /** The spot the march last gave its leader. */
@@ -472,7 +538,7 @@ class MarchTest {
                 Vector spot = march.spot(id, position, now, ground);
                 if (march.over()) break;
                 if (spot != null && id.equals(march.leader())) leaderPoint = spot.clone();
-                if (spot != null) walk(position, spot, speeds.get(id), march.walksLeg(id, position));
+                if (spot != null && !held.contains(id)) walk(position, spot, speeds.get(id), march.walksLeg(id, position));
                 // A body stands on the ground under it.
                 int feet = ground.standing((int) Math.floor(position.getX()), (int) Math.floor(position.getY()),
                         (int) Math.floor(position.getZ()));
@@ -493,7 +559,7 @@ class MarchTest {
             boolean offItsLevel = Math.abs(spot.getY() - position.getY()) > RISE;
             if (onItsLeg && distance <= REACH) {
                 if (distance < 1.0E-9) return;
-                double pace = Math.max(FLOOR, PACE * speed * hurry * Math.max(SLOWEST_SHARE, Math.min(1, distance)));
+                double pace = Math.max(floor(), this.pace * speed * hurry * Math.max(SLOWEST_SHARE, Math.min(1, distance)));
                 double step = Math.min(pace, distance);
                 position.setX(position.getX() + dx / distance * step);
                 position.setZ(position.getZ() + dz / distance * step);
@@ -503,7 +569,7 @@ class MarchTest {
                 // Off its level and no single step away, or on its level with ground between that is not: the
                 // pathfinder's walk, at its pace with no easing, which ends a block short.
                 if (distance <= PATH_SHORT) return;
-                double step = Math.min(PACE * speed * hurry, distance - PATH_SHORT);
+                double step = Math.min(pace * speed * hurry, distance - PATH_SHORT);
                 position.setX(position.getX() + dx / distance * step);
                 position.setZ(position.getZ() + dz / distance * step);
                 return;
@@ -511,10 +577,15 @@ class MarchTest {
             // On its level a marcher stands still once it is close. A step away it is never close: march.lua measures
             // to the spot's own height.
             if (!offItsLevel && distance <= CLOSE || distance < 1.0E-9) return;
-            double pace = Math.max(FLOOR, PACE * speed * hurry * Math.max(SLOWEST_SHARE, Math.min(1, distance)));
+            double pace = Math.max(floor(), this.pace * speed * hurry * Math.max(SLOWEST_SHARE, Math.min(1, distance)));
             double step = Math.min(pace, distance);
             position.setX(position.getX() + dx / distance * step);
             position.setZ(position.getZ() + dz / distance * step);
+        }
+
+        /** steer_onto's slowest walk at this sim's pace: see FLOOR. */
+        private double floor() {
+            return FLOOR * pace / PACE;
         }
 
         /** steer_onto's rule for a straight walk on the body's level, on this ground: see PetLuaTable.WalkPath.level. */
