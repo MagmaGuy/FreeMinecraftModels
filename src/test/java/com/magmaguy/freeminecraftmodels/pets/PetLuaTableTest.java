@@ -744,10 +744,25 @@ class PetLuaTableTest {
     /** The calls a walk makes for a body standing at this place, as "name x speed". */
     private static List<String> walk(Location standing, boolean inWater,
                                      java.util.function.BiConsumer<PetLuaTable.WalkPath, MindContext> steer) {
+        return walk(standing, inWater, steer, false);
+    }
+
+    /** The calls a walk makes for a body standing at this place, out of water, as "name x y speed". */
+    private static List<String> heights(Location standing,
+                                        java.util.function.BiConsumer<PetLuaTable.WalkPath, MindContext> steer) {
+        return walk(standing, false, steer, true);
+    }
+
+    private static List<String> walk(Location standing, boolean inWater,
+                                     java.util.function.BiConsumer<PetLuaTable.WalkPath, MindContext> steer,
+                                     boolean withHeight) {
         List<String> calls = new ArrayList<>();
         MindActuator actuator = stub(MindActuator.class, (proxy, method, args) -> switch (method.getName()) {
             case "moveTo", "moveDirect" -> {
-                calls.add(String.format("%s %.2f %.2f", method.getName(), ((Location) args[0]).getX(), (Double) args[1]));
+                Location point = (Location) args[0];
+                calls.add(withHeight
+                        ? String.format("%s %.2f %.2f %.2f", method.getName(), point.getX(), point.getY(), (Double) args[1])
+                        : String.format("%s %.2f %.2f", method.getName(), point.getX(), (Double) args[1]));
                 yield true;
             }
             case "stopMoving" -> {
@@ -867,6 +882,32 @@ class PetLuaTableTest {
         World flat = ground(false);
         assertEquals(List.of("moveTo 1.40 0.60"), steerOnto(flat, false, new Location(flat, 1.4, 65, 0.5), 0.15D),
                 "a point in the air over level ground is not a step");
+    }
+
+    @Test
+    void steerOntoHandsTheBodyAStepsOwnHeightOnTheWayUp() {
+        // The body stands at x 0.5, y 64; from x 1 on the ground is a block higher, so a body stands there at y 65.
+        // The calls are "name x y speed".
+        World up = terrain(x -> x >= 1 ? 64 : 63);
+        Location body = new Location(up, 0.5, 64, 0.5);
+        assertEquals(List.of("moveDirect 1.40 65.00 0.54"),
+                heights(body, (path, context) -> path.steerOnto(context, new Location(up, 1.4, 65.3, 0.5), 0.15D)),
+                "a point a third of a block over the step is walked at through the step's own height: a body"
+                        + " asked for a point more than its step height above it jumps");
+        assertEquals(List.of("moveDirect 1.40 65.00 0.54"),
+                heights(body, (path, context) -> path.steerOnto(context, new Location(up, 1.4, 65, 0.5), 0.15D)),
+                "a point on the step keeps its height");
+        // From x 1 on the ground is a block lower.
+        World down = terrain(x -> x >= 1 ? 62 : 63);
+        assertEquals(List.of("moveDirect 1.40 63.30 0.60"),
+                heights(new Location(down, 0.5, 64, 0.5),
+                        (path, context) -> path.steerOnto(context, new Location(down, 1.4, 63.3, 0.5), 0.15D)),
+                "and so does a point down a step: nothing jumps at a point below it");
+        World flat = ground(false);
+        assertEquals(List.of("moveDirect 1.40 64.30 0.54"),
+                heights(new Location(flat, 0.5, 64, 0.5),
+                        (path, context) -> path.steerOnto(context, new Location(flat, 1.4, 64.3, 0.5), 0.15D)),
+                "and a point on the body's own level");
     }
 
     @Test

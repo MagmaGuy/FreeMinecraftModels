@@ -1055,7 +1055,9 @@ public final class PetLuaTable {
          * step at a time (see {@link #stepped}): off the edge of a step down, into a ditch and out of it, up a step
          * once the point is within {@link #ONTO_CLIMB}. Toward a point below it, it keeps its speed until it stands
          * on the point's level, and eases off there. Toward a point above it, or across a ditch on its own level, it
-         * eases off over the last block as on level ground. Such a point used to go to the path. A path to a point
+         * eases off over the last block as on level ground. Up a step it is handed the height of the step, however
+         * high over the step the point is, so that a body able to step up is not made to jump. Such a point used to
+         * go to the path. A path to a point
          * about a block away is done before it starts, and one to a point two blocks away starts at the middle of
          * the block the body rests on: a body already on the edge of a step, its middle over the lower ground,
          * walked back to that middle first, and whoever moves its point as the body moves, as a march does its
@@ -1089,7 +1091,18 @@ public final class PetLuaTable {
                 // Toward a point above it, or across a ditch on its own level, it eases off as on level ground:
                 // nothing holds a body back at the foot of a step, or in a ditch, as an edge under its box does.
                 double eased = speed(cruise) * Math.max(ONTO_SLOWEST, Math.min(1D, across));
-                return context.actuator().moveDirect(to, Math.max(MIN_SPEED, eased));
+                // Up a step the body is handed the step's own height, not the point's. A body asked for a point
+                // more than its step height above it, within a block, jumps: vanilla's move control decides that
+                // from the point's height alone. A point over a step can be higher than the step. A march's place
+                // climbs the face of the next step for two seconds, because its trail is measured up that face,
+                // and a penguin at the foot of the step before, on a horse's body that only had to step up, leapt
+                // two blocks into the air.
+                Location onto = to;
+                if (to.getBlockY() > here.getBlockY() && to.getY() > to.getBlockY()) {
+                    onto = to.clone();
+                    onto.setY(to.getBlockY());
+                }
+                return context.actuator().moveDirect(onto, Math.max(MIN_SPEED, eased));
             }
             forget();
             if (across <= ONTO_DONE) {
