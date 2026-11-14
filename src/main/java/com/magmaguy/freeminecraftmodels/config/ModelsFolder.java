@@ -15,7 +15,6 @@ import com.magmaguy.freeminecraftmodels.particles.ParticleSpriteWriter;
 import com.magmaguy.freeminecraftmodels.particles.ParticleSprites;
 import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
 import com.magmaguy.magmacore.util.Logger;
-import com.magmaguy.magmacore.util.VersionChecker;
 import org.apache.commons.io.FileUtils;
 
 import java.io.File;
@@ -24,9 +23,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class ModelsFolder {
-    private static int counter;
-    private static int folderCounter;
-
     /**
      * Returns the canonical lowercase models folder when it exists, then falls
      * back to the legacy uppercase name for old installs on case-sensitive
@@ -50,48 +46,14 @@ public class ModelsFolder {
     }
 
     public static void initializeConfig(ItemScriptManager.ItemCatalog candidate) {
-        counter = 1;
-        folderCounter = 50;
-
         File file = resolveModelsFolder();
 
         if (!file.isDirectory()) throw new IllegalStateException("Models directory is unavailable: " + file);
 
         FileModelConverter.preflightNormalizedModelIds(collectModelFiles(file));
 
-        if (VersionChecker.serverVersionOlderThan(21, 4))
-            legacyHorseArmorGeneration(file);
-        else
-            newModelGeneration(file);
+        newModelGeneration(file);
         ItemScriptManager.activateCandidate(candidate);
-    }
-
-    /**
-     * In the old file generation, a horse armor file just had a series of numbers reserved for the different IDs of the different models
-     */
-    private static void legacyHorseArmorGeneration(File file) {
-        Gson gson = new Gson();
-        List<FileModelConverter> bbModelConverterList = new ArrayList<>();
-        HashMap<String, Object> leatherHorseArmor = new HashMap<>();
-        leatherHorseArmor.put("parent", "item/generated");
-        leatherHorseArmor.put("textures", Collections.singletonMap("layer0", "minecraft:item/leather_horse_armor"));
-
-        processFolders(file, bbModelConverterList, leatherHorseArmor, true);
-        bbModelConverterList.removeIf(model -> !model.isRegisteredModel());
-        bbModelConverterList.forEach(BedrockEntityBundleExporter::export);
-        leatherHorseArmor.put("data", counter - 1 + folderCounter * 1000);
-
-        try {
-            FileUtils.writeStringToFile(
-                    new File(MetadataHandler.PLUGIN.getDataFolder().getAbsolutePath() + File.separatorChar + "output"
-                            + File.separatorChar + "FreeMinecraftModels" + File.separatorChar + "assets" + File.separatorChar +
-                            "minecraft" + File.separatorChar + "models" + File.separatorChar + "item" + File.separatorChar
-                            + "leather_horse_armor.json"),
-                    gson.toJson(leatherHorseArmor), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            Logger.warn("Failed to generate the leather horse armor file!");
-            throw new RuntimeException(e);
-        }
     }
 
     /**
@@ -114,8 +76,7 @@ public class ModelsFolder {
         DisplayModelRegistry.shutdown(); // Clear from any previous generation
 
         List<FileModelConverter> bbModelConverterList = new ArrayList<>();
-        HashMap<String, Object> jsonConfig = new HashMap<>();
-        processFolders(file, bbModelConverterList, jsonConfig, true);
+        processFolders(file, bbModelConverterList);
         bbModelConverterList.removeIf(model -> !model.isRegisteredModel());
         bbModelConverterList.forEach(BedrockEntityBundleExporter::export);
 
@@ -352,8 +313,7 @@ public class ModelsFolder {
     }
 
     private static void processFiles(File childFile,
-                                     List<FileModelConverter> bbModelConverterList,
-                                     HashMap<String, Object> leatherHorseArmor) {
+                                     List<FileModelConverter> bbModelConverterList) {
         try {
             FileModelConverter bbModelConverter = new FileModelConverter(childFile);
             if (bbModelConverter.getSkeletonBlueprint() == null) {
@@ -361,17 +321,12 @@ public class ModelsFolder {
                 return;
             }
             bbModelConverterList.add(bbModelConverter);
-            // Note: this used to "filter out" hitbox/tag_name/root bones, but the
-            // comparisons ran against the namespaced bone name
-            // ("freeminecraftmodels:model/bone") so they never matched and every
-            // bone has always gone through assignBoneModelID. Kept unconditional
-            // on purpose: skipping utility bones now would renumber the legacy
-            // (<1.21.4) custom_model_data IDs, breaking items already given out.
-            // Utility bones are excluded from display/output generation downstream
+            // Every bone goes through assignBoneModelID. Utility bones are excluded
+            // from display/output generation downstream
             // (BoneBlueprint.generateAndWriteCubes and newModelGeneration's
             // item-definition filter).
             for (BoneBlueprint boneBlueprint : bbModelConverter.getSkeletonBlueprint().getMainModel())
-                assignBoneModelID(leatherHorseArmor, boneBlueprint);
+                assignBoneModelID(boneBlueprint);
         } catch (Exception e) {
             Logger.warn("Failed to parse model " + childFile.getName() + "! Warn the developer about this");
             e.printStackTrace();
@@ -379,10 +334,7 @@ public class ModelsFolder {
     }
 
     private static void processFolders(File file,
-                                       List<FileModelConverter> bbModelConverterList,
-                                       HashMap<String, Object> leatherHorseArmor,
-                                       boolean firstLevel) {
-        if (!firstLevel) folderCounter++;
+                                       List<FileModelConverter> bbModelConverterList) {
         File[] modelFiles = file.listFiles();
         if (modelFiles == null) {
             Logger.warn("Failed to list models directory " + file.getAbsolutePath());
@@ -391,8 +343,8 @@ public class ModelsFolder {
         Arrays.sort(modelFiles, Comparator.comparing(File::getName));
 
         for (File childFile : modelFiles) {
-            if (childFile.isFile()) processFiles(childFile, bbModelConverterList, leatherHorseArmor);
-            else processFolders(childFile, bbModelConverterList, leatherHorseArmor, false);
+            if (childFile.isFile()) processFiles(childFile, bbModelConverterList);
+            else processFolders(childFile, bbModelConverterList);
         }
     }
 
@@ -414,29 +366,11 @@ public class ModelsFolder {
         return modelFiles;
     }
 
-    private static void assignBoneModelID(HashMap<String, Object> ironHorseArmorFile, BoneBlueprint boneBlueprint) {
-        boolean legacy = VersionChecker.serverVersionOlderThan(21, 4);
-        // The overrides list is only ever serialized by the legacy (<1.21.4)
-        // horse-armor generation; on the modern path the accumulating map is
-        // discarded, so only the setModelID/counter side effects are needed.
-        if (legacy) {
-            Map<String, Object> entryMap = new HashMap<>();
-            entryMap.put("predicate", Collections.singletonMap("custom_model_data", counter + folderCounter * 1000));
-            entryMap.put("model", boneBlueprint.getBoneName());
-            ironHorseArmorFile.computeIfAbsent("overrides", k -> new ArrayList<Map<String, Object>>());
-            List<Map<String, Object>> existingList = ((List<Map<String, Object>>) ironHorseArmorFile.get("overrides"));
-            existingList.add(entryMap);
-            ironHorseArmorFile.put("overrides", existingList);
-        }
-        if (!boneBlueprint.getCubeBlueprintChildren().isEmpty()) {
-            if (legacy)
-                boneBlueprint.setModelID(counter + folderCounter * 1000 + "");
-            else
-                boneBlueprint.setModelID(boneBlueprint.getBoneName());
-            counter++;
-        }
+    private static void assignBoneModelID(BoneBlueprint boneBlueprint) {
+        if (!boneBlueprint.getCubeBlueprintChildren().isEmpty())
+            boneBlueprint.setModelID(boneBlueprint.getBoneName());
         if (!boneBlueprint.getBoneBlueprintChildren().isEmpty())
             for (BoneBlueprint childBoneBlueprint : boneBlueprint.getBoneBlueprintChildren())
-                assignBoneModelID(ironHorseArmorFile, childBoneBlueprint);
+                assignBoneModelID(childBoneBlueprint);
     }
 }

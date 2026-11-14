@@ -234,8 +234,7 @@ public final class ModelMenuHelper {
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             // Set custom display model if available (1.21.4+)
-            if (!com.magmaguy.magmacore.util.VersionChecker.serverVersionOlderThan(21, 4)
-                    && com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry.hasDisplayModel(modelId)) {
+            if (com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry.hasDisplayModel(modelId)) {
                 meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + modelId));
             }
 
@@ -416,8 +415,7 @@ public final class ModelMenuHelper {
             if (config != null && config.getLeatherColor() != null && meta instanceof LeatherArmorMeta leatherMeta) {
                 leatherMeta.setColor(config.getLeatherColor());
             }
-            if (!com.magmaguy.magmacore.util.VersionChecker.serverVersionOlderThan(21, 4)
-                    && com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry.hasDisplayModel(itemId)) {
+            if (com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry.hasDisplayModel(itemId)) {
                 meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + itemId));
             }
             item.setItemMeta(meta);

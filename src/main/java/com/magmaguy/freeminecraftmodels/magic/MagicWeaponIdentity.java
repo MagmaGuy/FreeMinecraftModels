@@ -4,7 +4,6 @@ import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponKind;
 import com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry;
 import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
-import com.magmaguy.magmacore.util.VersionChecker;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -38,8 +37,7 @@ final class MagicWeaponIdentity {
         if (meta == null) return false;
         meta.getPersistentDataContainer().set(
                 ItemScriptManager.ITEM_ID_KEY, PersistentDataType.STRING, definition.itemId());
-        if (!VersionChecker.serverVersionOlderThan(21, 4)
-                && DisplayModelRegistry.hasDisplayModel(definition.itemId())) {
+        if (DisplayModelRegistry.hasDisplayModel(definition.itemId())) {
             NamespacedKey model = NamespacedKey.fromString(
                     "freeminecraftmodels:display/" + definition.itemId());
             if (model != null) meta.setItemModel(model);

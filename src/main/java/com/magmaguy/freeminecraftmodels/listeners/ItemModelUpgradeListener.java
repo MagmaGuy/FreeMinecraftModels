@@ -3,7 +3,6 @@ package com.magmaguy.freeminecraftmodels.listeners;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry;
 import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
-import com.magmaguy.magmacore.util.VersionChecker;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
@@ -29,7 +28,7 @@ public class ItemModelUpgradeListener implements Listener {
 
     /** Adds the registered display model to an authored FMM item that has none. */
     static boolean upgrade(ItemStack item) {
-        if (item == null || item.getType().isAir() || !item.hasItemMeta() || VersionChecker.serverVersionOlderThan(21, 4))
+        if (item == null || item.getType().isAir() || !item.hasItemMeta())
             return false;
         ItemMeta meta = item.getItemMeta();
         if (meta == null || meta.hasItemModel()) return false;

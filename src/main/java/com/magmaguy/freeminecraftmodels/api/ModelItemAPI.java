@@ -1,7 +1,6 @@
 package com.magmaguy.freeminecraftmodels.api;
 
 import com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry;
-import com.magmaguy.magmacore.util.VersionChecker;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -21,7 +20,6 @@ public final class ModelItemAPI {
      */
     public static boolean applyDisplayModel(ItemStack itemStack, String modelId) {
         if (itemStack == null || modelId == null || modelId.isBlank()
-                || VersionChecker.serverVersionOlderThan(21, 4)
                 || !DisplayModelRegistry.hasDisplayModel(modelId)) return false;
         ItemMeta meta = itemStack.getItemMeta();
         if (meta == null) return false;

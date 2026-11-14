@@ -94,8 +94,7 @@ public class CraftifyCommand extends AdvancedCommand {
             NamespacedKey craftifyKey = new NamespacedKey(MetadataHandler.PLUGIN, "craftify_output");
             outputMeta.getPersistentDataContainer().set(craftifyKey, PersistentDataType.BYTE, (byte) 1);
             // Set custom display model if available (1.21.4+)
-            if (!com.magmaguy.magmacore.util.VersionChecker.serverVersionOlderThan(21, 4)
-                    && com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry.hasDisplayModel(modelID)) {
+            if (com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry.hasDisplayModel(modelID)) {
                 outputMeta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + modelID));
             }
             output.setItemMeta(outputMeta);

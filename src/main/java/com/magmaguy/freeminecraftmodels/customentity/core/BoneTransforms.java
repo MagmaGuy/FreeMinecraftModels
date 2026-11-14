@@ -7,7 +7,6 @@ import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.utils.TransformationMatrix;
-import com.magmaguy.magmacore.util.VersionChecker;
 import lombok.Getter;
 import org.bukkit.Color;
 import org.bukkit.Location;
@@ -199,11 +198,7 @@ public class BoneTransforms {
         if (!DefaultConfig.useDisplayEntitiesWhenPossible) return;
         Location displayEntityLocation = getDisplayEntityTargetLocation();
         packetDisplayEntity = NMSManager.getAdapter().createPacketDisplayEntity(displayEntityLocation);
-        if (VersionChecker.serverVersionOlderThan(21, 4))
-            packetDisplayEntity.initializeModel(displayEntityLocation, Integer.parseInt(bone.getBoneBlueprint().getModelID()));
-        else {
-            packetDisplayEntity.initializeModel(displayEntityLocation, bone.getBoneBlueprint().getModelID());
-        }
+        packetDisplayEntity.initializeModel(displayEntityLocation, bone.getBoneBlueprint().getModelID());
         packetDisplayEntity.sendLocationAndRotationPacket(displayEntityLocation, getDisplayEntityRotation());
     }
 
@@ -221,10 +216,7 @@ public class BoneTransforms {
 
     private PacketModelEntity buildArmorStand(Location location, EulerAngle rotation) {
         PacketModelEntity armorStand = NMSManager.getAdapter().createPacketArmorStandEntity(location);
-        if (VersionChecker.serverVersionOlderThan(21, 4))
-            armorStand.initializeModel(location, Integer.parseInt(bone.getBoneBlueprint().getModelID()));
-        else
-            armorStand.initializeModel(location, bone.getBoneBlueprint().getModelID());
+        armorStand.initializeModel(location, bone.getBoneBlueprint().getModelID());
         armorStand.sendLocationAndRotationPacket(location, rotation);
         if (armorStandTint != null) armorStand.setHorseLeatherArmorColor(armorStandTint);
         return armorStand;
@@ -305,14 +297,14 @@ public class BoneTransforms {
         Location currentLocation = bone.getSkeleton().getCurrentLocation();
         double[] position = new double[3];
         readTargetPosition(currentLocation, position, true);
-        return createTargetLocation(currentLocation, position, true);
+        return createTargetLocation(currentLocation, position);
     }
 
     protected Location getDisplayEntityTargetLocation() {
         Location currentLocation = bone.getSkeleton().getCurrentLocation();
         double[] position = new double[3];
         readTargetPosition(currentLocation, position, false);
-        return createTargetLocation(currentLocation, position, false);
+        return createTargetLocation(currentLocation, position);
     }
 
     protected EulerAngle getDisplayEntityRotation() {
@@ -335,9 +327,8 @@ public class BoneTransforms {
         if (armorStand) position[1] -= BoneBlueprint.getARMOR_STAND_PIVOT_POINT_HEIGHT();
     }
 
-    private Location createTargetLocation(Location origin, double[] position, boolean armorStand) {
-        float yaw = armorStand || !VersionChecker.serverVersionOlderThan(20, 0) ? 180 : 0;
-        return new Location(origin.getWorld(), position[0], position[1], position[2], yaw, 0);
+    private Location createTargetLocation(Location origin, double[] position) {
+        return new Location(origin.getWorld(), position[0], position[1], position[2], 180, 0);
     }
 
     private void readTargetRotation(double[] rotation, boolean armorStand) {
@@ -345,7 +336,7 @@ public class BoneTransforms {
         if (armorStand) {
             rotation[0] = -rotation[0];
             rotation[1] = -rotation[1];
-        } else if (!VersionChecker.serverVersionOlderThan(20, 0)) {
+        } else {
             rotation[0] = -rotation[0];
             rotation[2] = -rotation[2];
         }
@@ -387,7 +378,7 @@ public class BoneTransforms {
             readTargetRotation(rotationBuffer, true);
             if (force || armorStandChanged(positionBuffer, rotationBuffer)) {
                 if (packetBundle == null) packetBundle = packetArmorStandEntity.createPacketBundle();
-                sendArmorStandUpdatePacket(packetBundle, createTargetLocation(origin, positionBuffer, true),
+                sendArmorStandUpdatePacket(packetBundle, createTargetLocation(origin, positionBuffer),
                         new EulerAngle(rotationBuffer[0], rotationBuffer[1], rotationBuffer[2]));
             }
         }
@@ -410,7 +401,7 @@ public class BoneTransforms {
             globalMatrix.getScale(scaleBuffer);
             if (force || displayChanged(positionBuffer, rotationBuffer, scaleBuffer) || packetDisplayEntity.owesPose()) {
                 if (packetBundle == null) packetBundle = packetDisplayEntity.createPacketBundle();
-                sendDisplayEntityUpdatePacket(packetBundle, createTargetLocation(origin, positionBuffer, false),
+                sendDisplayEntityUpdatePacket(packetBundle, createTargetLocation(origin, positionBuffer),
                         new EulerAngle(rotationBuffer[0], rotationBuffer[1], rotationBuffer[2]), scaleBuffer);
             }
         }
@@ -423,7 +414,7 @@ public class BoneTransforms {
         if (armorStandBone) {
             readTargetPosition(origin, positionBuffer, true);
             readTargetRotation(rotationBuffer, true);
-            sendArmorStandUpdatePacket(packetBundle, createTargetLocation(origin, positionBuffer, true),
+            sendArmorStandUpdatePacket(packetBundle, createTargetLocation(origin, positionBuffer),
                     new EulerAngle(rotationBuffer[0], rotationBuffer[1], rotationBuffer[2]));
         }
         if (packetDisplayEntity != null) {
@@ -436,7 +427,7 @@ public class BoneTransforms {
             readTargetPosition(origin, positionBuffer, false);
             readTargetRotation(rotationBuffer, false);
             globalMatrix.getScale(scaleBuffer);
-            sendDisplayEntityUpdatePacket(packetBundle, createTargetLocation(origin, positionBuffer, false),
+            sendDisplayEntityUpdatePacket(packetBundle, createTargetLocation(origin, positionBuffer),
                     new EulerAngle(rotationBuffer[0], rotationBuffer[1], rotationBuffer[2]), scaleBuffer);
         }
     }

@@ -10,7 +10,6 @@ import com.magmaguy.freeminecraftmodels.utils.ModelItemFactory;
 import com.magmaguy.magmacore.util.ChatColorConverter;
 import com.magmaguy.magmacore.util.ItemStackGenerator;
 import com.magmaguy.magmacore.util.Logger;
-import com.magmaguy.magmacore.util.VersionChecker;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -114,8 +113,7 @@ public class ShopMenu {
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             // Apply display-model item model on 1.21.4+ if the model is registered.
-            if (!VersionChecker.serverVersionOlderThan(21, 4)
-                    && DisplayModelRegistry.hasDisplayModel(modelId)) {
+            if (DisplayModelRegistry.hasDisplayModel(modelId)) {
                 meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + modelId));
             }
             meta.getPersistentDataContainer().set(MODEL_ID_KEY, PersistentDataType.STRING, modelId);

@@ -4,7 +4,6 @@ import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry;
 import com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields;
 import com.magmaguy.magmacore.util.ChatColorConverter;
-import com.magmaguy.magmacore.util.VersionChecker;
 import com.magmaguy.magmacore.enchantments.EnchantmentDefinitions;
 import com.magmaguy.magmacore.enchantments.EnchantmentItems;
 import com.magmaguy.magmacore.enchantments.EnchantmentItemProfile;
@@ -60,8 +59,7 @@ public final class ModelItemFactory {
         meta.getPersistentDataContainer().set(key, PersistentDataType.STRING, modelId);
 
         // Set custom item model if available and server supports it (1.21.4+)
-        if (!VersionChecker.serverVersionOlderThan(21, 4)
-                && DisplayModelRegistry.hasDisplayModel(modelId)) {
+        if (DisplayModelRegistry.hasDisplayModel(modelId)) {
             meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + modelId));
         }
 
@@ -113,8 +111,7 @@ public final class ModelItemFactory {
         meta.getPersistentDataContainer().set(itemKey, PersistentDataType.STRING, itemId);
 
         // Display model (1.21.4+)
-        if (!VersionChecker.serverVersionOlderThan(21, 4)
-                && DisplayModelRegistry.hasDisplayModel(itemId)) {
+        if (DisplayModelRegistry.hasDisplayModel(itemId)) {
             meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + itemId));
         }
 

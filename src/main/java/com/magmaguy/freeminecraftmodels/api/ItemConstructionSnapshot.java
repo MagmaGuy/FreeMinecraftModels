@@ -5,7 +5,6 @@ import com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponService;
 import com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry;
 import com.magmaguy.freeminecraftmodels.magic.MagicWeaponCatalog;
 import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
-import com.magmaguy.magmacore.util.VersionChecker;
 import org.bukkit.Bukkit;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
@@ -44,7 +43,7 @@ public final class ItemConstructionSnapshot {
         ids.addAll(definitions.keySet());
         for (String id : ids) {
             var kind = operational ? weapons.find(id).map(w -> w.kind()).orElse(null) : null;
-            NamespacedKey model = !VersionChecker.serverVersionOlderThan(21, 4) && models.contains(id)
+            NamespacedKey model = models.contains(id)
                     ? NamespacedKey.fromString("freeminecraftmodels:display/" + id) : null;
             prepared.put(id, new ItemData(definitions.containsKey(id) ? id : null, model, kind));
         }

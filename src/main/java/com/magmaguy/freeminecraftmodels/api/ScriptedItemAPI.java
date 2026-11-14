@@ -3,7 +3,6 @@ package com.magmaguy.freeminecraftmodels.api;
 import com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry;
 import com.magmaguy.freeminecraftmodels.config.props.PropScriptConfigFields;
 import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
-import com.magmaguy.magmacore.util.VersionChecker;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -58,10 +57,8 @@ public final class ScriptedItemAPI {
 
         // Set the item model if available (1.21.4+). Bow/crossbow draw states
         // are internal to the base item-model definition.
-        if (!VersionChecker.serverVersionOlderThan(21, 4)) {
-            if (DisplayModelRegistry.hasDisplayModel(itemId)) {
-                meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + itemId));
-            }
+        if (DisplayModelRegistry.hasDisplayModel(itemId)) {
+            meta.setItemModel(NamespacedKey.fromString("freeminecraftmodels:display/" + itemId));
         }
 
         itemStack.setItemMeta(meta);

@@ -6,7 +6,6 @@ import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.packets.PacketEntityDisplayHelper;
 import com.magmaguy.easyminecraftgoals.thirdparty.BedrockChecker;
-import com.magmaguy.magmacore.util.VersionChecker;
 import lombok.Getter;
 import org.bukkit.Color;
 import org.bukkit.Location;
@@ -201,8 +200,7 @@ public class Bone {
         if (boneBlueprint.isNameTag()) return; // ModeledEntity owns the complete nameplate.
         if (boneTransforms.hasArmorStand() &&
                 (!DefaultConfig.useDisplayEntitiesWhenPossible ||
-                        isBedrock ||
-                        VersionChecker.serverVersionOlderThan(19, 4))) {
+                        isBedrock)) {
             PacketModelEntity armorStand = boneTransforms.armorStand();
             if (com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.enabled())
                 com.magmaguy.freeminecraftmodels.thirdparty.BedrockDebugLog.log(
