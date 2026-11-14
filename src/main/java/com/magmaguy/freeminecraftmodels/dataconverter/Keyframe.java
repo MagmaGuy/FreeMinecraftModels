@@ -205,7 +205,7 @@ public class Keyframe {
         if (!assigns[index][axis]) return value(axis, point, context);
         context.clearTemporaries();
         // Reads fall through to the entity's variables; writes stay in the scratch context.
-        return finite(expressions[index][axis].evaluate(new MolangContext(context, context.random())));
+        return finite(expressions[index][axis].evaluate(context.scratchChild()));
     }
 
     private static double finite(double result) {

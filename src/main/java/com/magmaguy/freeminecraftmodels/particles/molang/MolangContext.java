@@ -23,6 +23,8 @@ public final class MolangContext {
     private Resolver resolver;
     private final MolangContext parent;
     private final RandomGenerator random;
+    // The child scratchChild() hands out, made on first use.
+    private MolangContext scratch;
 
     public MolangContext(RandomGenerator random) {
         this(null, random);
@@ -35,6 +37,20 @@ public final class MolangContext {
 
     public RandomGenerator random() {
         return random;
+    }
+
+    /**
+     * An empty child of this context for one evaluation whose writes are thrown away: reads fall through to this
+     * context, writes stay in the child. The same child is emptied and handed out again on the next call, so a caller
+     * must be done with it before asking again; it is no more thread-safe than this context.
+     */
+    public MolangContext scratchChild() {
+        MolangContext child = scratch;
+        if (child == null) return scratch = new MolangContext(this, random);
+        child.values.clear();
+        child.temporaries.clear();
+        child.resolver = null;
+        return child;
     }
 
     public void setResolver(Resolver resolver) {
