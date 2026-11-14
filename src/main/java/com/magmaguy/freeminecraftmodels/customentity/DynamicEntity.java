@@ -197,7 +197,7 @@ public class DynamicEntity extends ModeledEntity {
             getBedrockModeledEntity().bindToUnderlyingEntity((LivingEntity) getUnderlyingEntity());
         }
         dynamicEntities.put(getUnderlyingEntity().getUniqueId(), this);
-        syncSkeletonWithEntity();
+        syncSkeletonWithEntity(false);
     }
 
     @Override
@@ -209,8 +209,12 @@ public class DynamicEntity extends ModeledEntity {
 
     @Override
     public void tick(AbstractPacketBundle abstractPacketBundle) {
+        // The rider reads below happen at most once per tick; see tickSteeringRider and tickRiddenByPlayer.
+        tickRiderRead = false;
+        tickRiddenRead = false;
+        tickRider = null;
         //todo: investigate if this is still necessary since everything now updates anyway, at least for animations
-        syncSkeletonWithEntity();
+        syncSkeletonWithEntity(true);
         updateModelYaw();
         boolean swimming = isSwimming();
         updateTravelTilt(swimming);
@@ -259,7 +263,7 @@ public class DynamicEntity extends ModeledEntity {
         }
         if (underlyingEntity == null || !underlyingEntity.isValid()) return;
         Location at = underlyingEntity.getLocation();
-        boolean ridden = isRiddenByPlayer();
+        boolean ridden = tickRiddenByPlayer();
         boolean free = !isDying() && syncMovement && (leansWhileRidden || !ridden);
         // A swim moves the body by its velocity every tick, so the lean follows that velocity as it is, in step with
         // the swim's wave, instead of smoothing it out of positions a quarter of a wave late. A rider's client moves
@@ -282,8 +286,8 @@ public class DynamicEntity extends ModeledEntity {
      */
     private void updateModelYaw() {
         if (isDying() || !syncMovement || underlyingEntity == null || !underlyingEntity.isValid()) return;
-        float target = targetBodyYaw(underlyingEntity.getLocation());
-        if (!DefaultConfig.weightedTurning || Float.isNaN(turnInertia.getYaw()) || isRiddenByPlayer())
+        float target = targetBodyYaw(underlyingEntity.getLocation(), tickSteeringRider());
+        if (!DefaultConfig.weightedTurning || Float.isNaN(turnInertia.getYaw()) || tickRiddenByPlayer())
             turnInertia.reset(target);
         else
             turnInertia.step(target, turnSize(), DefaultConfig.turnSpeedCap, DefaultConfig.turnAcceleration);
@@ -293,6 +297,30 @@ public class DynamicEntity extends ModeledEntity {
     private boolean isRiddenByPlayer() {
         if (carriesPlayer(underlyingEntity)) return true;
         return getMountPointManager() != null && getMountPointManager().hasOccupant();
+    }
+
+    // The model tick's rider reads, each taken at most once per tick instead of once per step that needs it. Only
+    // the model clock's tick, which runs under the skeleton's lock, touches these.
+    private boolean tickRiderRead, tickRiddenRead, tickRidden;
+    private Player tickRider;
+
+    /** {@link #steeringRider()} as this tick first read it. */
+    @Nullable
+    private Player tickSteeringRider() {
+        if (!tickRiderRead) {
+            tickRider = steeringRider();
+            tickRiderRead = true;
+        }
+        return tickRider;
+    }
+
+    /** {@link #isRiddenByPlayer()} as this tick first read it. */
+    private boolean tickRiddenByPlayer() {
+        if (!tickRiddenRead) {
+            tickRidden = isRiddenByPlayer();
+            tickRiddenRead = true;
+        }
+        return tickRidden;
     }
 
     /**
@@ -407,7 +435,8 @@ public class DynamicEntity extends ModeledEntity {
         isEvokerAttacking = attacking;
     }
 
-    private void syncSkeletonWithEntity() {
+    /** {@code inTick} is true only from the model tick, which may reuse its once-per-tick rider read. */
+    private void syncSkeletonWithEntity(boolean inTick) {
         if (isDying()) return;
 
         if ((underlyingEntity == null || !underlyingEntity.isValid())) {
@@ -422,7 +451,7 @@ public class DynamicEntity extends ModeledEntity {
         if (underlyingEntity instanceof LivingEntity livingEntity) {
             // A steered mount looks where its rider steers and stays level: following the mob's pitch would tilt its
             // head with every look the rider takes up or down.
-            Player rider = steeringRider();
+            Player rider = inTick ? tickSteeringRider() : steeringRider();
             getSkeleton().setCurrentHeadPitch(rider != null ? 0 : livingEntity.getEyeLocation().getPitch());
             getSkeleton().setCurrentHeadYaw(rider != null ? rider.getLocation().getYaw() : livingEntity.getEyeLocation().getYaw());
         }
@@ -530,9 +559,13 @@ public class DynamicEntity extends ModeledEntity {
      * That lerping behavior would be unnecessarily demanding, and the is considered to be close enough for 99.99% of cases.
      */
     private float targetBodyYaw(Location bodyLoc) {
+        return targetBodyYaw(bodyLoc, steeringRider());
+    }
+
+    /** {@link #targetBodyYaw(Location)} with the steering rider already read. */
+    private float targetBodyYaw(Location bodyLoc, @Nullable Player rider) {
         // A player steering the mob turns it to their own facing on their client every tick. The server's copy of
         // the body can trail that by a tick or more (Paper), so the model follows the rider instead.
-        Player rider = steeringRider();
         if (rider != null) return rider.getLocation().getYaw();
 
         Location gaze = getSkeleton().getLookDirection(bodyLoc);
