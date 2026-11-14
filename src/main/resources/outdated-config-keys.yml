@@ -48,12 +48,13 @@ pet_behaviors:
   - files:
       - day_perch.lua
     sha256:
-      - e6d5a5864a5ea5ef3b5b335ddc8e4db6524c7c3559ac62ab24579b34968ebf82
       - 8da1d1a31d912c957bb0b69a92be99ab181ce19baff73d2f621db9ee51f04cf5
+      - e6d5a5864a5ea5ef3b5b335ddc8e4db6524c7c3559ac62ab24579b34968ebf82
   - files:
       - defend_owner.lua
     sha256:
       - 3ea863756b6bd7c94b56fac0b19975e44c89983160fc1acecdd5cb5671ccb44c
+      - f8f2c04003703995e5fd6db96b1759f2c46ff6957a9e033f69af98ffa8569963
   - files:
       - drift.lua
     sha256:
@@ -61,16 +62,19 @@ pet_behaviors:
       - 25cd08674173b291d3cc2018dde1f6f3b81c92d2d82c311ab2c7d5edc11ea9d4
       - 90356065d2ffbbe59cb5bcd711aa54c811765878fb72b46b6b54553b07f3168c
       - bb302e944e03a2640ae83b51d7aa60624624ede848fe5bfc30a2c0f8f01f9a19
+      - cfb33605d47251af35406fe68a2be13417167d4c225eb7b6102730862d68a879
   - files:
       - fishing_trip.lua
     sha256:
       - 1f537d42afcc7ebe8fbd7466dcf0bd36a9cb4b5b6f989a2f91b8c22cdcebe583
+      - 368fea0abdce0c7a026b236ccfe2e38040d89b0b454010e8d6bea4e487aadb5d
   - files:
       - follow_owner.lua
     sha256:
       - 01fd2bb6b6280f2ba68d13e09a1a3a055ff43a928444bf4ca051ac30985a5b1f
       - 676db65f5bcf345d135ce0e271c5fb50d15667c9f12b877380bb627b822b3c90
       - 6d8e529774749cd5f669d48ac60c328947688a58217de0b0c63f5688fb6523b3
+      - 8261d78214abdf49c45a0331e7ace67b620ca833bdc78d2bdfb52f78530595cd
       - ac121daace1160c72cad8b5b60735ca910c52e56da6060923fa60a153ea278e4
       - d7b8eeda3b4defbd559a3990510eacf4d81de24434da6a15db29671ea1c99438
       - f467260683c8174cedaad7d8269fe4cbceb8d368240b8496a79b6eb4ab66b7b8
@@ -79,6 +83,7 @@ pet_behaviors:
     sha256:
       - 20d4d9d524dcb3c5ff298f93e959e6af288b32cc85cb6cd4bb8639a958ad93eb
       - 80d2ec242ec4c880f7ccb127a36c3c12e16caff1f43911e7f9a6d3ab9eaca408
+      - a4dac87cc0e4983dce3c767cb0fef018cf2b2091489d310e9a508a3a720618b9
       - ab64230ad9a9951750f20b741646b3463fca16ac8a03bd3736ab44b0e0b6d75a
   - files:
       - idle_look.lua
@@ -87,9 +92,14 @@ pet_behaviors:
       - d9c995383d39e7f23aa4c1fe83338a77746acfba348202ea925f3aedf277a1b4
       - f20713d9e86a6031b9354b6bfd3828803467cf26aed716f09a11770cb3ddc4d8
   - files:
+      - march.lua
+    sha256:
+      - b75229c2e2dbc784d276e74881dd1cc7db0ac833e346bb7e731fece654287fff
+  - files:
       - migrate.lua
     sha256:
       - 17747fbc66041ceb824a628d149639d8c42458365b32d80063029d8ba9112534
+      - 8ea5a18543797f429d2f626f11505e8ef1bc257a0c09b27541b6a2609e9975fc
       - c852f4869d4d02524ea4d530549e098a5f6bd047acee869fd263b42c8253c09a
       - f708a4765a6002c04799301c7e81e9963d1f835ac5ce15640f91512a91fba104
   - files:
@@ -99,7 +109,12 @@ pet_behaviors:
   - files:
       - owner_effect.lua
     sha256:
+      - 636702a76b556bd7bad30996a941f04e178e02589a556df90ceeb102f8351ef3
       - d59a6abffecfb4c7579d812df1f5f949e3af2e11ceeb94360ae23c221e7d8769
+  - files:
+      - pebble_gift.lua
+    sha256:
+      - 6495dd15cff9e92ddc2c247163732ba373de71dc103884f2f392709c74b458fd
   - files:
       - rain_bloom.lua
     sha256:
@@ -108,9 +123,15 @@ pet_behaviors:
       - 3752d1d8ed7663b54056e027ee6495077689fd6ac55858cf65acf9d0bf012ad5
       - 47fa1e368f4304fbc3709518d98ab9083605799b188b98c1b174ff56c7d409dc
       - 966b084ddd8eee0741239680664c16e1c7def6c130ad958671a94938d2251d60
+      - cae364700eb672a4ca871c2dcd414a3a7f24ae2737ad4f0575e4df925d3c77bd
+  - files:
+      - retaliate.lua
+    sha256:
+      - e71a19d51cd71d28a543a3b51b308688e97ffc6c6f67decdf81eb113d3668721
   - files:
       - stay.lua
     sha256:
+      - 52eabd21fb35eaa8576e374a131c294a15de25645a773044015074757990b70d
       - 95bf6d2723668b560ae4a1886ab6f0e340dc21fe3f8cc97c2d9833327998dd0f
       - a1f1e5e9cf0272f5edba954df0da87a41e2c1d6000d8f7fad3ba1f1e8061ef91
       - c299bba52d76a299071a1fdccbb99720326b2a183d2c67f01ad3b0d06dfa6e68
@@ -120,6 +141,10 @@ pet_behaviors:
       - 15b6e20dc449ff30fa7506a22321dd5bd9efe768d03aee44e9c8a9ce40587082
       - 24717e5fa7bfaa0dcb353a6fa01881e22c516555cc43a373ce40b27aaaba51db
   - files:
+      - strike_back.lua
+    sha256:
+      - 6c6dc48f1ae336ac9653f604d37b3480fca31a350391c1707121e67456c00dea
+  - files:
       - swim.lua
     sha256:
       - 04077d533c259e60334f3238516834c3e240907a11dfabdb27feb1c8c938ed7f
@@ -127,6 +152,11 @@ pet_behaviors:
       - 6ca93b3151e7b8d36273c20583be7795a0b467e4f090b1fdedc721f3a4a10df0
       - a47aa6d26c8f386b1a39b69880866f5c2cb25666094f55ec43a47569e1cf2f14
       - bb30f3546a1a598ecc2b1eeff5e64d8d82f5f1fa1062d9708b74038908bea9cb
+      - ce65d1893c0f87ef76f8258ac9a0b70acbadaa8190fb60385ca908ccd2e4d440
+  - files:
+      - toboggan.lua
+    sha256:
+      - ae2aa6e7844060ded0fb65d734a667f1429c0a5f1f3d99c7c829bdc95750310c
   - files:
       - wander.lua
     sha256:
@@ -135,3 +165,4 @@ pet_behaviors:
       - 6c79dbc3c2c4bfe42baf08003c1b8f5d695975562cf3e6931cdae8f69afafa14
       - 9e265d86e854ed772b7b5db22460bd8d35ba9dc6d1c0787ba74b980e1d60033e
       - b4672d27bfd2e03c9544f08592c496ba9dc26b3ddcbfa31b7801790ef03d829a
+      - ea7f5feb58c0395d163b6f1c64b3b761dec8bd4d1bf3f982f33b6102f8960ac0
