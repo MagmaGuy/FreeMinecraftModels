@@ -17,6 +17,8 @@ public record MagicAttackRequest(
         MagicAttackBalance balance,
         java.util.Map<String, ItemStack> equipment,
         java.util.Map<String, Double> resolverFacts) {
+    private static final java.util.Set<String> EQUIPMENT_SLOTS =
+            java.util.Set.of("MAINHAND", "OFFHAND", "HEAD", "CHEST", "LEGS", "FEET");
 
     public MagicAttackRequest {
         Objects.requireNonNull(attackId, "attackId");
@@ -49,7 +51,7 @@ public record MagicAttackRequest(
     public static java.util.Map<String, ItemStack> copyEquipment(java.util.Map<String, ItemStack> equipment) {
         var copy = new java.util.LinkedHashMap<String, ItemStack>();
         Objects.requireNonNull(equipment, "equipment").forEach((slot, item) -> {
-            if (!java.util.Set.of("MAINHAND", "OFFHAND", "HEAD", "CHEST", "LEGS", "FEET").contains(slot))
+            if (!EQUIPMENT_SLOTS.contains(slot))
                 throw new IllegalArgumentException("Unknown equipment slot: " + slot);
             copy.put(slot, Objects.requireNonNull(item, "equipment item").clone());
         });
