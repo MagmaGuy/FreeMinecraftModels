@@ -8,7 +8,7 @@ import java.util.List;
 
 /**
  * Tab-completes against the current set of loaded model IDs. Re-reads
- * {@link FileModelConverter#getConvertedFileModels()} on each call so newly
+ * {@link FileModelConverter#liveModels()} on each call so newly
  * loaded models appear without a server restart.
  */
 public class LiveModelIDsArgument implements ICommandArgument {
@@ -25,7 +25,8 @@ public class LiveModelIDsArgument implements ICommandArgument {
     }
 
     private List<String> ids() {
-        return FileModelConverter.getConvertedFileModels().values().stream()
+        // Distinct and sorted, so the registry's iteration order does not matter and no copy of it is needed.
+        return FileModelConverter.liveModels().stream()
                 .filter(model -> !menuModels || com.magmaguy.freeminecraftmodels.menus.ModelMenuHelper.isMenuModel(model))
                 .map(model -> menuModels ? com.magmaguy.freeminecraftmodels.menus.ModelMenuHelper.getMenuModelId(model) : model.getID())
                 .distinct().sorted().toList();

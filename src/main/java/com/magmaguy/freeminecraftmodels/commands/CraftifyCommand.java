@@ -122,7 +122,7 @@ public class CraftifyCommand extends AdvancedCommand {
     }
 
     private static boolean isKnownMenuModel(String modelID) {
-        for (FileModelConverter converter : FileModelConverter.getConvertedFileModels().values()) {
+        for (FileModelConverter converter : FileModelConverter.liveModels()) {
             if (!ModelMenuHelper.isMenuModel(converter)) continue;
             if (ModelMenuHelper.getMenuModelId(converter).equals(modelID)) return true;
         }

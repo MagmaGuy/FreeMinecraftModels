@@ -71,7 +71,8 @@ public final class ModelMenuHelper {
 
         File modelsRoot = ModelsFolder.resolveModelsFolder();
 
-        return FileModelConverter.getConvertedFileModels().values().stream()
+        // Sorted by the unique model id before the menu-id merge, so the registry's iteration order does not matter.
+        return FileModelConverter.liveModels().stream()
                 .filter(converter -> {
                     File source = converter.getSourceFile();
                     if (source == null) return false;
@@ -87,9 +88,7 @@ public final class ModelMenuHelper {
                 .collect(Collectors.collectingAndThen(
                         Collectors.toMap(ModelMenuHelper::getMenuModelId, converter -> converter,
                                 (first, second) -> first, LinkedHashMap::new),
-                        map -> new ArrayList<>(map.values())))
-                .stream()
-                .collect(Collectors.toList());
+                        map -> new ArrayList<>(map.values())));
     }
 
     /**

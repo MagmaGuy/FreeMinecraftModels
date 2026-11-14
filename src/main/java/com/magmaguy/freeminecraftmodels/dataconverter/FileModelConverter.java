@@ -239,6 +239,15 @@ public class FileModelConverter {
     }
 
     /**
+     * A read-only live view of the registered models, for code inside the plugin that only reads them: no copy is
+     * made. Its iteration order is not the snapshot's, so callers whose result depends on encounter order keep using
+     * {@link #getConvertedFileModels()}. It is weakly consistent while models load or reload.
+     */
+    public static Collection<FileModelConverter> liveModels() {
+        return Collections.unmodifiableCollection(convertedFileModels.values());
+    }
+
+    /**
      * O(1) single-model lookup against the live registry. Prefer this over
      * {@link #getConvertedFileModels()} when only one model is needed — the
      * snapshot getter copies the whole registry per call.

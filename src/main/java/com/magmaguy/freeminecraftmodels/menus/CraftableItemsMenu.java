@@ -39,9 +39,7 @@ public class CraftableItemsMenu {
                 .collect(Collectors.collectingAndThen(
                         Collectors.toMap(ModelMenuHelper::getMenuModelId, converter -> converter,
                                 (first, second) -> first, LinkedHashMap::new),
-                        map -> new ArrayList<>(map.values())))
-                .stream()
-                .collect(Collectors.toList());
+                        map -> new ArrayList<>(map.values())));
 
         open();
     }
