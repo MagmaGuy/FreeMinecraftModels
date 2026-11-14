@@ -424,7 +424,10 @@ public class ModeledEntity {
         if (isRemoved || getLocation() == null) return;
         updateBonePlacement();
         getSkeleton().tick(abstractPacketBundle);
-        if (displayName != null && !displayName.isEmpty()) nameplate.move(getNameplateLocation());
+        // Unwatched, the nameplate has no viewers to move rows for; the primary-thread viewer pass sets its anchor
+        // before it admits anyone.
+        if (displayName != null && !displayName.isEmpty() && skeleton.getSkeletonWatchers().hasObservers())
+            nameplate.move(getNameplateLocation());
         if (bedrockModeledEntity != null) bedrockModeledEntity.tick();
         hitboxComponent.tick(abstractPacketBundle);
         animationComponent.tick();
