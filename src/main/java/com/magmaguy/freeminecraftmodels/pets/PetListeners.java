@@ -167,7 +167,7 @@ public final class PetListeners implements Listener {
         }
         if (!(event instanceof EntityDamageByEntityEvent byEntity)) return;
         Player attacker = attacker(byEntity.getDamager());
-        if (attacker != null && PetsConfig.petsInvulnerableToPlayers) event.setCancelled(true);
+        if (attacker != null && protectedFrom(pet)) event.setCancelled(true);
     }
 
     /**
