@@ -16,6 +16,7 @@ public class RegisterModelEntity {
     }
 
     public static boolean isModelEntity(Entity entity) {
-        return entity.getPersistentDataContainer().getKeys().contains(ENTITY_KEY);
+        // has(key) checks the one key; getKeys() built the whole key set for each check.
+        return entity.getPersistentDataContainer().has(ENTITY_KEY);
     }
 }
