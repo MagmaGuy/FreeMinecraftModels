@@ -4,6 +4,7 @@ import com.magmaguy.easyminecraftgoals.internal.AbstractPacketBundle;
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.customentity.ModeledEntity;
+import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.IKChainBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.LocatorBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
@@ -21,6 +22,7 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -41,6 +43,9 @@ public class Skeleton {
     // Map of controller names to IK chains for quick lookup
     @Getter
     private final HashMap<String, IKChain> ikChainMap = new HashMap<>();
+    // Each bone by its blueprint, so a locator finds its bone without scanning them all. Bones never change after
+    // construction.
+    private final IdentityHashMap<BoneBlueprint, Bone> bonesByBlueprint = new IdentityHashMap<>();
     @Getter
     @Setter
     private float currentHeadPitch = 0;
@@ -101,6 +106,7 @@ public class Skeleton {
         // Collect mount point bones
         for (Bone bone : boneMap.values()) {
             if (bone.getBoneBlueprint().isMountPoint()) mountPointBones.add(bone);
+            bonesByBlueprint.putIfAbsent(bone.getBoneBlueprint(), bone);
         }
     }
 
@@ -222,14 +228,7 @@ public class Skeleton {
         Location origin = getCurrentLocation();
         position.set(origin.getX(), origin.getY(), origin.getZ());
         Bone bone = null;
-        if (locator != null && locator.getParentBone() != null) {
-            for (Bone candidate : boneMap.values()) {
-                if (candidate.getBoneBlueprint() == locator.getParentBone()) {
-                    bone = candidate;
-                    break;
-                }
-            }
-        }
+        if (locator != null && locator.getParentBone() != null) bone = bonesByBlueprint.get(locator.getParentBone());
         if (bone == null) {
             if (rootBone != null) rootBone.getBoneTransforms().globalRotation(rotation);
             else rotation.identity();
