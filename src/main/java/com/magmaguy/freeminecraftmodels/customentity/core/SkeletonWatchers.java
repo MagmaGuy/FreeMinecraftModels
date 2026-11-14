@@ -9,6 +9,7 @@ import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.config.DefaultConfig;
 import com.magmaguy.freeminecraftmodels.customentity.DynamicEntity;
 import com.magmaguy.freeminecraftmodels.customentity.PropEntity;
+import com.magmaguy.freeminecraftmodels.customentity.core.components.PlayerPositions;
 import com.magmaguy.easyminecraftgoals.thirdparty.BedrockChecker;
 import org.bukkit.Bukkit;
 import org.bukkit.FluidCollisionMode;
@@ -195,10 +196,18 @@ public class SkeletonWatchers {
      * primary thread; the one-tick packet/animation path remains asynchronous.
      */
     public void tickPrimaryThread() {
+        tickPrimaryThread(new PlayerPositions());
+    }
+
+    /**
+     * {@link #tickPrimaryThread()} with the players of each world read once for the whole pass, shared by every model
+     * the pass refreshes.
+     */
+    public void tickPrimaryThread(PlayerPositions players) {
         if (!Bukkit.isPrimaryThread()) {
             throw new IllegalStateException("Skeleton watcher state must be refreshed on the primary thread");
         }
-        updateWatcherList();
+        updateWatcherList(players);
         refreshEntityTracking();
         boolean isInvisible = isUnderlyingEntityInvisible();
         if (isInvisible != wasInvisible) {
@@ -262,7 +271,7 @@ public class SkeletonWatchers {
     private static final double VIEW_DISTANCE_KEEP_MARGIN = 4;
     private static final double MIN_VIEW_DISTANCE_SQUARED = MIN_VIEW_DISTANCE * (double) MIN_VIEW_DISTANCE;
 
-    private void updateWatcherList() {
+    private void updateWatcherList(PlayerPositions players) {
         // Hoisted: getCurrentLocation() is not a plain getter — it rebuilds a
         // Location (NMS body-rotation lookup + clone for dynamic entities), so
         // one snapshot per pass instead of one per player matters.
@@ -303,10 +312,13 @@ public class SkeletonWatchers {
         Entity riddenBody = filmicMode || modeledEntity == null || modeledEntity.hasViewDistanceOverride() ? null : body;
         Location bodyLocation = adapter == null || riddenBody == null ? null : riddenBody.getLocation();
 
-        for (Player player : currentLocation.getWorld().getPlayers()) {
+        PlayerPositions.InWorld inWorld = players.of(currentLocation.getWorld());
+        double centerX = currentLocation.getX(), centerY = currentLocation.getY(), centerZ = currentLocation.getZ();
+        for (int index = 0; index < inWorld.size(); index++) {
+            Player player = inWorld.player(index);
             // Left out of newPlayers, a hidden player who is still a viewer gets dropped below.
             if (hidden.contains(player.getUniqueId())) continue;
-            double distance = player.getLocation().distanceSquared(currentLocation);
+            double distance = inWorld.distanceSquared(index, centerX, centerY, centerZ);
             boolean viewing = viewers.contains(player.getUniqueId());
             double reachSquared = viewing ? keepViewDistanceSquared : maxViewDistanceSquared;
 

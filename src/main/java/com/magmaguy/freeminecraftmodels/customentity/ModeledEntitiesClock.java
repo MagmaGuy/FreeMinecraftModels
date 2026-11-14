@@ -230,11 +230,13 @@ public class ModeledEntitiesClock {
     private static void refreshViewerState() {
         if (!running) return;
         ModelDensity.refresh();
+        // One read of each world's players for the pass, not one per model.
+        PlayerPositions players = new PlayerPositions();
         ModeledEntity.getLoadedModeledEntities().forEach(modeledEntity -> {
             if (!modeledEntity.isRemoved() &&
                     modeledEntity.getSkeleton() != null) {
                 modeledEntity.getSkeleton().getSkeletonWatchers()
-                        .tickPrimaryThread();
+                        .tickPrimaryThread(players);
             }
         });
     }
