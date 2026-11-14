@@ -1,7 +1,7 @@
 package com.magmaguy.freeminecraftmodels.pets.behavior;
 
-import com.magmaguy.shaded.luaj.vm2.LuaTable;
-import com.magmaguy.shaded.luaj.vm2.LuaValue;
+import com.magmaguy.magmacore.shaded.luaj.vm2.LuaTable;
+import com.magmaguy.magmacore.shaded.luaj.vm2.LuaValue;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;

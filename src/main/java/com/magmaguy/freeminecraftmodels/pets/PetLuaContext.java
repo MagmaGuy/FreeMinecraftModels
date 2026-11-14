@@ -4,9 +4,9 @@ import com.magmaguy.freeminecraftmodels.pets.behavior.PetBehaviorSettings;
 import com.magmaguy.freeminecraftmodels.pets.behavior.PetPrograms;
 import com.magmaguy.magmacore.ai.MindContext;
 import com.magmaguy.magmacore.scripting.LuaMindContextExtension;
-import com.magmaguy.shaded.luaj.vm2.LuaString;
-import com.magmaguy.shaded.luaj.vm2.LuaTable;
-import com.magmaguy.shaded.luaj.vm2.LuaValue;
+import com.magmaguy.magmacore.shaded.luaj.vm2.LuaString;
+import com.magmaguy.magmacore.shaded.luaj.vm2.LuaTable;
+import com.magmaguy.magmacore.shaded.luaj.vm2.LuaValue;
 
 import java.util.HashMap;
 import java.util.Map;

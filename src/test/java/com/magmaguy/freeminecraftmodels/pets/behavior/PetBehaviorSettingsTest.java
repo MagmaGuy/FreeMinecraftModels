@@ -1,6 +1,6 @@
 package com.magmaguy.freeminecraftmodels.pets.behavior;
 
-import com.magmaguy.shaded.luaj.vm2.LuaTable;
+import com.magmaguy.magmacore.shaded.luaj.vm2.LuaTable;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;

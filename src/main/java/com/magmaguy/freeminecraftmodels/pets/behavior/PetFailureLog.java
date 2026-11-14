@@ -1,7 +1,7 @@
 package com.magmaguy.freeminecraftmodels.pets.behavior;
 
 import com.magmaguy.magmacore.ai.MindFailure;
-import com.magmaguy.shaded.luaj.vm2.LuaError;
+import com.magmaguy.magmacore.shaded.luaj.vm2.LuaError;
 
 import java.util.HashSet;
 import java.util.Set;

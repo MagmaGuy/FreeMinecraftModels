@@ -5,7 +5,7 @@ import com.magmaguy.magmacore.ai.MindProgram;
 import com.magmaguy.magmacore.ai.MindSensor;
 import com.magmaguy.magmacore.scripting.LuaEnvironmentFactory;
 import com.magmaguy.magmacore.scripting.LuaMindContextExtension;
-import com.magmaguy.shaded.luaj.vm2.Globals;
+import com.magmaguy.magmacore.shaded.luaj.vm2.Globals;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -283,7 +283,7 @@ class PetOwnershipProgramsTest {
         Globals lua = LuaEnvironmentFactory.createGlobals();
         for (double seconds : new double[]{0, -3, 0.01, 0.26, 4, 2.5, 1e12, Double.POSITIVE_INFINITY}) {
             long expected = lua.load("local seconds = ... return " + ticks).call(
-                    com.magmaguy.shaded.luaj.vm2.LuaValue.valueOf(seconds)).tolong();
+                    com.magmaguy.magmacore.shaded.luaj.vm2.LuaValue.valueOf(seconds)).tolong();
             Map<String, Long> windows = PetPrograms.hurtWindows(Map.of("fmm:pet/retaliate", Map.of("flee_seconds", seconds)));
             assertEquals(Map.of(CHARGE, 0L, FLEE, expected), windows, "flee_seconds " + seconds);
         }

@@ -6,8 +6,8 @@ import com.magmaguy.magmacore.scripting.ScriptInstance;
 import com.magmaguy.magmacore.scripting.ScriptableEntity;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
-import com.magmaguy.shaded.luaj.vm2.LuaTable;
-import com.magmaguy.shaded.luaj.vm2.LuaValue;
+import com.magmaguy.magmacore.shaded.luaj.vm2.LuaTable;
+import com.magmaguy.magmacore.shaded.luaj.vm2.LuaValue;
 
 import java.util.HashMap;
 import java.util.Map;

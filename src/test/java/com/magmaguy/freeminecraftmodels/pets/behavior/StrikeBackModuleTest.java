@@ -1,9 +1,9 @@
 package com.magmaguy.freeminecraftmodels.pets.behavior;
 
 import org.junit.jupiter.api.Test;
-import com.magmaguy.shaded.luaj.vm2.Globals;
-import com.magmaguy.shaded.luaj.vm2.LuaValue;
-import com.magmaguy.shaded.luaj.vm2.lib.jse.JsePlatform;
+import com.magmaguy.magmacore.shaded.luaj.vm2.Globals;
+import com.magmaguy.magmacore.shaded.luaj.vm2.LuaValue;
+import com.magmaguy.magmacore.shaded.luaj.vm2.lib.jse.JsePlatform;
 
 import java.io.IOException;
 import java.io.InputStream;

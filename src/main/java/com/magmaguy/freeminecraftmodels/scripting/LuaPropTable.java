@@ -21,8 +21,8 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
-import com.magmaguy.shaded.luaj.vm2.LuaTable;
-import com.magmaguy.shaded.luaj.vm2.LuaValue;
+import com.magmaguy.magmacore.shaded.luaj.vm2.LuaTable;
+import com.magmaguy.magmacore.shaded.luaj.vm2.LuaValue;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;

@@ -7,11 +7,11 @@ import com.magmaguy.magmacore.ai.MindNavigationStatus;
 import com.magmaguy.magmacore.ai.MindPerception;
 import com.magmaguy.magmacore.ai.MindPosition;
 import com.magmaguy.magmacore.scripting.LuaEnvironmentFactory;
-import com.magmaguy.shaded.luaj.vm2.Globals;
-import com.magmaguy.shaded.luaj.vm2.LuaError;
-import com.magmaguy.shaded.luaj.vm2.LuaTable;
-import com.magmaguy.shaded.luaj.vm2.LuaValue;
-import com.magmaguy.shaded.luaj.vm2.Varargs;
+import com.magmaguy.magmacore.shaded.luaj.vm2.Globals;
+import com.magmaguy.magmacore.shaded.luaj.vm2.LuaError;
+import com.magmaguy.magmacore.shaded.luaj.vm2.LuaTable;
+import com.magmaguy.magmacore.shaded.luaj.vm2.LuaValue;
+import com.magmaguy.magmacore.shaded.luaj.vm2.Varargs;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -364,7 +364,7 @@ class PetLuaTableTest {
         // A length metamethod claiming a billion entries cannot stretch the read.
         LuaTable stretched = list("a");
         LuaTable metatable = new LuaTable();
-        metatable.set("__len", new com.magmaguy.shaded.luaj.vm2.lib.OneArgFunction() {
+        metatable.set("__len", new com.magmaguy.magmacore.shaded.luaj.vm2.lib.OneArgFunction() {
             @Override
             public LuaValue call(LuaValue table) {
                 return LuaValue.valueOf(1_000_000_000);
