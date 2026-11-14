@@ -273,9 +273,8 @@ public class BoneTransforms {
      * axes) that belongs to this bone. Uses the same chain as mount points.
      */
     public void globalPoint(Vector3f modelSpacePoint, double[] result) {
-        Vector3f center = bone.getBoneBlueprint().getModelCenter();
-        globalMatrix.transformPoint(modelSpacePoint.x - center.x, modelSpacePoint.y - center.y,
-                modelSpacePoint.z - center.z, result);
+        globalMatrix.transformPoint(modelSpacePoint.x - modelCenter.x, modelSpacePoint.y - modelCenter.y,
+                modelSpacePoint.z - modelCenter.z, result);
     }
 
     /** The bone's world rotation with scale removed. */
