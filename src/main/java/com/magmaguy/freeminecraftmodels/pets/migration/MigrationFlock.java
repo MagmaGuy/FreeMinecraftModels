@@ -64,6 +64,8 @@ public final class MigrationFlock implements MigrationRoute {
     private boolean done;
     // Whether this flock has said that a member could not be removed: once is enough.
     private boolean warned;
+    // Scratch position for target(), read on the main thread only.
+    private final Location probe = new Location(null, 0D, 0D, 0D);
 
     private MigrationFlock(World world, Vector heading, Vector anchorStart, double speed, double altitude, int durationTicks) {
         this.world = world;
@@ -202,17 +204,25 @@ public final class MigrationFlock implements MigrationRoute {
         double anchorX = anchorStart.getX() + heading.getX() * speed * age;
         double anchorZ = anchorStart.getZ() + heading.getZ() * speed * age;
         double bob = Math.sin(age * Math.PI * 2D / BOB_PERIOD_TICKS + slot.phase()) * BOB_HEIGHT;
-        Vector target = new Vector(anchorX + slot.x(), altitude + slot.y() + bob, anchorZ + slot.z());
-        // Shoulder away from any member closer than the separation radius, so the slots never bunch up.
-        Vector here = body.getLocation().toVector();
+        double targetX = anchorX + slot.x(), targetY = altitude + slot.y() + bob, targetZ = anchorZ + slot.z();
+        // Shoulder away from any member closer than the separation radius, so the slots never bunch up. Positions are
+        // read into one reused Location, with the same arithmetic the Vector form did.
+        Location probe = body.getLocation(this.probe);
+        double hereX = probe.getX(), hereY = probe.getY(), hereZ = probe.getZ();
         for (PetControl other : members.keySet()) {
-            if (other == pet || other.body() == null) continue;
-            Vector away = here.clone().subtract(other.body().getLocation().toVector());
-            double distance = away.length();
-            if (distance > 1.0E-3D && distance < SEPARATION_RADIUS)
-                target.add(away.multiply((SEPARATION_RADIUS - distance) / distance * SEPARATION_PUSH / SEPARATION_RADIUS));
+            LivingEntity otherBody = other.body();
+            if (other == pet || otherBody == null) continue;
+            otherBody.getLocation(probe);
+            double awayX = hereX - probe.getX(), awayY = hereY - probe.getY(), awayZ = hereZ - probe.getZ();
+            double distance = Math.sqrt(awayX * awayX + awayY * awayY + awayZ * awayZ);
+            if (distance > 1.0E-3D && distance < SEPARATION_RADIUS) {
+                double push = (SEPARATION_RADIUS - distance) / distance * SEPARATION_PUSH / SEPARATION_RADIUS;
+                targetX += awayX * push;
+                targetY += awayY * push;
+                targetZ += awayZ * push;
+            }
         }
-        return target.toLocation(world);
+        return new Location(world, targetX, targetY, targetZ);
     }
 
     @Override
