@@ -221,11 +221,9 @@ public class OrientedBoundingBox {
         ModeledEntity closestEntity = null;
         double closestDistance = maxDistance;
 
-        // Check for solid blocks along the player's look direction to determine max unobstructed distance
-        Vector direction = location.getDirection();
-        RayTraceResult blockHit = location.getWorld().rayTraceBlocks(
-                location, direction, maxDistance, FluidCollisionMode.NEVER, true);
-        double blockDistance = blockHit != null ? blockHit.getHitPosition().distance(location.toVector()) : maxDistance;
+        // The max unobstructed distance along the look direction, traced through the blocks only once a model
+        // is close enough along the ray for it to matter.
+        double blockDistance = Double.NaN;
 
         // Check each entity for intersection
         for (ModeledEntity entity : entities) {
@@ -259,6 +257,7 @@ public class OrientedBoundingBox {
                     continue;
                 }
                 // Skip if there's a solid block between the player and the entity
+                if (Double.isNaN(blockDistance)) blockDistance = unobstructedDistance(location, maxDistance);
                 if (distance > blockDistance) {
                     continue;
                 }
@@ -268,6 +267,14 @@ public class OrientedBoundingBox {
         }
 
         return Optional.ofNullable(closestEntity);
+    }
+
+    /** How far along the look direction the ray goes before a solid block, or the full distance without one. */
+    private static double unobstructedDistance(Location location, float maxDistance) {
+        Vector direction = location.getDirection();
+        RayTraceResult blockHit = location.getWorld().rayTraceBlocks(
+                location, direction, maxDistance, FluidCollisionMode.NEVER, true);
+        return blockHit != null ? blockHit.getHitPosition().distance(location.toVector()) : maxDistance;
     }
 
     /**
@@ -464,6 +471,20 @@ public class OrientedBoundingBox {
         double dz = center.z - origin.getZ();
         if (dx * dx + dy * dy + dz * dz > reach * reach) return -1D;
         return rayIntersection(origin, maxDistance);
+    }
+
+    /**
+     * Cheap broad phase for the projectile sweep: false only when nothing inside the sphere of {@code radius} around
+     * the point can touch this box, because the sphere and the box's circumscribed sphere are apart. Reads the pose
+     * {@link #update(Location)} last published; callers that follow it with exact tests hold this box's monitor
+     * across both so they see one pose.
+     */
+    synchronized boolean mayTouchSphere(double x, double y, double z, double radius) {
+        double reach = radius + halfExtents.length();
+        double dx = center.x - x;
+        double dy = center.y - y;
+        double dz = center.z - z;
+        return dx * dx + dy * dy + dz * dz <= reach * reach;
     }
 
     /**

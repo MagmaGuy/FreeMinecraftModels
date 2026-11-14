@@ -351,7 +351,14 @@ public class OBBHitDetection implements Listener {
                                 if (shooterId != null && shooterId.equals(underlyingId)) continue;
                             }
 
-                            double distance = projectileIntersectionDistance(obb, motions.get(proj));
+                            ProjectileMotion motion = motions.get(proj);
+                            double distance;
+                            // One pose for the broad phase and the exact tests; update() takes the same monitor.
+                            synchronized (obb) {
+                                if (!obb.mayTouchSphere(motion.reachX(), motion.reachY(), motion.reachZ(),
+                                        motion.reachRadius())) continue;
+                                distance = projectileIntersectionDistance(obb, motion);
+                            }
                             if (distance < 0) continue;
 
                             candidatesByProjectile
@@ -435,7 +442,38 @@ public class OBBHitDetection implements Listener {
      */
     private record ProjectileMotion(double x, double y, double z, double startX, double startY, double startZ,
                                     double directionX, double directionY, double directionZ, double length,
-                                    org.bukkit.util.BoundingBox bounds) {}
+                                    org.bukkit.util.BoundingBox bounds) {
+        // Slack on the broad phase so rounding in the exact tests can never matter.
+        private static final double REACH_MARGIN = 1D;
+
+        /** The middle of the swept segment, the center of a sphere holding the segment and the projectile's box. */
+        double reachX() {
+            return (startX + x) / 2D;
+        }
+
+        double reachY() {
+            return (startY + y) / 2D;
+        }
+
+        double reachZ() {
+            return (startZ + z) / 2D;
+        }
+
+        /**
+         * The radius of that sphere, plus a margin: everything the swept ray test or the box overlap test can
+         * accept lies inside it, so a model whose box cannot reach the sphere cannot be hit this tick.
+         */
+        double reachRadius() {
+            double boxX = bounds.getCenterX() - reachX();
+            double boxY = bounds.getCenterY() - reachY();
+            double boxZ = bounds.getCenterZ() - reachZ();
+            double boxHalfDiagonal = Math.sqrt(bounds.getWidthX() * bounds.getWidthX()
+                    + bounds.getHeight() * bounds.getHeight()
+                    + bounds.getWidthZ() * bounds.getWidthZ()) / 2D;
+            double box = Math.sqrt(boxX * boxX + boxY * boxY + boxZ * boxZ) + boxHalfDiagonal;
+            return Math.max(length / 2D, box) + REACH_MARGIN;
+        }
+    }
 
     private static ProjectileMotion captureMotion(Projectile projectile) {
         org.bukkit.util.Vector last = projectileLastPositions.get(projectile.getUniqueId());
