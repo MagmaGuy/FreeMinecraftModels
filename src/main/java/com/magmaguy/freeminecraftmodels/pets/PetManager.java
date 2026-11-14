@@ -886,10 +886,9 @@ public final class PetManager {
         DynamicEntity modeled = control.modeled();
         LivingEntity body = control.body();
         if (modeled == null || modeled.isRemoved() || body == null || !body.isValid()) return;
-        String name = nameplate(control);
         if (ticks >= control.healthBarUntil() || !PetsConfig.showHealthBar) {
             control.setHealthBarUntil(0L);
-            modeled.setDisplayName(name);
+            modeled.setDisplayName(nameplate(control));
             return;
         }
         double health = body.getHealth();

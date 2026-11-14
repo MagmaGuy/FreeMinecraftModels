@@ -29,6 +29,7 @@ final class PetSteps {
     static final float VOLUME = 0.15F;
     /** How far under a pet's feet the block it stands on is looked for, in blocks, as vanilla looks. */
     private static final double UNDER = 0.2D;
+    private static final Location PROBE = new Location(null, 0D, 0D, 0D);
 
     private PetSteps() {
     }
@@ -72,7 +73,8 @@ final class PetSteps {
      * every block its own.
      */
     static void tick(Walk walk, LivingEntity body, Map<Material, String> override) {
-        Location at = body.getLocation();
+        // One Location for every pet's tick: the pet clock runs on the main thread, and nothing keeps it past the call.
+        Location at = body.getLocation(PROBE);
         boolean walking = body.isOnGround() && !body.isInWater();
         if (!advance(walk, at.getX(), at.getZ(), walking)) return;
         Block feet = at.getBlock();
