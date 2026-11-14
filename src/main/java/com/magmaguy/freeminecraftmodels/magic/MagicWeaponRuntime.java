@@ -49,8 +49,6 @@ import java.util.UUID;
 
 /** FMM's sole input, projectile, collision and damage owner for built-in magic weapons. */
 public final class MagicWeaponRuntime implements Listener, MagicWeaponService, AutoCloseable {
-    private static final int REQUIRED_CAPABILITY_VERSION = 2;
-
     private final Plugin plugin;
     private MagicWeaponCatalog catalog;
     private final MagicInputDeduplicator deduplicator = new MagicInputDeduplicator();
@@ -603,10 +601,6 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
             resolver = null;
         }
         applyingDamageDepth.remove();
-    }
-
-    public static int requiredCapabilityVersion() {
-        return REQUIRED_CAPABILITY_VERSION;
     }
 
     private record CooldownKey(UUID playerId, String weaponId, MagicAttackKind attackKind) {

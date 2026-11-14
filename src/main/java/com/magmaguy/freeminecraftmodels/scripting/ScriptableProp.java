@@ -42,10 +42,6 @@ public class ScriptableProp extends ScriptableEntity {
         this.propEntity = propEntity;
     }
 
-    public PropEntity getPropEntity() {
-        return propEntity;
-    }
-
     @Override
     public LuaTable buildContextTable(ScriptInstance instance) {
         return LuaPropTable.build(propEntity);

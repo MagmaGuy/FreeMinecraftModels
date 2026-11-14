@@ -267,10 +267,6 @@ public final class PetControl {
         this.route = route;
     }
 
-    void setModeled(DynamicEntity modeled) {
-        this.modeled = modeled;
-    }
-
     /** A player's hit on this pet went through. */
     void hurtBy(UUID player, long tick) {
         hurtBy = player;
@@ -314,7 +310,6 @@ public final class PetControl {
         return home == null ? null : home.clone();
     }
 
-    /** Distance to the owner, or infinity when the owner is away or in another world. */
     /**
      * How far from its owner the pet ranges before following, and the most its owner can be from what it goes to
      * (a fire, a perch): the follow distance while the owner is on the move, the idle distance while they stand about.
@@ -340,6 +335,7 @@ public final class PetControl {
         return Math.min(followRange * 0.8D, Math.max(roamRadius, followRange * 0.6D));
     }
 
+    /** Distance to the owner, or infinity when the owner is away or in another world. */
     public double ownerDistance(LivingEntity body) {
         Player player = companion().orElse(null);
         if (player == null || body == null || player.getWorld() != body.getWorld()) return Double.POSITIVE_INFINITY;

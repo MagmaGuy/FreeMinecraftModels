@@ -391,7 +391,6 @@ public final class PetMotion {
         return dx * dx + dz * dz >= minDistance * minDistance;
     }
 
-    /** Whether a catch-up spot this far from the owner is worth it for a body this far: at least a block nearer. */
     /** A catch-up spot within radius of center that is loaded and brings the body nearer the owner; null otherwise. */
     private static Location catchUpSpot(PetControl control, Location center, Location owner, LivingEntity body, double radius) {
         // Water is looked for at least 6 blocks out, since an owner on a shore or a boat may have none closer.
@@ -409,6 +408,7 @@ public final class PetMotion {
         return at.clone().add(Math.sin(yaw) * back, 0D, -Math.cos(yaw) * back);
     }
 
+    /** Whether a catch-up spot this far from the owner is worth it for a body this far: at least a block nearer. */
     static boolean closesIn(double spotDistance, double bodyDistance) {
         return spotDistance <= bodyDistance - 1D;
     }

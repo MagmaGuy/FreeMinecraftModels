@@ -1,7 +1,6 @@
 package com.magmaguy.freeminecraftmodels.magic;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
-import com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponKind;
 import com.magmaguy.freeminecraftmodels.config.DisplayModelRegistry;
 import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
 import org.bukkit.NamespacedKey;
@@ -44,11 +43,6 @@ final class MagicWeaponIdentity {
         }
         itemStack.setItemMeta(meta);
         return true;
-    }
-
-
-    static MagicWeaponKind kind(ItemStack itemStack, MagicWeaponCatalog catalog) {
-        return resolve(itemStack, catalog).map(MagicWeaponDefinition::kind).orElse(null);
     }
 
 }

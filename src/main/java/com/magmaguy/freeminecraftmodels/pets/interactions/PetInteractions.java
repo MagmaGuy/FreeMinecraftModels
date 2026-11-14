@@ -9,8 +9,10 @@ import org.bukkit.configuration.ConfigurationSection;
  * world, campfires, rain, glow, stings, perching and drizzle among it, comes from the behavior modules its file lists.
  */
 public final class PetInteractions {
-    /** The species' look in a night migration flock. A bone draws each member as that one bone, the cheap way. */
-    /** model is a fixed model for every member, null to pick from the species' variants; scale multiplies its size. */
+    /**
+     * The species' look in a night migration flock. A bone draws each member as that one bone, the cheap way. model is
+     * a fixed model for every member, null to pick from the species' variants; scale multiplies its size.
+     */
     public record Migration(String model, double scale, String animation, double weight) {
     }
 
@@ -22,10 +24,10 @@ public final class PetInteractions {
         this.migration = migration;
     }
 
-    /** Reads the migration section of a pet file; {@code model} is the species' model, the migration default. */
-    public static PetInteractions read(ConfigurationSection config, String filename, String model) {
+    /** Reads the migration section of a pet file. */
+    public static PetInteractions read(ConfigurationSection config, String filename) {
         try {
-            return new PetInteractions(migration(config, model));
+            return new PetInteractions(migration(config));
         } catch (RuntimeException failure) {
             Logger.warn("Could not read the migration section in " + filename + ": " + failure.getMessage());
             return NONE;
@@ -39,7 +41,7 @@ public final class PetInteractions {
         return section;
     }
 
-    private static Migration migration(ConfigurationSection config, String model) {
+    private static Migration migration(ConfigurationSection config) {
         ConfigurationSection section = enabled(config, "migration");
         if (section == null) return null;
         String fixed = section.getString("model", "");

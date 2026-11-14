@@ -161,10 +161,6 @@ public class ModeledEntity {
         }
     }
 
-    private static boolean isNameTag(ArmorStand armorStand) {
-        return armorStand.getPersistentDataContainer().has(BoneBlueprint.nameTagKey, PersistentDataType.BYTE);
-    }
-
     public static void shutdown() {
         // Create a copy of the collection to avoid ConcurrentModificationException
         HashSet<ModeledEntity> entitiesToRemove = new HashSet<>(loadedModeledEntities);

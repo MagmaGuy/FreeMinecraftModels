@@ -652,10 +652,6 @@ public final class PetLuaTable {
     }
 
     /**
-     * Points the table at a callback's context, and names the module it runs for in warnings. A callback on a new pet
-     * tick, a new game tick or another body reads every property afresh.
-     */
-    /**
      * The longest tick interval among the behaviors of this pet's program, so a flying body steered by one that runs
      * every Nth tick still counts as stuck (see {@link FlightTrack}).
      */
@@ -663,6 +659,10 @@ public final class PetLuaTable {
         flight.allow(ticks);
     }
 
+    /**
+     * Points the table at a callback's context, and names the module it runs for in warnings. A callback on a new pet
+     * tick, a new game tick or another body reads every property afresh.
+     */
     void bind(MindContext context, String module) {
         this.context = context;
         this.module = module;
@@ -779,7 +779,6 @@ public final class PetLuaTable {
         }
     }
 
-    /** Owned: the owner. Wild: its home, or where it is when it has none. */
     /**
      * Whether an owned pet defends its owner against this entity: a player among the aggressors who can be hurt
      * (alive, not in creative or spectator), or a pet one of them owns. Never one its owner's pets have given up on
@@ -844,6 +843,7 @@ public final class PetLuaTable {
         return threatPoint.clone();
     }
 
+    /** Owned: the owner. Wild: its home, or where it is when it has none. */
     private Location anchor() {
         if (!control.isWild()) return control.companion().map(Player::getLocation).orElse(null);
         Location home = control.home();

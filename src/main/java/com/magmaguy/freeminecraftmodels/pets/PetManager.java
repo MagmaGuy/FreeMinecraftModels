@@ -658,17 +658,6 @@ public final class PetManager {
         PetRides.prepare(control, entity, modeled);
     }
 
-    /**
-     * Moves a pet onto a new body of another vanilla carrier where its body stands: a ridden penguin that dives swims
-     * as a nautilus its rider's client steers. Its Mind (still released if it was), health and look come along; the
-     * old body and its model go. The new body faces {@code facing}'s yaw and pitch, or the old body's way when it is
-     * null, before anyone sees it. Returns the new body, or null with the pet left as it was when the new one cannot
-     * spawn.
-     */
-    LivingEntity rebody(PetControl control, String carrier, Location facing) {
-        return rebody(control, carrier, facing, null, null);
-    }
-
     /** Where a pet's new body goes, once it has the size it will have. */
     @FunctionalInterface
     interface Placement {
@@ -680,8 +669,13 @@ public final class PetManager {
     }
 
     /**
-     * {@link #rebody(PetControl, String, Location)}, running {@code ready} once the new body and its model exist and
-     * before the pet moves to them: what must leave the old body first, such as its rider, leaves only when there is
+     * Moves a pet onto a new body of another vanilla carrier where its body stands: a ridden penguin that dives swims
+     * as a nautilus its rider's client steers. Its Mind (still released if it was), health and look come along; the
+     * old body and its model go. The new body faces {@code facing}'s yaw and pitch, or the old body's way when it is
+     * null, before anyone sees it. Returns the new body, or null with the pet left as it was when the new one cannot
+     * spawn.
+     * <p>
+     * {@code ready}, when given, runs once the new body and its model exist and before the pet moves to them: what must leave the old body first, such as its rider, leaves only when there is
      * a body to go to. It does not run when the new body could not spawn.
      * <p>
      * The new body spawns where the old one stands, and bodies differ in size: a horse body is wider and taller than
@@ -1016,12 +1010,12 @@ public final class PetManager {
         }
     }
 
-    /** Tells an owned pet to stay where it is, or to follow again. The order is kept on its record, so it lasts. */
     /** The pet follows its owner again, without the message the stay gesture sends. */
     void follow(Player owner, PetControl control) {
         setStay(owner, control, false, null);
     }
 
+    /** Tells an owned pet to stay where it is, or to follow again. The order is kept on its record, so it lasts. */
     private void setStay(Player owner, PetControl control, boolean stay, Location at) {
         control.setStay(stay, at);
         PetRecord record = control.record();

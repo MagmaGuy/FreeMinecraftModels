@@ -787,10 +787,6 @@ final class PetRides {
         at.getWorld().dropItemNaturally(at, new ItemStack(Material.SADDLE));
     }
 
-    void clear() {
-        for (PetControl control : new ArrayList<>(ridden.keySet())) getOff(control);
-    }
-
     /**
      * FreeMinecraftModels' invisible saddle, on a tamed body its owner owns, as a vanilla horse or nautilus needs to
      * carry a steering rider. The record holds the real saddle; this one never leaves the body.

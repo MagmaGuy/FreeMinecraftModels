@@ -259,7 +259,7 @@ public final class PetSpecies {
         this.breathesUnderwater = breathesUnderwater(config);
         this.footsteps = footsteps(config, movement);
         this.hiddenBones = hiddenBones(config);
-        this.interactions = PetInteractions.read(config, filename, model);
+        this.interactions = PetInteractions.read(config, filename);
         PetRiding readRiding = PetRiding.read(config.getConfigurationSection("riding"), filename, Logger::warn);
         this.riding = readRiding != null && PetRiding.supports(bodyType, movement, filename, Logger::warn)
                 ? readRiding : null;
@@ -296,11 +296,6 @@ public final class PetSpecies {
     }
 
     /**
-     * Whether the pet keeps its air under water: off unless the file says so, for a creature that lives in water but
-     * moves as a flyer or walker, such as a jellyfish on a flying body. AQUATIC and AMPHIBIOUS species breathe under
-     * water whatever it says.
-     */
-    /**
      * Whether the pet makes footsteps (see {@link PetSteps}): a pet file's {@code footsteps}, on unless the file turns
      * it off, for a species that walks. One that flies or swims has no feet on the ground and makes none, whatever
      * its file says.
@@ -310,6 +305,11 @@ public final class PetSpecies {
                 && config.getBoolean("footsteps", true);
     }
 
+    /**
+     * Whether the pet keeps its air under water: off unless the file says so, for a creature that lives in water but
+     * moves as a flyer or walker, such as a jellyfish on a flying body. AQUATIC and AMPHIBIOUS species breathe under
+     * water whatever it says.
+     */
     static boolean breathesUnderwater(ConfigurationSection config) {
         return config.getBoolean("breathesUnderwater", false);
     }

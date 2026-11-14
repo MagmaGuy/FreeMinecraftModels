@@ -49,20 +49,4 @@ public record MagicWeaponDefinition(
         return new MagicWeaponDefinition(itemId, kind,
                 Objects.requireNonNull(effectiveTraits, "effectiveTraits"), basePowers, reloadTicks);
     }
-
-    public MagicWeaponDefinition withBasePower(MagicAttackKind attackKind, double basePower) {
-        Map<MagicAttackKind, Double> changed = new java.util.EnumMap<>(basePowers);
-        if (!changed.containsKey(attackKind))
-            throw new IllegalArgumentException("Unsupported attack " + attackKind);
-        changed.put(attackKind, basePower);
-        return new MagicWeaponDefinition(itemId, kind, traits, changed, reloadTicks);
-    }
-
-    public MagicWeaponDefinition withReloadTicks(MagicAttackKind attackKind, int ticks) {
-        Map<MagicAttackKind, Integer> changed = new java.util.EnumMap<>(reloadTicks);
-        if (!changed.containsKey(attackKind))
-            throw new IllegalArgumentException("Unsupported attack " + attackKind);
-        changed.put(attackKind, ticks);
-        return new MagicWeaponDefinition(itemId, kind, traits, basePowers, changed);
-    }
 }
