@@ -14,6 +14,8 @@ import com.magmaguy.freeminecraftmodels.dataconverter.LocatorBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.ParticleKeyframe;
 import com.magmaguy.freeminecraftmodels.particles.ParticleSprites;
 import com.magmaguy.freeminecraftmodels.particles.ResolvedParticleEffect;
+import com.magmaguy.freeminecraftmodels.particles.molang.MolangParseException;
+import com.magmaguy.freeminecraftmodels.particles.molang.MolangParser;
 import com.magmaguy.freeminecraftmodels.particles.runtime.ParticleEmitter;
 import com.magmaguy.freeminecraftmodels.particles.runtime.ParticleSpriteRenderer;
 import com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager;
@@ -195,6 +197,13 @@ public final class HeldItemParticles {
         ParticleEmitter emitter = new ParticleEmitter(effect.blueprint(), new SplittableRandom(),
                 DefaultConfig.maxParticlesPerEmitter);
         emitter.start();
+        if (!keyframe.script().isBlank()) {
+            try {
+                emitter.runScript(MolangParser.parse(keyframe.script()));
+            } catch (MolangParseException ignored) {
+                // A broken pre-effect script leaves the effect's own defaults in place, as on models.
+            }
+        }
         Vector3d point = state.profile.locatorPoints().getOrDefault(keyframe.locator(), ITEM_CENTER);
         state.emitters.add(new HeldEmitter(index, emitter, new ParticleSpriteRenderer(sprites, effect.blueprint(),
                 location -> NMSManager.getAdapter().createPacketDisplayEntity(location), DefaultConfig.maxParticlesPerViewer),
