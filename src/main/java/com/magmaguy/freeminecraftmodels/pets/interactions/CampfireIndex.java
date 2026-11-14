@@ -8,9 +8,8 @@ import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Campfire;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.function.Predicate;
@@ -66,16 +65,16 @@ public final class CampfireIndex {
     }
 
     private static int[] scan(Chunk chunk) {
-        List<Integer> positions = new ArrayList<>();
+        int[] positions = new int[0];
+        int size = 0;
         for (BlockState state : chunk.getTileEntities()) {
             if (!(state instanceof Campfire)) continue;
-            positions.add(state.getX());
-            positions.add(state.getY());
-            positions.add(state.getZ());
+            if (size + 3 > positions.length) positions = Arrays.copyOf(positions, Math.max(12, positions.length * 2));
+            positions[size++] = state.getX();
+            positions[size++] = state.getY();
+            positions[size++] = state.getZ();
         }
-        int[] packed = new int[positions.size()];
-        for (int index = 0; index < packed.length; index++) packed[index] = positions.get(index);
-        return packed;
+        return size == positions.length ? positions : Arrays.copyOf(positions, size);
     }
 
     static void prune(long now) {
