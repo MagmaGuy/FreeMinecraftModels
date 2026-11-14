@@ -47,9 +47,26 @@ public class BoneTransforms {
     private Color armorStandTint;
     @Getter
     private PacketModelEntity packetDisplayEntity = null;
+    // The blueprint's offsets and default rotation, which never change once the model has loaded, read once here
+    // instead of copied out of the blueprint for every transform. Skeletons are rebuilt on reload.
+    private final Vector3f negativePivot;
+    private final Vector3f pivot;
+    private final Vector3f modelCenter;
+    private final Vector3f negativeParentModelCenter;
+    private final float defaultRotationX, defaultRotationY, defaultRotationZ;
+
     public BoneTransforms(Bone bone, Bone parent) {
         this.bone = bone;
         this.parent = parent;
+        BoneBlueprint blueprint = bone.getBoneBlueprint();
+        this.negativePivot = blueprint.getBlueprintModelPivot().mul(-1);
+        this.pivot = blueprint.getBlueprintModelPivot();
+        this.modelCenter = blueprint.getModelCenter();
+        this.negativeParentModelCenter = parent == null ? null : parent.getBoneBlueprint().getModelCenter().mul(-1);
+        Vector3f defaultRotation = blueprint.getBlueprintOriginalBoneRotation();
+        this.defaultRotationX = defaultRotation.get(0);
+        this.defaultRotationY = defaultRotation.get(1);
+        this.defaultRotationZ = defaultRotation.get(2);
     }
 
     public void transform() {
@@ -135,18 +152,14 @@ public class BoneTransforms {
 
     //Shift to model center
     private void translateModelCenter() {
-        localMatrix.translateLocal(bone.getBoneBlueprint().getModelCenter());
+        localMatrix.translateLocal(modelCenter);
 
         //The bone is relative to its parent, so remove the offset of the parent
-        if (parent != null) {
-            Vector3f modelCenter = parent.getBoneBlueprint().getModelCenter();
-            modelCenter.mul(-1);
-            localMatrix.translateLocal(modelCenter);
-        }
+        if (parent != null) localMatrix.translateLocal(negativeParentModelCenter);
     }
 
     private void shiftPivotPoint() {
-        localMatrix.translateLocal(bone.getBoneBlueprint().getBlueprintModelPivot().mul(-1));
+        localMatrix.translateLocal(negativePivot);
     }
 
     private void translateAnimation() {
@@ -170,15 +183,12 @@ public class BoneTransforms {
     }
 
     private void rotateDefaultBoneRotation() {
-        localMatrix.rotateLocal(
-                bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(0),
-                bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(1),
-                bone.getBoneBlueprint().getBlueprintOriginalBoneRotation().get(2));
+        localMatrix.rotateLocal(defaultRotationX, defaultRotationY, defaultRotationZ);
     }
 
     private void shiftPivotPointBack() {
         //Remove the pivot point, go back to the model center
-        localMatrix.translateLocal(bone.getBoneBlueprint().getBlueprintModelPivot());
+        localMatrix.translateLocal(pivot);
     }
 
     public void generateDisplay() {
