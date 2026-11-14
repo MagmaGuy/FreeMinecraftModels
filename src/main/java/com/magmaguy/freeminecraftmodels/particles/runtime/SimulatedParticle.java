@@ -49,18 +49,6 @@ public final class SimulatedParticle {
         return result.add(emitterPosition);
     }
 
-    public boolean isExpired() {
-        return expired;
-    }
-
-    public int ageTicks() {
-        return ageTicks;
-    }
-
-    public double lifetime() {
-        return lifetime;
-    }
-
     public double rotationDegrees() {
         return rotation;
     }
@@ -91,14 +79,5 @@ public final class SimulatedParticle {
 
     public Vector3d facingDirection() {
         return facingDirection;
-    }
-
-    /** Current velocity in blocks per second, in the same space as the position. */
-    public Vector3d speed() {
-        return speed;
-    }
-
-    public boolean isLocalPosition() {
-        return localPosition;
     }
 }

@@ -172,10 +172,6 @@ public final class BedrockEntityBundleExporter {
                 && !"hitbox".equalsIgnoreCase(bone.getOriginalBoneName());
     }
 
-    public static String bonePropertyName(int index) {
-        return PROPERTY_NAMESPACE + ":bone" + index;
-    }
-
     public static String animationPropertyName(int index) {
         return PROPERTY_NAMESPACE + ":anim" + index;
     }
@@ -473,7 +469,7 @@ public final class BedrockEntityBundleExporter {
         }
 
         JsonObject result = new JsonObject();
-        result.add("uv", array(uvX, uvY));
+        result.add("uv", array2(uvX, uvY));
         result.add("uv_size", array2(uvSizeX, uvSizeY));
         Object rotation = face.get("rotation");
         if (rotation instanceof Number number && number.intValue() != 0) {
@@ -537,7 +533,7 @@ public final class BedrockEntityBundleExporter {
                 if (animation.isOverride()) animationJson.addProperty("override_previous_animation", true);
                 if (animation.getBlendWeight() != 1) animationJson.addProperty("blend_weight", animation.getBlendWeight());
                 animationJson.add("bones", bedrockAnimationBones(
-                        animation, visualBones, converter.getBlockBenchVersion()));
+                        animation, visualBones));
                 JsonObject particleTimeline = BedrockParticleExporter.timeline(animation);
                 if (!particleTimeline.entrySet().isEmpty()) {
                     animationJson.add("particle_effects", particleTimeline);
@@ -723,16 +719,6 @@ public final class BedrockEntityBundleExporter {
         }
     }
 
-    private static String defaultAnimation(List<String> animations) {
-        if (animations.contains("spawn")) {
-            return "spawn";
-        }
-        if (animations.contains("idle")) {
-            return "idle";
-        }
-        return null;
-    }
-
     /** Shrinks the bone, and the bones under it, to nothing for as long as it plays. */
     private static JsonObject hideAnimation(BoneBlueprint bone) {
         JsonObject scale = new JsonObject();
@@ -828,8 +814,7 @@ public final class BedrockEntityBundleExporter {
         return bones;
     }
 
-    private static JsonObject bedrockAnimationBones(AnimationBlueprint animation, List<BoneBlueprint> visualBones,
-                                                    int blockBenchVersion) {
+    private static JsonObject bedrockAnimationBones(AnimationBlueprint animation, List<BoneBlueprint> visualBones) {
         JsonObject bones = new JsonObject();
         animation.getAnimationFrames().entrySet().stream()
                 .sorted(Comparator.comparing(entry -> safeBoneName(entry.getKey())))
@@ -841,15 +826,15 @@ public final class BedrockEntityBundleExporter {
 
                     List<ExpressionTrack> expressions = animation.getExpressionTracks().get(entry.getKey());
                     JsonObject bone = new JsonObject();
-                    JsonObject rotation = channel(frames, expressions, TransformationType.ROTATION, blockBenchVersion);
+                    JsonObject rotation = channel(frames, expressions, TransformationType.ROTATION);
                     if (rotation != null) {
                         bone.add("rotation", rotation);
                     }
-                    JsonObject position = channel(frames, expressions, TransformationType.POSITION, blockBenchVersion);
+                    JsonObject position = channel(frames, expressions, TransformationType.POSITION);
                     if (position != null) {
                         bone.add("position", position);
                     }
-                    JsonObject scale = channel(frames, expressions, TransformationType.SCALE, blockBenchVersion);
+                    JsonObject scale = channel(frames, expressions, TransformationType.SCALE);
                     if (scale != null) {
                         bone.add("scale", scale);
                     }
@@ -865,11 +850,11 @@ public final class BedrockEntityBundleExporter {
 
     /** A bone's channel: its authored keyframes when MoLang keys it, otherwise its baked frames. */
     private static JsonObject channel(AnimationFrame[] frames, List<ExpressionTrack> expressions,
-                                      TransformationType channel, int blockBenchVersion) {
+                                      TransformationType channel) {
         if (expressions != null)
             for (ExpressionTrack track : expressions)
                 if (track.channel() == channel) return expressionChannel(track);
-        return channel(frames, channel, blockBenchVersion);
+        return channel(frames, channel);
     }
 
     /**
@@ -899,7 +884,7 @@ public final class BedrockEntityBundleExporter {
         return keyframes;
     }
 
-    private static JsonObject channel(AnimationFrame[] frames, TransformationType channel, int blockBenchVersion) {
+    private static JsonObject channel(AnimationFrame[] frames, TransformationType channel) {
         JsonObject keyframes = new JsonObject();
         double[] current = new double[3], previous = new double[3], retained = new double[3];
         double defaultValue = channel == TransformationType.SCALE ? 1 : 0;
@@ -982,10 +967,6 @@ public final class BedrockEntityBundleExporter {
 
     private static JsonArray bedrockRotation(double x, double y, double z) {
         return array(-x, -y, z);
-    }
-
-    private static JsonArray array(double x, double y) {
-        return array2(x, y);
     }
 
     private static JsonArray array2(double x, double y) {

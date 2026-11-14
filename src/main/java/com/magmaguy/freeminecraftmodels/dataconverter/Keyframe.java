@@ -30,8 +30,6 @@ public class Keyframe {
     @Getter
     private final TransformationType transformationType;
     @Getter
-    private final int timeInTicks;
-    @Getter
     private final double exactTimeInTicks;
     @Getter
     private final InterpolationType interpolationType;
@@ -57,7 +55,6 @@ public class Keyframe {
         if (!Double.isFinite(exactTimeInTicks)) {
             throw new IllegalArgumentException("Keyframe time must be finite");
         }
-        timeInTicks = (int) Math.floor(exactTimeInTicks);
         List<Map<String, Object>> dataPoints = (List<Map<String, Object>>) data.get("data_points");
 
         String[] axes = {"x", "y", "z"};
@@ -80,14 +77,9 @@ public class Keyframe {
         readHandle(data.get("bezier_right_value"), bezierRightValue, 1);
     }
 
-    public Keyframe(TransformationType transformationType, int timeInTicks, InterpolationType interpolationType, float dataX, float dataY, float dataZ) {
-        this(transformationType, (double) timeInTicks, interpolationType, dataX, dataY, dataZ);
-    }
-
     Keyframe(TransformationType transformationType, double exactTimeInTicks, InterpolationType interpolationType, float dataX, float dataY, float dataZ) {
         this.transformationType = transformationType;
         this.exactTimeInTicks = exactTimeInTicks;
-        this.timeInTicks = (int) Math.floor(exactTimeInTicks);
         this.interpolationType = interpolationType;
         data[PRE][0] = dataX;
         data[PRE][1] = dataY;

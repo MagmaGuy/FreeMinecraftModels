@@ -72,11 +72,6 @@ public class CubeBlueprint {
             Logger.warn("Model " + modelName + " has a cube with no from position. This is not allowed. The model will appear with the debug black and purple cube texture until fixed.");
             return;
         }
-        from = new Vector3f(
-                Round.fourDecimalPlaces(fromList.get(0).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER),
-                Round.fourDecimalPlaces(fromList.get(1).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER),
-                Round.fourDecimalPlaces(fromList.get(2).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER));
-
         ArrayList<Double> toList = (ArrayList<Double>) cubeJSON.get("to");
         from = new Vector3f(
                 fromList.get(0).floatValue() * BoneBlueprint.ARMOR_STAND_HEAD_SIZE_MULTIPLIER,

@@ -10,10 +10,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class HitboxBlueprint {
-    private final String modelName;
     @Getter
     private Vector modelOffset = new Vector();
-    private BoneBlueprint parent = null;
     @Getter
     private double widthX;
     @Getter
@@ -22,8 +20,6 @@ public class HitboxBlueprint {
     private double height;
 
     public HitboxBlueprint(Map<String, Object> boneJSON, HashMap<String, Object> values, String modelName, BoneBlueprint parent) {
-        this.parent = parent;
-        this.modelName = modelName;
         ArrayList<?> childrenValues = (ArrayList<?>) boneJSON.get("children");
         if (childrenValues.size() > 1) {
             Logger.warn("Model " + modelName + " has more than one value defining a hitbox! Only the first cube will be used to define the hitbox.");

@@ -50,7 +50,7 @@ public final class SnowstormParser {
         List<String> unsupported = new ArrayList<>();
         for (String name : components.keySet()) if (!SUPPORTED.contains(name)) unsupported.add(name);
 
-        Emitter emitter = emitter(components, unsupported);
+        Emitter emitter = emitter(components);
         Particle particle = particle(components, unsupported);
         return new ParticleEffectBlueprint(
                 string(description, "identifier", ""),
@@ -60,7 +60,7 @@ public final class SnowstormParser {
                 emitter, particle, List.copyOf(unsupported));
     }
 
-    private static Emitter emitter(JsonObject components, List<String> unsupported) {
+    private static Emitter emitter(JsonObject components) {
         JsonObject initialization = object(components, "minecraft:emitter_initialization");
         JsonObject localSpace = object(components, "minecraft:emitter_local_space");
 
@@ -94,10 +94,10 @@ public final class SnowstormParser {
                 expression(initialization, "creation_expression", 0),
                 expression(initialization, "per_update_expression", 0),
                 bool(localSpace, "position"), bool(localSpace, "rotation"),
-                rate, lifetime, shape(components, unsupported));
+                rate, lifetime, shape(components));
     }
 
-    private static Shape shape(JsonObject components, List<String> unsupported) {
+    private static Shape shape(JsonObject components) {
         ShapeType type = ShapeType.POINT;
         JsonObject shape = null;
         for (String name : List.of("sphere", "box", "disc", "point", "custom", "entity_aabb")) {

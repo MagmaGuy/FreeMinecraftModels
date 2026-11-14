@@ -66,7 +66,7 @@ public final class ParticleSpriteRenderer {
         this.lit = effect.particle().lit();
     }
 
-    /** Forgets every viewer's live-particle count, for tests and plugin shutdown. */
+    /** Forgets every viewer's live-particle count, for tests. */
     public static void resetViewerCounts() {
         LIVE_BY_VIEWER.clear();
     }
