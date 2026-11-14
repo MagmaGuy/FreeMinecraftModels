@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.config;
 
+import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
 import java.util.*;
@@ -18,6 +19,7 @@ import java.util.*;
  * </ul>
  */
 public final class BowStateDetector {
+    private static final Gson PRETTY_GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private static final String SUFFIX_IDLE = "_idle";
     private static final String SUFFIX_DRAW_START = "_draw_start";
@@ -129,7 +131,7 @@ public final class BowStateDetector {
         condition.put("on_true", rangeDispatch);
         root.put("model", condition);
 
-        return new GsonBuilder().setPrettyPrinting().create().toJson(root);
+        return PRETTY_GSON.toJson(root);
     }
 
     /**
@@ -200,7 +202,7 @@ public final class BowStateDetector {
         select.put("fallback", condition);
 
         root.put("model", select);
-        return new GsonBuilder().setPrettyPrinting().create().toJson(root);
+        return PRETTY_GSON.toJson(root);
     }
 
     /**

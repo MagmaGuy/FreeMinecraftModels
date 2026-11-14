@@ -18,6 +18,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 
 public class FileModelConverter {
+    // Gson is thread-safe; one shared instance reads every model file.
+    private static final Gson GSON = new Gson();
 
     private static final ConcurrentHashMap<String, FileModelConverter> convertedFileModels = new ConcurrentHashMap<>();
     private static final Set<String> rejectedModelIds = new HashSet<>();
@@ -76,11 +78,9 @@ public class FileModelConverter {
             return;
         }
 
-        Gson gson = new Gson();
-
         Map<?, ?> map;
         try (Reader reader = Files.newBufferedReader(file.toPath())) {
-            map = gson.fromJson(reader, Map.class);
+            map = GSON.fromJson(reader, Map.class);
         } catch (Exception exception) {
             Logger.warn("Failed to read model file " + file.getAbsolutePath() + ": " + exception.getMessage());
             return;

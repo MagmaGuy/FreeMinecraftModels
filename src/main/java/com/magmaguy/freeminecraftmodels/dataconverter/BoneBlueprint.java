@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.Map;
 
 public class BoneBlueprint {
+    // Gson is thread-safe; one shared compact instance writes every bone file.
+    private static final Gson GSON = new Gson();
     //This multiplier converts units from the bbmodel units to the resource pack units, needed because the model is scaled up
     // by 4x to bypass the Minecraft limitations and
     protected static final float ARMOR_STAND_HEAD_SIZE_MULTIPLIER = 0.4f;
@@ -494,9 +496,8 @@ public class BoneBlueprint {
 
     private void writeFile(String modelName, String filename, Map<String, Object> boneJSON) {
         String modelDirectory = getModelDirectory(modelName);
-        Gson gson = new Gson();
         try {
-            FileUtils.writeStringToFile(file = new File(modelDirectory + File.separatorChar + filename + ".json"), gson.toJson(boneJSON), StandardCharsets.UTF_8);
+            FileUtils.writeStringToFile(file = new File(modelDirectory + File.separatorChar + filename + ".json"), GSON.toJson(boneJSON), StandardCharsets.UTF_8);
         } catch (Exception e) {
             Logger.warn("Failed to write boneBlueprint resource packs for boneBlueprint " + filename + "!");
             throw new RuntimeException(e);
