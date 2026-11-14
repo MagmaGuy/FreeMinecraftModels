@@ -265,15 +265,12 @@ class MagicWeaponDamageCooldownTest {
     private static final class LegacyAdapter extends NMSAdapter {
         @Override public void damageWithoutCooldown(LivingEntity target, double amount, Entity source) { throw new AssertionError(); }
         @Override public boolean move(LivingEntity entity, double speed, Location target) { throw new AssertionError(); }
-        @Override public boolean forcedMove(LivingEntity entity, double speed, Location target) { throw new AssertionError(); }
-        @Override public void universalMove(LivingEntity entity, double speed, Location target) { throw new AssertionError(); }
         @Override public AbstractWanderBackToPoint wanderBackToPoint(LivingEntity entity, Location target, double distance,
                 int ticks, OverridableWanderPriority priority) { throw new AssertionError(); }
         @Override public boolean setCustomHitbox(Entity entity, float width, float height, boolean fixed) { throw new AssertionError(); }
         @Override public float getBodyRotation(Entity entity) { throw new AssertionError(); }
         @Override public PacketModelEntity createPacketArmorStandEntity(Location location) { throw new AssertionError(); }
         @Override public PacketModelEntity createPacketDisplayEntity(Location location) { throw new AssertionError(); }
-        @Override public PacketTextEntity createPacketTextArmorStandEntity(Location location) { throw new AssertionError(); }
         @Override public void doNotMove(LivingEntity entity) { throw new AssertionError(); }
         @Override public void setBlockInNativeDataPalette(World world, int x, int y, int z, BlockData data, boolean physics) { throw new AssertionError(); }
         @Override public AbstractPacketBundle createPacketBundle() { throw new AssertionError(); }
