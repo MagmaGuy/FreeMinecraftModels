@@ -3,6 +3,7 @@ package com.magmaguy.freeminecraftmodels.customentity.core;
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.IKChainBlueprint;
 import lombok.Getter;
+import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
@@ -21,8 +22,17 @@ public class IKChain {
     private final Skeleton skeleton;
     private final float[] boneLengths;
     private final Vector3f[] jointPositions;
+    // The straight-line start pose every solve begins from; it depends only on the blueprint.
+    private final Vector3f[] restJointPositions;
     private final Vector3f[] restDirections;
     private final Vector3f restGoalPosition;
+    // Scratch values for one solve, reused so a solve does not allocate them each tick.
+    private final Vector3f target = new Vector3f();
+    private final Vector3f newDir = new Vector3f();
+    private final Vector3f euler = new Vector3f();
+    private final Quaternionf cumulativeWorldRotation = new Quaternionf();
+    private final Quaternionf worldRotation = new Quaternionf();
+    private final Quaternionf localRotation = new Quaternionf();
 
     // Current IK goal offset (from animation)
     private Vector3f currentGoalOffset = new Vector3f(0, 0, 0);
@@ -50,9 +60,12 @@ public class IKChain {
 
         // Initialize joint positions array (bones + 1 for end effector)
         this.jointPositions = new Vector3f[chainBones.size() + 1];
+        this.restJointPositions = new Vector3f[chainBones.size() + 1];
         for (int i = 0; i < jointPositions.length; i++) {
             jointPositions[i] = new Vector3f();
+            restJointPositions[i] = new Vector3f();
         }
+        if (!chainBones.isEmpty()) calculateRestJointPositions();
 
         // Calculate rest directions for each bone (direction to next joint in rest pose)
         this.restDirections = new Vector3f[chainBones.size()];
@@ -126,11 +139,11 @@ public class IKChain {
             return;
         }
 
-        // Initialize joint positions from current bone positions
-        initializeJointPositions();
+        // Every solve starts from the straight-line rest layout
+        for (int i = 0; i < jointPositions.length; i++) jointPositions[i].set(restJointPositions[i]);
 
         // Calculate the target position (rest goal + animated offset)
-        Vector3f target = new Vector3f(restGoalPosition).add(currentGoalOffset);
+        target.set(restGoalPosition).add(currentGoalOffset);
 
         // Solve FABRIK
         IKSolver.solveFABRIK(jointPositions, target, boneLengths);
@@ -140,11 +153,11 @@ public class IKChain {
     }
 
     /**
-     * Initializes joint positions for FABRIK solving.
+     * Calculates the joint positions every FABRIK solve starts from.
      * If bones share pivot points (common in Blockbench), calculates positions
      * by stepping from root toward end effector using bone lengths.
      */
-    private void initializeJointPositions() {
+    private void calculateRestJointPositions() {
         // Get root position and end effector position
         Vector3f rootPivot = chainBones.get(0).getBoneBlueprint().getBlueprintModelPivot();
         if (rootPivot == null) {
@@ -168,13 +181,13 @@ public class IKChain {
         }
 
         // Initialize joint positions by stepping along the direction using bone lengths
-        jointPositions[0].set(rootPivot);
+        restJointPositions[0].set(rootPivot);
 
         float accumulatedLength = 0;
         for (int i = 0; i < chainBones.size(); i++) {
             accumulatedLength += boneLengths[i];
             // Position the next joint along the direction from root
-            jointPositions[i + 1].set(rootPivot)
+            restJointPositions[i + 1].set(rootPivot)
                     .add(direction.x * accumulatedLength,
                          direction.y * accumulatedLength,
                          direction.z * accumulatedLength);
@@ -189,13 +202,13 @@ public class IKChain {
      */
     private void applyRotationsToBones() {
         // Track the cumulative world rotation as we go down the chain
-        org.joml.Quaternionf cumulativeWorldRotation = new org.joml.Quaternionf(); // Identity
+        cumulativeWorldRotation.identity();
 
         for (int i = 0; i < chainBones.size(); i++) {
             Bone bone = chainBones.get(i);
 
             // Calculate the new direction from solved positions
-            Vector3f newDir = new Vector3f(jointPositions[i + 1]).sub(jointPositions[i]);
+            newDir.set(jointPositions[i + 1]).sub(jointPositions[i]);
             float length = newDir.length();
 
             if (length > 0.0001f) {
@@ -205,7 +218,6 @@ public class IKChain {
             }
 
             // Calculate the WORLD rotation needed for this bone (from rest to solved direction)
-            org.joml.Quaternionf worldRotation = new org.joml.Quaternionf();
             worldRotation.rotationTo(restDirections[i], newDir);
 
             // Check if this bone actually inherits rotation from the previous bone in the chain
@@ -224,19 +236,18 @@ public class IKChain {
             if (inheritsFromPrevious) {
                 // Calculate LOCAL rotation by removing the parent's cumulative rotation
                 // localRotation = inverse(cumulativeWorldRotation) * worldRotation
-                org.joml.Quaternionf localRotation = new org.joml.Quaternionf();
                 cumulativeWorldRotation.invert(localRotation); // localRotation = inverse of cumulative
                 localRotation.mul(worldRotation); // localRotation = inverse(cumulative) * world
-                rotation = IKSolver.quaternionToEuler(localRotation);
+                rotation = localRotation.getEulerAnglesXYZ(euler);
             } else {
                 // Bone doesn't inherit from previous, use full world rotation
-                rotation = IKSolver.quaternionToEuler(worldRotation);
+                rotation = worldRotation.getEulerAnglesXYZ(euler);
             }
 
             // Invert X rotation to match Minecraft's coordinate system
             rotation.x = -rotation.x;
 
-            // Apply the IK rotation to the bone
+            // Apply the IK rotation to the bone (it keeps its own copy)
             bone.setIKRotation(rotation);
 
             // Update cumulative rotation for the next bone

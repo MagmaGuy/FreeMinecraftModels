@@ -43,14 +43,16 @@ public class IKSolver {
         if (distanceToTarget > totalLength) {
             // Stretch the chain toward the target
             Vector3f direction = new Vector3f(target).sub(base).normalize();
+            Vector3f step = new Vector3f();
             positions[0].set(base);
             for (int i = 0; i < n; i++) {
-                positions[i + 1].set(positions[i]).add(new Vector3f(direction).mul(boneLengths[i]));
+                positions[i + 1].set(positions[i]).add(step.set(direction).mul(boneLengths[i]));
             }
             return false; // Didn't reach target, but chain is stretched toward it
         }
 
         // FABRIK iterations
+        Vector3f direction = new Vector3f();
         for (int iter = 0; iter < MAX_ITERATIONS; iter++) {
             // Check if close enough to target
             if (positions[n].distance(target) < TOLERANCE) {
@@ -60,7 +62,7 @@ public class IKSolver {
             // BACKWARD REACHING (from end effector to base)
             positions[n].set(target);
             for (int i = n - 1; i >= 0; i--) {
-                Vector3f direction = new Vector3f(positions[i]).sub(positions[i + 1]);
+                direction.set(positions[i]).sub(positions[i + 1]);
                 float length = direction.length();
                 if (length > 0) {
                     direction.normalize();
@@ -71,7 +73,7 @@ public class IKSolver {
             // FORWARD REACHING (from base to end effector)
             positions[0].set(base);
             for (int i = 0; i < n; i++) {
-                Vector3f direction = new Vector3f(positions[i + 1]).sub(positions[i]);
+                direction.set(positions[i + 1]).sub(positions[i]);
                 float length = direction.length();
                 if (length > 0) {
                     direction.normalize();
