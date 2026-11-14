@@ -82,11 +82,13 @@ public final class ParticleSpriteRenderer {
             if (entry != null) discard(entry);
         }
         for (SimulatedParticle particle : emitter.particles()) {
-            particle.worldPosition(emitterPosition, emitterRotation, position);
+            // The world position is only worked out for a particle that spawns or is due an update this tick.
             Rendered entry = rendered.get(particle.id());
             if (entry == null) {
+                particle.worldPosition(emitterPosition, emitterRotation, position);
                 spawn(particle, emitterRotation, world, viewers, tick);
             } else if (entry.sprite != null && tick - entry.lastUpdate >= UPDATE_INTERVAL_TICKS) {
+                particle.worldPosition(emitterPosition, emitterRotation, position);
                 update(entry, particle, emitterRotation, world, bundle, tick);
             }
         }
