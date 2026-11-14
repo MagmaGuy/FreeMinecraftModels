@@ -60,6 +60,8 @@ public class OrientedBoundingBox {
     private double scaleModifier = 1.0;
     // Cached axis vectors (the 3 principal axes of the OBB)
     private Vector3d[] axes;
+    // The 15 SAT candidate axes, rewritten by every intersectsAABB call under this box's lock.
+    private final double[][] satAxes = new double[15][3];
     private boolean cornersDirty = true;
     private boolean scaleDirty = true;
     // Cached primitives from the last update(). Used to short-circuit the
@@ -610,7 +612,7 @@ public class OrientedBoundingBox {
 
         // 15 candidate separating axes: 3 world axes, 3 OBB axes, 9 cross products.
         // Each axis (ax, ay, az) need not be unit length — SAT compares projections in the same scale.
-        double[][] axesToTest = new double[15][3];
+        double[][] axesToTest = satAxes;
 
         // 3 world axes
         axesToTest[0][0] = 1; axesToTest[0][1] = 0; axesToTest[0][2] = 0;
