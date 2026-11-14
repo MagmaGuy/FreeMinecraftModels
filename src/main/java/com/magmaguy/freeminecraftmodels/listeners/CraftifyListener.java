@@ -1,12 +1,10 @@
 package com.magmaguy.freeminecraftmodels.listeners;
 
-import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.commands.CraftifyCommand;
 import com.magmaguy.freeminecraftmodels.config.recipes.PropRecipeConfig;
 import com.magmaguy.freeminecraftmodels.config.recipes.PropRecipeManager;
 import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.Material;
-import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
@@ -22,7 +20,6 @@ import java.util.*;
 
 public class CraftifyListener implements Listener {
 
-    private static final NamespacedKey CRAFTIFY_KEY = new NamespacedKey(MetadataHandler.PLUGIN, "craftify_output");
     private static final Map<UUID, Session> activeSessions = new HashMap<>();
 
     private record Session(String modelId, Inventory inventory) {}

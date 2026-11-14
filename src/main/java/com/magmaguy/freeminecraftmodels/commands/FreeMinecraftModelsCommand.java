@@ -4,7 +4,6 @@ import com.magmaguy.freeminecraftmodels.menus.CraftableItemsMenu;
 import com.magmaguy.magmacore.command.AdvancedCommand;
 import com.magmaguy.magmacore.command.CommandData;
 import com.magmaguy.magmacore.command.SenderType;
-import com.magmaguy.magmacore.command.arguments.ListStringCommandArgument;
 import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.entity.Player;
 
@@ -14,9 +13,6 @@ public class FreeMinecraftModelsCommand extends AdvancedCommand {
 
     public FreeMinecraftModelsCommand() {
         super(List.of());
-        addArgument("action", new ListStringCommandArgument(
-                List.of("visualize", "setup", "initialize", "recommendedplugins", "downloadall", "downloadallcontent", "downloadpluginupdate", "updatecontent"),
-                "<action>"));
         setPermission("freeminecraftmodels.menu");
         setDescription("Shares basic info about FreeMinecraftModels and points to the setup flow.");
         setUsage("/fmm");

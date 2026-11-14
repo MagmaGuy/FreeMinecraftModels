@@ -20,8 +20,6 @@ import java.util.List;
 
 public class SpawnCommand extends AdvancedCommand {
 
-    List<String> spawnTypes = List.of("static", "dynamic", "prop");
-
     public SpawnCommand() {
         super(List.of("spawn"));
         addArgument("type", new ListStringCommandArgument(List.of("STATIC", "DYNAMIC", "PROP"), "<spawn>"));

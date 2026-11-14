@@ -8,7 +8,6 @@ import com.magmaguy.magmacore.menus.MenuButton;
 import com.magmaguy.magmacore.nightbreak.NightbreakSetupMenuHelper;
 import com.magmaguy.magmacore.util.ItemStackGenerator;
 import com.magmaguy.magmacore.util.Logger;
-import com.magmaguy.magmacore.util.SpigotMessage;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -87,17 +86,5 @@ public class FreeMinecraftModelsFirstTimeSetupMenu {
                 Logger.sendSimpleMessage(player, "&8&m-----------------------------------------------------");
             }
         };
-    }
-
-    private static void sendLink(Player player, String prefix, String display, String hover, String url) {
-        player.spigot().sendMessage(
-                SpigotMessage.simpleMessage(prefix),
-                SpigotMessage.hoverLinkMessage(display, hover, url));
-    }
-
-    private static void sendCommand(Player player, String prefix, String display, String hover, String command) {
-        player.spigot().sendMessage(
-                SpigotMessage.simpleMessage(prefix),
-                SpigotMessage.commandHoverMessage(display, hover, command));
     }
 }
