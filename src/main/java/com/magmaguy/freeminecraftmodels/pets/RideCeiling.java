@@ -86,8 +86,27 @@ final class RideCeiling {
         for (int stride = 1; stride <= strides; stride++) {
             double share = (double) stride / strides;
             BoundingBox there = body.clone().shift(aheadX * share, 0D, aheadZ * share);
-            if (!BodyFit.colliders(there, blocks).isEmpty()) break;
+            if (BodyFit.anyCollider(there, blocks)) break;
             lowest = Math.min(lowest, over(footprint.clone().shift(aheadX * share, 0D, aheadZ * share), upTo, blocks));
+        }
+        return lowest;
+    }
+
+    /**
+     * The lower of {@link #above(BoundingBox, double, double, double, Blocks)} and
+     * {@link #above(BoundingBox, BoundingBox, double, double, double, Blocks)} for the same body and way ahead, in one
+     * walk: both end the way ahead at the same place, so each stride's fit is tested once and both are looked over.
+     */
+    static double aboveBoth(BoundingBox body, BoundingBox footprint, double aheadX, double aheadZ, double upTo, Blocks blocks) {
+        double lowest = Math.min(over(body, upTo, blocks), over(footprint, upTo, blocks));
+        double far = Math.sqrt(aheadX * aheadX + aheadZ * aheadZ);
+        int strides = (int) Math.ceil(far / STRIDE);
+        for (int stride = 1; stride <= strides; stride++) {
+            double share = (double) stride / strides;
+            BoundingBox there = body.clone().shift(aheadX * share, 0D, aheadZ * share);
+            if (BodyFit.anyCollider(there, blocks)) break;
+            lowest = Math.min(lowest, Math.min(over(there, upTo, blocks),
+                    over(footprint.clone().shift(aheadX * share, 0D, aheadZ * share), upTo, blocks)));
         }
         return lowest;
     }

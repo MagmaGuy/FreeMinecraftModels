@@ -65,7 +65,7 @@ final class BodyFit {
 
     /** Whether the shape is clear of every block with the body's feet at these coordinates. */
     static boolean fits(double x, double y, double z, Shape shape, RideCeiling.Blocks blocks) {
-        for (BoundingBox box : shape.at(x, y, z)) if (!colliders(box, blocks).isEmpty()) return false;
+        for (BoundingBox box : shape.at(x, y, z)) if (anyCollider(box, blocks)) return false;
         return true;
     }
 
@@ -76,7 +76,7 @@ final class BodyFit {
      * already.
      */
     static Vector nearest(double x, double y, double z, Shape shape, BoundingBox before, RideCeiling.Blocks blocks) {
-        boolean travels = before != null && colliders(before, blocks).isEmpty();
+        boolean travels = before != null && !anyCollider(before, blocks);
         PriorityQueue<double[]> open = new PriorityQueue<>(Comparator.comparingDouble(spot -> spot[3]));
         Set<String> seen = new HashSet<>();
         open.add(new double[]{x, y, z, 0D});
@@ -115,7 +115,7 @@ final class BodyFit {
         int steps = (int) Math.ceil(far / STEP);
         for (int step = 1; step <= steps; step++) {
             double share = (double) step / steps;
-            if (!colliders(box.clone().shift(dx * share, dy * share, dz * share), blocks).isEmpty()) return false;
+            if (anyCollider(box.clone().shift(dx * share, dy * share, dz * share), blocks)) return false;
         }
         return true;
     }
@@ -133,6 +133,22 @@ final class BodyFit {
                                 && block.getMaxZ() > box.getMinZ() + EDGE && block.getMinZ() < box.getMaxZ() - EDGE)
                             inside.add(block);
         return inside;
+    }
+
+    /**
+     * Whether {@link #colliders} would find any block: the same test, stopping at the first block the box reaches
+     * into instead of collecting them all.
+     */
+    static boolean anyCollider(BoundingBox box, RideCeiling.Blocks blocks) {
+        for (int x = floor(box.getMinX() + EDGE); x <= floor(box.getMaxX() - EDGE); x++)
+            for (int y = floor(box.getMinY() + EDGE) - 1; y <= floor(box.getMaxY() - EDGE); y++)
+                for (int z = floor(box.getMinZ() + EDGE); z <= floor(box.getMaxZ() - EDGE); z++)
+                    for (BoundingBox block : blocks.boxes(x, y, z))
+                        if (block.getMaxX() > box.getMinX() + EDGE && block.getMinX() < box.getMaxX() - EDGE
+                                && block.getMaxY() > box.getMinY() + EDGE && block.getMinY() < box.getMaxY() - EDGE
+                                && block.getMaxZ() > box.getMinZ() + EDGE && block.getMinZ() < box.getMaxZ() - EDGE)
+                            return true;
+        return false;
     }
 
     /**

@@ -356,7 +356,7 @@ final class PetRides {
         // alone is asked: the body's own box is the client's to keep out of blocks, and the server's copy of it
         // may sit a hair inside one the client has it pressed to. Looked for only as often as the rider's client
         // is told, since it snaps the pet to each such move.
-        if (tell && !BodyFit.colliders(RideColumn.head(box, half - RideColumn.DEEP, head), blocks).isEmpty()) {
+        if (tell && BodyFit.anyCollider(RideColumn.head(box, half - RideColumn.DEEP, head), blocks)) {
             Vector spot = BodyFit.nearest(at.getX(), y, at.getZ(), headShape(box, 2D * (half + BodyFit.CLEAR), head - y), box, blocks);
             if (spot != null && NMSManager.getAdapter().moveSteeredVehicle(body, spot.getX(), spot.getY(), spot.getZ(), true)) {
                 ride.correctAgainAt = PetManager.ticks() + CORRECTION_TICKS;
@@ -373,8 +373,8 @@ final class PetRides {
         // Further ahead than its next step: a body heading for a tunnel's mouth with its rider's head over the
         // tunnel's ceiling is on its way down before the head gets there.
         int look = delay + 1 + RideColumn.LOOK_TICKS;
-        double over = Math.min(RideCeiling.above(box, stepX * look, stepZ * look, upTo, blocks),
-                RideCeiling.above(box, RideColumn.footprint(box, half, head), stepX * look, stepZ * look, upTo, blocks));
+        double over = RideCeiling.aboveBoth(box, RideColumn.footprint(box, half, head), stepX * look, stepZ * look, upTo,
+                blocks);
         // Vanilla steers a nautilus along its rider's view: looking up, part of its thrust lifts it.
         Location view = rider.getLocation();
         Vector thrust = RideColumn.thrust(speed, view.getYaw(), view.getPitch(), forward(rider), strafe(rider));
@@ -604,7 +604,7 @@ final class PetRides {
         if (player == null || player.isDead() || player.isInsideVehicle() || player.getGameMode() == GameMode.SPECTATOR) return;
         RideCeiling.Blocks blocks = RideCeiling.of(player.getWorld());
         BoundingBox box = player.getBoundingBox();
-        if (BodyFit.colliders(box, blocks).isEmpty()) return;
+        if (!BodyFit.anyCollider(box, blocks)) return;
         Location at = player.getLocation();
         Vector spot = BodyFit.nearest(at.getX(), at.getY(), at.getZ(), BodyFit.Shape.of(box.getWidthX(), box.getHeight()), null, blocks);
         if (spot == null) return;
@@ -650,7 +650,7 @@ final class PetRides {
         double minX = Math.max(probe.getMinX(), body.getMinX()), maxX = Math.min(probe.getMaxX(), body.getMaxX());
         double minZ = Math.max(probe.getMinZ(), body.getMinZ()), maxZ = Math.min(probe.getMaxZ(), body.getMaxZ());
         if (minX >= maxX || minZ >= maxZ) return true;
-        return !BodyFit.colliders(new BoundingBox(minX, probe.getMinY(), minZ, maxX, probe.getMaxY(), maxZ), blocks).isEmpty();
+        return BodyFit.anyCollider(new BoundingBox(minX, probe.getMinY(), minZ, maxX, probe.getMaxY(), maxZ), blocks);
     }
 
     /**
