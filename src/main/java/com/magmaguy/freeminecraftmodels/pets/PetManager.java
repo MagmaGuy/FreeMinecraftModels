@@ -132,6 +132,16 @@ public final class PetManager {
     private record PendingChunk(UUID world, int cx, int cz, long due) {
     }
 
+    /*
+     * Chunks that loaded again, whose persistent data is read on the next tick. Spigot fires the load event while it is
+     * still updating chunk tickets, and reading the chunk's data at that moment asks for the chunk again, which starts
+     * a second ticket update inside the first and breaks it with a NullPointerException in DistanceManager.
+     */
+    private final Set<ChunkAt> toRead = new LinkedHashSet<>();
+
+    private record ChunkAt(UUID world, int cx, int cz) {
+    }
+
     private PetManager() {
     }
 
@@ -1621,6 +1631,8 @@ public final class PetManager {
      * and on autosaves. Every chunk unload comes through here, on servers without any pets too.
      */
     private void writeChunk(Chunk chunk) {
+        // A chunk whose data is still unread is read first, so its saved wild pets are kept rather than overwritten.
+        if (toRead.remove(new ChunkAt(chunk.getWorld().getUID(), chunk.getX(), chunk.getZ()))) readChunk(chunk);
         writeChunk(chunk.getPersistentDataContainer(), wildKey,
                 wildStore.peek(chunk.getWorld().getUID(), chunk.getX(), chunk.getZ()));
     }
@@ -1641,11 +1653,17 @@ public final class PetManager {
         if (world.isChunkLoaded(cx, cz)) writeChunk(world.getChunkAt(cx, cz));
     }
 
-    /**
-     * A chunk loaded: the wild pets its persistent data keeps join any that were lost there while it was unloaded, and
-     * wait in the store for a player to come near. Wild pets from the old wild_pets.yml join their chunk the same way.
-     */
+    /** A chunk loaded again; its persistent data is read on the next tick (see {@link #toRead}). */
     public void chunkLoaded(Chunk chunk) {
+        toRead.add(new ChunkAt(chunk.getWorld().getUID(), chunk.getX(), chunk.getZ()));
+    }
+
+    /**
+     * Reads a loaded chunk: the wild pets its persistent data keeps join any that were lost there while it was
+     * unloaded, and wait in the store for a player to come near. Wild pets from the old wild_pets.yml join their chunk
+     * the same way.
+     */
+    private void readChunk(Chunk chunk) {
         UUID worldId = chunk.getWorld().getUID();
         List<WildPetStore.Entry> saved = WildPetStore.decodeAll(
                 chunk.getPersistentDataContainer().get(wildKey, PersistentDataType.STRING));
@@ -1687,10 +1705,19 @@ public final class PetManager {
     private void loadWild() {
         for (Map.Entry<UUID, List<WildPetStore.Entry>> world : WildPetStore.readLegacy(legacyWildFile).entrySet())
             for (WildPetStore.Entry entry : world.getValue()) wildStore.put(world.getKey(), entry);
-        for (World world : Bukkit.getWorlds()) for (Chunk chunk : world.getLoadedChunks()) chunkLoaded(chunk);
+        for (World world : Bukkit.getWorlds()) for (Chunk chunk : world.getLoadedChunks()) readChunk(chunk);
     }
 
     private void workChunks() {
+        if (!toRead.isEmpty()) {
+            List<ChunkAt> due = new ArrayList<>(toRead);
+            toRead.clear();
+            for (ChunkAt at : due) {
+                World world = Bukkit.getWorld(at.world());
+                // A chunk that unloaded unread still has its data on disk; it is read when it loads again.
+                if (world != null && world.isChunkLoaded(at.cx(), at.cz())) readChunk(world.getChunkAt(at.cx(), at.cz()));
+            }
+        }
         while (!toStock.isEmpty() && toStock.peek().due() <= ticks) {
             PendingChunk chunk = toStock.poll();
             World world = Bukkit.getWorld(chunk.world());
