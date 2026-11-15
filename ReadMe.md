@@ -61,15 +61,15 @@ FreeMinecraftModels generates it for you every time it starts or reloads, with a
 # 🟠 Additional downloads:
  
 <p align="center">
-  <a href="https://nightbreak.io/plugin/freeminecraftmodels/#basic-furniture-pack">
+  <a href="https://nightbreak.io/content/basic-furniture-pack/">
     <img src="https://i.postimg.cc/FKLb2LJT/new-bfp.png" width="600"/>
   </a>
 </br>
 
-  <a href="https://nightbreak.io/plugin/freeminecraftmodels/#betterstructures-prop-pack">
+  <a href="https://nightbreak.io/content/betterstructures-prop-pack/">
     <img src="https://i.postimg.cc/Vk3MtcKS/Group-7085.png" width="400"/>
   </a>
-  <a href="https://nightbreak.io/plugin/freeminecraftmodels/#elitemobs-prop-pack">
+  <a href="https://nightbreak.io/content/elitemobs-prop-pack/">
     <img src="https://i.postimg.cc/mD4mQ9mR/bb.png" width="400"/>
   </a>
 </p>
@@ -82,35 +82,35 @@ FreeMinecraftModels generates it for you every time it starts or reloads, with a
 # 🟠 View More by Magmaguy!
  
 <p align="center">
-  <a href="https://nightbreak.io/plugin/elitemobs">
+  <a href="https://nightbreak.io/plugin/elitemobs/">
     <img src="https://i.postimg.cc/zXQRn1jD/Elite-Mobs.png" width="300"/>
   </a>
-  <a href="https://nightbreak.io/plugin/betterstructures">
+  <a href="https://nightbreak.io/plugin/betterstructures/">
     <img src="https://i.postimg.cc/3rVK1rPq/Better-Structures.png" width="300"/>
   </a>
 </p>
 <p align="center">
-  <a href="https://nightbreak.io/plugin/extractioncraft">
+  <a href="https://nightbreak.io/plugin/extractioncraft/">
     <img src="https://i.postimg.cc/gjV6VMYz/extractioncraft.png" width="300"/>
   </a>
-  <a href="https://nightbreak.io/plugin/eternaltd">
+  <a href="https://nightbreak.io/plugin/eternaltd/">
     <img src="https://i.postimg.cc/Kjf8cCGM/ETD.png" width="300"/>
   </a>
 </p>
  
 <p align="center">
-  <a href="https://nightbreak.io/plugin/resourcepackmanager">
+  <a href="https://nightbreak.io/plugin/resourcepackmanager/">
     <img src="https://i.postimg.cc/Y0GdtBfX/Resource-Pack-Manager.png" width="300"/>
   </a>
-  <a href="https://nightbreak.io/plugin/freeminecraftmodels">
+  <a href="https://nightbreak.io/plugin/freeminecraftmodels/">
     <img src="https://i.postimg.cc/0Qxv6ZHd/FMM.png" width="300"/>
   </a>
 </p>
 <p align="center">
-  <a href="https://nightbreak.io/plugin/betterfood">
+  <a href="https://nightbreak.io/plugin/betterfood/">
     <img src="https://i.postimg.cc/JzcDSB80/Better-Food.png" width="300"/>
   </a>
-  <a href="https://nightbreak.io/plugin/resurrectionchest">
+  <a href="https://nightbreak.io/plugin/resurrectionchest/">
     <img src="https://i.imgur.com/qpgXCge.png" width="300"/>
   </a>
 </p>
