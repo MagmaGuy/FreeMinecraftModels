@@ -491,17 +491,32 @@ public final class PetManager {
 
     // ---- spawning --------------------------------------------------------------------------------------------
 
-    /** A wild one of a variant that lives in the location's biome. */
+    /** A wild adult of a variant that lives in the location's biome. */
     public PetControl spawnWild(PetSpecies pet, Location location) {
-        String model = pet.pickWildVariant(ThreadLocalRandom.current(), location);
-        if (model == null) return refuse(pet, "none of its variants lives in the biome it was spawned in");
-        return spawnWild(pet, location, model);
+        return spawnWild(pet, location, false);
     }
 
-    /** A wild one wearing this variant, wherever it is. */
+    /** A wild one of a variant that lives in the location's biome, born a baby when {@code baby} is true. */
+    PetControl spawnWild(PetSpecies pet, Location location, boolean baby) {
+        String model = pet.pickWildVariant(ThreadLocalRandom.current(), location);
+        if (model == null) return refuse(pet, "none of its variants lives in the biome it was spawned in");
+        return spawnWild(pet, location, model, baby);
+    }
+
+    /** A wild adult wearing this variant, wherever it is. */
     public PetControl spawnWild(PetSpecies pet, Location location, String model) {
-        Location at = PetMotion.hoverPoint(new PetControl(pet, null, null, null, false, location), location, 0D);
-        return spawn(pet, null, null, model, false, at, location);
+        return spawnWild(pet, location, model, false);
+    }
+
+    /**
+     * A wild one wearing this variant, wherever it is. A baby is born now, so it grows up after the species'
+     * babyGrowthMinutes, as a wild baby set free does.
+     */
+    PetControl spawnWild(PetSpecies pet, Location location, String model, boolean baby) {
+        Location at = PetMotion.hoverPoint(new PetControl(pet, null, null, null, baby, location), location, 0D);
+        PetControl spawned = spawn(pet, null, null, model, baby, at, location);
+        if (spawned != null && baby) spawned.setWildBornAt(System.currentTimeMillis());
+        return spawned;
     }
 
     /**

@@ -101,10 +101,16 @@ public final class PetSpecies {
      * custom ones MagmaCore maps to each vanilla biome listed (see {@link #wildBiomes}). {@code time} and {@code cap}
      * only hold back the top-up spawns around players: {@code cap} is how many of this species may be wild around one
      * player, and new chunks are stocked whatever the time. {@code cluster} sometimes stocks a much bigger group.
+     * {@code babyChance} is the chance, 0 to 1, that a member after a group's first is born a baby, as vanilla's
+     * farm animals (AgeableMob's group data: never the first, then 0.05 each).
      */
     public record WildSpawn(boolean enabled, int weight, int minGroup, int maxGroup, Placement placement, int minLight,
                             int maxLight, int cap, List<String> worlds, List<World.Environment> environments,
-                            Set<NamespacedKey> biomes, TimeOfDay time, int minY, int maxY, Cluster cluster) {
+                            Set<NamespacedKey> biomes, TimeOfDay time, int minY, int maxY, Cluster cluster,
+                            double babyChance) {
+        /** Vanilla's AgeableMob.AgeableMobGroupData baby chance. */
+        public static final double VANILLA_BABY_CHANCE = 0.05D;
+
         /** Whether this world could ever hold the species, before looking at any spot in it. */
         public boolean allowsWorld(World world) {
             if (world == null) return false;
@@ -442,7 +448,8 @@ public final class PetSpecies {
                 environments(wild.getStringList("environments"), filename),
                 wildBiomes(wild.getStringList("biomes"), filename, key -> Registry.BIOME.get(key) != null,
                         CustomBiomeCompatibility::getCustomBiomes, Logger::warn),
-                time, wild.getInt("minY", -64), wild.getInt("maxY", 320), readCluster(wild.getConfigurationSection("cluster")));
+                time, wild.getInt("minY", -64), wild.getInt("maxY", 320), readCluster(wild.getConfigurationSection("cluster")),
+                Math.max(0D, Math.min(1D, wild.getDouble("babyChance", WildSpawn.VANILLA_BABY_CHANCE))));
     }
 
     /**

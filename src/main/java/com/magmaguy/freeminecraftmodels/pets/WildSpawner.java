@@ -132,7 +132,9 @@ final class WildSpawner {
                 if (at != null) {
                     String colour = gathering.colour() != null ? gathering.colour()
                             : anywhere ? pet.pickVariant(random) : null;
-                    placed = (colour == null ? manager.spawnWild(pet, at) : manager.spawnWild(pet, at, colour)) != null;
+                    boolean baby = bornBaby(standing, pet.wildSpawn().babyChance(), random);
+                    placed = (colour == null ? manager.spawnWild(pet, at, baby)
+                            : manager.spawnWild(pet, at, colour, baby)) != null;
                 }
                 int[] next = generationStep(startX, startZ, x, z, minX, minZ, random);
                 x = next[0];
@@ -141,6 +143,14 @@ final class WildSpawner {
             if (placed) standing++;
         }
         return standing;
+    }
+
+    /**
+     * Whether a group member is born a baby, as vanilla's AgeableMob group data decides: the group's first member
+     * ({@code before} 0 already standing) is always grown, each later one is a baby at {@code chance}.
+     */
+    static boolean bornBaby(int before, double chance, Random random) {
+        return before > 0 && chance > 0D && random.nextDouble() < chance;
     }
 
     /** A number from min to max, both included. */
@@ -299,6 +309,8 @@ final class WildSpawner {
         for (int pack = 0; pack < PACKS; pack++) {
             int x = startX, z = startZ;
             PetSpecies pet = null;
+            // Each pack is a group of its own, as vanilla's group data starts afresh per pack: its first is grown.
+            int inPack = 0;
             int steps = 1 + random.nextInt(PACK_SEARCH);
             for (int step = 0; step < steps; step++) {
                 x += packStep(random);
@@ -315,7 +327,9 @@ final class WildSpawner {
                 Location at = spot(pet, world, players, x, startY, z);
                 if (at == null) continue;
                 if (!roomNear(manager, players, at, pet)) return;
-                if (manager.spawnWild(pet, at) != null && ++placed >= pet.wildSpawn().maxGroup()) return;
+                if (manager.spawnWild(pet, at, bornBaby(inPack, pet.wildSpawn().babyChance(), random)) == null) continue;
+                inPack++;
+                if (++placed >= pet.wildSpawn().maxGroup()) return;
             }
         }
     }

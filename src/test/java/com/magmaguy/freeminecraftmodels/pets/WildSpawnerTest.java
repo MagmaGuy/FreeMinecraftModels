@@ -159,7 +159,7 @@ class WildSpawnerTest {
     /** A penguin's wildSpawn: groups of 2 to 4, with this cluster. */
     private static PetSpecies.WildSpawn penguin(PetSpecies.Cluster cluster) {
         return new PetSpecies.WildSpawn(true, 10, 2, 4, PetSpecies.Placement.GROUND, 9, 15, 6, List.of(), List.of(),
-                Set.of(), PetSpecies.TimeOfDay.ANY, -64, 320, cluster);
+                Set.of(), PetSpecies.TimeOfDay.ANY, -64, 320, cluster, PetSpecies.WildSpawn.VANILLA_BABY_CHANCE);
     }
 
     @Test
@@ -213,5 +213,15 @@ class WildSpawnerTest {
         assertEquals(0D, WildSpawner.generationChance(10, -1D));
         assertEquals(0D, WildSpawner.generationChance(0, 1D));
         assertEquals(WildSpawner.MAX_GENERATION_CHANCE, WildSpawner.generationChance(10, 1000D));
+    }
+
+    @Test
+    void aGroupsFirstMemberIsGrownAndTheRestAreBabiesAtTheChance() {
+        Random random = new Random(7L);
+        for (int i = 0; i < 1000; i++) assertFalse(WildSpawner.bornBaby(0, 1D, random), "the first is never a baby");
+        for (int i = 0; i < 1000; i++) assertTrue(WildSpawner.bornBaby(1 + i % 13, 1D, random));
+        for (int i = 0; i < 1000; i++) assertFalse(WildSpawner.bornBaby(1 + i % 13, 0D, random));
+        long babies = IntStream.range(0, 100_000).filter(i -> WildSpawner.bornBaby(3, 0.05D, random)).count();
+        assertTrue(babies > 4_500 && babies < 5_500, "about 1 in 20 at vanilla's 0.05, was " + babies);
     }
 }

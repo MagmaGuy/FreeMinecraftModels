@@ -72,7 +72,7 @@ class PetSpeciesWildSpawnTest {
                 """, MindBodyLocomotion.FLYING);
         assertEquals(new PetSpecies.WildSpawn(false, 25, 2, 4, PetSpecies.Placement.WATER_SURFACE, 3, 12, 6, List.of("world"),
                 List.of(World.Environment.NORMAL, World.Environment.THE_END), Set.of(), PetSpecies.TimeOfDay.NIGHT, 40, 90,
-                PetSpecies.Cluster.NONE), wild);
+                PetSpecies.Cluster.NONE, PetSpecies.WildSpawn.VANILLA_BABY_CHANCE), wild);
     }
 
     @Test
@@ -105,6 +105,15 @@ class PetSpeciesWildSpawnTest {
                     maxSize: 0
                     rareColourChance: -1
                 """, MindBodyLocomotion.GROUNDED).cluster(), "the largest cluster is never smaller than the smallest");
+    }
+
+    @Test
+    void babiesComeAsOftenAsVanillaFarmAnimalsUnlessTheFileSaysOtherwise() throws InvalidConfigurationException {
+        assertEquals(0.05D, read("", MindBodyLocomotion.GROUNDED).babyChance());
+        assertEquals(0.2D, read("wildSpawn:\n  babyChance: 0.2\n", MindBodyLocomotion.GROUNDED).babyChance());
+        assertEquals(0D, read("wildSpawn:\n  babyChance: 0\n", MindBodyLocomotion.GROUNDED).babyChance());
+        assertEquals(1D, read("wildSpawn:\n  babyChance: 4\n", MindBodyLocomotion.GROUNDED).babyChance());
+        assertEquals(0D, read("wildSpawn:\n  babyChance: -1\n", MindBodyLocomotion.GROUNDED).babyChance());
     }
 
     @Test
