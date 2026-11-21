@@ -84,7 +84,7 @@ final class WildSpawner {
                 Location first = surfaceSpot(pet, world, x, z);
                 if (first == null || random.nextDouble() >= pet.wildOdds(first)) continue;
                 place(manager, pet, world, x, z, gathering(pet.wildSpawn(), () -> pet.pickRareWildVariant(random, first),
-                        random), false, random);
+                        () -> pet.pickWildVariant(random, first), random), false, random);
             }
         }
     }
@@ -95,23 +95,29 @@ final class WildSpawner {
 
     /**
      * A group as a new chunk gets it: at the cluster's chance, a cluster, which at its rareColourChance wears the one
-     * colour {@code rareColour} gives; otherwise one of the species' usual groups.
+     * colour {@code rareColour} gives; otherwise one of the species' usual groups. Every group wears one colour, as
+     * vanilla's rabbits, horses and llamas share their group's variant: the rare one, or else {@code groupColour}'s
+     * pick by the usual weights.
      */
-    static Gathering gathering(PetSpecies.WildSpawn wild, Supplier<String> rareColour, Random random) {
+    static Gathering gathering(PetSpecies.WildSpawn wild, Supplier<String> rareColour, Supplier<String> groupColour,
+                               Random random) {
         PetSpecies.Cluster cluster = wild.cluster();
-        if (cluster.chance() > 0D && random.nextDouble() < cluster.chance())
-            return new Gathering(between(cluster.minSize(), cluster.maxSize(), random),
-                    random.nextDouble() < cluster.rareColourChance() ? rareColour.get() : null);
-        return new Gathering(between(wild.minGroup(), wild.maxGroup(), random), null);
+        boolean clustered = cluster.chance() > 0D && random.nextDouble() < cluster.chance();
+        int size = clustered ? between(cluster.minSize(), cluster.maxSize(), random)
+                : between(wild.minGroup(), wild.maxGroup(), random);
+        String colour = clustered && random.nextDouble() < cluster.rareColourChance() ? rareColour.get() : null;
+        return new Gathering(size, colour != null ? colour : groupColour.get());
     }
 
     /**
      * An admin's test cluster at this spot: the species' cluster size, all in {@code colour}, or without one in a rare
-     * colour as often as its clusters wear one, placed on any open surface in the spot's chunk. Returns how many stand.
+     * colour as often as its clusters wear one and otherwise in one colour by the usual weights, placed on any open
+     * surface in the spot's chunk. Returns how many stand.
      */
     static int testCluster(PetManager manager, PetSpecies pet, Location at, String colour, Random random) {
         PetSpecies.Cluster cluster = pet.wildSpawn().cluster();
         if (colour == null && random.nextDouble() < cluster.rareColourChance()) colour = pet.pickRareVariant(random);
+        if (colour == null) colour = pet.pickVariant(random);
         Gathering gathering = new Gathering(between(cluster.minSize(), cluster.maxSize(), random), colour);
         return place(manager, pet, at.getWorld(), at.getBlockX(), at.getBlockZ(), gathering, true, random);
     }
@@ -309,8 +315,10 @@ final class WildSpawner {
         for (int pack = 0; pack < PACKS; pack++) {
             int x = startX, z = startZ;
             PetSpecies pet = null;
-            // Each pack is a group of its own, as vanilla's group data starts afresh per pack: its first is grown.
+            // Each pack is a group of its own, as vanilla's group data starts afresh per pack: its first is grown, and
+            // all of it wears the colour picked at its first spot.
             int inPack = 0;
+            String colour = null;
             int steps = 1 + random.nextInt(PACK_SEARCH);
             for (int step = 0; step < steps; step++) {
                 x += packStep(random);
@@ -322,12 +330,15 @@ final class WildSpawner {
                     // A biome whose colours are all rare gets their packs as rarely; this pack is skipped.
                     Location first = spot(pet, world, players, x, startY, z);
                     if (first == null || random.nextDouble() >= pet.wildOdds(first)) break;
+                    colour = pet.pickWildVariant(random, first);
+                    if (colour == null) break;
                     steps = between(pet.wildSpawn().minGroup(), pet.wildSpawn().maxGroup(), random);
                 }
                 Location at = spot(pet, world, players, x, startY, z);
                 if (at == null) continue;
                 if (!roomNear(manager, players, at, pet)) return;
-                if (manager.spawnWild(pet, at, bornBaby(inPack, pet.wildSpawn().babyChance(), random)) == null) continue;
+                if (manager.spawnWild(pet, at, colour, bornBaby(inPack, pet.wildSpawn().babyChance(), random)) == null)
+                    continue;
                 inPack++;
                 if (++placed >= pet.wildSpawn().maxGroup()) return;
             }

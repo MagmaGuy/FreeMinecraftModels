@@ -167,9 +167,9 @@ class WildSpawnerTest {
         Random random = new Random(19);
         for (int group = 0; group < 10_000; group++) {
             WildSpawner.Gathering gathering = WildSpawner.gathering(penguin(PetSpecies.Cluster.NONE),
-                    () -> { throw new AssertionError("no cluster, so no rare colour"); }, random);
+                    () -> { throw new AssertionError("no cluster, so no rare colour"); }, () -> "fmm_penguin", random);
             assertTrue(gathering.size() >= 2 && gathering.size() <= 4, "size " + gathering.size());
-            assertNull(gathering.colour());
+            assertEquals("fmm_penguin", gathering.colour(), "a group wears one colour, picked by the usual weights");
         }
     }
 
@@ -180,18 +180,17 @@ class WildSpawnerTest {
         int groups = 100_000, clusters = 0, rare = 0;
         Set<Integer> clusterSizes = new HashSet<>();
         for (int group = 0; group < groups; group++) {
-            WildSpawner.Gathering gathering = WildSpawner.gathering(wild, () -> "penguin_lutino", random);
+            WildSpawner.Gathering gathering = WildSpawner.gathering(wild, () -> "penguin_lutino", () -> "fmm_penguin",
+                    random);
             if (gathering.size() <= 4) {
                 assertTrue(gathering.size() >= 2);
-                assertNull(gathering.colour(), "a usual group never wears one colour");
+                assertEquals("fmm_penguin", gathering.colour(), "a usual group never wears the rare colour");
                 continue;
             }
             clusters++;
             clusterSizes.add(gathering.size());
-            if (gathering.colour() != null) {
-                assertEquals("penguin_lutino", gathering.colour());
-                rare++;
-            }
+            if (gathering.colour().equals("penguin_lutino")) rare++;
+            else assertEquals("fmm_penguin", gathering.colour());
         }
         assertEquals(0.1D, (double) clusters / groups, 0.005D);
         assertEquals(Set.of(8, 9, 10, 11, 12, 13, 14), clusterSizes);
@@ -199,11 +198,11 @@ class WildSpawnerTest {
     }
 
     @Test
-    void aClusterWithNoRareColourToWearLetsEachMemberPick() {
+    void aClusterWithNoRareColourToWearWearsTheUsualPick() {
         Random random = new Random(29);
         PetSpecies.WildSpawn wild = penguin(new PetSpecies.Cluster(1D, 8, 8, 1D));
-        WildSpawner.Gathering gathering = WildSpawner.gathering(wild, () -> null, random);
-        assertEquals(new WildSpawner.Gathering(8, null), gathering);
+        WildSpawner.Gathering gathering = WildSpawner.gathering(wild, () -> null, () -> "fmm_penguin", random);
+        assertEquals(new WildSpawner.Gathering(8, "fmm_penguin"), gathering);
     }
 
     @Test
