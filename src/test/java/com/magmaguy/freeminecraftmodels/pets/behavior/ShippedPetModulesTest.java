@@ -94,7 +94,7 @@ class ShippedPetModulesTest {
      * is always flint, and a march call plays the slide animation. Every other setting keeps its default.
      */
     private static final Map<String, Map<String, Object>> SURE = Map.of(
-            "fishing_trip", Map.of("chance", 1.0, "gift_chance", 1.0),
+            "fishing_trip", Map.of("chance", 1.0, "gift_chance", 1.0, "shore_chance", 1.0),
             "toboggan", Map.of("chance", 1.0),
             "march", Map.of("every_minutes", 0.01, "animation", "slide"),
             "pebble_gift", Map.of("chance", 1.0, "interval_seconds", 1, "items", List.of("FLINT")));
@@ -117,7 +117,7 @@ class ShippedPetModulesTest {
      * strike_back is new too: a wild pet's headbutt within 1 block, 2 damage and no effect, with a goat's ram impact and
      * crit particles. The penguin's creature behaviors came after: a huddle of 3 within 8 blocks shuffling round at
      * 0.05 to spots on its level, ground looked for 4 blocks down; a fishing trip to water 1 to 3 blocks deep within 8 blocks (an owned pet's within its roam range of its
-     * owner), on to spots within 4 of each other at 0.15 with a splash at each, the fish bone shown on the way back (SURE), and a cod for the owner within 3 blocks; a slide of 4 to 12
+     * owner, and a wild colony's within 6 of the water at its shore), on to spots within 4 of each other at 0.15 with a splash at each, the fish bone shown on the way back (SURE), and a cod for the owner within 3 blocks; a slide of 4 to 12
      * blocks over snow and ice at 0.35 playing slide; a march of 4 within 12 blocks lasting 60 to 120 seconds, 1.5
      * blocks apart, called with a didgeridoo at pitch 2, walked onto its spots at 0.15 and at 0.24 when behind; flint
      * for the owner from 2 blocks off (SURE); and fish within 8 blocks, eaten within 0.5 for 2 half hearts at 0.2.
@@ -156,6 +156,7 @@ class ShippedPetModulesTest {
             "fmm:pet/huddle kin_center(8, 3)", "fmm:pet/huddle ground_below(L, 4)", "fmm:pet/huddle steer_onto(L, 0.225)",
             "fmm:pet/huddle stop()",
             "fmm:pet/fishing_trip water_point(L, 8, 1, 3)", "fmm:pet/fishing_trip water_point(L, 4, 1, 3)",
+            "fmm:pet/fishing_trip water_point(L, 6, 1, 3)",
             "fmm:pet/fishing_trip distance_to(L)", "fmm:pet/fishing_trip steer_to(L, 0.225)",
             "fmm:pet/fishing_trip gift(COD, 1, 3, entity.cod.flop, 1, 1)", "fmm:pet/fishing_trip stop()",
             "fmm:pet/fishing_trip splash(entity.fishing_bobber.splash, 1, 1)",
@@ -966,11 +967,14 @@ class ShippedPetModulesTest {
             properties.put("attacker", () -> owner == Owner.WILD && !answersNothing("attacker")
                     ? place(x() + (tick % 40 < 20 ? 1 : 4), 70, 0.5) : LuaValue.NIL);
             properties.put("hurt_count", () -> LuaValue.valueOf(owner == Owner.WILD ? 1 : 0));
-            // An admin asks a wild pet to call a march for half of every 10 seconds.
-            properties.put("march_requested", () -> LuaValue.valueOf(owner == Owner.WILD && tick % 200 >= 100));
+            // An admin asks a wild pet to call a march for the first half of every 10 seconds: the only way a wild
+            // pet on its colony's routine calls one itself.
+            properties.put("march_requested", () -> LuaValue.valueOf(owner == Owner.WILD && tick % 200 < 100));
             // In a march whenever march_spot gives a spot.
             properties.put("marching", () -> LuaValue.valueOf(tick % 120 >= 20 && !answersNothing("march_spot")));
             properties.put("stuck_ticks", () -> LuaValue.valueOf(stuckTicks()));
+            // A wild pet's colony is at its shore by day, with water 4 blocks off.
+            properties.put("colony_water", () -> owner == Owner.WILD && !night ? place(x() + 4, 69, 0.5) : LuaValue.NIL);
             assertEquals(PetLuaTable.PROPERTIES, properties.keySet(), "the stand-in's properties match PetLuaTable's");
 
             // Shapes: L a location, N a finite number, C a cruise (a number that may be infinite), T a list of text,

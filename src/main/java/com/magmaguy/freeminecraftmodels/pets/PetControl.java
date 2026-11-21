@@ -42,6 +42,9 @@ public final class PetControl {
     private Location stayAnchor;
     // Where a wild pet drifts around; an owned pet drifts around its owner instead.
     private Location home;
+    // Where its colony keeps it for now, in place of home, and the water it fishes there (see PetColonies); null at
+    // home, and never saved, so home stays where the pet lives.
+    private Location colonyPlace, colonyWater;
     private long farSince = PetCatchUp.NEVER;
     private int watchedAge = -1;
     private Runnable movedListener;
@@ -308,6 +311,22 @@ public final class PetControl {
 
     public Location home() {
         return home == null ? null : home.clone();
+    }
+
+    /** Where its colony keeps this wild pet for now, its shore by day; null when that is home. */
+    Location colonyPlace() {
+        return colonyPlace == null ? null : colonyPlace.clone();
+    }
+
+    /** The water its colony fishes, while the colony is at its shore; else null. */
+    Location colonyWater() {
+        return colonyWater == null ? null : colonyWater.clone();
+    }
+
+    /** Set by its colony: where it keeps the pet for now (null for home), and the water it fishes there. */
+    void setColonyPlace(Location place, Location water) {
+        this.colonyPlace = place == null ? null : place.clone();
+        this.colonyWater = water == null ? null : water.clone();
     }
 
     /**

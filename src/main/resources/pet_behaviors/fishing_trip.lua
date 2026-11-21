@@ -1,7 +1,8 @@
 -- Now and then, near water, it goes fishing. It walks in and dives to a spot between min_depth and max_depth under
 -- the surface, swims on to a few more spots near it, snapping at a fish at each one, and comes back: a wild pet to
 -- where it set off, an owned one to its owner. gift_chance of the trips catch a fish, which it carries home in its
--- beak; back beside its owner, an owned pet drops catch at their feet for them alone to pick up.
+-- beak; back beside its owner, an owned pet drops catch at their feet for them alone to pick up. A wild colony that
+-- marched to its shore for the day (see march) fishes the water there: its grown pets go out often.
 
 -- Within this many blocks of a spot it has reached it: native navigation stops about a block short of its goal.
 local ARRIVED = 1.5
@@ -36,8 +37,11 @@ return ai.module {
     -- for silence). A trip that reached a spot catches a fish gift_chance of the time (0 to 1) and shows the model's
     -- carry_bone on the way back (NONE for none; list the bone under the pet file's hiddenBones so it starts hidden).
     -- catch is any item, NONE for no gift, dropped within gift_range blocks of the owner (up to 8) with sound at
-    -- volume and pitch. wild and pets switch it on for wild and for owned pets.
+    -- volume and pitch. wild and pets switch it on for wild and for owned pets. At its colony's shore a grown wild pet
+    -- looks every shore_interval_seconds instead, shore_chance of the time, for water within shore_radius blocks of
+    -- the water its colony found; babies there stay ashore.
     settings = { radius = 8, min_depth = 1, max_depth = 3, spots = 3, interval_seconds = 60, chance = 0.5,
+                 shore_radius = 6, shore_interval_seconds = 20, shore_chance = 0.75,
                  speed = 0.15, trip_seconds = 40, stuck_ticks = 40, wild = true, pets = true, gift_chance = 0.3,
                  catch = 'COD', gift_range = 3, sound = 'entity.cod.flop', volume = 1.0, pitch = 1.0, splash = true,
                  splash_sound = 'entity.fishing_bobber.splash', splash_volume = 1.0, splash_pitch = 1.0,
@@ -56,6 +60,17 @@ return ai.module {
                 if c.pet.wild then allowed = s.wild end
                 if not allowed or not c.pet.settled or c.tick < (c.memory:get('fishing_next') or 0) then
                     return false
+                end
+                local shore = nil
+                if c.pet.wild then shore = c.pet.colony_water end
+                if shore ~= nil then
+                    -- At its colony's shore: the colony's water, often, and only for the grown ones.
+                    c.memory:set('fishing_next', c.tick + seconds_ticks(s.shore_interval_seconds))
+                    if c.pet.baby or math.random() >= s.shore_chance then return false end
+                    local spot = c.pet:water_point(shore, s.shore_radius, s.min_depth, s.max_depth)
+                    if spot == nil then return false end
+                    c.memory:set('fishing_to', spot)
+                    return true
                 end
                 c.memory:set('fishing_next', c.tick + seconds_ticks(s.interval_seconds))
                 if math.random() >= s.chance then return false end

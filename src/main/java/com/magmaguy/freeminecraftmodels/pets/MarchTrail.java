@@ -17,9 +17,18 @@ final class MarchTrail {
 
     /** A trail that starts where the march is called, its virtual tail opposite the unit heading (dx, dz). */
     MarchTrail(Vector start, double dx, double dz) {
+        this(start, dx, dz, -dx, -dz);
+    }
+
+    /**
+     * A trail that starts where the march is called, setting off along the unit heading (dx, dz), its virtual tail
+     * along the unit (tailX, tailZ): straight back where that is standing ground, or bent aside where it is not, so
+     * the line does not form in water or powder snow (see {@link MarchRoute#tail}).
+     */
+    MarchTrail(Vector start, double dx, double dz, double tailX, double tailZ) {
         footprints.add(start.clone());
-        tailX = -dx;
-        tailZ = -dz;
+        this.tailX = tailX;
+        this.tailZ = tailZ;
     }
 
     /**

@@ -89,7 +89,7 @@ public final class PetLuaTable {
     public static final Set<String> PROPERTIES = Set.of("wild", "staying", "settled", "baby", "migrating", "model",
             "species", "position", "home", "anchor", "stay_anchor", "owner_location", "owner_distance", "follow_range",
             "roam_range", "night", "day", "raining", "snowing", "speed", "route_cruise", "threat", "attacker",
-            "hurt_count", "march_requested", "marching", "stuck_ticks");
+            "hurt_count", "march_requested", "marching", "stuck_ticks", "colony_water");
     /** How far from its owner an owned pet looks for someone to defend them against. */
     static final double THREAT_RANGE = 16D;
     /** How long a wild pet keeps the player who hurt it in mind: 30 seconds. */
@@ -268,6 +268,10 @@ public final class PetLuaTable {
         // Whether this pet is in a march under way. Unlike march_spot it does not keep the pet's place in line, so a
         // module asks it to learn whether the pet marches, and march_spot only while it walks the march.
         property("marching", ticks.perTick(() -> LuaValue.valueOf(PetMarches.marching(body()))));
+        // The open water its colony fishes by day, once the colony has marched to its shore and while it stays there;
+        // nil for a pet in no colony, at home, on the way, or owned. Its anchor is then the colony's spot on the shore.
+        Supplier<Location> colonyWater = ticks.perTick(control::colonyWater);
+        property("colony_water", () -> location(colonyWater.get()));
         // How many ticks in a row the pet has steered somewhere without getting anywhere: its body has not moved 0.05
         // blocks from where it last did. 0 while it steers nowhere, once it comes within half a block of the point it
         // steers at, and after c.pet:stop; a new steer_to point keeps the count. A walking or swimming body's count is
@@ -843,11 +847,20 @@ public final class PetLuaTable {
         return threatPoint.clone();
     }
 
-    /** Owned: the owner. Wild: its home, or where it is when it has none. */
+    /**
+     * Owned: the owner. Wild: where its colony keeps it for now (its shore by day), else its home, or where it is when
+     * it has neither.
+     */
     private Location anchor() {
         if (!control.isWild()) return control.companion().map(Player::getLocation).orElse(null);
-        Location home = control.home();
+        Location home = wildAnchor();
         return home != null ? home : body().getLocation();
+    }
+
+    /** A wild pet's anchor: where its colony keeps it for now, else its home; null with neither. */
+    private Location wildAnchor() {
+        Location place = control.colonyPlace();
+        return place != null ? place : control.home();
     }
 
     /** Whether snow falls on the pet, looked up at most every 10 ticks. */
@@ -1370,7 +1383,7 @@ public final class PetLuaTable {
     /** See slide_point: where a slide from {@code from} may end. */
     private boolean slideLeash(Location from, Location end, double maxLength) {
         if (!control.isWild()) return withinLeash(end);
-        Location home = control.home();
+        Location home = wildAnchor();
         if (home == null || home.getWorld() != end.getWorld()) return true;
         double endX = end.getX() - home.getX(), endZ = end.getZ() - home.getZ();
         double fromX = from.getX() - home.getX(), fromZ = from.getZ() - home.getZ();

@@ -9,7 +9,9 @@ import java.util.UUID;
 /**
  * One march: a leader and the marchers behind it in single file, by body id. The leader walks straight legs out from
  * where it called the march, turns with a hairpin when half the march is up, and leads the line back; each marcher's
- * spot is its place in line times the spacing back along the leader's footprints. Marchers ask for their spots every
+ * spot is its place in line times the spacing back along the leader's footprints. A march to a goal, as a colony's to
+ * its shore in the morning and home at dusk, has no way out and no hairpin: once the line has formed it walks the way
+ * home's legs walk, aimed at the goal, and ends there. Marchers ask for their spots every
  * tick they march, which is how the march knows who is there: one that stops asking is away, and the ones behind it
  * close up. Positions come from the caller, so the rules run on any {@link MarchRoute.Ground}. Server thread only.
  */
@@ -83,7 +85,13 @@ final class March {
     // The line, its leader first.
     private final List<Marcher> line = new ArrayList<>();
     private final MarchTrail trail;
-    private final Vector home;
+    // Where the march was called, where the leader waits while the line forms; and where its legs home aim, which is
+    // the same spot for a march out and back.
+    private final Vector home, goal;
+    // A march to a goal: it sets off for the goal once the line has formed.
+    private final boolean toGoal;
+    // Whether the leader reached the goal, or home, which is what ended the march.
+    private boolean arrived;
     private final double spacing;
     private final long calledAt, durationTicks, hardEnd;
     private Phase phase = Phase.FORMING;
@@ -100,6 +108,9 @@ final class March {
     private final long[] latelyTick = new long[WALK_TICKS];
     private int replans;
     private boolean over;
+    // The side a leader going round something on its way home or to its goal keeps to, 1 or -1, until the straight
+    // way opens again; 0 while it walks straight.
+    private int detourSide;
 
     /**
      * A march called at {@code home} by the leader, the marchers following in the given order, each with its speed stat
@@ -108,7 +119,20 @@ final class March {
      */
     March(UUID leader, Vector home, List<UUID> marchers, Vector[] marcherPositions, double[] speeds, double dx,
           double dz, double spacing, long now, long durationTicks) {
+        this(leader, home, null, marchers, marcherPositions, speeds, dx, dz, -dx, -dz, spacing, now, durationTicks);
+    }
+
+    /**
+     * A march as above, the line forming along the unit (tailX, tailZ) behind the leader (see
+     * {@link MarchRoute#tail}). With a {@code goal} it is a march to that goal, which sets off for it once the line has
+     * formed and ends there; {@code durationTicks} is then half the most it may take, its hard cap being twice that.
+     * Without one it walks out for half its duration and back.
+     */
+    March(UUID leader, Vector home, Vector goal, List<UUID> marchers, Vector[] marcherPositions, double[] speeds,
+          double dx, double dz, double tailX, double tailZ, double spacing, long now, long durationTicks) {
         this.home = home.clone();
+        this.goal = goal == null ? this.home : goal.clone();
+        this.toGoal = goal != null;
         this.spacing = spacing;
         this.calledAt = now;
         this.durationTicks = Math.max(1L, durationTicks);
@@ -116,7 +140,7 @@ final class March {
         line.add(new Marcher(leader, home.clone(), speeds[0]));
         for (int index = 0; index < marchers.size(); index++)
             line.add(new Marcher(marchers.get(index), marcherPositions[index].clone(), speeds[index + 1]));
-        trail = new MarchTrail(home, dx, dz);
+        trail = new MarchTrail(home, dx, dz, tailX, tailZ);
         headingX = dx;
         headingZ = dz;
         java.util.Arrays.fill(latelyTick, NEVER);
@@ -128,6 +152,26 @@ final class March {
 
     boolean over() {
         return over;
+    }
+
+    /** Whether the leader reached where the march was going, the goal or home, and that ended it. */
+    boolean arrived() {
+        return arrived;
+    }
+
+    /** Whether this is a march to a goal rather than out and back. */
+    boolean toGoal() {
+        return toGoal;
+    }
+
+    /** Where the march is going: its goal, or home for a march out and back. */
+    Vector goal() {
+        return goal.clone();
+    }
+
+    /** Ends the march where it is, as when its colony's day turns and it is wanted elsewhere. */
+    void cancel() {
+        over = true;
     }
 
     long calledAt() {
@@ -265,11 +309,16 @@ final class March {
                         (int) Math.floor(home.getZ()));
                 return new Vector(home.getX(), feet == MarchRoute.Ground.NO_FOOTING ? home.getY() : feet, home.getZ());
             }
-            phase = Phase.OUT;
-            outEnd = now + durationTicks / 2L;
             // The first leg runs from that spot, along the heading that was found clear from there. From wherever
             // the leader stood a block to the side, that heading could be shut, and the march turned away or ended.
-            if (!nextLeg(home, ground)) return null;
+            if (toGoal) {
+                phase = Phase.HOME;
+                if (!homeLeg(home, ground)) return null;
+            } else {
+                phase = Phase.OUT;
+                outEnd = now + durationTicks / 2L;
+                if (!nextLeg(home, ground)) return null;
+            }
         }
         trail.step(at, (line.size() + 1) * spacing + 2D);
         // Where it stood WALK_TICKS ago, when it asked then.
@@ -288,7 +337,7 @@ final class March {
             progressTick = now;
             if (++replans > MAX_REPLANS || !replan(at, ground, true)) return end();
         }
-        if (phase == Phase.HOME && horizontal(at, home) <= ARRIVE) return end();
+        if (phase == Phase.HOME && horizontal(at, goal) <= ARRIVE) return arrive();
         if (phase == Phase.OUT && now >= outEnd) {
             if (!hairpin(at, ground)) return null;
         } else {
@@ -365,22 +414,24 @@ final class March {
      * line, with the way home open.
      */
     private boolean homeLeg(Vector from, MarchRoute.Ground ground) {
-        double distance = horizontal(from, home);
+        double distance = horizontal(from, goal);
         if (distance <= ARRIVE) {
-            end();
+            arrive();
             return false;
         }
-        double dx = (home.getX() - from.getX()) / distance, dz = (home.getZ() - from.getZ()) / distance;
+        double dx = (goal.getX() - from.getX()) / distance, dz = (goal.getZ() - from.getZ()) / distance;
         MarchRoute.Run straight = MarchRoute.run(ground, from, dx, dz, Math.min(distance, MarchRoute.MAX_RUN));
         if (straight.length() >= Math.min(MarchRoute.MIN_LEG, distance - ARRIVE)) {
+            detourSide = 0;
             leg(from, dx, dz, straight.length());
             return true;
         }
-        double[] around = MarchRoute.turn(ground, from, dx, dz, MarchRoute.MIN_LEG, true);
+        double[] around = MarchRoute.turn(ground, from, dx, dz, MarchRoute.MIN_LEG, true, detourSide);
         if (around == null) {
             end();
             return false;
         }
+        detourSide = MarchRoute.side(dx, dz, around[0], around[1]);
         MarchRoute.Run run = MarchRoute.run(ground, from, around[0], around[1], DETOUR_LEG);
         leg(from, around[0], around[1], run.length());
         return true;
@@ -450,6 +501,11 @@ final class March {
     private Vector end() {
         over = true;
         return null;
+    }
+
+    private Vector arrive() {
+        arrived = true;
+        return end();
     }
 
     /** How far along its leg the leader is, by its projection on the leg's line. */

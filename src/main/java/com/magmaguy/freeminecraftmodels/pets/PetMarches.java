@@ -1,5 +1,6 @@
 package com.magmaguy.freeminecraftmodels.pets;
 
+import com.magmaguy.freeminecraftmodels.pets.behavior.PetBehaviorCatalog;
 import com.magmaguy.magmacore.ai.MindHandle;
 import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.Bukkit;
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Consumer;
 
 /**
  * The marches under way, for the march module: a call gathers the free kin round the caller into a {@link March}, and
@@ -44,6 +46,8 @@ final class PetMarches {
         // The marchers' bodies, by id: a body that is gone has left.
         final Map<UUID, LivingEntity> bodies = new HashMap<>();
         boolean secondToot;
+        // Told once, when the march ends, whether its leader got where it was going: a colony's march.
+        Consumer<Boolean> ended;
 
         Walk(March march, World world, PetControl leader, String sound, float volume, float pitch) {
             this.march = march;
@@ -112,15 +116,77 @@ final class PetMarches {
             return false;
         }
         if (!asked && random.nextDouble() >= 1D / (kin.size() + 1)) return false;
-        MarchRoute.Ground ground = ground(body.getWorld());
-        Vector start = here.toVector();
-        double[] heading = MarchRoute.widest(ground, start, random.nextDouble(2D * Math.PI / MarchRoute.HEADINGS));
-        if (heading == null) {
+        double seconds = minSeconds + random.nextDouble() * Math.max(0D, maxSeconds - minSeconds);
+        Walk walk = begin(caller, body, kin, null, spacing, sound, volume, pitch, now, Math.round(seconds * 20D));
+        if (walk == null) {
             if (asked) requests.refused(body.getUniqueId(), MarchRequests.noGround(species, MarchRoute.MIN_LEG));
             return false;
         }
+        tell(requests.started(body.getUniqueId(), MarchRequests.started(species, walk.bodies.size())));
+        return true;
+    }
+
+    /**
+     * Sets off a colony's march with this leader and these marchers, all free (see {@link #free}): to {@code goal} when
+     * there is one, where it ends, else out and back for {@code durationTicks}. {@code ended} is told once, when the
+     * march ends, whether the leader got there. False when the leader is in a march already, nobody else can fall in,
+     * or a march out and back has no clear ground to set off over.
+     */
+    static boolean lead(PetControl leader, LivingEntity body, List<LivingEntity> marchers, Vector goal, double spacing,
+                        String sound, float volume, float pitch, long now, long durationTicks,
+                        Consumer<Boolean> ended) {
+        if (byBody.containsKey(body.getUniqueId())) return false;
+        List<LivingEntity> kin = new ArrayList<>(marchers.size());
+        for (LivingEntity marcher : marchers)
+            if (marcher != body && !byBody.containsKey(marcher.getUniqueId())) kin.add(marcher);
+        if (kin.isEmpty()) return false;
+        Walk walk = begin(leader, body, kin, goal, spacing, sound, volume, pitch, now, durationTicks);
+        if (walk == null) return false;
+        walk.ended = ended;
+        return true;
+    }
+
+    /** The march module's id, as the Mind knows it. */
+    static final String MODULE = PetBehaviorCatalog.ID_PREFIX + "march";
+
+    /**
+     * Whether this pet could fall in now: settled, not told to stay, on no migration, carrying no rider, in no march,
+     * and not held by something that comes before the march module (see {@link #call}).
+     */
+    static boolean free(PetControl pet, LivingEntity body) {
+        if (pet == null || body == null || !body.isValid() || pet.route() != null || pet.isStaying()
+                || byBody.containsKey(body.getUniqueId()) || !body.isEmpty() || !PetMotion.settled(pet, body))
+            return false;
+        MindHandle mind = pet.mind();
+        return mind == null || !mind.isBlocked(MODULE);
+    }
+
+    /**
+     * The march itself: the leader sets off along the heading whose straight run goes farthest, or for a march to a
+     * goal toward it, the line forming behind it over standing ground (see {@link MarchRoute#tail}). Null when no
+     * heading out runs {@link MarchRoute#MIN_LEG}; a march to a goal sets off anyway and finds its way round on its
+     * first leg.
+     */
+    private static Walk begin(PetControl caller, LivingEntity body, List<LivingEntity> kin, Vector goal,
+                              double spacing, String sound, float volume, float pitch, long now, long durationTicks) {
+        PetManager manager = PetManager.get();
+        Location here = body.getLocation();
+        MarchRoute.Ground ground = ground(body.getWorld());
+        Vector start = here.toVector();
+        double[] heading;
+        if (goal == null) {
+            heading = MarchRoute.widest(ground, start,
+                    ThreadLocalRandom.current().nextDouble(2D * Math.PI / MarchRoute.HEADINGS));
+            if (heading == null) return null;
+        } else {
+            double dx = goal.getX() - start.getX(), dz = goal.getZ() - start.getZ();
+            double length = Math.sqrt(dx * dx + dz * dz);
+            heading = length < 1.0E-6D ? new double[]{1D, 0D} : new double[]{dx / length, dz / length};
+        }
+        kin = new ArrayList<>(kin);
         kin.sort(Comparator.comparingDouble(entity -> entity.getLocation().distanceSquared(here)));
         if (kin.size() > MAX_MARCHERS - 1) kin = kin.subList(0, MAX_MARCHERS - 1);
+        double[] tail = MarchRoute.tail(ground, start, heading[0], heading[1], (kin.size() + 1) * spacing);
         List<UUID> ids = new ArrayList<>(kin.size());
         Vector[] positions = new Vector[kin.size()];
         double[] speeds = new double[kin.size() + 1];
@@ -128,20 +194,26 @@ final class PetMarches {
         for (int index = 0; index < kin.size(); index++) {
             ids.add(kin.get(index).getUniqueId());
             positions[index] = kin.get(index).getLocation().toVector();
-            PetControl marcher = manager.pet(kin.get(index));
+            PetControl marcher = manager == null ? null : manager.pet(kin.get(index));
             speeds[index + 1] = marcher == null ? 1D : marcher.stats().speed;
         }
-        double seconds = minSeconds + random.nextDouble() * Math.max(0D, maxSeconds - minSeconds);
-        March march = new March(body.getUniqueId(), start, ids, positions, speeds, heading[0], heading[1], spacing, now,
-                Math.round(seconds * 20D));
+        March march = new March(body.getUniqueId(), start, goal, ids, positions, speeds, heading[0], heading[1],
+                tail[0], tail[1], spacing, now, durationTicks);
         Walk walk = new Walk(march, body.getWorld(), caller, sound, volume, pitch);
         walk.bodies.put(body.getUniqueId(), body);
         for (LivingEntity marcher : kin) walk.bodies.put(marcher.getUniqueId(), marcher);
         for (UUID id : walk.bodies.keySet()) byBody.put(id, walk);
         walks.add(walk);
-        tell(requests.started(body.getUniqueId(), MarchRequests.started(species, walk.bodies.size())));
         toot(walk, here);
-        return true;
+        return walk;
+    }
+
+    /** Ends the march this pet is in, if any, as its colony wants it elsewhere now. */
+    static void cancel(LivingEntity body) {
+        Walk walk = byBody.get(body.getUniqueId());
+        if (walk == null) return;
+        walk.march.cancel();
+        end(walk);
     }
 
     /** Where this marcher should walk to now (see {@link March#spot}); null when it is in no march, or it ended. */
@@ -239,6 +311,8 @@ final class PetMarches {
 
     /** Forgets every march and request. */
     static void clear() {
+        // Nobody is told: the colonies are cleared with the marches.
+        for (Walk walk : walks) walk.ended = null;
         byBody.clear();
         walks.clear();
         requests.clear();
@@ -269,6 +343,9 @@ final class PetMarches {
         byBody.values().removeIf(other -> other == walk);
         // Walk keeps identity equality, so this drops this march alone.
         walks.remove(walk);
+        Consumer<Boolean> ended = walk.ended;
+        walk.ended = null;
+        if (ended != null) ended.accept(walk.march.arrived());
     }
 
     private static void toot(Walk walk, Location at) {

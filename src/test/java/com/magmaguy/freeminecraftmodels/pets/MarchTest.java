@@ -526,6 +526,80 @@ class MarchTest {
         assertTrue(capped.march.over(), "the hard cap: twice the duration after forming");
     }
 
+    @Test
+    void aMarchToAGoalFormsSetsOffForItWithNoHairpinAndArrives() {
+        Vector goal = new Vector(40.5, FEET, 12.5);
+        Sim sim = Sim.toGoal(OPEN, 5, goal, 1200);
+        assertTrue(sim.march.toGoal());
+        while (sim.march.phase() == March.Phase.FORMING) {
+            sim.step();
+            assertTrue(sim.now < Sim.START + 400, "the line sets off");
+        }
+        assertEquals(March.Phase.HOME, sim.march.phase(), "a march to a goal walks straight there");
+        boolean hairpin = false;
+        while (!sim.march.over()) {
+            sim.step();
+            if (sim.march.phase() == March.Phase.HAIRPIN || sim.march.phase() == March.Phase.OUT) hairpin = true;
+            assertTrue(sim.now < Sim.START + 2000, "the march ends");
+        }
+        assertFalse(hairpin, "no walk out and no hairpin");
+        assertTrue(sim.march.arrived(), "it got there");
+        double dx = sim.at(0).getX() - goal.getX(), dz = sim.at(0).getZ() - goal.getZ();
+        assertTrue(Math.sqrt(dx * dx + dz * dz) <= March.ARRIVE + 0.3, "the leader is at the goal: " + sim.at(0));
+        // The line followed it there, in single file behind it.
+        for (int rank = 1; rank <= 5; rank++)
+            assertTrue(sim.at(rank).distance(goal) < sim.at(rank).distance(HOME), "rank " + rank + " came along");
+    }
+
+    @Test
+    void aMarchToAGoalBehindAWallFindsItsWayRoundAndArrives() {
+        // A wall across the way, 20 blocks long, between the call and the goal.
+        Vector goal = new Vector(30.5, FEET, 0.5);
+        Sim sim = Sim.toGoal(ground((x, z) -> x == 14 && Math.abs(z) <= 10), 3, goal, 1200);
+        while (!sim.march.over()) {
+            sim.step();
+            assertTrue(sim.now < Sim.START + 3000, "the march ends");
+            for (int rank = 0; rank <= 3; rank++)
+                assertFalse(Math.floor(sim.at(rank).getX()) == 14 && Math.abs(sim.at(rank).getZ()) <= 10.5,
+                        "nobody walks through the wall");
+        }
+        assertTrue(sim.march.arrived(), "it went round the wall and got there: " + sim.at(0));
+    }
+
+    @Test
+    void aMarchToAGoalThatRunsOutOfTimeHasNotArrived() {
+        Vector goal = new Vector(150.5, FEET, 0.5);
+        Sim sim = Sim.toGoal(OPEN, 2, goal, 60);
+        while (!sim.march.over()) {
+            sim.step();
+            assertTrue(sim.now < Sim.START + 1000, "the hard cap ends it");
+        }
+        assertFalse(sim.march.arrived(), "ended by its cap, short of the goal");
+    }
+
+    @Test
+    void aLineFormingOnAShoreLiesOverTheLandNotTheWater() {
+        // Water from x -2 back: the shore runs along x -1. The march sets off +x, away from the water, so straight
+        // back lies in it.
+        MarchRoute.Ground shore = ground((x, z) -> x <= -2);
+        double[] tail = MarchRoute.tail(shore, HOME, 1, 0, 5 * SPACING);
+        assertTrue(tail[0] > -0.5, "the tail bends aside along the shore: " + tail[0] + ", " + tail[1]);
+        Vector goal = new Vector(40.5, FEET, 0.5);
+        Sim sim = Sim.toGoal(shore, 4, goal, 1200);
+        for (int tick = 0; tick < 120 && sim.march.phase() == March.Phase.FORMING; tick++) {
+            for (int rank = 1; rank <= 4; rank++) {
+                Vector spot = sim.march.spot(sim.ids.get(rank), sim.at(rank), sim.now, shore);
+                assertNotNull(spot);
+                assertTrue(spot.getX() >= -1, "rank " + rank + "'s place is on land: " + spot);
+            }
+            sim.step();
+        }
+        // Open ground straight back keeps the straight line.
+        double[] straight = MarchRoute.tail(OPEN, HOME, 1, 0, 5 * SPACING);
+        assertEquals(-1, straight[0], 1.0E-9);
+        assertEquals(0, straight[1], 1.0E-9);
+    }
+
     /** A march of a leader at HOME and {@code followers} marchers scattered round it, heading +x. */
     private static final class Sim {
         final March march;
@@ -556,6 +630,20 @@ class MarchTest {
         /** As above, setting off along the unit heading {dx, dz}. */
         Sim(MarchRoute.Ground ground, long durationTicks, double[] heading, double leaderSpeed,
             double... followerSpeeds) {
+            this(ground, durationTicks, heading, null, new double[]{-heading[0], -heading[1]}, leaderSpeed,
+                    followerSpeeds);
+        }
+
+        /** A march to {@code goal}, its line forming along the unit {@code tail}, as PetMarches calls one. */
+        static Sim toGoal(MarchRoute.Ground ground, int followers, Vector goal, long durationTicks) {
+            double dx = goal.getX() - HOME.getX(), dz = goal.getZ() - HOME.getZ(), length = Math.sqrt(dx * dx + dz * dz);
+            double[] heading = {dx / length, dz / length};
+            double[] tail = MarchRoute.tail(ground, HOME, heading[0], heading[1], (followers + 1) * SPACING);
+            return new Sim(ground, durationTicks, heading, goal, tail, 1D, ones(followers));
+        }
+
+        Sim(MarchRoute.Ground ground, long durationTicks, double[] heading, Vector goal, double[] tail,
+            double leaderSpeed, double... followerSpeeds) {
             this.ground = ground;
             int followers = followerSpeeds.length;
             UUID leader = new UUID(0, 0);
@@ -576,7 +664,8 @@ class MarchTest {
                 speeds.put(id, followerSpeeds[index]);
                 all[index + 1] = followerSpeeds[index];
             }
-            march = new March(leader, HOME, marchers, at, all, heading[0], heading[1], SPACING, now, durationTicks);
+            march = new March(leader, HOME, goal, marchers, at, all, heading[0], heading[1], tail[0], tail[1], SPACING,
+                    now, durationTicks);
         }
 
         private static double[] ones(int count) {

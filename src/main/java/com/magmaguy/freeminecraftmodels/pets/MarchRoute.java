@@ -118,6 +118,38 @@ final class MarchRoute {
         return best;
     }
 
+    /** Which way the unit heading (toX, toZ) lies from the unit heading (dx, dz): 1 to its left, -1 to its right. */
+    static int side(double dx, double dz, double toX, double toZ) {
+        return dx * toZ - dz * toX >= 0D ? 1 : -1;
+    }
+
+    /**
+     * The way a line forming behind a leader at {@code from}, about to set off along the unit heading (dx, dz), lies
+     * out: straight back when a run of {@code length} blocks of standing ground goes that way, else the heading
+     * nearest straight back whose run does, else the one whose run goes farthest. Straight back off a shore runs into
+     * the water, and the line formed there, its marchers given places they swam to or could not reach. Never along
+     * the heading itself, the way the leader walks. The heading comes back as a unit (dx, dz).
+     */
+    static double[] tail(Ground ground, Vector from, double dx, double dz, double length) {
+        double wanted = Math.min(Math.max(length, STEP), MAX_RUN);
+        double base = Math.atan2(-dz, -dx);
+        double[] longest = {-dx, -dz};
+        double longestLength = -1D;
+        for (int step = 0; step < HEADINGS / 2; step++) {
+            for (int side : step == 0 ? new int[]{1} : new int[]{1, -1}) {
+                double angle = base + side * step * 2D * Math.PI / HEADINGS;
+                double tailX = Math.cos(angle), tailZ = Math.sin(angle);
+                double run = run(ground, from, tailX, tailZ, wanted).length();
+                if (run >= wanted - 1.0E-9D) return new double[]{tailX, tailZ};
+                if (run > longestLength + 1.0E-9D) {
+                    longestLength = run;
+                    longest = new double[]{tailX, tailZ};
+                }
+            }
+        }
+        return longest;
+    }
+
     /**
      * The smallest turn from the unit heading (dx, dz), either way in steps of a sixteenth of a circle up to a full
      * about-turn, whose run reaches {@code wanted} blocks; the straight heading itself counts as no turn unless
@@ -125,11 +157,37 @@ final class MarchRoute {
      * Null when every way is blocked. The heading comes back as a unit (dx, dz).
      */
     static double[] turn(Ground ground, Vector from, double dx, double dz, double wanted, boolean mustTurn) {
+        return turn(ground, from, dx, dz, wanted, mustTurn, 0);
+    }
+
+    /**
+     * As {@link #turn(Ground, Vector, double, double, double, boolean)}, but with {@code side} 1 or -1 every turn to
+     * that side comes first, up to a full about-turn, and only then the other side's. 1 turns from the heading toward
+     * its left, (-dz, dx), the way a rising angle goes. A leader going round something long keeps to one side of it
+     * this way: aimed back at its goal from beside a wall, the smallest turn that cleared was as often the one that led
+     * back along the wall as the one that led on, and it walked to and fro along the wall until the march gave up.
+     */
+    static double[] turn(Ground ground, Vector from, double dx, double dz, double wanted, boolean mustTurn, int side) {
+        if (side == 0) return turn(ground, from, dx, dz, wanted, mustTurn, new int[]{1, -1});
+        double[] first = turn(ground, from, dx, dz, wanted, mustTurn, new int[]{side});
+        if (first != null && run(ground, from, first[0], first[1], Math.max(wanted, BLOCKED)).length()
+                >= wanted - 1.0E-9D) return first;
+        double[] other = turn(ground, from, dx, dz, wanted, true, new int[]{-side});
+        if (other != null && run(ground, from, other[0], other[1], Math.max(wanted, BLOCKED)).length()
+                >= wanted - 1.0E-9D) return other;
+        if (first == null) return other;
+        if (other == null) return first;
+        return run(ground, from, first[0], first[1], Math.max(wanted, BLOCKED)).length()
+                >= run(ground, from, other[0], other[1], Math.max(wanted, BLOCKED)).length() ? first : other;
+    }
+
+    private static double[] turn(Ground ground, Vector from, double dx, double dz, double wanted, boolean mustTurn,
+                                 int[] sides) {
         double base = Math.atan2(dz, dx);
         double[] longest = null;
         double longestLength = BLOCKED - 1.0E-9D;
         for (int step = mustTurn ? 1 : 0; step <= HEADINGS / 2; step++) {
-            for (int side : step == 0 || step == HEADINGS / 2 ? new int[]{1} : new int[]{1, -1}) {
+            for (int side : step == 0 || step == HEADINGS / 2 ? new int[]{sides[0]} : sides) {
                 double angle = base + side * step * 2D * Math.PI / HEADINGS;
                 double turnX = Math.cos(angle), turnZ = Math.sin(angle);
                 double length = run(ground, from, turnX, turnZ, Math.max(wanted, BLOCKED)).length();

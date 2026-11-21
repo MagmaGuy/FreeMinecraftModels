@@ -241,6 +241,7 @@ public final class PetManager {
         manager.aggressors.clear();
         manager.paces.clear();
         PetMarches.clear();
+        PetColonies.clear();
         if (manager.behaviors != null) manager.behaviors.close();
     }
 
@@ -256,6 +257,7 @@ public final class PetManager {
         manager.rides.tick();
         manager.tickFootsteps();
         PetMarches.tick(ticks);
+        PetColonies.tick(manager, ticks);
         manager.workChunks();
         if (ticks >= manager.nextWildSpawnTick) {
             manager.nextWildSpawnTick = ticks + Math.max(20, PetsConfig.wildSpawnIntervalTicks);
@@ -474,6 +476,24 @@ public final class PetManager {
         return program(pet.species(), pet.model(),
                 pet.isWild() ? PetPrograms.Ownership.WILD : PetPrograms.Ownership.OWNED)
                 .settings().get(PetBehaviorCatalog.ID_PREFIX + "march");
+    }
+
+    /**
+     * How the wild colony nearest this spot stands, one with a pet within {@code blocks}: its pets, where it is and is
+     * going, and its water (see {@link PetColonies}). With {@code hurry} it first forgets its failed marches and looks
+     * for its water again, so it sets off where the time of day wants it on its next check, within a second. Null when
+     * no colony is that near.
+     */
+    public String colony(Location at, double blocks, boolean hurry) {
+        PetColonies.Colony colony = PetColonies.nearest(at, blocks);
+        if (colony == null) return null;
+        if (hurry) PetColonies.hurry(colony);
+        return PetColonies.describe(colony) + (hurry ? " &aIt sets off within a second." : "");
+    }
+
+    /** The live wild pets, for the colonies; read only. */
+    Collection<PetControl> wildPets() {
+        return Collections.unmodifiableCollection(wildLive);
     }
 
     public Collection<PetControl> pets() {

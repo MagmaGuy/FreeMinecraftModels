@@ -5,6 +5,13 @@
 -- The others walk in the leader's own footprints, so the line keeps its shape through a turn. One that something else
 -- takes away leaves a gap the ones behind close up, and when it comes back it joins at the back. Wild pets march with
 -- wild ones, owned pets with their owner's other pets of the kind.
+--
+-- With routine on, wild pets keep a daily routine instead of calling marches at random: two or more of a kind whose
+-- homes lie within radius blocks of one another are a colony. Each morning the colony forms a line and marches to the
+-- open water nearest home, within water_reach blocks, and stays there by day, where fishing_trip fishes it. At
+-- dusk_time it forms a line again and marches home, to spend the night there (and huddle, with huddle). A colony with
+-- no water within reach stays home and marches out and back from there instead, in the morning and then every
+-- every_minutes. The colony decides all of this, not its pets, so it turns with /time set.
 
 -- How often a pet that is free looks into calling a march, in ticks.
 local CHECK_TICKS = 100
@@ -23,10 +30,13 @@ return ai.module {
     -- behind walks catch_up times as fast. sound (any Minecraft or resource pack sound, or NONE)
     -- is the call, at volume and pitch, and animation (a model animation, or '' for none) plays with it. Only adults
     -- call a march, and only by day with no snow falling, unless an admin asks for one. wild and pets switch it on for
-    -- wild and for owned pets.
+    -- wild and for owned pets. routine (see above) replaces those random marches for wild pets: min_group and the
+    -- chance no longer matter to them, radius links homes into a colony, water_reach is how far from home the colony
+    -- looks for water (up to 64), and dusk_time is the time of day it sets off home, in ticks as /time set takes them
+    -- (12300 is nightfall; 10500 leaves about a minute and a half for the walk).
     settings = { radius = 12, min_group = 4, every_minutes = 8, min_seconds = 60, max_seconds = 120, spacing = 1.5,
                  speed = 0.18, catch_up = 1.6, sound = 'block.note_block.didgeridoo', volume = 1.0, pitch = 2.0,
-                 animation = '', wild = true, pets = false },
+                 animation = '', wild = true, pets = false, routine = true, water_reach = 48, dusk_time = 10500 },
     memories = { march_next = 'integer', march_close = 'boolean' },
     behaviors = {
         ai.behavior {
@@ -43,6 +53,8 @@ return ai.module {
                 -- place in line while something else holds it, so it never counted as away.
                 if c.pet.marching then return true end
                 if not c.pet.march_requested then
+                    -- A wild colony on its routine is called to its marches by the colony.
+                    if s.routine and c.pet.wild then return false end
                     if c.pet.baby or not c.pet.day or c.pet.snowing then return false end
                     if c.tick < (c.memory:get('march_next') or 0) then return false end
                     c.memory:set('march_next', c.tick + CHECK_TICKS)

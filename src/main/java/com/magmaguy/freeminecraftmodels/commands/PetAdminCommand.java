@@ -26,21 +26,22 @@ import java.util.concurrent.ThreadLocalRandom;
  * {@code spawn <species> [variant]} puts a wild one where you look, {@code cluster <species> [variant]} puts a wild
  * cluster there (see {@link PetSpecies.Cluster}), {@code give <species> [variant]} adds an owned one to your collection
  * (without a variant, a menu of the species' colours to pick from), {@code march [species]} asks the nearest wild
- * adult that marches to call a march as soon as it is free, for filming, and tells its sender what came of it, and
- * {@code list} shows the loaded species.
+ * adult that marches to call a march as soon as it is free, for filming, and tells its sender what came of it,
+ * {@code colony [go]} tells how the nearest wild colony's day stands, and with {@code go} sets it off at once where the
+ * time of day wants it, and {@code list} shows the loaded species.
  */
 public class PetAdminCommand extends AdvancedCommand {
     public PetAdminCommand() {
         super(List.of("petadmin"));
-        addArgument("action", new ListStringCommandArgument(List.of("mode", "spawn", "cluster", "give", "march", "list"), "<action>"));
+        addArgument("action", new ListStringCommandArgument(List.of("mode", "spawn", "cluster", "give", "march", "colony", "list"), "<action>"));
         addOptionalArgument("value", new DynamicListStringCommandArgument(() -> {
-            List<String> values = new ArrayList<>(List.of("creatures", "cosmetic"));
+            List<String> values = new ArrayList<>(List.of("creatures", "cosmetic", "go"));
             PetManager manager = PetManager.get();
             if (manager != null) manager.species().forEach(species -> values.add(species.id()));
             return values;
         }, "[value]"));
         addOptionalArgument("variant", PetVariantArgument.create(PetAdminCommand::speciesTyped, "[variant]"));
-        setUsage("/fmm petadmin <mode|spawn|cluster|give|march|list> [value] [variant]");
+        setUsage("/fmm petadmin <mode|spawn|cluster|give|march|colony|list> [value] [variant]");
         setPermission("freeminecraftmodels.pets.admin");
         setSenderType(SenderType.PLAYER);
         setDescription("Pet mode switch and testing spawns.");
@@ -131,7 +132,18 @@ public class PetAdminCommand extends AdvancedCommand {
                 Logger.sendMessage(player, "&aAdded a " + species.id() + " (" + model + ") to your pets.");
             }
             case "march" -> march(player, manager, value);
-            default -> Logger.sendMessage(player, "&cUse mode, spawn, cluster, give, march or list.");
+            case "colony" -> {
+                boolean go = "go".equalsIgnoreCase(value);
+                if (value != null && !go) {
+                    Logger.sendMessage(player, "&cUse /fmm petadmin colony, or /fmm petadmin colony go.");
+                    return;
+                }
+                String status = manager.colony(player.getLocation(), MARCH_SEARCH, go);
+                Logger.sendMessage(player, status != null ? status : "&cNo wild colony on its daily routine has a pet within "
+                        + (int) MARCH_SEARCH + " blocks. A colony is 2 or more wild pets of a kind whose homes are close"
+                        + " together, with the march behavior's routine on.");
+            }
+            default -> Logger.sendMessage(player, "&cUse mode, spawn, cluster, give, march, colony or list.");
         }
     }
 
