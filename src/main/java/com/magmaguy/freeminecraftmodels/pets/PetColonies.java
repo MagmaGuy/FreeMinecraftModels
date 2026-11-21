@@ -46,6 +46,12 @@ final class PetColonies {
     static final double HOME_MOVED = 4D;
     /** A march to a goal is given a second per block of the way and this many seconds more, then its hard cap. */
     static final double GOAL_SLACK_SECONDS = 30D;
+    /**
+     * The most colonies that look for their water, and that set off on a march, in one check. At dawn every colony on
+     * the server wants both at once; a search costs about a millisecond and a half and twenty of them in one tick made
+     * a 58 ms tick in the 100-penguin load check, so the rest wait their turn a second or two.
+     */
+    static final int SEARCHES_PER_CHECK = 2, MARCHES_PER_CHECK = 4;
     /** When the day ends by these bounds, as PetSky counts it. */
     private static final long DAWN = 23850L;
 
@@ -88,6 +94,8 @@ final class PetColonies {
     // Each colony by its pets, and the colonies.
     private static final Map<PetControl, Colony> byPet = new IdentityHashMap<>();
     private static final List<Colony> colonies = new ArrayList<>();
+    // What is left of this check's searches and march starts.
+    private static int searchesLeft, marchesLeft;
 
     private PetColonies() {
     }
@@ -96,6 +104,8 @@ final class PetColonies {
     static void tick(PetManager manager, long now) {
         if (now % CHECK_TICKS != 0L) return;
         gather(manager, now);
+        searchesLeft = SEARCHES_PER_CHECK;
+        marchesLeft = MARCHES_PER_CHECK;
         for (Colony colony : colonies) decide(colony, now);
     }
 
@@ -300,7 +310,8 @@ final class PetColonies {
             colony.nextRoam = now;
         }
         colony.wasShoreTime = shoreTime;
-        if (shoreTime) search(colony, now);
+        // A colony whose look for water waits its turn decides nothing more until it has looked.
+        if (shoreTime && !search(colony, now)) return;
         boolean hasShore = colony.shore != null && !colony.shoreGivenUp;
         Place wanted = wanted(shoreTime, hasShore);
         if (colony.marchingTo != null) {
@@ -317,11 +328,16 @@ final class PetColonies {
         if (colony.place == wanted) {
             settle(colony);
             if (wanted == Place.HOME && shoreTime && colony.shore == null && colony.searchComplete
-                    && now >= colony.nextRoam && !snowing(colony))
+                    && now >= colony.nextRoam && !snowing(colony) && marchesLeft > 0) {
+                marchesLeft--;
                 roam(colony, now);
+            }
             return;
         }
-        if (now >= colony.nextTry) march(colony, wanted, now);
+        if (now >= colony.nextTry && marchesLeft > 0) {
+            marchesLeft--;
+            march(colony, wanted, now);
+        }
     }
 
     /** Where the colony is, by its pets' middle: at home, at its shore, or neither. */
@@ -351,13 +367,18 @@ final class PetColonies {
         for (PetControl pet : colony.members) pet.setColonyPlace(stand, water);
     }
 
-    /** Looks for the colony's water once a day, again when its home moved or unloaded columns may hold some. */
-    private static void search(Colony colony, long now) {
+    /**
+     * Looks for the colony's water once a day, again when its home moved or unloaded columns may hold some. False when
+     * a look is due but this check has none left, so the colony waits for the next.
+     */
+    private static boolean search(Colony colony, long now) {
         Vector home = colony.home.toVector();
         boolean stale = !colony.searched
                 || colony.searchedFrom.distanceSquared(home) > HOME_MOVED * HOME_MOVED
                 || colony.shore == null && !colony.searchComplete && now - colony.searchedAt >= SEARCH_AGAIN_TICKS;
-        if (!stale) return;
+        if (!stale) return true;
+        if (searchesLeft <= 0) return false;
+        searchesLeft--;
         double reach = number(colony.settings, "water_reach", 48D);
         ShoreSearch.Result result = ShoreSearch.nearest(terrain(colony.world), home, reach);
         colony.shore = result.shore();
@@ -365,9 +386,13 @@ final class PetColonies {
         colony.searched = true;
         colony.searchedFrom = home;
         colony.searchedAt = now;
+        return true;
     }
 
-    /** Calls the colony's march to where it is wanted, led by the free adult nearest there. */
+    /**
+     * Calls the colony's march to where it is wanted, led by the free adult standing on dry ground nearest there; one
+     * still in the water falls in behind and swims out to its place.
+     */
     private static void march(Colony colony, Place to, long now) {
         Vector goal = to == Place.SHORE ? colony.shore.stand() : colony.home.toVector();
         PetControl leader = null;
@@ -380,7 +405,7 @@ final class PetColonies {
             if (!PetMarches.free(pet, body)) continue;
             free.add(body);
             freePets.add(pet);
-            if (pet.isBaby()) continue;
+            if (pet.isBaby() || !PetMarches.standing(body)) continue;
             Location at = body.getLocation();
             double distance = horizontal(at.getX(), at.getZ(), goal.getX(), goal.getZ());
             if (distance < best) {
@@ -423,7 +448,7 @@ final class PetColonies {
             if (!PetMarches.free(pet, pet.body())) continue;
             free.add(pet.body());
             pets.add(pet);
-            if (leader == null && !pet.isBaby()) leader = pet;
+            if (leader == null && !pet.isBaby() && PetMarches.standing(pet.body())) leader = pet;
         }
         double minSeconds = number(colony.settings, "min_seconds", 60D),
                 maxSeconds = Math.max(minSeconds, number(colony.settings, "max_seconds", 120D));

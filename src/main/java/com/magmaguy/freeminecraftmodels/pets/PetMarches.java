@@ -135,7 +135,7 @@ final class PetMarches {
     static boolean lead(PetControl leader, LivingEntity body, List<LivingEntity> marchers, Vector goal, double spacing,
                         String sound, float volume, float pitch, long now, long durationTicks,
                         Consumer<Boolean> ended) {
-        if (byBody.containsKey(body.getUniqueId())) return false;
+        if (byBody.containsKey(body.getUniqueId()) || !standing(body)) return false;
         List<LivingEntity> kin = new ArrayList<>(marchers.size());
         for (LivingEntity marcher : marchers)
             if (marcher != body && !byBody.containsKey(marcher.getUniqueId())) kin.add(marcher);
@@ -144,6 +144,18 @@ final class PetMarches {
         if (walk == null) return false;
         walk.ended = ended;
         return true;
+    }
+
+    /**
+     * Whether the body stands on ground a march walks: not in water or powder snow. A line forms behind its leader over
+     * such ground only, so behind a leader still in the water no way back reaches any and every place in the line lay
+     * in the water: on a real shore the colony walked into a lagoon at dusk and stood there, and the leader found no
+     * way out, until the march gave up.
+     */
+    static boolean standing(LivingEntity body) {
+        Location at = body.getLocation();
+        return !body.isInWater() && ground(body.getWorld()).standing(at.getBlockX(), at.getBlockY(), at.getBlockZ())
+                != MarchRoute.Ground.NO_FOOTING;
     }
 
     /** The march module's id, as the Mind knows it. */
