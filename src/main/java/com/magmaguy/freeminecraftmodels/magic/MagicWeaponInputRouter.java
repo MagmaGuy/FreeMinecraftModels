@@ -11,6 +11,18 @@ final class MagicWeaponInputRouter {
     private MagicWeaponInputRouter() {
     }
 
+    /**
+     * A custom behavior standing in for the staff strike is also cast by a left click that met no
+     * entity, so it can be aimed into empty space. The built-in strike keeps needing an entity.
+     */
+    static Optional<MagicAttackKind> route(MagicWeaponKind weapon, MagicInput input, boolean staffStrikeHasBehavior) {
+        Optional<MagicAttackKind> routed = route(weapon, input);
+        if (routed.isEmpty() && staffStrikeHasBehavior && weapon == MagicWeaponKind.STAFF
+                && (input == MagicInput.AIR_LEFT_CLICK || input == MagicInput.BLOCK_LEFT_CLICK))
+            return Optional.of(MagicAttackKind.STAFF_MELEE);
+        return routed;
+    }
+
     static Optional<MagicAttackKind> route(MagicWeaponKind weapon, MagicInput input) {
         Objects.requireNonNull(weapon, "weapon");
         Objects.requireNonNull(input, "input");

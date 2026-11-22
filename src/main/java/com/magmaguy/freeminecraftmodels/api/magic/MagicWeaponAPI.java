@@ -8,7 +8,9 @@ import java.util.Objects;
 
 /** Stable capability boundary for FMM-owned magic weapons. */
 public final class MagicWeaponAPI {
-    public static final int CAPABILITY_VERSION = 7;
+    public static final int CAPABILITY_VERSION = 8;
+    /** The first capability version with {@link MagicAttackBehaviors}, the custom attack registry. */
+    public static final int ATTACK_BEHAVIORS_CAPABILITY = 8;
     public static final String DEFAULT_WAND_ID = "fmm_default_arcane_wand";
     public static final String DEFAULT_STAFF_ID = "fmm_default_arcane_staff";
 

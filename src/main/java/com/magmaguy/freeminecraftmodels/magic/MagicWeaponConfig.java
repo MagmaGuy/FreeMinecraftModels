@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.magic;
 
 import com.magmaguy.freeminecraftmodels.api.magic.MagicAttackKind;
 import com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponKind;
+import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.ConfigurationSection;
 import java.util.EnumMap;
 import java.util.Map;
@@ -19,15 +20,17 @@ public final class MagicWeaponConfig {
         MagicWeaponDefinition defaults = BuiltInMagicWeapons.defaults(itemId, kind);
         Map<MagicAttackKind, Double> powers = new EnumMap<>(defaults.basePowers());
         Map<MagicAttackKind, Integer> reloads = new EnumMap<>(defaults.reloadTicks());
+        Map<MagicAttackKind, NamespacedKey> behaviors = new EnumMap<>(MagicAttackKind.class);
         if (section.contains("attacks")) {
             ConfigurationSection attacks = section.getConfigurationSection("attacks");
             if (attacks == null || !attacks.getKeys(false).equals(defaults.basePowers().keySet().stream().map(Enum::name).collect(java.util.stream.Collectors.toSet())))
                 throw new IllegalArgumentException("weapon.attacks must contain exactly the attacks for " + kind);
             for (MagicAttackKind attack : defaults.basePowers().keySet()) {
                 ConfigurationSection entry = attacks.getConfigurationSection(attack.name());
-                requireKeys(entry, Set.of("basePower", "reloadTicks"), "weapon.attacks." + attack);
+                requireKeys(entry, Set.of("basePower", "reloadTicks", "behavior"), "weapon.attacks." + attack);
                 powers.put(attack, number(entry, "basePower", null, false));
                 reloads.put(attack, integer(entry, "reloadTicks", null));
+                if (entry.contains("behavior")) behaviors.put(attack, behavior(entry.get("behavior"), attack));
             }
         }
         MagicWeaponTraits base = defaults.traits();
@@ -36,11 +39,22 @@ public final class MagicWeaponConfig {
         MagicWeaponTraits traits = new MagicWeaponTraits(1, 0, number(section, "impactRadius", base.impactRadius(), true), 0,
                 number(section, "projectileSpeed", base.projectileSpeed(), false), number(section, "range", base.range(), false),
                 integer(section, "travelTicks", base.travelTicks()), aim);
-        return new MagicWeaponDefinition(itemId, kind, traits, powers, reloads);
+        return new MagicWeaponDefinition(itemId, kind, traits, powers, reloads, behaviors);
     }
 
     private static void requireKeys(ConfigurationSection section, Set<String> allowed, String path) {
         if (section == null || !allowed.containsAll(section.getKeys(false))) throw new IllegalArgumentException("Unknown or malformed fields at " + path);
+    }
+    /**
+     * The addon attack behavior that stands in for this attack. Only the id's shape is checked here:
+     * the addon may register later or be absent, and the weapon then casts its built-in attack.
+     */
+    private static NamespacedKey behavior(Object raw, MagicAttackKind attack) {
+        NamespacedKey id = raw instanceof String text && text.matches("[a-z0-9._-]+:[a-z0-9/._-]+")
+                ? NamespacedKey.fromString(text) : null;
+        if (id == null) throw new IllegalArgumentException("weapon.attacks." + attack
+                + ".behavior must be a lowercase namespaced id such as myaddon:piercing_ray");
+        return id;
     }
     private static double number(ConfigurationSection section, String key, Double fallback, boolean zeroAllowed) {
         Object raw = section.get(key);

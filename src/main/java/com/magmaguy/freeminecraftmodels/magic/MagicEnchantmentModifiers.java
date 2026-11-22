@@ -67,7 +67,7 @@ final class MagicEnchantmentModifiers {
                 traits.range(), traits.travelTicks(), traits.aimAssistDegrees());
         var powers = new HashMap<>(base.basePowers());
         if (attack == MagicAttackKind.WAND_MISSILE) powers.put(attack, positive(base.basePower(attack) * damageFactor, "missile power"));
-        return new MagicWeaponDefinition(base.itemId(), base.kind(), effective, powers, base.reloadTicks());
+        return new MagicWeaponDefinition(base.itemId(), base.kind(), effective, powers, base.reloadTicks(), base.behaviors());
     }
 
     private static int integer(double value, int minimum, String name) {

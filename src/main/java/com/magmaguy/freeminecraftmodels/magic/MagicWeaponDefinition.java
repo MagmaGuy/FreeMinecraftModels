@@ -2,17 +2,29 @@ package com.magmaguy.freeminecraftmodels.magic;
 
 import com.magmaguy.freeminecraftmodels.api.magic.MagicAttackKind;
 import com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponKind;
+import org.bukkit.NamespacedKey;
 
 import java.util.Map;
 import java.util.Objects;
 
-/** Immutable built-in weapon mechanics and base-power coefficients. */
+/** Immutable weapon mechanics, base-power coefficients and the attack behaviors its item file names. */
 public record MagicWeaponDefinition(
         String itemId,
         MagicWeaponKind kind,
         MagicWeaponTraits traits,
         Map<MagicAttackKind, Double> basePowers,
-        Map<MagicAttackKind, Integer> reloadTicks) {
+        Map<MagicAttackKind, Integer> reloadTicks,
+        Map<MagicAttackKind, NamespacedKey> behaviors) {
+
+    /** A weapon whose item file names no attack behavior. */
+    public MagicWeaponDefinition(
+            String itemId,
+            MagicWeaponKind kind,
+            MagicWeaponTraits traits,
+            Map<MagicAttackKind, Double> basePowers,
+            Map<MagicAttackKind, Integer> reloadTicks) {
+        this(itemId, kind, traits, basePowers, reloadTicks, Map.of());
+    }
 
     public MagicWeaponDefinition {
         if (itemId == null || itemId.isBlank()) throw new IllegalArgumentException("itemId must not be blank");
@@ -31,6 +43,9 @@ public record MagicWeaponDefinition(
             throw new IllegalArgumentException("Every attack requires one reload duration");
         for (int ticks : reloadTicks.values())
             if (ticks < 1) throw new IllegalArgumentException("Reload ticks must be positive");
+        behaviors = Map.copyOf(behaviors);
+        if (!basePowers.keySet().containsAll(behaviors.keySet()))
+            throw new IllegalArgumentException("An attack behavior must stand in for one of the weapon's attacks");
     }
 
     public double basePower(MagicAttackKind attackKind) {
@@ -47,6 +62,6 @@ public record MagicWeaponDefinition(
 
     public MagicWeaponDefinition withTraits(MagicWeaponTraits effectiveTraits) {
         return new MagicWeaponDefinition(itemId, kind,
-                Objects.requireNonNull(effectiveTraits, "effectiveTraits"), basePowers, reloadTicks);
+                Objects.requireNonNull(effectiveTraits, "effectiveTraits"), basePowers, reloadTicks, behaviors);
     }
 }

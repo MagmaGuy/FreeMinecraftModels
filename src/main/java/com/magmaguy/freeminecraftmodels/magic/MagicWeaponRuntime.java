@@ -47,13 +47,19 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-/** FMM's sole input, projectile, collision and damage owner for built-in magic weapons. */
+/**
+ * FMM's sole input, projectile, collision and damage owner for magic weapons. An addon attack
+ * behavior replaces only the launch of one attack; its impacts come back through this class.
+ */
 public final class MagicWeaponRuntime implements Listener, MagicWeaponService, AutoCloseable {
     private final Plugin plugin;
     private MagicWeaponCatalog catalog;
     private final MagicInputDeduplicator deduplicator = new MagicInputDeduplicator();
     private final MagicDamageResolution damageResolution = new MagicDamageResolution();
     private final MagicProjectileEngine projectiles;
+    private final MagicAttackBehaviorRegistry behaviors;
+    private final MagicBehaviorCasts behaviorCasts;
+    private final java.util.function.Consumer<MagicAttackBehaviorRegistry.Registration> behaviorRemoved;
     private final Map<CooldownKey, Long> readyAtTick = new HashMap<>();
     private final ThreadLocal<Integer> applyingDamageDepth = ThreadLocal.withInitial(() -> 0);
     private final ThreadLocal<LivingEntity> noKnockbackTarget = new ThreadLocal<>();
@@ -73,9 +79,31 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
     }
 
     MagicWeaponRuntime(Plugin plugin, MagicWeaponCatalog catalog) {
+        this(plugin, catalog, MagicAttackBehaviorRegistry.shared(), MagicBehaviorCasts.BUKKIT);
+    }
+
+    MagicWeaponRuntime(Plugin plugin, MagicWeaponCatalog catalog, MagicAttackBehaviorRegistry behaviors,
+                       MagicBehaviorCasts.Scheduler behaviorScheduler) {
         this.plugin = java.util.Objects.requireNonNull(plugin, "plugin");
         this.catalog = java.util.Objects.requireNonNull(catalog, "catalog");
         this.projectiles = new MagicProjectileEngine(plugin, this::onImpact);
+        this.behaviors = java.util.Objects.requireNonNull(behaviors, "behaviors");
+        this.behaviorCasts = new MagicBehaviorCasts(new MagicBehaviorCasts.Host() {
+            @Override public boolean targetEligible(MagicCast cast, LivingEntity target) {
+                return MagicWeaponRuntime.this.targetEligible(cast, target);
+            }
+            @Override public boolean applyDamage(MagicCast cast, LivingEntity target, double powerFactor) {
+                return MagicWeaponRuntime.this.applyDamage(cast, target, powerFactor);
+            }
+            @Override public List<LivingEntity> acquireTargets(MagicCast cast, double range, double aimAssistDegrees, int limit) {
+                return projectiles.acquireTargets(cast.owner(), range, aimAssistDegrees,
+                        candidate -> MagicWeaponRuntime.this.targetEligible(cast, candidate),
+                        candidate -> targetPriority(cast, candidate), limit);
+            }
+        }, behaviorScheduler, Logger::warn);
+        // The registry outlives this runtime, so a removed behavior's running casts are ended from here.
+        this.behaviorRemoved = behaviorCasts::endFor;
+        behaviors.addRemovalListener(behaviorRemoved);
     }
 
     public void start() {
@@ -96,6 +124,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
     /** Adopts the validated item catalog after the existing content-reload boundary. */
     public void refreshContentState() {
         catalog = com.magmaguy.freeminecraftmodels.scripting.ItemScriptManager.getWeaponCatalog();
+        behaviors.resetWarnings();
         contentReady = !catalog.definitions().isEmpty();
         if (contentReady) {
             contentWarningSent = false;
@@ -105,10 +134,14 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         }
     }
 
-    /** Stops new casts; launched projectiles retain their captured definitions and modifiers. */
+    /**
+     * Stops new casts; launched projectiles retain their captured definitions and modifiers.
+     * Addon behavior casts end here: their definitions and bindings are about to be rebuilt.
+     */
     public void pauseForContentReload() {
         if (closed) return;
         paused = true;
+        behaviorCasts.endAll();
     }
 
     /** Reopens casting only after the rebuilt item and display-model registries are available. */
@@ -162,6 +195,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         // A delayed cast must not silently switch from an integration's hostile-target policy
         // to FMM's broader standalone policy while it is in flight.
         projectiles.cancelAll();
+        behaviorCasts.endAll();
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
@@ -178,7 +212,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         if (InteractionProtectionPolicy.isDenied(
                 event.useInteractedBlock(), event.useItemInHand())) return;
         Optional<MagicWeaponDefinition> definition = resolveDefinition(event.getItem());
-        if (definition.isEmpty() || MagicWeaponInputRouter.route(definition.get().kind(), input).isEmpty()) return;
+        if (definition.isEmpty() || route(definition.get(), input).isEmpty()) return;
         event.setCancelled(true);
         event.setUseInteractedBlock(org.bukkit.event.Event.Result.DENY);
         event.setUseItemInHand(org.bukkit.event.Event.Result.DENY);
@@ -262,8 +296,9 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
             MagicInput input,
             LivingEntity clickedTarget) {
         if (!isOperational() || player == null || !player.isOnline()) return;
-        MagicAttackKind attackKind = MagicWeaponInputRouter.route(definition.kind(), input).orElse(null);
+        MagicAttackKind attackKind = route(definition, input).orElse(null);
         if (attackKind == null) return;
+        MagicWeaponDefinition authored = definition;
         MagicAttackResolver resolver = activeResolver();
         if (resolver != null) {
             try {
@@ -304,17 +339,39 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         compositionWarningSent = false;
         MagicCast cast = new MagicCast(attackId, player, capturedWeapon, definition, attackKind, resolver,
                 capturedEquipment, resolverFacts, effects);
-        boolean launched = switch (attackKind) {
-            case STAFF_MELEE -> strikeWithStaff(cast, clickedTarget);
-            case WAND_MISSILE -> castWand(cast);
-            case STAFF_FIREBALL -> castStaff(cast);
-        };
-        if (!launched) return;
+        if (!launch(cast, authored, clickedTarget)) return;
 
         int reload = definition.reloadTicks(attackKind);
         readyAtTick.put(cooldownKey, tick + reload);
         player.setCooldown(weapon, reload);
         player.swingMainHand();
+    }
+
+    /**
+     * An addon behavior bound to this attack of this weapon replaces the built-in launch. Admission
+     * before this point and the reload after it are the same either way.
+     */
+    boolean launch(MagicCast cast, MagicWeaponDefinition authored, LivingEntity clickedTarget) {
+        MagicAttackBehaviorRegistry.Registration behavior = behaviors.resolve(authored, cast.attackKind(), true);
+        if (behavior != null) return behaviorCasts.launch(behavior, cast, clickedTarget);
+        return switch (cast.attackKind()) {
+            case STAFF_MELEE -> strikeWithStaff(cast, clickedTarget);
+            case WAND_MISSILE -> castWand(cast);
+            case STAFF_FIREBALL -> castStaff(cast);
+        };
+    }
+
+    /** Input routing, widened only for a staff whose strike an addon behavior currently replaces. */
+    private Optional<MagicAttackKind> route(MagicWeaponDefinition definition, MagicInput input) {
+        Optional<MagicAttackKind> routed = MagicWeaponInputRouter.route(definition.kind(), input);
+        if (routed.isPresent() || definition.kind() != MagicWeaponKind.STAFF
+                || input != MagicInput.AIR_LEFT_CLICK && input != MagicInput.BLOCK_LEFT_CLICK) return routed;
+        return MagicWeaponInputRouter.route(definition.kind(), input,
+                behaviors.resolve(definition, MagicAttackKind.STAFF_MELEE, false) != null);
+    }
+
+    MagicBehaviorCasts behaviorCasts() {
+        return behaviorCasts;
     }
 
     private boolean strikeWithStaff(MagicCast cast, LivingEntity target) {
@@ -579,11 +636,18 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         UUID playerId = event.getPlayer().getUniqueId();
         deduplicator.forget(playerId);
         readyAtTick.keySet().removeIf(key -> key.playerId().equals(playerId));
+        behaviorCasts.endFor(event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onWorldChange(org.bukkit.event.player.PlayerChangedWorldEvent event) {
+        behaviorCasts.endFor(event.getPlayer());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPluginDisable(PluginDisableEvent event) {
         unregisterResolver(event.getPlugin());
+        behaviors.unregisterAll(event.getPlugin());
     }
 
     @Override
@@ -594,6 +658,8 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         plugin.getServer().getServicesManager().unregister(MagicWeaponService.class, this);
         HandlerList.unregisterAll(this);
         projectiles.close();
+        behaviorCasts.endAll();
+        behaviors.removeRemovalListener(behaviorRemoved);
         deduplicator.clear();
         readyAtTick.clear();
         synchronized (this) {
