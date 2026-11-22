@@ -6,12 +6,13 @@
 -- takes away leaves a gap the ones behind close up, and when it comes back it joins at the back. Wild pets march with
 -- wild ones, owned pets with their owner's other pets of the kind.
 --
--- With routine on, wild pets keep a daily routine instead of calling marches at random: two or more of a kind whose
--- homes lie within radius blocks of one another are a colony. Each morning the colony forms a line and marches to the
--- open water nearest home, within water_reach blocks, and stays there by day, where fishing_trip fishes it. At
--- dusk_time it forms a line again and marches home, to spend the night there (and huddle, with huddle). A colony with
--- no water within reach stays home and marches out and back from there instead, in the morning and then every
--- every_minutes. The colony decides all of this, not its pets, so it turns with /time set.
+-- With routine on (it is off unless a species' pet file sets routine: true in its march entry), wild pets keep a daily
+-- routine instead of calling marches at random: two or more of a kind whose homes lie within radius blocks of one
+-- another are a colony. Each morning the colony forms a line and marches to the open water nearest home, within
+-- water_reach blocks, and stays there by day, where fishing_trip fishes it. At dusk_time it forms a line again and
+-- marches home, to spend the night there (and huddle, with huddle). A colony with no water within reach stays home and
+-- marches out and back from there instead, in the morning and then every every_minutes. The colony decides all of this,
+-- not its pets, so it turns with /time set.
 
 -- How often a pet that is free looks into calling a march, in ticks.
 local CHECK_TICKS = 100
@@ -36,7 +37,7 @@ return ai.module {
     -- (12300 is nightfall; 10500 leaves about a minute and a half for the walk).
     settings = { radius = 12, min_group = 4, every_minutes = 8, min_seconds = 60, max_seconds = 120, spacing = 1.5,
                  speed = 0.18, catch_up = 1.6, sound = 'block.note_block.didgeridoo', volume = 1.0, pitch = 2.0,
-                 animation = '', wild = true, pets = false, routine = true, water_reach = 48, dusk_time = 10500 },
+                 animation = '', wild = true, pets = false, routine = false, water_reach = 48, dusk_time = 10500 },
     memories = { march_next = 'integer', march_close = 'boolean' },
     behaviors = {
         ai.behavior {

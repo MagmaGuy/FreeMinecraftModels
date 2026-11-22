@@ -263,7 +263,7 @@ public final class PetPrograms {
      */
     public static List<PetBehaviorEntry> defaults(MindBodyLocomotion locomotion) {
         List<String> names = switch (locomotion) {
-            case FLYING -> List.of("migrate", "stay", "defend_owner", "follow_owner", "drift", "hover");
+            case FLYING -> List.of("stay", "defend_owner", "follow_owner", "drift", "hover");
             case AQUATIC -> List.of("stay", "defend_owner", "follow_owner", "swim");
             case GROUNDED, AMPHIBIOUS -> List.of("stay", "defend_owner", "follow_owner", "wander", "idle_look");
             case STATIONARY -> List.of("stay", "follow_owner");

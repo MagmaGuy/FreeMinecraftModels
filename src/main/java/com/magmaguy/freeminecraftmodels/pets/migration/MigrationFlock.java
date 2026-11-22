@@ -57,6 +57,7 @@ public final class MigrationFlock implements MigrationRoute {
     private final double speed;
     private final double altitude;
     private final int durationTicks;
+    private final int viewDistance;
     private final Map<PetControl, Slot> members = new IdentityHashMap<>();
     private final StoppedMembers<PetControl> stopped;
     private BukkitTask task;
@@ -67,19 +68,23 @@ public final class MigrationFlock implements MigrationRoute {
     // Scratch position for target(), read on the main thread only.
     private final Location probe = new Location(null, 0D, 0D, 0D);
 
-    private MigrationFlock(World world, Vector heading, Vector anchorStart, double speed, double altitude, int durationTicks) {
+    private MigrationFlock(World world, Vector heading, Vector anchorStart, double speed, double altitude, int durationTicks,
+                           int viewDistance) {
         this.world = world;
         this.heading = heading;
         this.anchorStart = anchorStart;
         this.speed = speed;
         this.altitude = altitude;
         this.durationTicks = durationTicks;
+        this.viewDistance = viewDistance;
         this.stopped = new StoppedMembers<>(patience(speed));
     }
 
-    /** Puts a flock of the species in the air on a path over the player, or returns null when none could spawn. */
-    static MigrationFlock launch(Plugin plugin, Player player, PetSpecies species, PetInteractions.Migration look,
-                                 PetMigrations.Settings settings) {
+    /**
+     * Puts a flock of the species in the air on a path over the player, flying as its migration section says, or
+     * returns null when none could spawn.
+     */
+    static MigrationFlock launch(Plugin plugin, Player player, PetSpecies species, PetInteractions.Migration look) {
         PetManager manager = PetManager.get();
         if (manager == null) return null;
         World world = player.getWorld();
@@ -90,29 +95,31 @@ public final class MigrationFlock implements MigrationRoute {
         // Halfway through the flight the anchor passes over the player. It starts where its members still tick and
         // can be seen: inside the simulation distance and the view distance.
         double simulated = Math.max(32D, (world.getSimulationDistance() - 1) * 16D);
-        double length = settings.speed() * settings.durationTicks();
-        double approach = Math.min(length / 2D, Math.min(simulated * 0.8D, settings.viewDistance() * 0.9D));
+        double length = look.speed() * look.durationTicks();
+        double approach = Math.min(length / 2D, Math.min(simulated * 0.8D, look.viewDistance() * 0.9D));
         Vector start = over.toVector().subtract(heading.clone().multiply(approach));
-        int size = settings.minFlockSize() + random.nextInt(settings.maxFlockSize() - settings.minFlockSize() + 1);
+        int size = look.minFlockSize() + random.nextInt(look.maxFlockSize() - look.minFlockSize() + 1);
         double spread = SPREAD_BASE + SPREAD_PER_ROOT * Math.sqrt(size);
         // The flock flies one height for its whole crossing, so it clears the highest ground anywhere under it, not
         // just under the player: a hill where it starts would otherwise swallow members.
         int ground = routeGround(start, heading, length, spread + SEPARATION_RADIUS, (x, z) -> world.isChunkLoaded(x >> 4, z >> 4)
                 ? world.getHighestBlockYAt(x, z, HeightMap.MOTION_BLOCKING) : Integer.MIN_VALUE);
         double height = Math.min(world.getMaxHeight() - 4D, Math.max(over.getY(), ground)
-                + Math.max(settings.altitude(), HEIGHT_SPREAD / 2D + BOB_HEIGHT + MIN_CLEARANCE));
+                + Math.max(look.altitude(), HEIGHT_SPREAD / 2D + BOB_HEIGHT + MIN_CLEARANCE));
         start.setY(height);
-        MigrationFlock flock = new MigrationFlock(world, heading, start, settings.speed(), height, settings.durationTicks());
+        MigrationFlock flock = new MigrationFlock(world, heading, start, look.speed(), height, look.durationTicks(),
+                look.viewDistance());
         // A rare flock: one unusual colour for every member. Otherwise each member picks its own, like a wild spawn.
         String model = look.model();
-        if (model == null && random.nextDouble() < settings.rareFlockChance()) model = species.pickRareVariant(random);
+        if (model == null && random.nextDouble() < look.rareFlockChance()) model = species.pickRareVariant(random);
         for (int index = 0; index < size; index++) {
             double around = random.nextDouble() * Math.PI * 2D, out = Math.sqrt(random.nextDouble()) * spread;
             Slot slot = new Slot(Math.cos(around) * out, (random.nextDouble() - 0.5D) * HEIGHT_SPREAD, Math.sin(around) * out,
                     random.nextDouble() * Math.PI * 2D);
             Location at = new Location(world, start.getX() + slot.x(), height + slot.y(), start.getZ() + slot.z());
             if (!world.isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4) || !at.getBlock().isPassable()) continue;
-            PetControl member = manager.spawnMigrant(species, at, model, look.scale(), settings.viewDistance(), flock);
+            PetControl member = manager.spawnMigrant(species, at, model, look.scale(), look.viewDistance(),
+                    look.fullBright(), flock);
             if (member == null) continue;
             if (look.animation() != null) member.modeled().playAnimation(look.animation(), false, true);
             flock.members.put(member, slot);
@@ -232,6 +239,11 @@ public final class MigrationFlock implements MigrationRoute {
 
     public boolean isDone() {
         return done;
+    }
+
+    /** Blocks from which players see this flock. */
+    int viewDistance() {
+        return viewDistance;
     }
 
     /** Whether the flock's anchor is within the distance of the location. */

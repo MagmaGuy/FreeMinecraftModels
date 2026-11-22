@@ -19,28 +19,32 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.DoubleSupplier;
+import java.util.function.Function;
 
 /**
  * Night migrations: now and then a flock of a migrating species crosses the sky over a player and is gone after the
  * crossing. The members are wild pets of the species on a migration route, so they look and animate like the pets,
- * and a player who reaches one can tame it. Each player gets one roll per night, the first time the schedule sees them in
- * that night; a won roll picks a moment in the rest of the night, and the flock starts then if the player is under
- * open sky (otherwise it tries again until the night runs out). A flying species takes part through a
- * {@code migration:} section in its pet file, as long as migrate is among its behaviors (the flying defaults include
- * it); the schedule's own settings live in pets.yml.
+ * and a player who reaches one can tame it. Each player gets one roll per night, the first time the schedule sees them
+ * in that night: each migrating species is rolled at its own chancePerNight, and of those that won one is picked by
+ * weight. A won roll picks a moment in the rest of the night, and the flock starts then if the player is under open sky
+ * (otherwise it tries again until the night runs out). A flying species takes part through a {@code migration:}
+ * section in its pet file, which holds its flock settings, as long as migrate is among its behaviors; pets.yml only
+ * switches migrations on and limits them server-wide.
  */
 public final class PetMigrations {
-    /** The pets.yml settings of the schedule and of every flock. */
-    public record Settings(boolean enabled, double chancePerNight, int minFlockSize, int maxFlockSize, double altitude,
-                           double speed, int durationTicks, int viewDistance, int maxActiveFlocks, List<String> species,
-                           double rareFlockChance) {
+    /** The pets.yml settings: whether flocks fly, how many at once, and which species may. */
+    public record Settings(boolean enabled, int maxActiveFlocks, List<String> species) {
     }
 
-    private record Roll(UUID world, long night, long startAt) {
+    private record Roll(UUID world, long night, long startAt, String species) {
     }
 
+    /** The flock settings pets.yml held before they moved to each species' migration section. */
+    static final List<String> MOVED_KEYS = List.of("chancePerNight", "minFlockSize", "maxFlockSize", "altitude", "speed",
+            "durationSeconds", "viewDistance", "rareFlockChance");
     private static final int SCHEDULE_TICKS = 100;
-    private static Settings settings = new Settings(true, 0.15D, 8, 14, 28D, 0.15D, 1800, 160, 3, List.of(), 0.1D);
+    private static Settings settings = new Settings(true, 3, List.of());
 
     private final Plugin plugin;
     private final Map<UUID, Roll> rolls = new HashMap<>();
@@ -55,46 +59,23 @@ public final class PetMigrations {
         boolean enabled = ConfigurationEngine.setBoolean(
                 List.of("Night migrations: rare flocks of a migrating pet species crossing the night sky over players.",
                         "The members are wild pets of the species flying a migration route: same model and animations,",
-                        "and in CREATURES mode a player who reaches one can tame it. They leave after durationSeconds.",
-                        "A species migrates when it flies, its pet file has a migration: section, and migrate is among",
-                        "its behaviors (the flying defaults include it); the console says when one cannot."),
+                        "and in CREATURES mode a player who reaches one can tame it. A species migrates when it flies,",
+                        "its pet file has a migration: section and migrate is among its behaviors; the console says when",
+                        "one cannot. How often its flocks come, their size, height, speed and length are set in that",
+                        "migration: section."),
                 config, "migrations.enabled", true);
-        double chance = ConfigurationEngine.setDouble(
-                List.of("Chance, 0 to 1, that a player gets a flock over them on a given night."),
-                config, "migrations.chancePerNight", 0.15D);
-        int minSize = ConfigurationEngine.setInt(List.of("Fewest and most creatures in one flock."),
-                config, "migrations.minFlockSize", 8);
-        int maxSize = ConfigurationEngine.setInt(config, "migrations.maxFlockSize", 14);
-        double altitude = ConfigurationEngine.setDouble(
-                List.of("Blocks above the higher of the player and the ground under them that the flock flies at."),
-                config, "migrations.altitude", 28D);
-        double speed = ConfigurationEngine.setDouble(
-                List.of("Flock speed in blocks per tick (0.15 is 3 blocks a second)."),
-                config, "migrations.speed", 0.15D);
-        double duration = ConfigurationEngine.setDouble(
-                List.of("Seconds from the flock appearing to its removal. It passes over the player halfway through."),
-                config, "migrations.durationSeconds", 90D);
-        int viewDistance = ConfigurationEngine.setInt(
-                List.of("Blocks from which players see a flock; well past the usual model view distance.",
-                        "Clients still need the chunks the flock flies over within their render distance."),
-                config, "migrations.viewDistance", 160);
+        // The flock settings moved to each species' pet file, so they are taken out of pets.yml instead of
+        // advertising settings that do nothing.
+        for (String key : MOVED_KEYS) config.set("migrations." + key, null);
         int maxActive = ConfigurationEngine.setInt(
                 List.of("Most flocks in the air at once across the server."),
                 config, "migrations.maxActiveFlocks", 3);
         List<?> species = ConfigurationEngine.setList(
                 List.of("Species ids that may migrate. Empty means every species that can (see enabled above)."),
                 config, "migrations.species", List.of());
-        double rare = ConfigurationEngine.setDouble(
-                List.of("Chance, 0 to 1, that a flock is a rare one: every member wears the same colour, picked so that",
-                        "the species' rarest colours (lowest variant weight) come up most. Only for a species with",
-                        "colours (variants) and no fixed migration model."),
-                config, "migrations.rareFlockChance", 0.1D);
         List<String> ids = new ArrayList<>();
         for (Object id : species) if (id != null) ids.add(id.toString().toLowerCase(Locale.ROOT));
-        int fewest = Math.max(1, minSize);
-        settings = new Settings(enabled, Math.max(0D, Math.min(1D, chance)), fewest, Math.max(fewest, maxSize),
-                Math.max(4D, altitude), Math.max(0.02D, speed), (int) Math.max(100D, duration * 20D),
-                Math.max(16, viewDistance), Math.max(1, maxActive), List.copyOf(ids), Math.max(0D, Math.min(1D, rare)));
+        settings = new Settings(enabled, Math.max(1, maxActive), List.copyOf(ids));
     }
 
     public static Settings settings() {
@@ -111,35 +92,63 @@ public final class PetMigrations {
     private void schedule() {
         Settings current = settings;
         rolls.keySet().removeIf(id -> Bukkit.getPlayer(id) == null);
-        if (!current.enabled() || current.chancePerNight() <= 0D || PetManager.get() == null) return;
+        PetManager manager = PetManager.get();
+        if (!current.enabled() || manager == null) return;
+        List<PetSpecies> candidates = candidates(manager, current);
+        if (candidates.isEmpty()) return;
         ThreadLocalRandom random = ThreadLocalRandom.current();
         for (World world : Bukkit.getWorlds()) {
             if (world.getEnvironment() != World.Environment.NORMAL || PetSky.isDay(world)) continue;
             long now = world.getFullTime();
             long night = Math.floorDiv(now, 24000L);
-            long latest = PetSky.nightEnd(now) - current.durationTicks();
             for (Player player : world.getPlayers()) {
                 UUID id = player.getUniqueId();
                 Roll roll = rolls.get(id);
                 if (roll == null || !roll.world().equals(world.getUID()) || roll.night() != night) {
-                    long startAt = -1L;
-                    if (latest > now && random.nextDouble() < current.chancePerNight())
-                        startAt = now + random.nextLong(latest - now + 1L);
-                    roll = new Roll(world.getUID(), night, startAt);
+                    roll = new Roll(world.getUID(), night, -1L, null);
+                    PetSpecies won = rollNight(candidates, PetMigrations::migration, random::nextDouble);
+                    if (won != null) {
+                        long latest = latest(now, won);
+                        if (latest > now)
+                            roll = new Roll(world.getUID(), night, now + random.nextLong(latest - now + 1L), won.id());
+                    }
                     rolls.put(id, roll);
                 }
                 if (roll.startAt() < 0L || now < roll.startAt()) continue;
-                // Too late for a whole crossing, or a flock is up: drop the roll, or keep it for the next look.
-                if (now > latest) rolls.put(id, new Roll(world.getUID(), night, -1L));
-                else if (start(player, null, false) != null) rolls.put(id, new Roll(world.getUID(), night, -1L));
+                PetSpecies species = manager.species(roll.species());
+                // A species gone since the roll, or too late for a whole crossing, drops the roll; a flock that could
+                // not start keeps it for the next look.
+                if (species == null || !candidates.contains(species) || now > latest(now, species))
+                    rolls.put(id, new Roll(world.getUID(), night, -1L, null));
+                else if (start(player, species, false) != null) rolls.put(id, new Roll(world.getUID(), night, -1L, null));
             }
         }
     }
 
+    /** The last moment tonight a flock of the species can start and still finish its crossing before dawn. */
+    private static long latest(long now, PetSpecies species) {
+        return PetSky.nightEnd(now) - migration(species).durationTicks();
+    }
+
+    private static PetInteractions.Migration migration(PetSpecies species) {
+        return species.interactions().migration();
+    }
+
     /**
-     * Sends a flock over the player now. With a species, that species flies even without a migration section;
-     * forced, the open sky and nearby-flock checks are skipped (the admin command). Returns null when no flock
-     * could start.
+     * A player's roll for the night: each species is rolled at its own chancePerNight, and of those that won one is
+     * picked by weight. Null when none won.
+     */
+    static <T> T rollNight(List<T> candidates, Function<T, PetInteractions.Migration> migration, DoubleSupplier random) {
+        List<T> won = new ArrayList<>();
+        for (T species : candidates)
+            if (random.getAsDouble() < migration.apply(species).chancePerNight()) won.add(species);
+        return pick(won, migration, random);
+    }
+
+    /**
+     * Sends a flock over the player now. With a species, that species flies even without a migration section, with
+     * the default flock settings; forced, the open sky and nearby-flock checks are skipped (the admin command).
+     * Returns null when no flock could start.
      */
     public MigrationFlock start(Player player, PetSpecies species, boolean forced) {
         PetManager manager = PetManager.get();
@@ -147,40 +156,48 @@ public final class PetMigrations {
         Settings current = settings;
         flocks.removeIf(MigrationFlock::isDone);
         if (!forced && flocks.size() >= current.maxActiveFlocks()) return null;
-        Location at = player.getLocation();
-        if (!forced) {
-            for (MigrationFlock flock : flocks) if (flock.isNear(at, current.viewDistance())) return null;
-            if (!PetSky.underOpenSky(at)) return null;
-        }
-        PetSpecies chosen = species != null ? species : pick(manager, current);
+        PetSpecies chosen = species != null ? species
+                : pick(candidates(manager, current), PetMigrations::migration, ThreadLocalRandom.current()::nextDouble);
         if (chosen == null) return null;
         PetInteractions.Migration look = chosen.interactions().migration();
-        if (look == null) look = new PetInteractions.Migration(null, 1D, null, 1D);
-        MigrationFlock flock = MigrationFlock.launch(plugin, player, chosen, look, current);
+        if (look == null) look = PetInteractions.Migration.DEFAULT;
+        Location at = player.getLocation();
+        if (!forced) {
+            // Not where a flock is already in view, by the farther of the two view distances.
+            for (MigrationFlock flock : flocks)
+                if (flock.isNear(at, Math.max(flock.viewDistance(), look.viewDistance()))) return null;
+            if (!PetSky.underOpenSky(at)) return null;
+        }
+        MigrationFlock flock = MigrationFlock.launch(plugin, player, chosen, look);
         if (flock != null) flocks.add(flock);
         return flock;
     }
 
-
     /**
-     * A migrating species by weight, among those pets.yml allows. A species that does not fly, or whose migrants would
-     * not run the migrate behavior, is left out, since its flock would hover or fall where it spawned; its pet file
-     * was warned about at load.
+     * The migrating species pets.yml allows. A species that does not fly, or whose migrants would not run the migrate
+     * behavior, is left out, since its flock would hover or fall where it spawned; its pet file was warned about at
+     * load. So is one with a weight or chancePerNight of 0.
      */
-    private static PetSpecies pick(PetManager manager, Settings current) {
+    private static List<PetSpecies> candidates(PetManager manager, Settings current) {
         List<PetSpecies> candidates = new ArrayList<>();
-        double total = 0D;
         for (PetSpecies species : manager.species()) {
             PetInteractions.Migration look = species.interactions().migration();
-            if (look == null || look.weight() <= 0D || !manager.canMigrate(species)) continue;
+            if (look == null || look.weight() <= 0D || look.chancePerNight() <= 0D || !manager.canMigrate(species))
+                continue;
             if (!current.species().isEmpty() && !current.species().contains(species.id())) continue;
             candidates.add(species);
-            total += look.weight();
         }
+        return candidates;
+    }
+
+    /** One of the species, by the weight of its migration section; null when there is none. */
+    static <T> T pick(List<T> candidates, Function<T, PetInteractions.Migration> migration, DoubleSupplier random) {
         if (candidates.isEmpty()) return null;
-        double roll = ThreadLocalRandom.current().nextDouble() * total;
-        for (PetSpecies species : candidates) {
-            roll -= species.interactions().migration().weight();
+        double total = 0D;
+        for (T species : candidates) total += migration.apply(species).weight();
+        double roll = random.getAsDouble() * total;
+        for (T species : candidates) {
+            roll -= migration.apply(species).weight();
             if (roll < 0D) return species;
         }
         return candidates.get(candidates.size() - 1);

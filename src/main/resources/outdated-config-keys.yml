@@ -94,7 +94,9 @@ pet_behaviors:
   - files:
       - march.lua
     sha256:
+      - 8a4cd22fa31f368d73cfa58268b110a6c946e76f6fce159bb6d760422e2bece5
       - b75229c2e2dbc784d276e74881dd1cc7db0ac833e346bb7e731fece654287fff
+      - ebe3c06603d67077cb0f971e0bd206c7ac1c6a72bd0f71c27b9d0436b5203a9c
   - files:
       - migrate.lua
     sha256:

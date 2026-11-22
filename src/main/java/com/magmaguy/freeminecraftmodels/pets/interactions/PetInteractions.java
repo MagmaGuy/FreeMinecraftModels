@@ -4,16 +4,25 @@ import com.magmaguy.magmacore.util.Logger;
 import org.bukkit.configuration.ConfigurationSection;
 
 /**
- * A species' look in night migrations, from its pet file's migration section. It is off unless the section is in the
- * file, and the section can say {@code enabled: false} to stay off while keeping its values. What a pet does in the
+ * A species' night migrations, from its pet file's migration section: how its flocks look and fly. It is off unless the
+ * section is in the file, and the section can say {@code enabled: false} to stay off while keeping its values. What a pet does in the
  * world, campfires, rain, glow, stings, perching and drizzle among it, comes from the behavior modules its file lists.
  */
 public final class PetInteractions {
     /**
-     * The species' look in a night migration flock. A bone draws each member as that one bone, the cheap way. model is
-     * a fixed model for every member, null to pick from the species' variants; scale multiplies its size.
+     * The species' night migration flocks. model is a fixed model for every member, null to pick from the species'
+     * variants; scale multiplies its size; weight is how often the species is picked among those that migrate.
+     * chancePerNight is a player's chance of a flock of the species on a given night, a flock has minFlockSize to
+     * maxFlockSize members, flies altitude blocks up at speed blocks a tick for durationTicks, and is seen from
+     * viewDistance blocks. rareFlockChance is the chance of a flock all in one rare colour; fullBright lights the
+     * members fully whatever the light around them.
      */
-    public record Migration(String model, double scale, String animation, double weight) {
+    public record Migration(String model, double scale, String animation, double weight, double chancePerNight,
+                            int minFlockSize, int maxFlockSize, double altitude, double speed, int durationTicks,
+                            int viewDistance, double rareFlockChance, boolean fullBright) {
+        /** A migration section that sets nothing: the flocks pets.yml flew before these moved to the pet file. */
+        public static final Migration DEFAULT = new Migration(null, 1D, null, 1D, 0.15D, 8, 14, 28D, 0.15D, 1800, 160,
+                0.1D, true);
     }
 
     public static final PetInteractions NONE = new PetInteractions(null);
@@ -44,12 +53,26 @@ public final class PetInteractions {
     private static Migration migration(ConfigurationSection config) {
         ConfigurationSection section = enabled(config, "migration");
         if (section == null) return null;
+        Migration plain = Migration.DEFAULT;
         String fixed = section.getString("model", "");
         String animation = section.getString("animation", "");
+        int fewest = Math.max(1, section.getInt("minFlockSize", plain.minFlockSize()));
         return new Migration(fixed == null || fixed.isBlank() ? null : fixed,
-                Math.max(0.05D, section.getDouble("scale", 1D)),
+                Math.max(0.05D, section.getDouble("scale", plain.scale())),
                 animation == null || animation.isBlank() ? null : animation,
-                Math.max(0D, section.getDouble("weight", 1D)));
+                Math.max(0D, section.getDouble("weight", plain.weight())),
+                chance(section.getDouble("chancePerNight", plain.chancePerNight())),
+                fewest, Math.max(fewest, section.getInt("maxFlockSize", plain.maxFlockSize())),
+                Math.max(4D, section.getDouble("altitude", plain.altitude())),
+                Math.max(0.02D, section.getDouble("speed", plain.speed())),
+                (int) Math.max(100D, section.getDouble("durationSeconds", plain.durationTicks() / 20D) * 20D),
+                Math.max(16, section.getInt("viewDistance", plain.viewDistance())),
+                chance(section.getDouble("rareFlockChance", plain.rareFlockChance())),
+                section.getBoolean("fullBright", plain.fullBright()));
+    }
+
+    private static double chance(double value) {
+        return Math.max(0D, Math.min(1D, value));
     }
 
     public Migration migration() {

@@ -145,7 +145,10 @@ class PetOwnershipProgramsTest {
     void onlyAWildBodyRunsMigrate() {
         try (PetBehaviorCatalog catalog = catalog()) {
             PetPrograms programs = new PetPrograms(catalog, warnings::add);
-            List<PetBehaviorEntry> flyer = PetPrograms.defaults(com.magmaguy.magmacore.ai.MindBodyLocomotion.FLYING);
+            // A migrating flyer lists migrate itself, as the Driftjelly does; no default list has it.
+            List<PetBehaviorEntry> flyer = new java.util.ArrayList<>(
+                    PetPrograms.defaults(com.magmaguy.magmacore.ai.MindBodyLocomotion.FLYING));
+            flyer.addFirst(new PetBehaviorEntry("migrate", Map.of()));
             // A migrant is a wild body; taming one spawns an owned body, which is in no flock.
             PetPrograms.Program wild = programs.program("jelly", "flyer", PetPrograms.Ownership.WILD, flyer, "jelly.pet.yml");
             PetPrograms.Program owned = programs.program("jelly", "flyer", PetPrograms.Ownership.OWNED, flyer, "jelly.pet.yml");

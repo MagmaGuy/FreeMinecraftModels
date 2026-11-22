@@ -576,16 +576,16 @@ public final class PetManager {
     /**
      * Puts a wild pet on a migration route: an ordinary wild pet of the species, wearing its full model, flying the
      * route at the top of its Mind program. It is sizeMultiplier times the species' size, seen from viewDistance blocks
-     * and lit fully bright. A player who reaches it can tame it like any wild pet.
+     * and, with fullBright, lit fully bright. A player who reaches it can tame it like any wild pet.
      */
     public PetControl spawnMigrant(PetSpecies pet, Location at, String model, double sizeMultiplier, int viewDistance,
-                                   MigrationRoute route) {
+                                   boolean fullBright, MigrationRoute route) {
         PetControl control = spawn(pet, null, null, model != null ? model : pet.pickVariant(ThreadLocalRandom.current()), false,
                 at, at, sizeMultiplier, null);
         if (control == null) return null;
         control.setRoute(route);
         control.modeled().setViewDistanceOverride(viewDistance);
-        control.modeled().setBrightnessOverride(15, 15);
+        if (fullBright) control.modeled().setBrightnessOverride(15, 15);
         return control;
     }
 

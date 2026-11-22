@@ -315,6 +315,25 @@ class ShippedPetModulesTest {
     }
 
     /**
+     * A colony's daily routine is for the species that asks for it: march leaves it off, and a pet file's march entry
+     * with routine: true turns it on.
+     */
+    @Test
+    void marchRunsItsRoutineOnlyWhenThePetFileAsks() {
+        try (PetBehaviorCatalog catalog = catalog()) {
+            assertEquals(false, catalog.module("march").orElseThrow().settings().get("routine"));
+            PetPrograms programs = new PetPrograms(catalog, warnings::add);
+            String march = PetBehaviorCatalog.ID_PREFIX + "march";
+            assertEquals(false, programs.program("test", "plain", List.of(new PetBehaviorEntry("march", Map.of())), "plain")
+                    .settings().get(march).get("routine"));
+            assertEquals(true, programs.program("test", "colony",
+                            List.of(new PetBehaviorEntry("march", Map.of("routine", true))), "colony")
+                    .settings().get(march).get("routine"));
+        }
+        assertEquals(List.of(), warnings);
+    }
+
+    /**
      * How often the runtime asks each shipped behavior, while stopped, whether it can start: every 4 ticks for an
      * owner's commands and walk-offs and for hover's bob between drifts, every 10 for the rest. Pinned, so a typo
      * cannot make stay or follow_owner wait seconds, or put a behavior back to asking every tick.

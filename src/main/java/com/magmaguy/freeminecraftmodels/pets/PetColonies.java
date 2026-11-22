@@ -150,7 +150,7 @@ final class PetColonies {
                     || home.getWorld() != body.getWorld()) continue;
             String kind = body.getWorld().getUID() + "/" + pet.species().id() + "/" + pet.model();
             Map<String, Object> settings = settingsByKind.computeIfAbsent(kind, key -> manager.marchSettings(pet));
-            if (settings == null || !bool(settings, "routine", true)) continue;
+            if (settings == null || !bool(settings, "routine", false)) continue;
             byKind.computeIfAbsent(kind, key -> new ArrayList<>()).add(pet);
         }
         // Variants of one species live together: a colony is of a species, whatever each one's colour.

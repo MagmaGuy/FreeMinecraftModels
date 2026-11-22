@@ -279,11 +279,8 @@ class PetProgramsTest {
         try (PetBehaviorCatalog catalog = catalog("migrate", "stay", "defend_owner", "follow_owner", "drift", "hover",
                 "wander", "idle_look", "swim")) {
             PetPrograms programs = new PetPrograms(catalog, warnings::add);
-            // Only a flyer's default list includes migrate.
-            assertTrue(programs.program("jellyfish", "flying", PetPrograms.defaults(MindBodyLocomotion.FLYING), FILE)
-                    .runs("migrate"));
-            for (MindBodyLocomotion locomotion : List.of(MindBodyLocomotion.GROUNDED, MindBodyLocomotion.AMPHIBIOUS,
-                    MindBodyLocomotion.AQUATIC, MindBodyLocomotion.STATIONARY))
+            // No default list includes migrate, a flyer's neither: a species that migrates lists it itself.
+            for (MindBodyLocomotion locomotion : MindBodyLocomotion.values())
                 assertFalse(programs.program("jellyfish", locomotion.name(), PetPrograms.defaults(locomotion), FILE)
                         .runs("migrate"), locomotion.name());
             // A list that leaves it out does not run it; one module needing it pulls it in.
@@ -299,8 +296,7 @@ class PetProgramsTest {
 
     @Test
     void eachLocomotionHasADefaultList() {
-        assertEquals(List.of("migrate", "stay", "defend_owner", "follow_owner", "drift", "hover"),
-                names(MindBodyLocomotion.FLYING));
+        assertEquals(List.of("stay", "defend_owner", "follow_owner", "drift", "hover"), names(MindBodyLocomotion.FLYING));
         assertEquals(List.of("stay", "defend_owner", "follow_owner", "wander", "idle_look"), names(MindBodyLocomotion.GROUNDED));
         assertEquals(List.of("stay", "defend_owner", "follow_owner", "wander", "idle_look"), names(MindBodyLocomotion.AMPHIBIOUS));
         assertEquals(List.of("stay", "defend_owner", "follow_owner", "swim"), names(MindBodyLocomotion.AQUATIC));

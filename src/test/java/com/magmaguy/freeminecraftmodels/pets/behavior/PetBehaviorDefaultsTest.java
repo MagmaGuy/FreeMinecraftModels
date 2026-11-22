@@ -51,6 +51,9 @@ class PetBehaviorDefaultsTest {
                 for (Object hash : (List<?>) rule.get("sha256"))
                     listed.computeIfAbsent(file.toString(), ignored -> new java.util.HashSet<>()).add(hash.toString());
         assertTrue(listed.containsKey("migrate.lua"), "the earlier migrate.lua versions are still archived");
+        // The tester builds' march.lua ran every colony's routine; the routine is off by default now.
+        assertTrue(listed.get("march.lua").contains("8a4cd22fa31f368d73cfa58268b110a6c946e76f6fce159bb6d760422e2bece5"),
+                "the march.lua with routine on by default is archived");
         java.security.MessageDigest sha256 = java.security.MessageDigest.getInstance("SHA-256");
         for (String name : PetBehaviorCatalog.DEFAULTS) {
             String text = PetBehaviorDefaults.text(name, JAR);
