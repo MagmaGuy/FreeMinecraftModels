@@ -42,8 +42,9 @@ class ModelShadingCompatibilityTest {
         try {
             Path models = Files.createDirectories(temporary.resolve("models"));
             JsonObject source;
+            // One of FMM's own bundled models: pack content stays out of this public repository.
             try (var stream = getClass().getResourceAsStream(
-                    "/ticket-220/current/models/fmm_craftenmine_basic_item_pack_formula_7_sword.bbmodel")) {
+                    "/models/fmm_default_magic/fmm_default_arcane_wand.bbmodel")) {
                 assertNotNull(stream);
                 source = JsonParser.parseString(new String(stream.readAllBytes(), StandardCharsets.UTF_8)).getAsJsonObject();
             }

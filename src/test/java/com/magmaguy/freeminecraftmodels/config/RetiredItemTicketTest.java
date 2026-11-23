@@ -10,14 +10,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class RetiredItemTicketTest {
     @Test
     void scriptedCustomItemIsClassifiedAsRetiredWithoutRevivingItsScript() throws Exception {
-        String source = new String(
-                getClass().getResourceAsStream("/ticket-220/formula-7-v1-retired.yml")
-                        .readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        // A stand-in in the retired format. The item the ticket was about is paid content and
+        // stays out of this public repository.
+        String source = """
+                isEnabled: true
+                material: IRON_SWORD
+                name: "Stand-in scripted sword"
+                lore:
+                - "&7An item in the retired scripted format."
+                enchantments:
+                - "SHARPNESS,5"
+                - "UNBREAKING,1"
+                scripts:
+                - standin_scripted_sword.lua
+                """;
         PropScriptConfigFields fields = parse(source);
 
         assertTrue(fields.getUnavailableReason().startsWith("retired scripted item format"));
         assertTrue(fields.getFileConfiguration().getStringList("scripts")
-                .contains("fmm_craftenmine_basic_item_pack_formula_7_sword.lua"));
+                .contains("standin_scripted_sword.lua"));
     }
 
     private static PropScriptConfigFields parse(String yaml) throws Exception {
