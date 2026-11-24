@@ -34,9 +34,9 @@ import java.util.regex.Pattern;
  */
 final class HatFit {
     /** How much wider than the head the brim is drawn, so the brim's sides clear the head's. */
-    private static final float BRIM_OVERHANG = 1.0625f;
+    private static final float BRIM_OVERHANG = 1.12f;
     /** The share of the brim's height that sinks below where the hat rests, so no gap shows under the hat. */
-    private static final float BRIM_SINK = 0.25f;
+    private static final float BRIM_SINK = 0.45f;
     /** The furthest the hat is stretched one way more than the other to follow a head that is not square. */
     private static final float MAX_STRETCH = 1.35f;
     /** A skull face this close to level, as the cosine of its tilt, turns the hat with it; past it the hat stands upright. */
@@ -44,14 +44,19 @@ final class HatFit {
     /** A skull standing on an edge or a corner counts this much narrower than its outline. */
     private static final float RIDGE_SHARE = 0.7f;
     /** The hat rests at the height that carries at least this share of it; what stands higher on less goes through it. */
-    private static final float SUPPORT_SHARE = 0.35f;
+    private static final float SUPPORT_SHARE = 0.55f;
     /** The head is measured this far below where the hat rests, as a share of the skull's size. */
     private static final float CROWN_DEPTH = 0.15f;
     /**
      * The hat is fitted to a head no narrower than this share of the skull, and no wider than this many times the
      * skull's larger side: wings, a collar or a mane joined to the head at that height do not widen the hat with them.
      */
-    private static final float NARROWEST = 0.5f, WIDEST = 1.15f;
+    private static final float NARROWEST = 0.5f, WIDEST = 1.3f;
+    /**
+     * A cube counts towards how wide the head is when its own section is at least this share of the skull's: ears,
+     * tufts, bars and trim poke out of the hat's brim instead of widening it.
+     */
+    private static final float BODY_SHARE = 0.3f;
     /** A cube whose top face is drawn on less than this share of it has no top to carry a hat. */
     private static final float DRAWN_TOP = 0.05f;
     /** A cube thinner than this, in pixels, across either level direction is a flat plane and carries nothing. */
@@ -63,6 +68,7 @@ final class HatFit {
 
     private static final Pattern HEAD_NAME = Pattern.compile("(h_)?head\\d*");
     private static final Pattern HEAD_WORD = Pattern.compile("(^|[^a-z])head([^a-z]|$)");
+    private static final Pattern HAT_WORD = Pattern.compile("(^|[^a-z])hat([^a-z]|$)");
 
     private HatFit() {
     }
@@ -90,7 +96,8 @@ final class HatFit {
     /**
      * The bones of a model that wear a hat. A bone named head or h_head, with or without a number, is a head, and a
      * model with several wears a hat on each. A model without one wears a single hat on the bone that follows its
-     * mob's gaze (h_), or else on a bone with head in its name, whichever has the largest skull.
+     * mob's gaze (h_), or else on a bone with head in its name, whichever has the largest skull. A head with a bone
+     * named hat under it already wears one and gets none.
      */
     static List<BoneBlueprint> heads(SkeletonBlueprint model) {
         List<BoneBlueprint> named = new ArrayList<>(), gazing = new ArrayList<>(), worded = new ArrayList<>();
@@ -98,6 +105,8 @@ final class HatFit {
             if (bone.isNameTag() || bone.isMountPoint() || bone.getParent() == null) continue;
             String name = bone.getOriginalBoneName().toLowerCase(Locale.ROOT);
             if (name.startsWith("tag_") || name.equals("hitbox") || skull(bone) == null) continue;
+            // A head that already wears a hat, a bone named hat somewhere under it, keeps the one it has.
+            if (wearsHat(bone)) continue;
             if (HEAD_NAME.matcher(name).matches()) named.add(bone);
             else if (bone.isHead()) gazing.add(bone);
             else if (HEAD_WORD.matcher(name).find()) worded.add(bone);
@@ -114,6 +123,14 @@ final class HatFit {
             if (largest != null) return List.of(largest);
         }
         return List.of();
+    }
+
+    private static boolean wearsHat(BoneBlueprint bone) {
+        for (BoneBlueprint child : bone.getBoneBlueprintChildren()) {
+            if (child.isNameTag() || child.isAttachment()) continue;
+            if (HAT_WORD.matcher(child.getOriginalBoneName().toLowerCase(Locale.ROOT)).find() || wearsHat(child)) return true;
+        }
+        return false;
     }
 
     private static boolean hasAncestorIn(BoneBlueprint bone, List<BoneBlueprint> bones) {
@@ -178,9 +195,11 @@ final class HatFit {
         float middle = skullSpan.middleAcross(), centre = skullSpan.middleAlong();
         float rest = heights.rest(middle, centre, width * BRIM_OVERHANG, depth * BRIM_OVERHANG);
         if (Float.isNaN(rest)) rest = skullSpan.top;
-        // The head is as wide as what the hat rests on, measured a little below it and through the middle.
-        float crownLevel = rest - CROWN_DEPTH * size;
-        boolean[] section = heights.section(crownLevel);
+        // The head is as wide as its larger cubes are where the hat rests and a little below, through the middle.
+        float body = BODY_SHARE * skull.crossSection(hatUp);
+        boolean[] section = heights.section(rest - CROWN_DEPTH * size, hatUp, body);
+        boolean[] brow = heights.section(rest - 0.02f * size, hatUp, body);
+        for (int cell = 0; cell < section.length; cell++) section[cell] |= brow[cell];
         float[] wide = heights.run(section, middle, centre, true), deep = heights.run(section, middle, centre, false);
         float widest = WIDEST * Math.max(skullSpan.width(), skullSpan.depth());
         if (wide != null) {
@@ -356,14 +375,18 @@ final class HatFit {
             map.across = across;
             map.up = up;
             map.along = along;
-            map.each((cell, reach) -> {
+            map.each((box, cell, reach) -> {
                 if (reach[1] > map.tops[cell]) map.tops[cell] = reach[1];
             });
             return map;
         }
 
         /** Runs over every cube and every step of the map under it, with where the line up from there crosses it. */
-        private void each(java.util.function.BiConsumer<Integer, float[]> crossing) {
+        private interface Crossing {
+            void at(Box box, int cell, float[] reach);
+        }
+
+        private void each(Crossing crossing) {
             for (int index = 0; index < boxes.size(); index++) {
                 Span span = spans.get(index);
                 int firstColumn = column(span.left), lastColumn = column(span.right);
@@ -373,16 +396,19 @@ final class HatFit {
                         Vector3f point = new Vector3f(across).mul(left + (column + 0.5f) * step)
                                 .add(new Vector3f(along).mul(back + (row + 0.5f) * step));
                         float[] reach = boxes.get(index).reach(point, up);
-                        if (reach != null) crossing.accept(row * columns + column, reach);
+                        if (reach != null) crossing.at(boxes.get(index), row * columns + column, reach);
                     }
             }
         }
 
-        /** Where the head is solid at one height: a cube floating above that height is no part of it there. */
-        boolean[] section(float level) {
+        /**
+         * Where the head is solid at one height, counting the cubes whose own section across {@code up} is at least
+         * {@code body}: a cube floating above that height is no part of it there.
+         */
+        boolean[] section(float level, Vector3f up, float body) {
             boolean[] solid = new boolean[columns * rows];
-            each((cell, reach) -> {
-                if (reach[0] <= level && reach[1] >= level) solid[cell] = true;
+            each((box, cell, reach) -> {
+                if (reach[0] <= level && reach[1] >= level && box.crossSection(up) >= body) solid[cell] = true;
             });
             return solid;
         }
@@ -393,10 +419,6 @@ final class HatFit {
 
         private int row(float along) {
             return Math.max(0, Math.min(rows - 1, (int) Math.floor((along - back) / step)));
-        }
-
-        private float top(int column, int row) {
-            return column < 0 || row < 0 || column >= columns || row >= rows ? Float.NEGATIVE_INFINITY : tops[row * columns + column];
         }
 
         /**
@@ -526,6 +548,15 @@ final class HatFit {
 
         float volume() {
             return Math.max(size(0), MIN_THICKNESS) * Math.max(size(1), MIN_THICKNESS) * Math.max(size(2), MIN_THICKNESS);
+        }
+
+        /** The area of the cube's own section across {@code up}: its two sides that lie most nearly level. */
+        float crossSection(Vector3f up) {
+            Vector3f[] axes = axes();
+            int upright = 0;
+            for (int axis = 1; axis < 3; axis++)
+                if (Math.abs(axes[axis].dot(up)) > Math.abs(axes[upright].dot(up))) upright = axis;
+            return size((upright + 1) % 3) * size((upright + 2) % 3);
         }
 
         /** Whether the cube has thickness both ways across {@code up}: a flat plane standing on edge has none. */
