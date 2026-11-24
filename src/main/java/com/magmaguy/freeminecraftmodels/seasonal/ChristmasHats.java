@@ -25,7 +25,10 @@ import java.util.Collection;
  * then wears it if it is built in season for a living entity and the config allows it. A model built out of season
  * stays bare until it is built again.
  *
- * <p>Java clients on display entities see the hat. Bedrock clients and armor stand models do not.
+ * <p>Java clients on display entities see the hat as extra bones of the model. Bedrock clients see it on a model
+ * sent as a custom Bedrock entity: the Bedrock export writes the fitted hat as a second geometry of that entity,
+ * drawn while the model's hat flag is set (see {@code BedrockEntityBundleExporter.HAT_ANIMATION}). Models drawn on
+ * armor stands wear none.
  */
 public final class ChristmasHats {
     public static final String MODEL_ID = "fmm_christmas_hat";

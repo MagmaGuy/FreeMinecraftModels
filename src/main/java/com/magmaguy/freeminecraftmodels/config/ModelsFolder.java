@@ -78,8 +78,9 @@ public class ModelsFolder {
         List<FileModelConverter> bbModelConverterList = new ArrayList<>();
         processFolders(file, bbModelConverterList);
         bbModelConverterList.removeIf(model -> !model.isRegisteredModel());
-        bbModelConverterList.forEach(BedrockEntityBundleExporter::export);
+        // Before the Bedrock export, which writes the fitted hat beside each model that wears one.
         com.magmaguy.freeminecraftmodels.seasonal.ChristmasHats.fit(bbModelConverterList);
+        bbModelConverterList.forEach(BedrockEntityBundleExporter::export);
 
         Gson itemDefinitionGson = new Gson();
         for (FileModelConverter fileModelConverter : bbModelConverterList) {

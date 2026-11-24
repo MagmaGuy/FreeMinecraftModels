@@ -166,6 +166,9 @@ public class BoneBlueprint {
     private boolean attachment = false;
     // What an attachment's first bone is drawn at, per axis, about its pivot; null for every other bone.
     private Vector3f attachmentScale = null;
+    // The bone of the attached model an attachment bone copies, which holds its cubes; null for every other bone.
+    @Getter
+    private BoneBlueprint attachmentSource = null;
 
     /**
      * The first bone of an attachment: it holds no cubes and places the bones under it, which keep the coordinates of
@@ -212,6 +215,7 @@ public class BoneBlueprint {
         this.uuid = null;
         this.attachment = true;
         if (source == null) return;
+        this.attachmentSource = source;
         this.modelID = source.modelID;
         this.isDisplayModel = source.isDisplayModel;
         // The source measured its reach about its own centre, before the copy's centre moved.

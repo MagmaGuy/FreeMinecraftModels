@@ -18,6 +18,7 @@ import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
 import com.magmaguy.freeminecraftmodels.dataconverter.Keyframe;
 import com.magmaguy.freeminecraftmodels.dataconverter.ParsedTexture;
 import com.magmaguy.freeminecraftmodels.particles.molang.MolangParser;
+import com.magmaguy.freeminecraftmodels.seasonal.ChristmasHats;
 import com.magmaguy.freeminecraftmodels.utils.LoopType;
 import com.magmaguy.freeminecraftmodels.utils.StringToResourcePackFilename;
 import com.magmaguy.freeminecraftmodels.utils.TransformationType;
@@ -66,6 +67,15 @@ public final class BedrockEntityBundleExporter {
      */
     public static final List<String> HIDEABLE_BONES = List.of("saddle", "fish");
     private static final String HIDE_ANIMATION_PREFIX = PROPERTY_NAMESPACE + "_hide_";
+    /**
+     * The flag a model sets while it wears its Christmas hat (see {@link ChristmasHats}), after its other flags. The
+     * hat is a geometry of its own beside the model's, with copies of the bones down to each head so the model's
+     * animations carry it, drawn with the hat model's texture by a second render controller while the flag is set.
+     * The model's own geometry, texture and render controller stay as they are. The flag's animation scales the hat
+     * to the head it was fitted to.
+     */
+    public static final String HAT_ANIMATION = PROPERTY_NAMESPACE + "_wear_christmas_hat";
+    private static final String HAT_KEY = "christmas_hat";
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 
@@ -101,6 +111,8 @@ public final class BedrockEntityBundleExporter {
             writeAnimations(root, modelId, converter, visualBones);
             writeAnimationControllers(root, modelId, converter, visualBones);
             writeEntity(root, modelId, textureInfo, converter);
+            List<BoneBlueprint> hattedHeads = hattedHeads(converter);
+            if (!hattedHeads.isEmpty()) writeHat(root, modelId, converter, visualBones, hattedHeads);
         } catch (Exception exception) {
             Logger.warn("Failed to export Bedrock custom entity bundle for "
                     + converter.getID() + ": " + exception.getMessage());
@@ -125,7 +137,30 @@ public final class BedrockEntityBundleExporter {
         List<String> sortedAnimations = sortedAnimationNames(converter);
         List<String> names = new ArrayList<>(sortedAnimations.isEmpty() ? List.of("idle") : sortedAnimations);
         for (BoneBlueprint bone : hideableBones(converter)) names.add(hideAnimationName(bone.getOriginalBoneName()));
+        if (wearsHat(converter, names.size())) names.add(HAT_ANIMATION);
         return List.copyOf(names);
+    }
+
+    /** The head bones of a model that carry a fitted hat on Bedrock; none when the model wears no hat there. */
+    public static List<BoneBlueprint> hattedHeads(FileModelConverter converter) {
+        return exportedAnimationNames(converter).contains(HAT_ANIMATION) ? fittedHeads(converter) : List.of();
+    }
+
+    private static List<BoneBlueprint> fittedHeads(FileModelConverter converter) {
+        return visualBones(converter).stream().filter(bone -> !bone.getAttachments().isEmpty()).toList();
+    }
+
+    /**
+     * Whether a model with this many flags gets one more for its hat: the hats are on, a hat was fitted to it, the
+     * hat model has a texture to draw it with, and the flag fits without costing the model its lean.
+     */
+    private static boolean wearsHat(FileModelConverter converter, int flags) {
+        if (!DefaultConfig.christmasHats || fittedHeads(converter).isEmpty()) return false;
+        FileModelConverter hat = FileModelConverter.getModel(ChristmasHats.MODEL_ID);
+        if (hat == null || hat.getParsedTextures() == null || hat.getParsedTextures().isEmpty()) return false;
+        if (leans(flags) != leans(flags + 1)) return false;
+        return PackedBooleanPropertySet.requiredPropertyCount(flags + 1)
+                + (leans(flags + 1) ? LEAN_BONE_PROPERTIES.size() : 0) <= CustomEntityPropertySchema.MAX_PROPERTIES;
     }
 
     /** The model's visual bones the server can hide on Bedrock, one per name in {@link #HIDEABLE_BONES}, in its order. */
@@ -239,6 +274,12 @@ public final class BedrockEntityBundleExporter {
         writeJson(new File(root, "materials/entity.material"), rootJson);
     }
 
+    /** The path {@link #writeTextures} gives a model's texture: its only texture, or the atlas of several. */
+    private static String texturePath(String modelId, List<ParsedTexture> textures) {
+        String name = textures.size() == 1 ? textures.getFirst().getFilename().replace(".png", "") : "atlas";
+        return "textures/entity/" + modelId + "/" + name;
+    }
+
     private static BedrockTextureInfo writeTextures(File root, String modelId, List<ParsedTexture> textures) throws Exception {
         File sourceDir = new File(MetadataHandler.PLUGIN.getDataFolder(),
                 "output/FreeMinecraftModels/assets/freeminecraftmodels/textures/entity/" + modelId);
@@ -323,24 +364,7 @@ public final class BedrockEntityBundleExporter {
             bones.add(leanBone);
         }
         for (BoneBlueprint bone : visualBones) {
-            JsonObject bedrockBone = new JsonObject();
-            bedrockBone.addProperty("name", safeBoneName(bone));
-            if (bone.getParent() != null && visualBones.contains(bone.getParent())) {
-                bedrockBone.addProperty("parent", safeBoneName(bone.getParent()));
-            } else if (lean) {
-                bedrockBone.addProperty("parent", LEAN_BONE);
-            }
-            Vector3f pivot = bone.getOriginalOrigin();
-            if (pivot.lengthSquared() > 0.000001f) {
-                bedrockBone.add("pivot", bedrockPosition(pivot.x, pivot.y, pivot.z));
-            }
-            Vector3f rotation = bone.getBlueprintOriginalBoneRotation();
-            if (rotation.lengthSquared() > 0.000001f) {
-                bedrockBone.add("rotation", bedrockRotation(
-                        Math.toDegrees(rotation.x),
-                        Math.toDegrees(rotation.y),
-                        Math.toDegrees(rotation.z)));
-            }
+            JsonObject bedrockBone = boneFrame(bone, parentName(bone, visualBones, lean));
             JsonArray cubes = new JsonArray();
             for (CubeBlueprint cubeBlueprint : bone.getCubeBlueprintChildren()) {
                 JsonObject cube = convertCube(bone, cubeBlueprint, textureInfo);
@@ -371,7 +395,37 @@ public final class BedrockEntityBundleExporter {
         writeJson(new File(root, "models/entity/freeminecraftmodels/" + modelId + ".geo.json"), rootJson);
     }
 
+    /** A bone's name, parent, pivot and rest rotation, as the geometry holds them. */
+    private static JsonObject boneFrame(BoneBlueprint bone, String parent) {
+        JsonObject bedrockBone = new JsonObject();
+        bedrockBone.addProperty("name", safeBoneName(bone));
+        if (parent != null) bedrockBone.addProperty("parent", parent);
+        Vector3f pivot = bone.getOriginalOrigin();
+        if (pivot.lengthSquared() > 0.000001f) {
+            bedrockBone.add("pivot", bedrockPosition(pivot.x, pivot.y, pivot.z));
+        }
+        Vector3f rotation = bone.getBlueprintOriginalBoneRotation();
+        if (rotation.lengthSquared() > 0.000001f) {
+            bedrockBone.add("rotation", bedrockRotation(
+                    Math.toDegrees(rotation.x),
+                    Math.toDegrees(rotation.y),
+                    Math.toDegrees(rotation.z)));
+        }
+        return bedrockBone;
+    }
+
+    /** The bone a model's bone hangs from: its parent, or the lean bone for a bone without one; null for neither. */
+    private static String parentName(BoneBlueprint bone, List<BoneBlueprint> visualBones, boolean lean) {
+        if (bone.getParent() != null && visualBones.contains(bone.getParent())) return safeBoneName(bone.getParent());
+        return lean ? LEAN_BONE : null;
+    }
+
     private static JsonObject convertCube(BoneBlueprint bone, CubeBlueprint cubeBlueprint, BedrockTextureInfo textureInfo) {
+        return convertCube(cubeBlueprint, textureInfo, new Vector3f());
+    }
+
+    /** A cube moved by {@code shift}, in Blockbench pixels: a hat's cubes keep the hat model's own coordinates. */
+    private static JsonObject convertCube(CubeBlueprint cubeBlueprint, BedrockTextureInfo textureInfo, Vector3f shift) {
         Map<String, Object> blockbenchCube = cubeBlueprint.getOriginalCubeJSON();
         Object fromObject = blockbenchCube.get("from");
         Object toObject = blockbenchCube.get("to");
@@ -379,12 +433,12 @@ public final class BedrockEntityBundleExporter {
             return null;
         }
 
-        double fx = number(from.get(0));
-        double fy = number(from.get(1));
-        double fz = number(from.get(2));
-        double tx = number(to.get(0));
-        double ty = number(to.get(1));
-        double tz = number(to.get(2));
+        double fx = number(from.get(0)) + shift.x;
+        double fy = number(from.get(1)) + shift.y;
+        double fz = number(from.get(2)) + shift.z;
+        double tx = number(to.get(0)) + shift.x;
+        double ty = number(to.get(1)) + shift.y;
+        double tz = number(to.get(2)) + shift.z;
 
         double originX = Math.min(fx, tx);
         double originY = Math.min(fy, ty);
@@ -397,7 +451,7 @@ public final class BedrockEntityBundleExporter {
         cube.add("origin", array(-(originX + sizeX), originY, originZ));
         cube.add("size", array(sizeX, sizeY, sizeZ));
         addCubeInflate(cube, blockbenchCube);
-        addCubeRotation(cube, blockbenchCube);
+        addCubeRotation(cube, blockbenchCube, shift);
 
         Object facesObject = blockbenchCube.get("faces");
         if (facesObject instanceof Map<?, ?> faces) {
@@ -425,7 +479,7 @@ public final class BedrockEntityBundleExporter {
         }
     }
 
-    private static void addCubeRotation(JsonObject cube, Map<String, Object> blockbenchCube) {
+    private static void addCubeRotation(JsonObject cube, Map<String, Object> blockbenchCube, Vector3f shift) {
         Object rotationObject = blockbenchCube.get("rotation");
         if (!(rotationObject instanceof List<?> rotation) || rotation.size() < 3) {
             return;
@@ -442,7 +496,8 @@ public final class BedrockEntityBundleExporter {
 
         Object originObject = blockbenchCube.get("origin");
         if (originObject instanceof List<?> origin && origin.size() >= 3) {
-            cube.add("pivot", bedrockPosition(number(origin.get(0)), number(origin.get(1)), number(origin.get(2))));
+            cube.add("pivot", bedrockPosition(number(origin.get(0)) + shift.x, number(origin.get(1)) + shift.y,
+                    number(origin.get(2)) + shift.z));
         }
     }
 
@@ -547,6 +602,9 @@ public final class BedrockEntityBundleExporter {
         for (BoneBlueprint bone : hideableBones(converter))
             animations.add("animation.fmm." + modelId + "." + animationKey(hideAnimationName(bone.getOriginalBoneName())),
                     hideAnimation(bone));
+        List<BoneBlueprint> hattedHeads = hattedHeads(converter);
+        if (!hattedHeads.isEmpty())
+            animations.add("animation.fmm." + modelId + "." + animationKey(HAT_ANIMATION), hatAnimation(hattedHeads));
         if (leans(converter)) animations.add("animation.fmm." + modelId + "." + LEAN_KEY, leanAnimation());
 
         JsonObject rootJson = new JsonObject();
@@ -565,10 +623,7 @@ public final class BedrockEntityBundleExporter {
         JsonObject controllers = new JsonObject();
         for (int i = 0; i < animations.size(); i++) {
             String animation = animations.get(i);
-            int propertyIndex = i / PackedBooleanPropertySet.BITS_PER_PROPERTY;
-            int bit = 1 << (i % PackedBooleanPropertySet.BITS_PER_PROPERTY);
-            String query = "math.mod(math.floor(query.property('" + animationPropertyName(propertyIndex)
-                    + "') / " + bit + "), 2)";
+            String query = flagQuery(i);
 
             JsonObject playState = new JsonObject();
             JsonArray playAnimations = new JsonArray();
@@ -610,6 +665,122 @@ public final class BedrockEntityBundleExporter {
         writeJson(new File(root, "animation_controllers/" + modelId + ".animation_controllers.json"), rootJson);
     }
 
+    /** Reads one animation flag, 0 or 1, out of the packed property that carries it. */
+    private static String flagQuery(int flag) {
+        int propertyIndex = flag / PackedBooleanPropertySet.BITS_PER_PROPERTY;
+        int bit = 1 << (flag % PackedBooleanPropertySet.BITS_PER_PROPERTY);
+        return "math.mod(math.floor(query.property('" + animationPropertyName(propertyIndex)
+                + "') / " + bit + "), 2)";
+    }
+
+    private static String hatGeometryIdentifier(String modelId) {
+        return "geometry.freeminecraftmodels." + modelId + "." + HAT_KEY;
+    }
+
+    private static String hatRenderController(String modelId) {
+        return "controller.render.fmm_" + modelId + "." + HAT_KEY;
+    }
+
+    /**
+     * Writes a model's hat: a geometry of the bones from the model's root down to each head that wears one, without
+     * their cubes, then the hat's bones with the hat model's cubes moved onto the head; and the render controller
+     * that draws it with the hat model's texture.
+     */
+    private static void writeHat(File root, String modelId, FileModelConverter converter,
+                                 List<BoneBlueprint> visualBones, List<BoneBlueprint> heads) throws Exception {
+        FileModelConverter hat = FileModelConverter.getModel(ChristmasHats.MODEL_ID);
+        BedrockTextureInfo texture = writeTextures(root, hat.getID(), hat.getParsedTextures());
+
+        JsonObject description = new JsonObject();
+        description.addProperty("identifier", hatGeometryIdentifier(modelId));
+        description.addProperty("texture_width", texture.width);
+        description.addProperty("texture_height", texture.height);
+        description.addProperty("visible_bounds_width", 8);
+        description.addProperty("visible_bounds_height", 8);
+        description.add("visible_bounds_offset", array(0, 2, 0));
+
+        JsonArray bones = new JsonArray();
+        boolean lean = leans(converter);
+        if (lean) {
+            JsonObject leanBone = new JsonObject();
+            leanBone.addProperty("name", LEAN_BONE);
+            leanBone.add("pivot", bedrockPosition(0, converter.getSkeletonBlueprint().getBodyTiltPivot() * 16D, 0));
+            bones.add(leanBone);
+        }
+        Set<BoneBlueprint> carriers = new LinkedHashSet<>();
+        for (BoneBlueprint head : heads) addCarriers(head, visualBones, carriers);
+        for (BoneBlueprint carrier : carriers) bones.add(boneFrame(carrier, parentName(carrier, visualBones, lean)));
+        for (BoneBlueprint head : heads)
+            for (BoneBlueprint worn : head.getAttachments()) addHatBones(worn, safeBoneName(head), texture, bones);
+
+        JsonObject geometry = new JsonObject();
+        geometry.add("description", description);
+        geometry.add("bones", bones);
+        JsonArray geometryArray = new JsonArray();
+        geometryArray.add(geometry);
+        JsonObject geometryJson = new JsonObject();
+        geometryJson.addProperty("format_version", "1.21.0");
+        geometryJson.add("minecraft:geometry", geometryArray);
+        writeJson(new File(root, "models/entity/freeminecraftmodels/" + modelId + "." + HAT_KEY + ".geo.json"), geometryJson);
+
+        JsonObject controller = new JsonObject();
+        controller.addProperty("geometry", "Geometry." + HAT_KEY);
+        JsonArray materials = new JsonArray();
+        JsonObject material = new JsonObject();
+        material.addProperty("*", "Material." + HAT_KEY);
+        materials.add(material);
+        controller.add("materials", materials);
+        JsonArray textures = new JsonArray();
+        textures.add("Texture." + HAT_KEY);
+        controller.add("textures", textures);
+        JsonObject controllers = new JsonObject();
+        controllers.add(hatRenderController(modelId), controller);
+        JsonObject controllerJson = new JsonObject();
+        controllerJson.addProperty("format_version", "1.8.0");
+        controllerJson.add("render_controllers", controllers);
+        writeJson(new File(root, "render_controllers/" + modelId + "." + HAT_KEY + ".render_controllers.json"), controllerJson);
+    }
+
+    /** Adds a bone and the bones above it, topmost first. */
+    private static void addCarriers(BoneBlueprint bone, List<BoneBlueprint> visualBones, Set<BoneBlueprint> carriers) {
+        if (bone == null || !visualBones.contains(bone)) return;
+        addCarriers(bone.getParent(), visualBones, carriers);
+        carriers.add(bone);
+    }
+
+    private static void addHatBones(BoneBlueprint worn, String parent, BedrockTextureInfo texture, JsonArray bones) {
+        JsonObject bedrockBone = boneFrame(worn, parent);
+        BoneBlueprint source = worn.getAttachmentSource();
+        if (source != null) {
+            // The copy stands where its source does in the hat model, moved onto the head.
+            Vector3f shift = worn.getOriginalOrigin().sub(source.getOriginalOrigin());
+            JsonArray cubes = new JsonArray();
+            for (CubeBlueprint cubeBlueprint : source.getCubeBlueprintChildren()) {
+                JsonObject cube = convertCube(cubeBlueprint, texture, shift);
+                if (cube != null) cubes.add(cube);
+            }
+            if (!cubes.isEmpty()) bedrockBone.add("cubes", cubes);
+        }
+        bones.add(bedrockBone);
+        for (BoneBlueprint child : worn.getBoneBlueprintChildren()) addHatBones(child, safeBoneName(worn), texture, bones);
+    }
+
+    /** Draws each hat at the size it was fitted to its head at, about the point it stands on. */
+    private static JsonObject hatAnimation(List<BoneBlueprint> heads) {
+        JsonObject bones = new JsonObject();
+        for (BoneBlueprint head : heads)
+            for (BoneBlueprint worn : head.getAttachments()) {
+                Vector3f scale = worn.getAttachmentScale();
+                JsonObject bone = new JsonObject();
+                bone.add("scale", array(scale.x, scale.y, scale.z));
+                bones.add(safeBoneName(worn), bone);
+            }
+        JsonObject animation = new JsonObject();
+        animation.addProperty("loop", true);
+        animation.add("bones", bones);
+        return animation;
+    }
+
     private static void writeEntity(File root, String modelId, BedrockTextureInfo textureInfo,
                                     FileModelConverter converter) throws Exception {
         JsonObject description = new JsonObject();
@@ -628,6 +799,14 @@ public final class BedrockEntityBundleExporter {
         description.add("geometry", geometry);
 
         List<String> exportedAnimations = exportedAnimationNames(converter);
+        boolean hat = exportedAnimations.contains(HAT_ANIMATION);
+        if (hat) {
+            FileModelConverter hatModel = FileModelConverter.getModel(ChristmasHats.MODEL_ID);
+            // A plain material: the hat keeps its own colours on a model that is tinted.
+            materials.addProperty(HAT_KEY, "entity_alphatest");
+            textures.addProperty(HAT_KEY, texturePath(hatModel.getID(), hatModel.getParsedTextures()));
+            geometry.addProperty(HAT_KEY, hatGeometryIdentifier(modelId));
+        }
         JsonObject animations = new JsonObject();
         for (String animation : exportedAnimations) {
             String safe = animationKey(animation);
@@ -661,6 +840,12 @@ public final class BedrockEntityBundleExporter {
 
         JsonArray renderControllers = new JsonArray();
         renderControllers.add("controller.render.fmm_" + modelId);
+        if (hat) {
+            JsonObject whileWorn = new JsonObject();
+            whileWorn.addProperty(hatRenderController(modelId),
+                    flagQuery(exportedAnimations.indexOf(HAT_ANIMATION)) + " == 1");
+            renderControllers.add(whileWorn);
+        }
         description.add("render_controllers", renderControllers);
 
         JsonObject clientEntity = new JsonObject();

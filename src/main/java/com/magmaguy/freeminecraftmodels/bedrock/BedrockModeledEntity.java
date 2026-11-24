@@ -47,6 +47,8 @@ public final class BedrockModeledEntity {
     private Map<String, Object> lastProperties = new LinkedHashMap<>();
     // Null when the carrier has no room for the lean bone's properties.
     private final BedrockBodyLean bodyLean;
+    // Whether the model wears its Christmas hat, which Bedrock draws while the hat's flag is set.
+    private final boolean wearsHat;
 
     public BedrockModeledEntity(ModeledEntity modeledEntity,
                                 FileModelConverter converter,
@@ -54,6 +56,8 @@ public final class BedrockModeledEntity {
         this.modeledEntity = modeledEntity;
         this.animations = BedrockEntityBundleExporter.exportedAnimationNames(converter);
         this.identifier = BedrockEntityBundleExporter.identifier(modeledEntity.getEntityID());
+        this.wearsHat = animations.contains(BedrockEntityBundleExporter.HAT_ANIMATION)
+                && modeledEntity.getSkeleton() != null && modeledEntity.getSkeleton().wearsAttachments();
         for (var bone : BedrockEntityBundleExporter.hideableBones(converter))
             hideAnimations.put(bone.getOriginalBoneName(),
                     BedrockEntityBundleExporter.hideAnimationName(bone.getOriginalBoneName()));
@@ -359,7 +363,8 @@ public final class BedrockModeledEntity {
         for (String animation : animations) {
             enabled.add(baseAnimation != null && animation.equalsIgnoreCase(baseAnimation)
                     || actionAnimation != null && animation.equalsIgnoreCase(actionAnimation)
-                    || hiding.contains(animation));
+                    || hiding.contains(animation)
+                    || wearsHat && animation.equals(BedrockEntityBundleExporter.HAT_ANIMATION));
         }
         List<Integer> packedAnimations = PackedBooleanPropertySet.packBooleans(enabled);
         for (int i = 0; i < packedAnimations.size(); i++) {

@@ -218,8 +218,10 @@ public class DefaultConfig extends ConfigurationFile {
                         "without a living entity never wear one. A model's head is its head or h_head bone, or failing",
                         "that the bone that follows its mob's gaze (h_) or one with head in its name.",
                         "The hat is the model models/fmm_default_seasonal/fmm_christmas_hat.bbmodel, sized to each head.",
-                        "Java players see it where display entities are in use; Bedrock players do not.",
-                        "Set to false to never show the hats. A change reaches each model the next time it spawns."),
+                        "Java players see it where display entities are in use. Bedrock players see it on models sent",
+                        "to them as custom Bedrock entities, which get a hat geometry beside their own in the Bedrock pack.",
+                        "Set to false to never show the hats and to leave the Bedrock pack without them. A change reaches",
+                        "each model the next time it spawns, and the Bedrock pack on /fmm reload or a restart."),
                 fileConfiguration, "christmasHats", true);
         preventPropPlacementInProtectedRegions = ConfigurationEngine.setBoolean(
                 List.of("Sets whether players are prevented from placing props (custom model items) inside protected regions.",

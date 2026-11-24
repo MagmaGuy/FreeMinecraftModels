@@ -86,7 +86,7 @@ public class Skeleton {
     // Whether this model wears the attachments fitted to its bones (a seasonal hat), decided once as it is built.
     private final boolean wearsAttachments;
 
-    boolean wearsAttachments() {
+    public boolean wearsAttachments() {
         return wearsAttachments;
     }
 
