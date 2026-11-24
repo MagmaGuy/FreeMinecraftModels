@@ -212,7 +212,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
         if (InteractionProtectionPolicy.isDenied(
                 event.useInteractedBlock(), event.useItemInHand())) return;
         Optional<MagicWeaponDefinition> definition = resolveDefinition(event.getItem());
-        if (definition.isEmpty() || route(definition.get(), input).isEmpty()) return;
+        if (definition.isEmpty() || MagicWeaponInputRouter.route(definition.get().kind(), input).isEmpty()) return;
         event.setCancelled(true);
         event.setUseInteractedBlock(org.bukkit.event.Event.Result.DENY);
         event.setUseItemInHand(org.bukkit.event.Event.Result.DENY);
@@ -296,7 +296,7 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
             MagicInput input,
             LivingEntity clickedTarget) {
         if (!isOperational() || player == null || !player.isOnline()) return;
-        MagicAttackKind attackKind = route(definition, input).orElse(null);
+        MagicAttackKind attackKind = MagicWeaponInputRouter.route(definition.kind(), input).orElse(null);
         if (attackKind == null) return;
         MagicWeaponDefinition authored = definition;
         MagicAttackResolver resolver = activeResolver();
@@ -359,15 +359,6 @@ public final class MagicWeaponRuntime implements Listener, MagicWeaponService, A
             case WAND_MISSILE -> castWand(cast);
             case STAFF_FIREBALL -> castStaff(cast);
         };
-    }
-
-    /** Input routing, widened only for a staff whose strike an addon behavior currently replaces. */
-    private Optional<MagicAttackKind> route(MagicWeaponDefinition definition, MagicInput input) {
-        Optional<MagicAttackKind> routed = MagicWeaponInputRouter.route(definition.kind(), input);
-        if (routed.isPresent() || definition.kind() != MagicWeaponKind.STAFF
-                || input != MagicInput.AIR_LEFT_CLICK && input != MagicInput.BLOCK_LEFT_CLICK) return routed;
-        return MagicWeaponInputRouter.route(definition.kind(), input,
-                behaviors.resolve(definition, MagicAttackKind.STAFF_MELEE, false) != null);
     }
 
     MagicBehaviorCasts behaviorCasts() {

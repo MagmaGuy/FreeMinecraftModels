@@ -223,13 +223,9 @@ class MagicAttackBehaviorTest {
         assertEquals(staff.traits().range(), handle.range());
         assertFalse(handle.isActive(), "A cast with nothing pending ends when the behavior returns");
 
-        // Empty space: no clicked entity, and the widened staff route only exists with a behavior.
-        assertTrue(runtime.launch(cast(staff, MagicAttackKind.STAFF_MELEE, null), staff, null));
-        assertNull(received.get().clickedTarget());
-        assertEquals(MagicAttackKind.STAFF_MELEE,
-                MagicWeaponInputRouter.route(MagicWeaponKind.STAFF, MagicInput.AIR_LEFT_CLICK, true).orElseThrow());
-        assertTrue(MagicWeaponInputRouter.route(MagicWeaponKind.STAFF, MagicInput.AIR_LEFT_CLICK, false).isEmpty());
-        assertTrue(MagicWeaponInputRouter.route(MagicWeaponKind.WAND, MagicInput.AIR_RIGHT_CLICK, true).isEmpty());
+        // A staff's left click in air or on a block is no strike, with or without a behavior bound.
+        assertTrue(MagicWeaponInputRouter.route(MagicWeaponKind.STAFF, MagicInput.AIR_LEFT_CLICK).isEmpty());
+        assertTrue(MagicWeaponInputRouter.route(MagicWeaponKind.STAFF, MagicInput.BLOCK_LEFT_CLICK).isEmpty());
 
         castResult.set(false);
         assertFalse(runtime.launch(cast(staff, MagicAttackKind.STAFF_MELEE, null), staff, target.entity),

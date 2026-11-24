@@ -31,9 +31,9 @@ import java.util.Objects;
  *
  * <p>Inputs follow the attack the behavior stands in for: {@link MagicAttackKind#WAND_MISSILE} on a
  * wand's left click, {@link MagicAttackKind#STAFF_FIREBALL} on a staff's right click, both in air,
- * on a block or on an entity. A behavior standing in for {@link MagicAttackKind#STAFF_MELEE} runs on
- * a staff's left click on an entity and, unlike the built-in strike, on a left click in air or on a
- * block too.</p>
+ * on a block or on an entity. A behavior standing in for {@link MagicAttackKind#STAFF_MELEE} runs
+ * only when the staff's left click hits an entity, as the built-in strike does: a left click in air
+ * or on a block casts nothing.</p>
  *
  * <p>Register from {@code onEnable}; FreeMinecraftModels does not need to have finished loading.
  * Everything an owner registered is removed when its plugin disables. Call these methods on the
