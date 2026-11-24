@@ -2,6 +2,7 @@ package com.magmaguy.freeminecraftmodels.magic;
 
 import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.api.magic.MagicAttackKind;
+import com.magmaguy.magmacore.projectiles.MagicProjectileMarker;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -9,23 +10,36 @@ import org.bukkit.entity.Arrow;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.metadata.MetadataValue;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.PluginManager;
+import org.bukkit.scheduler.BukkitScheduler;
+import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -117,6 +131,270 @@ class MagicProjectileEngineTest {
                     () -> assertEquals(eye.getZ() + .35D, origin.getZ(), 1.0E-9D));
         } finally {
             MetadataHandler.PLUGIN = previousPlugin;
+        }
+    }
+
+    // EliteMobs#244: Bukkit keeps entity metadata until it is removed, also after the entity is gone, so a
+    // marker that ends its flight with the impact handler still stored stays in the server's metadata map.
+
+    @Test
+    void aMarkerThatHitsAnEntityReleasesItsImpactHandlerAndImpactsOnce() {
+        Flights flights = new Flights();
+        Marker marker = flights.launchWand();
+        assertTrue(marker.arrow.hasMetadata(IMPACT_HANDLER), "The handler is stored while the marker flies");
+
+        flights.engine.onMarkerHit(new ProjectileHitEvent(marker.arrow, flights.target));
+        flights.engine.onMarkerHit(new ProjectileHitEvent(marker.arrow, flights.target));
+
+        flights.assertReleased(marker, 1);
+        assertSame(flights.target, flights.impacts.get(0));
+    }
+
+    @Test
+    void aModeledHitRoutedThroughTheStoredHandlerImpactsOnceAndReleasesIt() {
+        Flights flights = new Flights();
+        Marker marker = flights.launchWand();
+
+        // What FMM's modeled-hitbox listener does, in this or in another plugin's shaded copy.
+        assertTrue(MagicProjectileMarker.resolve(marker.arrow, flights.target));
+        assertFalse(MagicProjectileMarker.resolve(marker.arrow, flights.target), "A finished marker routes nothing");
+
+        flights.assertReleased(marker, 1);
+        assertSame(flights.target, flights.impacts.get(0));
+    }
+
+    @Test
+    void theStoredHandlerHoldsNoEntity() throws Exception {
+        Flights flights = new Flights();
+        Marker marker = flights.launchWand();
+
+        Object handler = marker.metadata.get(IMPACT_HANDLER).value();
+        assertNotNull(handler);
+        for (Field captured : handler.getClass().getDeclaredFields()) {
+            captured.setAccessible(true);
+            assertFalse(captured.get(handler) instanceof Entity,
+                    "The handler outlives a missed removal, so it must not keep the marker and its world: " + captured);
+        }
+    }
+
+    @Test
+    void aWandBoltThatRunsOutOfTravelTimeReleasesItsImpactHandler() {
+        Flights flights = new Flights();
+        Marker marker = flights.launchWand();
+        int travelTicks = flights.wand.traits().travelTicks();
+
+        for (int tick = 1; tick < travelTicks; tick++) flights.tick.run();
+        assertTrue(marker.arrow.hasMetadata(IMPACT_HANDLER), "The bolt still flies one tick before its travel time");
+        assertTrue(flights.warnings.isEmpty(), "The flight ticked without an error: " + flights.warnings);
+        flights.tick.run();
+
+        flights.assertReleased(marker, 0);
+    }
+
+    @Test
+    void aStaffFireballThatRunsOutOfTravelTimeImpactsOnceAndReleasesItsImpactHandler() {
+        Flights flights = new Flights();
+        Marker marker = flights.launchStaff();
+        int travelTicks = flights.staff.traits().travelTicks();
+
+        for (int tick = 1; tick < travelTicks; tick++) flights.tick.run();
+        assertTrue(marker.arrow.hasMetadata(IMPACT_HANDLER), "The fireball still flies one tick before its travel time");
+        assertTrue(flights.warnings.isEmpty(), "The flight ticked without an error: " + flights.warnings);
+        flights.tick.run();
+
+        flights.assertReleased(marker, 1);
+    }
+
+    @Test
+    void aMarkerTheServerRemovedReleasesItsImpactHandlerOnTheNextTick() {
+        Flights flights = new Flights();
+        Marker marker = flights.launchWand();
+
+        marker.valid = false; // chunk or world unload, or the caster gone: the flight is no longer valid
+        flights.tick.run();
+
+        flights.assertReleased(marker, 0);
+    }
+
+    @Test
+    void cancellingOneCastEveryCastOrClosingTheEngineReleasesTheImpactHandlers() {
+        Flights one = new Flights();
+        Marker cancelled = one.launchWand();
+        Marker kept = one.launchStaff();
+        one.engine.cancel(one.lastWandCast);
+        one.assertReleased(cancelled, 0);
+        assertTrue(kept.arrow.hasMetadata(IMPACT_HANDLER), "Another cast's flight is untouched");
+        one.engine.cancelAll();
+        one.assertReleased(kept, 0);
+
+        Flights two = new Flights();
+        Marker open = two.launchStaff();
+        two.engine.close();
+        two.assertReleased(open, 0);
+    }
+
+    private static final String IMPACT_HANDLER = "magmacore_magic_impact_owner";
+
+    /** A marker arrow that keeps what the engine stores on it, as a server entity does. */
+    private static final class Marker {
+        private final Map<String, MetadataValue> metadata = new HashMap<>();
+        private final Set<Object> dataKeys = new HashSet<>();
+        private boolean valid = true;
+        private boolean removed;
+        private Arrow arrow;
+    }
+
+    /** One engine on a world whose spawned arrows are {@link Marker}s, ticked by hand. */
+    private static final class Flights {
+        private final List<Marker> markers = new ArrayList<>();
+        private final List<LivingEntity> impacts = new ArrayList<>();
+        private final List<String> warnings = new ArrayList<>();
+        private final MagicWeaponDefinition wand = BuiltInMagicWeapons.defaults(
+                BuiltInMagicWeapons.DEFAULT_WAND_ID, com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponKind.WAND);
+        private final MagicWeaponDefinition staff = BuiltInMagicWeapons.defaults(
+                BuiltInMagicWeapons.DEFAULT_STAFF_ID, com.magmaguy.freeminecraftmodels.api.magic.MagicWeaponKind.STAFF);
+        private final UUID worldId = UUID.randomUUID();
+        private final World world;
+        private final Player owner;
+        private final LivingEntity target;
+        private final MagicProjectileEngine engine;
+        private Runnable tick;
+        private MagicCast lastWandCast;
+
+        private Flights() {
+            world = proxy(World.class, (instance, method, arguments) -> switch (method.getName()) {
+                case "isChunkLoaded" -> true;
+                case "getUID" -> worldId;
+                case "spawn" -> {
+                    // The fireball's item display is cosmetic; the engine flies without it.
+                    if (arguments[1] != Arrow.class) throw new IllegalStateException("Only marker arrows spawn here");
+                    yield spawnMarker((Location) arguments[0], arguments[2]);
+                }
+                case "equals" -> instance == arguments[0];
+                case "hashCode" -> System.identityHashCode(instance);
+                case "toString" -> "FlightWorldProxy";
+                default -> defaultValue(method.getReturnType());
+            });
+            Location eye = new Location(world, 8D, 70D, -3D);
+            owner = proxy(Player.class, (instance, method, arguments) -> switch (method.getName()) {
+                case "getEyeLocation" -> eye.clone();
+                case "getWorld" -> world;
+                case "isOnline", "isValid" -> true;
+                case "equals" -> instance == arguments[0];
+                case "hashCode" -> System.identityHashCode(instance);
+                case "toString" -> "OwnerProxy";
+                default -> defaultValue(method.getReturnType());
+            });
+            target = MagicProjectileEngineTest.target(world, new Location(world, 8D, 68.96D, 7D));
+            java.util.logging.Logger logger = java.util.logging.Logger.getAnonymousLogger();
+            logger.setUseParentHandlers(false);
+            logger.addHandler(new java.util.logging.Handler() {
+                @Override public void publish(java.util.logging.LogRecord line) { warnings.add(line.getMessage()); }
+                @Override public void flush() { }
+                @Override public void close() { }
+            });
+            BukkitTask task = proxy(BukkitTask.class, (ignored, method, arguments) -> defaultValue(method.getReturnType()));
+            BukkitScheduler scheduler = proxy(BukkitScheduler.class, (ignored, method, arguments) -> {
+                if (!method.getName().equals("runTaskTimer")) return defaultValue(method.getReturnType());
+                tick = (Runnable) arguments[1];
+                return task;
+            });
+            PluginManager events = proxy(PluginManager.class, (ignored, method, arguments) -> defaultValue(method.getReturnType()));
+            org.bukkit.Server server = proxy(org.bukkit.Server.class, (ignored, method, arguments) -> switch (method.getName()) {
+                case "getScheduler" -> scheduler;
+                case "getPluginManager" -> events;
+                default -> defaultValue(method.getReturnType());
+            });
+            Plugin plugin = proxy(Plugin.class, (instance, method, arguments) -> switch (method.getName()) {
+                case "getName" -> "FreeMinecraftModels";
+                case "isEnabled" -> true;
+                case "getServer" -> server;
+                case "getLogger" -> logger;
+                case "equals" -> instance == arguments[0];
+                case "hashCode" -> System.identityHashCode(instance);
+                case "toString" -> "PluginProxy";
+                default -> defaultValue(method.getReturnType());
+            });
+            engine = new MagicProjectileEngine(plugin, (cast, directTarget, impact, incoming) -> impacts.add(directTarget));
+            engine.start();
+            assertNotNull(tick, "The engine scheduled its tick");
+        }
+
+        @SuppressWarnings("unchecked")
+        private Arrow spawnMarker(Location origin, Object configure) {
+            Marker marker = new Marker();
+            UUID id = UUID.randomUUID();
+            PersistentDataContainer data = proxy(PersistentDataContainer.class, (ignored, method, arguments) -> switch (method.getName()) {
+                case "set" -> {
+                    marker.dataKeys.add(arguments[0]);
+                    yield null;
+                }
+                case "has" -> marker.dataKeys.contains(arguments[0]);
+                default -> defaultValue(method.getReturnType());
+            });
+            marker.arrow = proxy(Arrow.class, (arrow, method, arguments) -> switch (method.getName()) {
+                case "getUniqueId" -> id;
+                case "getWorld" -> world;
+                case "getLocation" -> origin.clone();
+                case "getVelocity" -> new Vector(0D, 0D, 1D);
+                case "getPersistentDataContainer" -> data;
+                case "setMetadata" -> {
+                    marker.metadata.put((String) arguments[0], (MetadataValue) arguments[1]);
+                    yield null;
+                }
+                case "getMetadata" -> marker.metadata.containsKey(arguments[0])
+                        ? List.of(marker.metadata.get(arguments[0])) : List.of();
+                case "hasMetadata" -> marker.metadata.containsKey(arguments[0]);
+                case "removeMetadata" -> {
+                    MetadataValue stored = marker.metadata.get(arguments[0]);
+                    if (stored != null && stored.getOwningPlugin() == arguments[1]) marker.metadata.remove(arguments[0]);
+                    yield null;
+                }
+                case "isValid" -> marker.valid && !marker.removed;
+                case "remove" -> {
+                    marker.removed = true;
+                    yield null;
+                }
+                case "equals" -> arrow == arguments[0];
+                case "hashCode" -> System.identityHashCode(arrow);
+                case "toString" -> "MarkerProxy";
+                default -> defaultValue(method.getReturnType());
+            });
+            ((Consumer<Arrow>) configure).accept(marker.arrow);
+            markers.add(marker);
+            return marker.arrow;
+        }
+
+        private MagicCast cast(MagicWeaponDefinition weapon, MagicAttackKind attack) {
+            return new MagicCast(UUID.randomUUID(), owner, new ItemStack(Material.BLAZE_ROD), weapon, attack, null,
+                    Map.of(), Map.of(), Map.of());
+        }
+
+        /** A wand bolt with no locked target: it flies straight until something ends it. */
+        private Marker launchWand() {
+            lastWandCast = cast(wand, MagicAttackKind.WAND_MISSILE);
+            return launch(lastWandCast);
+        }
+
+        private Marker launchStaff() {
+            return launch(cast(staff, MagicAttackKind.STAFF_FIREBALL));
+        }
+
+        private Marker launch(MagicCast cast) {
+            int before = markers.size();
+            boolean launched = cast.attackKind() == MagicAttackKind.WAND_MISSILE
+                    ? engine.launchWand(cast, List.of()) : engine.launchStaff(cast, new Vector(0D, 0D, 1D));
+            assertTrue(launched, "The engine launched the flight");
+            assertEquals(before + 1, markers.size(), "One marker per flight");
+            return markers.get(before);
+        }
+
+        private void assertReleased(Marker marker, int expectedImpacts) {
+            assertAll(
+                    () -> assertFalse(marker.arrow.hasMetadata(IMPACT_HANDLER), "The finished marker keeps no impact handler"),
+                    () -> assertTrue(marker.removed, "The engine removed the marker"),
+                    () -> assertEquals(expectedImpacts, impacts.size(), "Impacts handed to the weapon"),
+                    () -> assertTrue(warnings.isEmpty(), "The flight ended without an engine warning: " + warnings));
         }
     }
 
