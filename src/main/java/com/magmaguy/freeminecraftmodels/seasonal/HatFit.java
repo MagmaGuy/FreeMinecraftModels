@@ -1,13 +1,20 @@
 package com.magmaguy.freeminecraftmodels.seasonal;
 
 import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
+import com.magmaguy.freeminecraftmodels.MetadataHandler;
 import com.magmaguy.freeminecraftmodels.dataconverter.CubeBlueprint;
+import com.magmaguy.freeminecraftmodels.dataconverter.FileModelConverter;
+import com.magmaguy.freeminecraftmodels.dataconverter.ParsedTexture;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
 import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -18,26 +25,39 @@ import java.util.regex.Pattern;
  * Works out where a hat goes on a model and how big it is drawn there, from the two models' cubes. Everything is in
  * Blockbench pixels and Blockbench axes: y up, a model facing -z.
  *
- * <p>The head is measured by its skull, the largest cube of the head bone. The hat stands on the skull's top face,
- * turned with it, and is scaled so its brim, the widest cube of the hat, is a little wider than that face.
+ * <p>The head's largest cube, its skull, gives the hat its direction and a first size. The hat is then lowered onto
+ * the whole head: a map of how high the head's cubes reach under each point of the hat, on which the hat comes to rest
+ * where enough of it is carried. A helmet, a crown or a hat of the model's own carries it; an antenna, a spike, a horn
+ * or a flat plane passes through it, and so does a cube whose top is see-through, such as a cluster of crystals drawn
+ * on a clear box. The head is measured where the hat rests, and the hat is scaled so its brim, the widest cube of the
+ * hat, is a little wider than that.
  */
 final class HatFit {
-    /** How much wider than the skull the brim is drawn, so the brim's sides clear the head's. */
+    /** How much wider than the head the brim is drawn, so the brim's sides clear the head's. */
     private static final float BRIM_OVERHANG = 1.0625f;
-    /** The share of the brim's height that sinks below the top of the skull, so no gap shows under the hat. */
+    /** The share of the brim's height that sinks below where the hat rests, so no gap shows under the hat. */
     private static final float BRIM_SINK = 0.25f;
-    /** The furthest the hat is stretched one way more than the other to follow a skull that is not square. */
+    /** The furthest the hat is stretched one way more than the other to follow a head that is not square. */
     private static final float MAX_STRETCH = 1.35f;
-    /** A skull face this close to level, as the cosine of its tilt, carries the hat; past it the hat stands upright. */
+    /** A skull face this close to level, as the cosine of its tilt, turns the hat with it; past it the hat stands upright. */
     private static final float LEVEL_ENOUGH = (float) Math.cos(Math.toRadians(35));
-    /** On a skull standing on an edge or a corner the hat sits on a ridge, so it is drawn this much narrower. */
+    /** A skull standing on an edge or a corner counts this much narrower than its outline. */
     private static final float RIDGE_SHARE = 0.7f;
-    /** A cube carries the hat when it covers at least this share of the skull's top. */
-    private static final float CARRYING_SHARE = 0.25f;
-    /** A cube rests on the one below when it starts no further than this above it, in pixels. */
-    private static final float RESTING_GAP = 0.75f;
-    /** The hat is fitted to a top between these shares of the skull's own width. */
-    private static final float NARROWEST = 0.6f, WIDEST = 1.3f;
+    /** The hat rests at the height that carries at least this share of it; what stands higher on less goes through it. */
+    private static final float SUPPORT_SHARE = 0.35f;
+    /** The head is measured this far below where the hat rests, as a share of the skull's size. */
+    private static final float CROWN_DEPTH = 0.15f;
+    /**
+     * The hat is fitted to a head no narrower than this share of the skull, and no wider than this many times the
+     * skull's larger side: wings, a collar or a mane joined to the head at that height do not widen the hat with them.
+     */
+    private static final float NARROWEST = 0.5f, WIDEST = 1.15f;
+    /** A cube whose top face is drawn on less than this share of it has no top to carry a hat. */
+    private static final float DRAWN_TOP = 0.05f;
+    /** A cube thinner than this, in pixels, across either level direction is a flat plane and carries nothing. */
+    private static final float MIN_SOLID = 0.2f;
+    /** How many steps of the height map span the skull. */
+    private static final float MAP_STEPS = 16f;
     /** Thickness a flat cube counts for when cubes are compared by size. */
     private static final float MIN_THICKNESS = 0.5f;
 
@@ -103,7 +123,7 @@ final class HatFit {
     }
 
     /** Where the hat goes on this head bone; null when the head has no cube to stand it on. */
-    static Placement place(BoneBlueprint head, Brim brim) {
+    static Placement place(BoneBlueprint head, Brim brim, Textures textures) {
         Box skull = skull(head);
         if (skull == null) return null;
 
@@ -125,10 +145,9 @@ final class HatFit {
             }
         }
 
-        Vector3f hatUp, hatFront, crown;
-        float width, depth;
+        Vector3f hatUp, hatFront;
         if (level >= LEVEL_ENOUGH) {
-            // The hat stands on the face nearest to level, squared up with the skull's sides.
+            // The hat turns with the skull's face nearest to level, squared up with the skull's sides.
             hatUp = new Vector3f(axes[top]).mul(topSign);
             int front = (top + 1) % 3, side = (top + 2) % 3;
             if (Math.abs(axes[side].dot(forward)) > Math.abs(axes[front].dot(forward))) {
@@ -137,63 +156,49 @@ final class HatFit {
                 side = swap;
             }
             hatFront = new Vector3f(axes[front]).mul(axes[front].dot(forward) < 0 ? -1 : 1);
-            Vector3f right = new Vector3f(hatFront).cross(hatUp);
-
-            // A head often carries more on top of its skull: a helmet, a hat of its own, hair, a crest. The hat
-            // climbs onto whatever rests on the spot it stands on and is big enough to carry it; thinner things,
-            // such as a spike or the tip of a pointed hat, end up inside the hat instead.
-            Span skullSpan = Span.of(skull, right, hatUp, hatFront), support = skullSpan;
-            List<Box> carried = new ArrayList<>(boxes(head));
-            collectBelow(head, carried);
-            List<Span> spans = new ArrayList<>();
-            for (Box box : carried) spans.add(Span.of(box, right, hatUp, hatFront));
-            float middleAcross = skullSpan.middleAcross(), middleAlong = skullSpan.middleAlong();
-            while (true) {
-                Span higher = null;
-                for (Span span : spans) {
-                    if (span.top <= support.top + 0.05f || span.bottom > support.top + RESTING_GAP) continue;
-                    if (!span.covers(middleAcross, middleAlong)) continue;
-                    if (span.width() * span.depth() < CARRYING_SHARE * skullSpan.width() * skullSpan.depth()) continue;
-                    if (higher == null || span.top > higher.top) higher = span;
-                }
-                if (higher == null) break;
-                support = higher;
-            }
-            // The hat keeps to the skull's size: a little smaller on a narrow top, a little bigger on a wide one.
-            width = Math.max(NARROWEST * skullSpan.width(), Math.min(WIDEST * skullSpan.width(), support.width()));
-            depth = Math.max(NARROWEST * skullSpan.depth(), Math.min(WIDEST * skullSpan.depth(), support.depth()));
-            // On a top narrower than the skull the hat centres on that top, otherwise on the skull.
-            float across = support.width() < skullSpan.width() ? support.middleAcross() : middleAcross;
-            float along = support.depth() < skullSpan.depth() ? support.middleAlong() : middleAlong;
-            crown = new Vector3f(right).mul(across).add(new Vector3f(hatUp).mul(support.top))
-                    .add(new Vector3f(hatFront).mul(along));
         } else {
-            // No face is near level: the hat stands upright on the skull's highest edge or corner.
+            // No face is near level: the hat stands upright.
             hatUp = up;
             hatFront = forward;
-            Vector3f right = new Vector3f(hatFront).cross(hatUp);
-            List<Vector3f> corners = skull.corners();
-            float highest = Float.NEGATIVE_INFINITY;
-            float[] across = {Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY}, along = {Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY};
-            for (Vector3f corner : corners) {
-                highest = Math.max(highest, corner.dot(hatUp));
-                across[0] = Math.min(across[0], corner.dot(right));
-                across[1] = Math.max(across[1], corner.dot(right));
-                along[0] = Math.min(along[0], corner.dot(hatFront));
-                along[1] = Math.max(along[1], corner.dot(hatFront));
-            }
-            crown = new Vector3f();
-            int highCorners = 0;
-            for (Vector3f corner : corners)
-                if (corner.dot(hatUp) >= highest - 0.01f) {
-                    crown.add(corner);
-                    highCorners++;
-                }
-            crown.div(highCorners);
-            width = (across[1] - across[0]) * RIDGE_SHARE;
-            depth = (along[1] - along[0]) * RIDGE_SHARE;
         }
-        if (width <= 0 && depth <= 0) return null;
+        Vector3f across = new Vector3f(hatFront).cross(hatUp);
+
+        Span skullSpan = Span.of(skull, across, hatUp, hatFront);
+        float narrowed = level >= LEVEL_ENOUGH ? 1 : RIDGE_SHARE;
+        float width = Math.max(skullSpan.width() * narrowed, MIN_THICKNESS);
+        float depth = Math.max(skullSpan.depth() * narrowed, MIN_THICKNESS);
+        float size = (float) Math.sqrt(width * depth);
+
+        // The whole head carries the hat, not the skull alone: the cubes of the head bone and of the bones under it.
+        List<Box> carrying = new ArrayList<>();
+        for (Box box : subtree(head)) if (box.solid(hatUp) && box.topped(hatUp, textures)) carrying.add(box);
+        if (carrying.isEmpty()) carrying.addAll(subtree(head));
+        HeightMap heights = HeightMap.of(carrying, across, hatUp, hatFront, size / MAP_STEPS);
+
+        float middle = skullSpan.middleAcross(), centre = skullSpan.middleAlong();
+        float rest = heights.rest(middle, centre, width * BRIM_OVERHANG, depth * BRIM_OVERHANG);
+        if (Float.isNaN(rest)) rest = skullSpan.top;
+        // The head is as wide as what the hat rests on, measured a little below it and through the middle.
+        float crownLevel = rest - CROWN_DEPTH * size;
+        boolean[] section = heights.section(crownLevel);
+        float[] wide = heights.run(section, middle, centre, true), deep = heights.run(section, middle, centre, false);
+        float widest = WIDEST * Math.max(skullSpan.width(), skullSpan.depth());
+        if (wide != null) {
+            float measured = Math.max(NARROWEST * width, Math.min(widest, wide[1] - wide[0]));
+            middle = measured > wide[1] - wide[0] ? (wide[0] + wide[1]) / 2
+                    : Math.max(wide[0] + measured / 2, Math.min(wide[1] - measured / 2, middle));
+            width = measured;
+        }
+        if (deep != null) {
+            float measured = Math.max(NARROWEST * depth, Math.min(widest, deep[1] - deep[0]));
+            centre = measured > deep[1] - deep[0] ? (deep[0] + deep[1]) / 2
+                    : Math.max(deep[0] + measured / 2, Math.min(deep[1] - measured / 2, centre));
+            depth = measured;
+        }
+        float settled = heights.rest(middle, centre, width * BRIM_OVERHANG, depth * BRIM_OVERHANG);
+        if (!Float.isNaN(settled)) rest = settled;
+        Vector3f crown = new Vector3f(across).mul(middle).add(new Vector3f(hatUp).mul(rest))
+                .add(new Vector3f(hatFront).mul(centre));
 
         float scaleX = width * BRIM_OVERHANG / brim.width(), scaleZ = depth * BRIM_OVERHANG / brim.depth();
         // A hat stretched too far one way stops looking like the hat, so the narrow side gives instead.
@@ -204,8 +209,7 @@ final class HatFit {
 
         // The hat model faces -z with y up, so its axes map onto the head's right, up and back.
         Vector3f back = new Vector3f(hatFront).negate();
-        Vector3f right = new Vector3f(hatUp).cross(back);
-        Vector3f rotation = new Quaternionf().setFromNormalized(new Matrix3f(right, hatUp, back))
+        Vector3f rotation = new Quaternionf().setFromNormalized(new Matrix3f(across, hatUp, back))
                 .getEulerAnglesZYX(new Vector3f());
         return new Placement(anchor, rotation, new Vector3f(scaleX, scaleY, scaleZ));
     }
@@ -222,6 +226,13 @@ final class HatFit {
             rotation.premul(new Quaternionf().rotationZYX(angles.z, angles.y, angles.x));
         }
         return rotation;
+    }
+
+    /** The cubes of a bone and of every bone under it, in the bone's own frame; the bones under it count unturned. */
+    private static List<Box> subtree(BoneBlueprint head) {
+        List<Box> boxes = boxes(head);
+        collectBelow(head, boxes);
+        return boxes;
     }
 
     /** The largest cube of the bone, or of the bones under it when it has none of its own. */
@@ -253,7 +264,7 @@ final class HatFit {
             Vector3f angles = vector(json.get("rotation")), origin = vector(json.get("origin"));
             Quaternionf rotation = angles == null ? new Quaternionf() : new Quaternionf().rotationZYX(
                     (float) Math.toRadians(angles.z), (float) Math.toRadians(angles.y), (float) Math.toRadians(angles.x));
-            boxes.add(new Box(low, high, rotation, origin == null ? new Vector3f() : origin));
+            boxes.add(new Box(low, high, rotation, origin == null ? new Vector3f() : origin, json.get("faces")));
         }
         return boxes;
     }
@@ -304,8 +315,207 @@ final class HatFit {
         }
     }
 
+    /** How high a head's cubes reach over each point across and along the hat's directions. */
+    private static final class HeightMap {
+        private final float step, left, back;
+        private final int columns, rows;
+        private final float[] tops;
+        private final List<Box> boxes = new ArrayList<>();
+        private final List<Span> spans = new ArrayList<>();
+        private Vector3f across, up, along;
+
+        private HeightMap(float step, float left, float back, int columns, int rows) {
+            this.step = step;
+            this.left = left;
+            this.back = back;
+            this.columns = columns;
+            this.rows = rows;
+            this.tops = new float[columns * rows];
+            java.util.Arrays.fill(tops, Float.NEGATIVE_INFINITY);
+        }
+
+        static HeightMap of(List<Box> boxes, Vector3f across, Vector3f up, Vector3f along, float step) {
+            List<Span> spans = new ArrayList<>();
+            float left = Float.POSITIVE_INFINITY, right = Float.NEGATIVE_INFINITY;
+            float back = Float.POSITIVE_INFINITY, front = Float.NEGATIVE_INFINITY;
+            for (Box box : boxes) {
+                Span span = Span.of(box, across, up, along);
+                spans.add(span);
+                left = Math.min(left, span.left);
+                right = Math.max(right, span.right);
+                back = Math.min(back, span.back);
+                front = Math.max(front, span.front);
+            }
+            step = Math.max(step, 0.125f);
+            // A head with far-flung parts gets a coarser map instead of a huge one.
+            while ((right - left) / step * ((front - back) / step) > 90_000f) step *= 1.5f;
+            int columns = Math.max(1, (int) Math.ceil((right - left) / step)), rows = Math.max(1, (int) Math.ceil((front - back) / step));
+            HeightMap map = new HeightMap(step, left, back, columns, rows);
+            map.boxes.addAll(boxes);
+            map.spans.addAll(spans);
+            map.across = across;
+            map.up = up;
+            map.along = along;
+            map.each((cell, reach) -> {
+                if (reach[1] > map.tops[cell]) map.tops[cell] = reach[1];
+            });
+            return map;
+        }
+
+        /** Runs over every cube and every step of the map under it, with where the line up from there crosses it. */
+        private void each(java.util.function.BiConsumer<Integer, float[]> crossing) {
+            for (int index = 0; index < boxes.size(); index++) {
+                Span span = spans.get(index);
+                int firstColumn = column(span.left), lastColumn = column(span.right);
+                int firstRow = row(span.back), lastRow = row(span.front);
+                for (int row = firstRow; row <= lastRow; row++)
+                    for (int column = firstColumn; column <= lastColumn; column++) {
+                        Vector3f point = new Vector3f(across).mul(left + (column + 0.5f) * step)
+                                .add(new Vector3f(along).mul(back + (row + 0.5f) * step));
+                        float[] reach = boxes.get(index).reach(point, up);
+                        if (reach != null) crossing.accept(row * columns + column, reach);
+                    }
+            }
+        }
+
+        /** Where the head is solid at one height: a cube floating above that height is no part of it there. */
+        boolean[] section(float level) {
+            boolean[] solid = new boolean[columns * rows];
+            each((cell, reach) -> {
+                if (reach[0] <= level && reach[1] >= level) solid[cell] = true;
+            });
+            return solid;
+        }
+
+        private int column(float across) {
+            return Math.max(0, Math.min(columns - 1, (int) Math.floor((across - left) / step)));
+        }
+
+        private int row(float along) {
+            return Math.max(0, Math.min(rows - 1, (int) Math.floor((along - back) / step)));
+        }
+
+        private float top(int column, int row) {
+            return column < 0 || row < 0 || column >= columns || row >= rows ? Float.NEGATIVE_INFINITY : tops[row * columns + column];
+        }
+
+        /**
+         * The height a hat of this outline comes to rest at: the highest level that carries at least
+         * {@link #SUPPORT_SHARE} of it. NaN when nothing of the head is under it.
+         */
+        float rest(float middle, float centre, float width, float depth) {
+            List<Float> under = new ArrayList<>();
+            for (int row = 0; row < rows; row++) {
+                float along = back + (row + 0.5f) * step;
+                if (Math.abs(along - centre) > depth / 2) continue;
+                for (int column = 0; column < columns; column++) {
+                    float across = left + (column + 0.5f) * step;
+                    if (Math.abs(across - middle) <= width / 2) under.add(tops[row * columns + column]);
+                }
+            }
+            // The hat's outline also reaches past the map, over nothing.
+            int outline = Math.max(under.size(), Math.round(width / step) * Math.round(depth / step));
+            under.sort(Comparator.reverseOrder());
+            int carried = Math.max(0, (int) Math.ceil(SUPPORT_SHARE * outline) - 1);
+            if (carried < under.size() && under.get(carried) != Float.NEGATIVE_INFINITY) return under.get(carried);
+            // Too little of the head is under the hat to carry that share: it rests on the highest there is.
+            return under.isEmpty() || under.get(0) == Float.NEGATIVE_INFINITY ? Float.NaN : under.get(0);
+        }
+
+        /**
+         * How far a section of the head reaches through a point, across or along: its stretch that holds the point,
+         * on the line through it or one beside it. Null when the section does not hold the point.
+         */
+        float[] run(boolean[] section, float middle, float centre, boolean acrossways) {
+            int column = column(middle), row = row(centre);
+            float low = Float.POSITIVE_INFINITY, high = Float.NEGATIVE_INFINITY;
+            for (int beside = -1; beside <= 1; beside++) {
+                int fixed = (acrossways ? row : column) + beside, start = acrossways ? column : row;
+                int length = acrossways ? columns : rows;
+                if (!holds(section, acrossways, start, fixed)) continue;
+                int first = start, last = start;
+                // A seam one step wide between two cubes does not end the head.
+                while (first > 0 && (holds(section, acrossways, first - 1, fixed) || holds(section, acrossways, first - 2, fixed))) first--;
+                while (last < length - 1 && (holds(section, acrossways, last + 1, fixed) || holds(section, acrossways, last + 2, fixed))) last++;
+                while (first < start && !holds(section, acrossways, first, fixed)) first++;
+                while (last > start && !holds(section, acrossways, last, fixed)) last--;
+                float origin = acrossways ? left : back;
+                low = Math.min(low, origin + first * step);
+                high = Math.max(high, origin + (last + 1) * step);
+            }
+            return low > high ? null : new float[]{low, high};
+        }
+
+        private boolean holds(boolean[] section, boolean acrossways, int moving, int fixed) {
+            int column = acrossways ? moving : fixed, row = acrossways ? fixed : moving;
+            return column >= 0 && row >= 0 && column < columns && row < rows && section[row * columns + column];
+        }
+    }
+
+    /** A model's texture images, which tell a cube with a drawn top from one whose top is see-through. */
+    static final class Textures {
+        private final Map<Integer, BufferedImage> images = new HashMap<>();
+        private final Map<Integer, Float> pixelsPerUnit = new HashMap<>();
+
+        /** Reads the textures the model wrote into the resource pack; a texture that cannot be read counts as drawn. */
+        static Textures of(FileModelConverter model) {
+            Textures textures = new Textures();
+            if (model.getParsedTextures() == null || MetadataHandler.PLUGIN == null) return textures;
+            File folder = new File(MetadataHandler.PLUGIN.getDataFolder(),
+                    "output/FreeMinecraftModels/assets/freeminecraftmodels/textures/entity/" + model.getID());
+            for (ParsedTexture texture : model.getParsedTextures()) {
+                try {
+                    BufferedImage image = ImageIO.read(new File(folder, texture.getFilename()));
+                    if (image == null || texture.getTextureWidth() <= 0) continue;
+                    textures.images.put(texture.getId(), image);
+                    textures.pixelsPerUnit.put(texture.getId(), (float) (image.getWidth() / texture.getTextureWidth()));
+                } catch (Exception unreadable) {
+                    // Left out: its faces count as drawn.
+                }
+            }
+            return textures;
+        }
+
+        /** The share of a face that is drawn rather than see-through; 1 when it cannot be told. */
+        float drawn(Object faceJson) {
+            if (!(faceJson instanceof Map<?, ?> face) || !(face.get("texture") instanceof Number texture)
+                    || !(face.get("uv") instanceof List<?> uv) || uv.size() < 4) return 1;
+            BufferedImage image = images.get(texture.intValue());
+            if (image == null) return 1;
+            float scale = pixelsPerUnit.get(texture.intValue());
+            float[] corners = new float[4];
+            for (int corner = 0; corner < 4; corner++) {
+                if (!(uv.get(corner) instanceof Number number)) return 1;
+                corners[corner] = number.floatValue() * scale;
+            }
+            int left = Math.max(0, (int) Math.floor(Math.min(corners[0], corners[2])));
+            int right = Math.min(image.getWidth(), Math.max(left + 1, (int) Math.ceil(Math.max(corners[0], corners[2]))));
+            int top = Math.max(0, (int) Math.floor(Math.min(corners[1], corners[3])));
+            int bottom = Math.min(image.getHeight(), Math.max(top + 1, (int) Math.ceil(Math.max(corners[1], corners[3]))));
+            int pixels = 0, drawn = 0;
+            for (int y = top; y < bottom; y++)
+                for (int x = left; x < right; x++) {
+                    pixels++;
+                    if ((image.getRGB(x, y) >>> 24) > 24) drawn++;
+                }
+            return pixels == 0 ? 1 : drawn / (float) pixels;
+        }
+    }
+
     /** A cube as Blockbench holds it: a box turned about its own pivot. */
-    private record Box(Vector3f low, Vector3f high, Quaternionf rotation, Vector3f pivot) {
+    private record Box(Vector3f low, Vector3f high, Quaternionf rotation, Vector3f pivot, Object faces) {
+        private static final String[][] FACES = {{"west", "east"}, {"down", "up"}, {"north", "south"}};
+
+        /** Whether the face of the cube that looks {@code up} is drawn: a cube with a see-through top has no top. */
+        boolean topped(Vector3f up, Textures textures) {
+            if (textures == null || !(faces instanceof Map<?, ?> map)) return true;
+            Vector3f[] axes = axes();
+            int upright = 0;
+            for (int axis = 1; axis < 3; axis++)
+                if (Math.abs(axes[axis].dot(up)) > Math.abs(axes[upright].dot(up))) upright = axis;
+            return textures.drawn(map.get(FACES[upright][axes[upright].dot(up) < 0 ? 0 : 1])) >= DRAWN_TOP;
+        }
+
         float size(int axis) {
             return high.get(axis) - low.get(axis);
         }
@@ -316,6 +526,37 @@ final class HatFit {
 
         float volume() {
             return Math.max(size(0), MIN_THICKNESS) * Math.max(size(1), MIN_THICKNESS) * Math.max(size(2), MIN_THICKNESS);
+        }
+
+        /** Whether the cube has thickness both ways across {@code up}: a flat plane standing on edge has none. */
+        boolean solid(Vector3f up) {
+            Vector3f[] axes = axes();
+            int upright = 0;
+            for (int axis = 1; axis < 3; axis++)
+                if (Math.abs(axes[axis].dot(up)) > Math.abs(axes[upright].dot(up))) upright = axis;
+            return size((upright + 1) % 3) > MIN_SOLID && size((upright + 2) % 3) > MIN_SOLID;
+        }
+
+        /**
+         * Where the line up from a point of the plane through the origin across {@code up} enters and leaves the
+         * cube, as heights along {@code up}; null where it misses the cube.
+         */
+        float[] reach(Vector3f point, Vector3f up) {
+            Quaternionf back = new Quaternionf(rotation).conjugate();
+            Vector3f start = back.transform(new Vector3f(point).sub(pivot)).add(pivot);
+            Vector3f direction = back.transform(new Vector3f(up));
+            float enter = Float.NEGATIVE_INFINITY, leave = Float.POSITIVE_INFINITY;
+            for (int axis = 0; axis < 3; axis++) {
+                float from = start.get(axis), along = direction.get(axis);
+                if (Math.abs(along) < 1e-6f) {
+                    if (from < low.get(axis) || from > high.get(axis)) return null;
+                    continue;
+                }
+                float first = (low.get(axis) - from) / along, second = (high.get(axis) - from) / along;
+                enter = Math.max(enter, Math.min(first, second));
+                leave = Math.min(leave, Math.max(first, second));
+            }
+            return enter <= leave ? new float[]{enter, leave} : null;
         }
 
         /** The directions of the cube's sides once turned. */

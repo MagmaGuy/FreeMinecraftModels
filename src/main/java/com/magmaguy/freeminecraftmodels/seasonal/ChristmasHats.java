@@ -83,8 +83,10 @@ public final class ChristmasHats {
         }
         for (FileModelConverter model : models) {
             if (model == hat || model.getSkeletonBlueprint() == null) continue;
+            HatFit.Textures textures = null;
             for (BoneBlueprint head : HatFit.heads(model.getSkeletonBlueprint())) {
-                HatFit.Placement placement = HatFit.place(head, brim);
+                if (textures == null) textures = HatFit.Textures.of(model);
+                HatFit.Placement placement = HatFit.place(head, brim, textures);
                 if (placement != null) head.getAttachments().add(wear(head, hatSkeleton, brim, placement));
             }
         }
