@@ -36,6 +36,7 @@ public class DefaultConfig extends ConfigurationFile {
     public static int maxParticlesPerEmitter = 100;
     public static int maxParticlesPerViewer = 400;
     public static boolean christmasHats = true;
+    public static List<String> christmasHatsExcludedModels = List.of();
     private static DefaultConfig instance;
     public static boolean setupDone;
 
@@ -224,6 +225,14 @@ public class DefaultConfig extends ConfigurationFile {
                         "Set to false to never show the hats and to leave the Bedrock pack without them. A change reaches",
                         "each model the next time it spawns, and the Bedrock pack on /fmm reload or a restart."),
                 fileConfiguration, "christmasHats", true);
+        List<String> excluded = new java.util.ArrayList<>();
+        for (Object id : ConfigurationEngine.setList(
+                List.of("Models that never wear the Christmas hat, by model ID (the file name without .bbmodel).",
+                        "Add a model here when the hat does not suit it, such as one with a crown built into its head."),
+                fileConfiguration, "christmasHatsExcludedModels",
+                List.of("06_em_corrupted_advisor", "07_em_corrupted_advisor_2")))
+            excluded.add(com.magmaguy.freeminecraftmodels.utils.StringToResourcePackFilename.convert(String.valueOf(id)));
+        christmasHatsExcludedModels = List.copyOf(excluded);
         preventPropPlacementInProtectedRegions = ConfigurationEngine.setBoolean(
                 List.of("Sets whether players are prevented from placing props (custom model items) inside protected regions.",
                         "When true, FMM asks MagmaCore's registered protection providers whether the player may build in the target cell.",

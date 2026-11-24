@@ -83,6 +83,7 @@ public final class ChristmasHats {
         }
         for (FileModelConverter model : models) {
             if (model == hat || model.getSkeletonBlueprint() == null) continue;
+            if (DefaultConfig.christmasHatsExcludedModels.contains(model.getID())) continue;
             HatFit.Textures textures = null;
             for (BoneBlueprint head : HatFit.heads(model.getSkeletonBlueprint())) {
                 if (textures == null) textures = HatFit.Textures.of(model);

@@ -45,16 +45,24 @@ final class HatFit {
     private static final float RIDGE_SHARE = 0.7f;
     /** The hat rests at the height that carries at least this share of it; what stands higher on less goes through it. */
     private static final float SUPPORT_SHARE = 0.55f;
+    /**
+     * The brim is pulled down over what lies just under its rim: when this share of the hat is carried at a height
+     * the brim can reach, a hood's top under a narrower cap or a rim round a crown, the brim covers it.
+     */
+    private static final float RIM_SHARE = 0.85f;
+    /** A cube carries the hat when its own section is at least this share of the largest one among the head's cubes. */
+    private static final float CARRY_SHARE = 0.15f;
     /** The head is measured this far below where the hat rests, as a share of the skull's size. */
     private static final float CROWN_DEPTH = 0.15f;
     /**
-     * The hat is fitted to a head no narrower than this share of the skull, and no wider than this many times the
-     * skull's larger side: wings, a collar or a mane joined to the head at that height do not widen the hat with them.
+     * The hat is fitted to a head no narrower than the skull, and no wider than this many times the skull's larger
+     * side: wings, a collar or a mane joined to the head at that height do not widen the hat with them.
      */
-    private static final float NARROWEST = 0.5f, WIDEST = 1.3f;
+    private static final float NARROWEST = 1f, WIDEST = 1.3f;
     /**
-     * A cube counts towards how wide the head is when its own section is at least this share of the skull's: ears,
-     * tufts, bars and trim poke out of the hat's brim instead of widening it.
+     * A cube counts towards how wide the head is when its own section is at least this share of the largest one among
+     * the head's cubes: ears, tufts, antlers, bars and trim poke out of the hat's brim instead of widening it or
+     * pulling it to one side.
      */
     private static final float BODY_SHARE = 0.3f;
     /** A cube whose top face is drawn on less than this share of it has no top to carry a hat. */
@@ -187,16 +195,21 @@ final class HatFit {
         float size = (float) Math.sqrt(width * depth);
 
         // The whole head carries the hat, not the skull alone: the cubes of the head bone and of the bones under it.
+        List<Box> solid = new ArrayList<>();
+        for (Box box : subtree(head)) if (box.solid(hatUp) && box.topped(hatUp, textures)) solid.add(box);
+        if (solid.isEmpty()) solid.addAll(subtree(head));
+        float largest = skull.crossSection(hatUp);
+        for (Box box : solid) largest = Math.max(largest, box.crossSection(hatUp));
+        // Small cubes carry nothing: antlers, horns and spikes pass through the hat instead of holding it up.
         List<Box> carrying = new ArrayList<>();
-        for (Box box : subtree(head)) if (box.solid(hatUp) && box.topped(hatUp, textures)) carrying.add(box);
-        if (carrying.isEmpty()) carrying.addAll(subtree(head));
+        for (Box box : solid) if (box.crossSection(hatUp) >= CARRY_SHARE * largest) carrying.add(box);
         HeightMap heights = HeightMap.of(carrying, across, hatUp, hatFront, size / MAP_STEPS);
 
         float middle = skullSpan.middleAcross(), centre = skullSpan.middleAlong();
-        float rest = heights.rest(middle, centre, width * BRIM_OVERHANG, depth * BRIM_OVERHANG);
+        float rest = heights.rest(middle, centre, width * BRIM_OVERHANG, depth * BRIM_OVERHANG, SUPPORT_SHARE);
         if (Float.isNaN(rest)) rest = skullSpan.top;
         // The head is as wide as its larger cubes are where the hat rests and a little below, through the middle.
-        float body = BODY_SHARE * skull.crossSection(hatUp);
+        float body = BODY_SHARE * largest;
         boolean[] section = heights.section(rest - CROWN_DEPTH * size, hatUp, body);
         boolean[] brow = heights.section(rest - 0.02f * size, hatUp, body);
         for (int cell = 0; cell < section.length; cell++) section[cell] |= brow[cell];
@@ -214,7 +227,7 @@ final class HatFit {
                     : Math.max(deep[0] + measured / 2, Math.min(deep[1] - measured / 2, centre));
             depth = measured;
         }
-        float settled = heights.rest(middle, centre, width * BRIM_OVERHANG, depth * BRIM_OVERHANG);
+        float settled = heights.rest(middle, centre, width * BRIM_OVERHANG, depth * BRIM_OVERHANG, SUPPORT_SHARE);
         if (!Float.isNaN(settled)) rest = settled;
         Vector3f crown = new Vector3f(across).mul(middle).add(new Vector3f(hatUp).mul(rest))
                 .add(new Vector3f(hatFront).mul(centre));
@@ -224,7 +237,10 @@ final class HatFit {
         scaleX = Math.max(scaleX, scaleZ / MAX_STRETCH);
         scaleZ = Math.max(scaleZ, scaleX / MAX_STRETCH);
         float scaleY = (float) Math.sqrt(scaleX * scaleZ);
-        Vector3f anchor = crown.sub(new Vector3f(hatUp).mul(BRIM_SINK * brim.height() * scaleY));
+        float brimHeight = brim.height() * scaleY, sink = BRIM_SINK * brimHeight;
+        float rim = heights.rest(middle, centre, width * BRIM_OVERHANG, depth * BRIM_OVERHANG, RIM_SHARE);
+        if (rim < rest && rest - rim <= 0.85f * brimHeight) sink = Math.max(sink, rest - rim + 0.15f * brimHeight);
+        Vector3f anchor = crown.sub(new Vector3f(hatUp).mul(sink));
 
         // The hat model faces -z with y up, so its axes map onto the head's right, up and back.
         Vector3f back = new Vector3f(hatFront).negate();
@@ -422,10 +438,10 @@ final class HatFit {
         }
 
         /**
-         * The height a hat of this outline comes to rest at: the highest level that carries at least
-         * {@link #SUPPORT_SHARE} of it. NaN when nothing of the head is under it.
+         * The height a hat of this outline comes to rest at: the highest level that carries at least {@code share}
+         * of it. NaN when nothing of the head is under it, or when a share above {@link #SUPPORT_SHARE} is carried nowhere.
          */
-        float rest(float middle, float centre, float width, float depth) {
+        float rest(float middle, float centre, float width, float depth, float share) {
             List<Float> under = new ArrayList<>();
             for (int row = 0; row < rows; row++) {
                 float along = back + (row + 0.5f) * step;
@@ -438,9 +454,10 @@ final class HatFit {
             // The hat's outline also reaches past the map, over nothing.
             int outline = Math.max(under.size(), Math.round(width / step) * Math.round(depth / step));
             under.sort(Comparator.reverseOrder());
-            int carried = Math.max(0, (int) Math.ceil(SUPPORT_SHARE * outline) - 1);
+            int carried = Math.max(0, (int) Math.ceil(share * outline) - 1);
             if (carried < under.size() && under.get(carried) != Float.NEGATIVE_INFINITY) return under.get(carried);
             // Too little of the head is under the hat to carry that share: it rests on the highest there is.
+            if (share > SUPPORT_SHARE) return Float.NaN;
             return under.isEmpty() || under.get(0) == Float.NEGATIVE_INFINITY ? Float.NaN : under.get(0);
         }
 
