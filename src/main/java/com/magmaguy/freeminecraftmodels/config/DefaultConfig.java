@@ -35,6 +35,7 @@ public class DefaultConfig extends ConfigurationFile {
     public static boolean particleEffectsEnabled = true;
     public static int maxParticlesPerEmitter = 100;
     public static int maxParticlesPerViewer = 400;
+    public static boolean christmasHats = true;
     private static DefaultConfig instance;
     public static boolean setupDone;
 
@@ -211,6 +212,15 @@ public class DefaultConfig extends ConfigurationFile {
                 List.of("Upper limit of live particles one Java player is shown across all models.",
                         "Past it, new particles for that player are skipped until older ones expire."),
                 fileConfiguration, "maxParticlesPerViewer", 400);
+        christmasHats = ConfigurationEngine.setBoolean(
+                List.of("Sets whether models of living entities (mobs, bosses, pets, player disguises) wear a Christmas hat",
+                        "on their head from December 1st to January 1st, by the server's clock. Props and other models",
+                        "without a living entity never wear one. A model's head is its head or h_head bone, or failing",
+                        "that the bone that follows its mob's gaze (h_) or one with head in its name.",
+                        "The hat is the model models/fmm_default_seasonal/fmm_christmas_hat.bbmodel, sized to each head.",
+                        "Java players see it where display entities are in use; Bedrock players do not.",
+                        "Set to false to never show the hats. A change reaches each model the next time it spawns."),
+                fileConfiguration, "christmasHats", true);
         preventPropPlacementInProtectedRegions = ConfigurationEngine.setBoolean(
                 List.of("Sets whether players are prevented from placing props (custom model items) inside protected regions.",
                         "When true, FMM asks MagmaCore's registered protection providers whether the player may build in the target cell.",

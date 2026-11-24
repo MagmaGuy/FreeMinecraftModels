@@ -54,6 +54,7 @@ public class BoneTransforms {
     private final Vector3f modelCenter;
     private final Vector3f negativeParentModelCenter;
     private final float defaultRotationX, defaultRotationY, defaultRotationZ;
+    private final Vector3f attachmentScale;
 
     public BoneTransforms(Bone bone, Bone parent) {
         this.bone = bone;
@@ -67,6 +68,7 @@ public class BoneTransforms {
         this.defaultRotationX = defaultRotation.get(0);
         this.defaultRotationY = defaultRotation.get(1);
         this.defaultRotationZ = defaultRotation.get(2);
+        this.attachmentScale = blueprint.getAttachmentScale();
     }
 
     public void transform() {
@@ -200,7 +202,8 @@ public class BoneTransforms {
                 return;
             }
             initializeDisplayEntityBone();
-            initializeArmorStandBone();
+            // An armor stand cannot be scaled, so an attachment has none and is skipped where displays are off.
+            if (!bone.getBoneBlueprint().isAttachment()) initializeArmorStandBone();
         }
     }
 
@@ -688,6 +691,12 @@ public class BoneTransforms {
             scaleX *= (float) scaleModifier;
             scaleY *= (float) scaleModifier;
             scaleZ *= (float) scaleModifier;
+        }
+        // An attachment's first bone fits the model it carries to the bone wearing it.
+        if (attachmentScale != null) {
+            scaleX *= attachmentScale.x;
+            scaleY *= attachmentScale.y;
+            scaleZ *= attachmentScale.z;
         }
         return new Vector3f(scaleX, scaleY, scaleZ);
     }

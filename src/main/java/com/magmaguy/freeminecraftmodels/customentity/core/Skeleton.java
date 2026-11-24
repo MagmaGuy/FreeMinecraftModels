@@ -8,6 +8,7 @@ import com.magmaguy.freeminecraftmodels.dataconverter.BoneBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.IKChainBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.LocatorBlueprint;
 import com.magmaguy.freeminecraftmodels.dataconverter.SkeletonBlueprint;
+import com.magmaguy.freeminecraftmodels.seasonal.ChristmasHats;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.Bukkit;
@@ -82,9 +83,17 @@ public class Skeleton {
         return lookTarget != null;
     }
 
+    // Whether this model wears the attachments fitted to its bones (a seasonal hat), decided once as it is built.
+    private final boolean wearsAttachments;
+
+    boolean wearsAttachments() {
+        return wearsAttachments;
+    }
+
     public Skeleton(SkeletonBlueprint skeletonBlueprint, ModeledEntity modeledEntity) {
         this.skeletonBlueprint = skeletonBlueprint;
         this.modeledEntity = modeledEntity;
+        this.wearsAttachments = ChristmasHats.wornBy(modeledEntity);
         skeletonBlueprint.getBoneMap().forEach((key, value) -> {
             if (value.getParent() == null) {
                 Bone bone = new Bone(value, null, this);
@@ -301,8 +310,7 @@ public class Skeleton {
                 if (!modeledEntity.isDying()) {
                     // done — fade back to persistent tint when set, else undyed
                     tinting = false;
-                    Color restore = persistentTint != null ? persistentTint : Color.WHITE;
-                    boneMap.values().forEach(b -> b.setHorseLeatherArmorColor(restore));
+                    showPersistentTint();
                 } else if (modeledEntity.isRemoved()) {
                     // entity gone, cancel
                     tinting = false;
@@ -357,8 +365,14 @@ public class Skeleton {
     public void applyPersistentTint(Color color) {
         this.persistentTint = color;
         if (tinting) return;
-        Color applied = color != null ? color : Color.WHITE;
-        boneMap.values().forEach(b -> b.setHorseLeatherArmorColor(applied));
+        showPersistentTint();
+    }
+
+    /** Dyes the model its persistent tint. A worn attachment keeps its own colours; it only takes the damage flash. */
+    private void showPersistentTint() {
+        Color applied = persistentTint != null ? persistentTint : Color.WHITE;
+        boneMap.values().forEach(b ->
+                b.setHorseLeatherArmorColor(b.getBoneBlueprint().isAttachment() ? Color.WHITE : applied));
     }
 
     /**

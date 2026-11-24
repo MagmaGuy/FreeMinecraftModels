@@ -155,6 +155,74 @@ public class BoneBlueprint {
         processBoneValues(boneJSON);
     }
 
+    // ---- attachments ---------------------------------------------------------
+    // An attachment is another model's bones worn on this bone, such as a seasonal hat on a head. It is no part of
+    // the model's own bones: it is kept out of the skeleton blueprint's bone map and of this bone's children, so the
+    // resource pack, the Bedrock export, animations and the model's measured size never see it. A skeleton adds the
+    // attachment's bones under this one when it is built (see Bone).
+    @Getter
+    private final List<BoneBlueprint> attachments = new ArrayList<>();
+    @Getter
+    private boolean attachment = false;
+    // What an attachment's first bone is drawn at, per axis, about its pivot; null for every other bone.
+    private Vector3f attachmentScale = null;
+
+    /**
+     * The first bone of an attachment: it holds no cubes and places the bones under it, which keep the coordinates of
+     * the model they come from. {@code anchor} is the point of this model the attachment stands on and
+     * {@code sourceAnchor} the point of the attached model put there, both in Blockbench pixels; the attached model
+     * turns by {@code rotation} (radians, Blockbench order) and is drawn at {@code scale} about that point.
+     */
+    public static BoneBlueprint attachmentRoot(String name, BoneBlueprint parent, Vector3f anchor,
+                                               Vector3f sourceAnchor, Vector3f rotation, Vector3f scale) {
+        BoneBlueprint root = new BoneBlueprint(name, parent, (BoneBlueprint) null);
+        // The pivot sits on the anchor, so turning and scaling keep the attached model's anchor on it.
+        root.originalOrigin = new Vector3f(anchor);
+        root.blueprintModelCenter = new Vector3f(anchor).sub(sourceAnchor).mul(ARMOR_STAND_HEAD_SIZE_MULTIPLIER);
+        root.blueprintModelPivot = new Vector3f(sourceAnchor).mul(-1 / 16f);
+        root.blueprintOriginalBoneRotation = new Vector3f(rotation);
+        root.attachmentScale = new Vector3f(scale);
+        return root;
+    }
+
+    /**
+     * Copies a bone of the attached model, and the bones under it, under an attachment bone. The copies show the
+     * source bones' own resource pack models, so the attached model stays a model of its own in the pack.
+     */
+    public static BoneBlueprint attachmentCopy(BoneBlueprint source, BoneBlueprint parent, BoneBlueprint root) {
+        BoneBlueprint copy = new BoneBlueprint(root.originalBoneName + "_" + source.originalBoneName, parent, source);
+        // A bone is placed by its centre less its parent's, so the whole copy moves with the first bone's centre.
+        Vector3f shift = root.blueprintModelCenter;
+        copy.blueprintModelCenter = new Vector3f(source.blueprintModelCenter).add(shift);
+        copy.blueprintModelPivot = new Vector3f(source.blueprintModelPivot);
+        copy.blueprintOriginalBoneRotation = new Vector3f(source.blueprintOriginalBoneRotation);
+        copy.originalOrigin = new Vector3f(source.originalOrigin).add(new Vector3f(shift).mul(1 / ARMOR_STAND_HEAD_SIZE_MULTIPLIER));
+        for (BoneBlueprint child : source.boneBlueprintChildren)
+            if (!child.nameTag && !child.mountPoint)
+                copy.boneBlueprintChildren.add(attachmentCopy(child, copy, root));
+        return copy;
+    }
+
+    /** An attachment bone: {@code source} is the bone it copies, or null for an attachment's first bone. */
+    private BoneBlueprint(String name, BoneBlueprint parent, BoneBlueprint source) {
+        this.originalBoneName = name;
+        this.originalModelName = parent.originalModelName;
+        this.boneName = "freeminecraftmodels:" + originalModelName + "/" + StringToResourcePackFilename.convert(name);
+        this.parent = parent;
+        this.uuid = null;
+        this.attachment = true;
+        if (source == null) return;
+        this.modelID = source.modelID;
+        this.isDisplayModel = source.isDisplayModel;
+        // The source measured its reach about its own centre, before the copy's centre moved.
+        this.displayReach = source.getDisplayReach();
+    }
+
+    /** What an attachment's first bone is drawn at, per axis; null for every other bone. */
+    public Vector3f getAttachmentScale() {
+        return attachmentScale == null ? null : new Vector3f(attachmentScale);
+    }
+
     public Vector3f getBlueprintOriginalBoneRotation() {
         return new Vector3f(blueprintOriginalBoneRotation);
     }

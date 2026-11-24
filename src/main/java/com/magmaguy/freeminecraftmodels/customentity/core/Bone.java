@@ -47,6 +47,10 @@ public class Bone {
         this.boneTransforms = new BoneTransforms(this, parent);
         for (BoneBlueprint child : boneBlueprint.getBoneBlueprintChildren())
             boneChildren.add(new Bone(child, this, skeleton));
+        // A seasonal hat is worn only by the models that qualify, decided once when the model is built.
+        if (!boneBlueprint.getAttachments().isEmpty() && skeleton.wearsAttachments())
+            for (BoneBlueprint worn : boneBlueprint.getAttachments())
+                boneChildren.add(new Bone(worn, this, skeleton));
     }
 
     public Vector3f getAnimationTranslation() {
@@ -198,6 +202,8 @@ public class Bone {
             return;
         }
         if (boneBlueprint.isNameTag()) return; // ModeledEntity owns the complete nameplate.
+        // An attachment is fitted by scale, which only a display entity on a Java client can draw.
+        if (boneBlueprint.isAttachment() && isBedrock) return;
         if (boneTransforms.hasArmorStand() &&
                 (!DefaultConfig.useDisplayEntitiesWhenPossible ||
                         isBedrock)) {

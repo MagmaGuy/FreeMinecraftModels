@@ -211,6 +211,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
         OutputFolder.initializeConfig();
         initializationContext.step("Bundled Magic Content");
         BundledMagicContent.installDefaults(this);
+        com.magmaguy.freeminecraftmodels.seasonal.ChristmasHats.installDefault(this);
         if (pendingEnchantmentCatalog == null) {
             try {
                 pendingEnchantmentCatalog = MagicEnchantmentCatalog.prepare(this);
@@ -368,6 +369,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
                         context.step("Validate Imported Content");
                         MagmaCore.initializeImporter(this);
                         BundledMagicContent.installDefaults(this);
+                        com.magmaguy.freeminecraftmodels.seasonal.ChristmasHats.installDefault(this);
                         ItemScriptManager.ItemCatalog candidate = ItemScriptManager.prepareCatalog(ModelsFolder.resolveModelsFolder());
                         EnchantmentCatalog enchantments = MagicEnchantmentCatalog.prepare(this);
                         var recipes = PropRecipeManager.prepareCatalog();
@@ -452,6 +454,7 @@ public final class FreeMinecraftModels extends JavaPlugin {
                     MagmaCore.initializeImporter(this);
                     if (context.isShutdownRequested()) return;
                     BundledMagicContent.installDefaults(this);
+                    com.magmaguy.freeminecraftmodels.seasonal.ChristmasHats.installDefault(this);
                     if (context.isShutdownRequested()) return;
                     var items = ItemScriptManager.prepareCatalog(ModelsFolder.resolveModelsFolder());
                     EnchantmentCatalog enchantments;

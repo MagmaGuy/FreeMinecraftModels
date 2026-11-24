@@ -79,6 +79,7 @@ public class ModelsFolder {
         processFolders(file, bbModelConverterList);
         bbModelConverterList.removeIf(model -> !model.isRegisteredModel());
         bbModelConverterList.forEach(BedrockEntityBundleExporter::export);
+        com.magmaguy.freeminecraftmodels.seasonal.ChristmasHats.fit(bbModelConverterList);
 
         Gson itemDefinitionGson = new Gson();
         for (FileModelConverter fileModelConverter : bbModelConverterList) {
